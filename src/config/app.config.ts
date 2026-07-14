@@ -34,6 +34,24 @@ export class AppConfigService {
     return this.configService.get('DATABASE_SSL', { infer: true });
   }
 
+  get clerkSecretKey(): string {
+    return this.configService.get('CLERK_SECRET_KEY', { infer: true });
+  }
+
+  get clerkPublishableKey(): string | undefined {
+    return this.configService.get('CLERK_PUBLISHABLE_KEY', { infer: true });
+  }
+
+  get clerkJwtKey(): string | undefined {
+    return this.configService.get('CLERK_JWT_KEY', { infer: true });
+  }
+
+  get clerkAuthorizedParties(): string[] {
+    return this.configService.get('CLERK_AUTHORIZED_PARTIES', {
+      infer: true,
+    });
+  }
+
   get isDevelopment(): boolean {
     return this.nodeEnv === 'development';
   }

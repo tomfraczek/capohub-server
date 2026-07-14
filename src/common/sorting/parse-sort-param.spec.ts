@@ -70,7 +70,6 @@ describe('parseSortParam', () => {
       parseSortParam({
         value: undefined,
         allowedFields,
-        // @ts-expect-error - intentionally invalid to test the guard
         defaultField: 'notAllowed',
       }),
     ).toThrow();
