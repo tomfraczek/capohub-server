@@ -30,13 +30,5 @@ export function buildMikroOrmOptions(options: DatabaseConnectionOptions) {
     extensions: [Migrator],
     debug: options.debug,
     allowGlobalContext: false,
-    // No concrete entity exists yet (BaseEntity is abstract-only); the first
-    // one (User) arrives in the next stage. Without this, MikroORM refuses
-    // to initialize at all when discovery finds zero concrete entities.
-    // TODO: Remove this override once the first concrete entity (User) is added.
-    // It is currently disabled only because the project contains BaseEntity only.
-    discovery: {
-      warnWhenNoEntities: false,
-    },
   });
 }

@@ -67,16 +67,6 @@ describe('buildMikroOrmOptions', () => {
     expect(options.allowGlobalContext).toBe(false);
   });
 
-  it('does not throw when no concrete entities exist yet', () => {
-    const options = buildMikroOrmOptions({
-      databaseUrl: DATABASE_URL,
-      databaseSsl: false,
-      debug: false,
-    });
-
-    expect(options.discovery?.warnWhenNoEntities).toBe(false);
-  });
-
   it('never includes the raw database url outside of clientUrl', () => {
     const options = buildMikroOrmOptions({
       databaseUrl: DATABASE_URL,

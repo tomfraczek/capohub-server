@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
+import { UserService } from '../../users/user.service';
 import { ClerkAuthService } from '../clerk/clerk-auth.service';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { AuthenticatedRequest } from '../types/authenticated-request.type';
@@ -15,6 +16,7 @@ export class ClerkAuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly clerkAuthService: ClerkAuthService,
+    private readonly userService: UserService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -34,7 +36,9 @@ export class ClerkAuthGuard implements CanActivate {
       throw new UnauthorizedException('Authentication required');
     }
 
-    request.auth = await this.clerkAuthService.verifySessionToken(token);
+    const auth = await this.clerkAuthService.verifySessionToken(token);
+    request.auth = auth;
+    request.localUser = await this.userService.findOrCreateFromClerk(auth);
 
     return true;
   }

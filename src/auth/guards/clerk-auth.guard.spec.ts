@@ -1,8 +1,14 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { UserService } from '../../users/user.service';
 import { ClerkAuthService } from '../clerk/clerk-auth.service';
 import { AuthContext } from '../types/auth-context.type';
 import { ClerkAuthGuard } from './clerk-auth.guard';
+
+interface FakeUser {
+  id: string;
+  clerkUserId: string;
+}
 
 describe('ClerkAuthGuard', () => {
   const sampleAuth: AuthContext = {
@@ -12,16 +18,20 @@ describe('ClerkAuthGuard', () => {
     claims: { sub: 'user_123', sid: 'sess_123' },
   };
 
+  const sampleUser: FakeUser = { id: 'local-uuid-1', clerkUserId: 'user_123' };
+
   function buildContext(authorizationHeader: string | undefined): {
     context: ExecutionContext;
     request: {
       headers: Record<string, string | undefined>;
       auth?: AuthContext;
+      localUser?: FakeUser;
     };
   } {
     const request: {
       headers: Record<string, string | undefined>;
       auth?: AuthContext;
+      localUser?: FakeUser;
     } = {
       headers: { authorization: authorizationHeader },
     };
@@ -40,6 +50,7 @@ describe('ClerkAuthGuard', () => {
   function buildGuard(options: {
     isPublic?: boolean;
     verifySessionToken?: jest.Mock;
+    findOrCreateFromClerk?: jest.Mock;
   }): ClerkAuthGuard {
     const reflector = {
       getAllAndOverride: jest.fn().mockReturnValue(options.isPublic ?? false),
@@ -50,7 +61,13 @@ describe('ClerkAuthGuard', () => {
         options.verifySessionToken ?? jest.fn().mockResolvedValue(sampleAuth),
     } as unknown as ClerkAuthService;
 
-    return new ClerkAuthGuard(reflector, clerkAuthService);
+    const userService = {
+      findOrCreateFromClerk:
+        options.findOrCreateFromClerk ??
+        jest.fn().mockResolvedValue(sampleUser),
+    } as unknown as UserService;
+
+    return new ClerkAuthGuard(reflector, clerkAuthService, userService);
   }
 
   it('allows a @Public() route without checking the header', async () => {
@@ -133,6 +150,28 @@ describe('ClerkAuthGuard', () => {
     expect(request.auth).toEqual(sampleAuth);
   });
 
+  it('syncs and attaches the local User to the request on success', async () => {
+    const findOrCreateFromClerk = jest.fn().mockResolvedValue(sampleUser);
+    const guard = buildGuard({ findOrCreateFromClerk });
+    const { context, request } = buildContext('Bearer valid-token');
+
+    await guard.canActivate(context);
+
+    expect(findOrCreateFromClerk).toHaveBeenCalledWith(sampleAuth);
+    expect(request.localUser).toEqual(sampleUser);
+  });
+
+  it('does not sync the user when the request is unauthenticated', async () => {
+    const findOrCreateFromClerk = jest.fn();
+    const guard = buildGuard({ findOrCreateFromClerk });
+    const { context } = buildContext(undefined);
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(findOrCreateFromClerk).not.toHaveBeenCalled();
+  });
+
   it('propagates a 401 when ClerkAuthService rejects the token', async () => {
     const verifySessionToken = jest
       .fn()
@@ -163,7 +202,10 @@ describe('ClerkAuthGuard', () => {
     const clerkAuthService = {
       verifySessionToken: jest.fn(),
     } as unknown as ClerkAuthService;
-    const guard = new ClerkAuthGuard(reflector, clerkAuthService);
+    const userService = {
+      findOrCreateFromClerk: jest.fn(),
+    } as unknown as UserService;
+    const guard = new ClerkAuthGuard(reflector, clerkAuthService, userService);
     const { context } = buildContext(undefined);
 
     await guard.canActivate(context);
