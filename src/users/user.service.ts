@@ -4,18 +4,14 @@ import { EntityManager, EntityRepository } from '@mikro-orm/core';
 import type { ClerkClient } from '@clerk/backend';
 import { CLERK_CLIENT } from '../auth/clerk/clerk-client.provider';
 import { AuthContext } from '../auth/types/auth-context.type';
-import { User } from './entities/user.entity';
-
-interface ClerkProfile {
-  email: string;
-  firstName: string | null;
-  lastName: string | null;
-  imageUrl: string | null;
-}
+import { ClerkProfile } from './clerk-profile.type';
+import { User, Theme } from './entities/user.entity';
+import { generateDisplayNameFromEmail } from './generate-display-name';
 
 export interface UpdateUserProfileInput {
-  firstName?: string | null;
-  lastName?: string | null;
+  displayName?: string;
+  theme?: Theme;
+  notificationsEnabled?: boolean;
 }
 
 @Injectable()
@@ -30,8 +26,13 @@ export class UserService {
 
   /**
    * Finds the local User for an authenticated Clerk session, creating it on
-   * first sight and refreshing profile fields + lastLoginAt otherwise.
-   * There are no webhooks yet, so this runs on every authenticated request.
+   * first login and refreshing email/avatarUrl otherwise. This is the only
+   * place a local User is created or synced - there are no webhooks; email
+   * changes are impossible in this app, and Clerk is the only place accounts
+   * are deleted from outside DELETE /users/me.
+   *
+   * lastLoginAt is set only when the user is created; it marks the moment of
+   * login, not of last activity, so it is never touched on later requests.
    */
   async findOrCreateFromClerk(auth: AuthContext): Promise<User> {
     const profile = await this.fetchClerkProfile(auth.userId);
@@ -41,46 +42,67 @@ export class UserService {
 
     if (user) {
       this.applyProfileChanges(user, profile);
-      user.lastLoginAt = new Date();
       await this.em.flush();
       return user;
     }
 
-    const created = new User();
-    created.clerkUserId = auth.userId;
-    created.email = profile.email;
-    created.firstName = profile.firstName;
-    created.lastName = profile.lastName;
-    created.imageUrl = profile.imageUrl;
+    const created = this.buildUser(auth.userId, profile);
     created.lastLoginAt = new Date();
     await this.em.persistAndFlush(created);
     return created;
+  }
+
+  /**
+   * DELETE /users/me: deletes the Clerk account first (source of truth for
+   * the account's existence), then all local data owned by the user.
+   */
+  async deleteAccount(user: User): Promise<void> {
+    await this.clerkClient.users.deleteUser(user.clerkUserId);
+    await this.deleteUserData(user);
   }
 
   async updateProfile(
     user: User,
     changes: UpdateUserProfileInput,
   ): Promise<User> {
-    if (changes.firstName !== undefined) {
-      user.firstName = changes.firstName;
+    if (changes.displayName !== undefined) {
+      user.displayName = changes.displayName;
     }
-    if (changes.lastName !== undefined) {
-      user.lastName = changes.lastName;
+    if (changes.theme !== undefined) {
+      user.theme = changes.theme;
+    }
+    if (changes.notificationsEnabled !== undefined) {
+      user.notificationsEnabled = changes.notificationsEnabled;
     }
     await this.em.flush();
     return user;
   }
 
-  // firstName/lastName are deliberately excluded here: PATCH /users/me lets
-  // the user own those locally, and re-syncing them from Clerk on every
-  // request would silently overwrite that edit on the very next request.
-  // Clerk stays authoritative for email/imageUrl, which aren't user-editable.
+  // Deletes everything this user owns. Only the User row exists today;
+  // future modules (playlists, notes, learning progress, favorites, ...)
+  // should extend this method with their own cascade-delete calls.
+  private async deleteUserData(user: User): Promise<void> {
+    await this.em.removeAndFlush(user);
+  }
+
+  private buildUser(clerkUserId: string, profile: ClerkProfile): User {
+    const user = new User();
+    user.clerkUserId = clerkUserId;
+    user.email = profile.email;
+    user.avatarUrl = profile.avatarUrl;
+    user.displayName = generateDisplayNameFromEmail(profile.email);
+    return user;
+  }
+
+  // displayName is deliberately excluded here: it's local/user-owned (see
+  // PATCH /users/me), and re-syncing it from Clerk would silently overwrite
+  // a user's edit on the very next request.
   private applyProfileChanges(user: User, profile: ClerkProfile): void {
     if (user.email !== profile.email) {
       user.email = profile.email;
     }
-    if (user.imageUrl !== profile.imageUrl) {
-      user.imageUrl = profile.imageUrl;
+    if (user.avatarUrl !== profile.avatarUrl) {
+      user.avatarUrl = profile.avatarUrl;
     }
   }
 
@@ -94,9 +116,7 @@ export class UserService {
 
     return {
       email: email.trim().toLowerCase(),
-      firstName: clerkUser.firstName,
-      lastName: clerkUser.lastName,
-      imageUrl: clerkUser.imageUrl,
+      avatarUrl: clerkUser.imageUrl,
     };
   }
 }

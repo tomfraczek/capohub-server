@@ -6,9 +6,10 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.id = 'user-uuid-1';
   user.clerkUserId = 'user_clerk_1';
   user.email = 'dev@example.com';
-  user.firstName = 'Ada';
-  user.lastName = 'Lovelace';
-  user.imageUrl = 'https://img.clerk.com/ada.png';
+  user.displayName = 'Ada Lovelace';
+  user.avatarUrl = 'https://img.clerk.com/ada.png';
+  user.theme = 'dark';
+  user.notificationsEnabled = false;
   user.isActive = true;
   user.lastLoginAt = new Date('2026-07-10T10:00:00.000Z');
   user.createdAt = new Date('2026-01-01T00:00:00.000Z');
@@ -23,9 +24,10 @@ describe('toUserResponseDto', () => {
     expect(toUserResponseDto(user)).toEqual({
       id: 'user-uuid-1',
       email: 'dev@example.com',
-      firstName: 'Ada',
-      lastName: 'Lovelace',
-      imageUrl: 'https://img.clerk.com/ada.png',
+      displayName: 'Ada Lovelace',
+      avatarUrl: 'https://img.clerk.com/ada.png',
+      theme: 'dark',
+      notificationsEnabled: false,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-02-01T00:00:00.000Z',
     });
@@ -39,14 +41,10 @@ describe('toUserResponseDto', () => {
     expect(dto.updatedAt).toBe(user.updatedAt.toISOString());
   });
 
-  it('passes through null for nullable fields', () => {
-    const user = buildUser({ firstName: null, lastName: null, imageUrl: null });
+  it('passes through null for avatarUrl', () => {
+    const user = buildUser({ avatarUrl: null });
 
-    expect(toUserResponseDto(user)).toMatchObject({
-      firstName: null,
-      lastName: null,
-      imageUrl: null,
-    });
+    expect(toUserResponseDto(user)).toMatchObject({ avatarUrl: null });
   });
 
   it('never includes clerkUserId, isActive, or lastLoginAt', () => {
@@ -56,5 +54,13 @@ describe('toUserResponseDto', () => {
     expect(dto).not.toHaveProperty('clerkUserId');
     expect(dto).not.toHaveProperty('isActive');
     expect(dto).not.toHaveProperty('lastLoginAt');
+  });
+
+  it('never includes firstName or lastName', () => {
+    const user = buildUser();
+    const dto = toUserResponseDto(user);
+
+    expect(dto).not.toHaveProperty('firstName');
+    expect(dto).not.toHaveProperty('lastName');
   });
 });

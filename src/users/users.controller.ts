@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Patch } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { UpdateUserDto } from './dto/update-user.schema';
@@ -23,5 +23,11 @@ export class UsersController {
   ): Promise<UserResponseDto> {
     const updated = await this.userService.updateProfile(user, dto);
     return toUserResponseDto(updated);
+  }
+
+  @Delete('me')
+  @HttpCode(204)
+  async deleteMe(@CurrentUser() user: User): Promise<void> {
+    await this.userService.deleteAccount(user);
   }
 }

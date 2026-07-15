@@ -33,21 +33,15 @@ const TOKEN_TO_AUTH: Record<string, AuthContext> = {
 const FIXTURE_CLERK_PROFILES: Record<
   string,
   {
-    firstName: string | null;
-    lastName: string | null;
     imageUrl: string;
     primaryEmailAddress: { emailAddress: string } | null;
   }
 > = {
   user_test_123: {
-    firstName: 'Test',
-    lastName: 'User',
     imageUrl: 'https://img.clerk.com/test-user.png',
     primaryEmailAddress: { emailAddress: 'test.user@example.com' },
   },
   user_test_flow: {
-    firstName: 'Flow',
-    lastName: 'Tester',
     imageUrl: 'https://img.clerk.com/flow-tester.png',
     primaryEmailAddress: { emailAddress: 'flow.tester@example.com' },
   },
@@ -56,10 +50,12 @@ const FIXTURE_CLERK_PROFILES: Record<
 const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 // Standard npm run test:e2e must never depend on a real Clerk instance or a
-// real session token - both token verification and the Clerk profile lookup
-// are unit tested against a mocked SDK elsewhere (clerk-auth.service.spec.ts,
-// user.service.spec.ts). Only UserService + the real Postgres DB run for
-// real here, to prove the sync/persist behavior end to end.
+// real session token - Clerk-SDK-touching pieces are unit tested against a
+// mocked SDK elsewhere (clerk-auth.service, user.service specs). Only
+// UserService + the real Postgres DB run for real here, to prove the
+// sync/persist behavior end to end. There are no webhooks: the only
+// synchronization path is findOrCreateFromClerk(), driven by an
+// authenticated request.
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
     const auth = TOKEN_TO_AUTH[token];
@@ -81,6 +77,7 @@ const fixtureClerkClient = {
       }
       return Promise.resolve({ id: clerkUserId, ...profile });
     },
+    deleteUser: () => Promise.resolve(),
   },
 };
 
@@ -174,7 +171,7 @@ describe('App (e2e)', () => {
 
   it(
     'syncs a Clerk user to the local DB on first request, reuses it on the ' +
-      'next one, and supports profile updates via PATCH',
+      'next one, generates a displayName, and supports profile updates via PATCH',
     async () => {
       const em = app.get(EntityManager).fork();
 
@@ -186,8 +183,9 @@ describe('App (e2e)', () => {
 
       expect(firstResponse.body).toMatchObject({
         email: 'flow.tester@example.com',
-        firstName: 'Flow',
-        lastName: 'Tester',
+        displayName: 'Flow Tester',
+        theme: 'system',
+        notificationsEnabled: true,
       });
       expect(firstResponse.body).not.toHaveProperty('clerkUserId');
 
@@ -207,26 +205,29 @@ describe('App (e2e)', () => {
       });
       expect(afterSecond).toBe(1);
 
-      // 3. PATCH updates firstName.
+      // 3. PATCH updates displayName/theme/notificationsEnabled.
       const patchResponse = await request(app.getHttpServer())
         .patch('/api/v1/users/me')
         .set('Authorization', 'Bearer valid-flow-token')
-        .send({ firstName: 'Updated' })
+        .send({ displayName: 'Updated Name', theme: 'dark' })
         .expect(200);
 
-      expect((patchResponse.body as { firstName: string }).firstName).toBe(
-        'Updated',
-      );
+      expect(patchResponse.body).toMatchObject({
+        displayName: 'Updated Name',
+        theme: 'dark',
+      });
 
-      // 4. A subsequent GET reflects the new data.
+      // 4. A subsequent GET reflects the new data and keeps displayName -
+      // sync (findOrCreateFromClerk) must not overwrite the local edit.
       const afterPatchResponse = await request(app.getHttpServer())
         .get('/api/v1/users/me')
         .set('Authorization', 'Bearer valid-flow-token')
         .expect(200);
 
-      expect((afterPatchResponse.body as { firstName: string }).firstName).toBe(
-        'Updated',
-      );
+      expect(afterPatchResponse.body).toMatchObject({
+        displayName: 'Updated Name',
+        theme: 'dark',
+      });
 
       const finalCount = await em.count(User, {
         clerkUserId: 'user_test_flow',
@@ -234,6 +235,64 @@ describe('App (e2e)', () => {
       expect(finalCount).toBe(1);
     },
   );
+
+  it('sets lastLoginAt on creation and never updates it on later requests', async () => {
+    const em = app.get(EntityManager).fork();
+
+    await request(app.getHttpServer())
+      .get('/api/v1/users/me')
+      .set('Authorization', 'Bearer valid-flow-token')
+      .expect(200);
+
+    const afterFirst = await em.findOneOrFail(User, {
+      clerkUserId: 'user_test_flow',
+    });
+    expect(afterFirst.lastLoginAt).not.toBeNull();
+    const firstLoginAt = afterFirst.lastLoginAt?.getTime();
+
+    // Wait past timer resolution so a bug (touching lastLoginAt again) would
+    // be observable as a different timestamp.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    await request(app.getHttpServer())
+      .get('/api/v1/users/me')
+      .set('Authorization', 'Bearer valid-flow-token')
+      .expect(200);
+
+    const em2 = app.get(EntityManager).fork();
+    const afterSecond = await em2.findOneOrFail(User, {
+      clerkUserId: 'user_test_flow',
+    });
+    expect(afterSecond.lastLoginAt?.getTime()).toBe(firstLoginAt);
+  });
+
+  it('PATCH /api/v1/users/me without a token returns 401', async () => {
+    await request(app.getHttpServer())
+      .patch('/api/v1/users/me')
+      .send({ displayName: 'Nope' })
+      .expect(401);
+  });
+
+  it('DELETE /api/v1/users/me deletes the local user (and the Clerk account)', async () => {
+    const em = app.get(EntityManager).fork();
+
+    await request(app.getHttpServer())
+      .get('/api/v1/users/me')
+      .set('Authorization', 'Bearer valid-flow-token')
+      .expect(200);
+    expect(await em.count(User, { clerkUserId: 'user_test_flow' })).toBe(1);
+
+    await request(app.getHttpServer())
+      .delete('/api/v1/users/me')
+      .set('Authorization', 'Bearer valid-flow-token')
+      .expect(204);
+
+    expect(await em.count(User, { clerkUserId: 'user_test_flow' })).toBe(0);
+  });
+
+  it('DELETE /api/v1/users/me without a token returns 401', async () => {
+    await request(app.getHttpServer()).delete('/api/v1/users/me').expect(401);
+  });
 
   afterEach(async () => {
     const em = app.get(EntityManager).fork();

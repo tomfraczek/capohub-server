@@ -7,9 +7,10 @@ function buildUser(): User {
   user.id = 'user-uuid-1';
   user.clerkUserId = 'user_clerk_1';
   user.email = 'ada@example.com';
-  user.firstName = 'Ada';
-  user.lastName = 'Lovelace';
-  user.imageUrl = 'https://img.clerk.com/ada.png';
+  user.displayName = 'Ada Lovelace';
+  user.avatarUrl = 'https://img.clerk.com/ada.png';
+  user.theme = 'system';
+  user.notificationsEnabled = true;
   user.isActive = true;
   user.lastLoginAt = new Date('2026-07-10T10:00:00.000Z');
   user.createdAt = new Date('2026-01-01T00:00:00.000Z');
@@ -27,9 +28,10 @@ describe('UsersController', () => {
       expect(controller.getMe(user)).toEqual({
         id: 'user-uuid-1',
         email: 'ada@example.com',
-        firstName: 'Ada',
-        lastName: 'Lovelace',
-        imageUrl: 'https://img.clerk.com/ada.png',
+        displayName: 'Ada Lovelace',
+        avatarUrl: 'https://img.clerk.com/ada.png',
+        theme: 'system',
+        notificationsEnabled: true,
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-02-01T00:00:00.000Z',
       });
@@ -51,20 +53,33 @@ describe('UsersController', () => {
     it('delegates to UserService.updateProfile and maps the result', async () => {
       const user = buildUser();
       const updateProfile = jest.fn().mockImplementation((u: User) => {
-        u.firstName = 'Updated';
+        u.displayName = 'Updated Name';
         return Promise.resolve(u);
       });
       const userService = { updateProfile } as unknown as UserService;
       const controller = new UsersController(userService);
 
       const response = await controller.updateMe(user, {
-        firstName: 'Updated',
+        displayName: 'Updated Name',
       });
 
       expect(updateProfile).toHaveBeenCalledWith(user, {
-        firstName: 'Updated',
+        displayName: 'Updated Name',
       });
-      expect(response.firstName).toBe('Updated');
+      expect(response.displayName).toBe('Updated Name');
+    });
+  });
+
+  describe('deleteMe', () => {
+    it('delegates to UserService.deleteAccount', async () => {
+      const user = buildUser();
+      const deleteAccount = jest.fn().mockResolvedValue(undefined);
+      const userService = { deleteAccount } as unknown as UserService;
+      const controller = new UsersController(userService);
+
+      await controller.deleteMe(user);
+
+      expect(deleteAccount).toHaveBeenCalledWith(user);
     });
   });
 });

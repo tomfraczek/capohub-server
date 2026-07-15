@@ -7,56 +7,94 @@ describe('updateUserSchema', () => {
     expect(result.data).toEqual({});
   });
 
-  it('trims a valid firstName', () => {
-    const result = updateUserSchema.parse({ firstName: '  Ada  ' });
-    expect(result.firstName).toBe('Ada');
+  it('trims a valid displayName', () => {
+    const result = updateUserSchema.parse({ displayName: '  Ada Lovelace  ' });
+    expect(result.displayName).toBe('Ada Lovelace');
   });
 
-  it('turns an empty string into null', () => {
-    const result = updateUserSchema.parse({ firstName: '' });
-    expect(result.firstName).toBeNull();
-  });
-
-  it('turns a whitespace-only string into null', () => {
-    const result = updateUserSchema.parse({ lastName: '   ' });
-    expect(result.lastName).toBeNull();
-  });
-
-  it('accepts an explicit null', () => {
-    const result = updateUserSchema.parse({ firstName: null });
-    expect(result.firstName).toBeNull();
-  });
-
-  it('leaves an omitted field as undefined', () => {
-    const result = updateUserSchema.parse({ firstName: 'Ada' });
-    expect(result.lastName).toBeUndefined();
-  });
-
-  it('rejects a firstName longer than the max length', () => {
-    const result = updateUserSchema.safeParse({ firstName: 'a'.repeat(101) });
+  it('rejects a displayName shorter than 2 characters', () => {
+    const result = updateUserSchema.safeParse({ displayName: 'A' });
     expect(result.success).toBe(false);
   });
 
-  it('accepts a firstName at exactly the max length', () => {
-    const result = updateUserSchema.safeParse({ firstName: 'a'.repeat(100) });
+  it('rejects a displayName that is only whitespace (trims to < 2 chars)', () => {
+    const result = updateUserSchema.safeParse({ displayName: '   a   ' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts a displayName at exactly the minimum length', () => {
+    const result = updateUserSchema.safeParse({ displayName: 'Ab' });
     expect(result.success).toBe(true);
   });
 
-  it('rejects a lastName longer than the max length', () => {
-    const result = updateUserSchema.safeParse({ lastName: 'b'.repeat(101) });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects a non-string firstName', () => {
-    const result = updateUserSchema.safeParse({ firstName: 123 });
-    expect(result.success).toBe(false);
-  });
-
-  it('updates both fields together', () => {
-    const result = updateUserSchema.parse({
-      firstName: ' Ada ',
-      lastName: ' Lovelace ',
+  it('rejects a displayName longer than 100 characters', () => {
+    const result = updateUserSchema.safeParse({
+      displayName: 'a'.repeat(101),
     });
-    expect(result).toEqual({ firstName: 'Ada', lastName: 'Lovelace' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts a displayName at exactly 100 characters', () => {
+    const result = updateUserSchema.safeParse({
+      displayName: 'a'.repeat(100),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('does not accept null for displayName (required once present)', () => {
+    const result = updateUserSchema.safeParse({ displayName: null });
+    expect(result.success).toBe(false);
+  });
+
+  it.each(['system', 'light', 'dark'] as const)('accepts theme=%s', (theme) => {
+    const result = updateUserSchema.safeParse({ theme });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an invalid theme value', () => {
+    const result = updateUserSchema.safeParse({ theme: 'blue' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts notificationsEnabled=true', () => {
+    const result = updateUserSchema.parse({ notificationsEnabled: true });
+    expect(result.notificationsEnabled).toBe(true);
+  });
+
+  it('accepts notificationsEnabled=false', () => {
+    const result = updateUserSchema.parse({ notificationsEnabled: false });
+    expect(result.notificationsEnabled).toBe(false);
+  });
+
+  it('rejects a non-boolean notificationsEnabled', () => {
+    const result = updateUserSchema.safeParse({ notificationsEnabled: 'yes' });
+    expect(result.success).toBe(false);
+  });
+
+  it('leaves omitted fields as undefined', () => {
+    const result = updateUserSchema.parse({ displayName: 'Ada' });
+    expect(result.theme).toBeUndefined();
+    expect(result.notificationsEnabled).toBeUndefined();
+  });
+
+  it('rejects an unknown field like email', () => {
+    const result = updateUserSchema.safeParse({ email: 'new@example.com' });
+    // Unknown keys are stripped by default zod object parsing, so the
+    // request itself does not fail - but the field never reaches the entity.
+    expect(result.success).toBe(true);
+    expect(result.data).not.toHaveProperty('email');
+  });
+
+  it('updates all three fields together', () => {
+    const result = updateUserSchema.parse({
+      displayName: ' Mestre Capoeira ',
+      theme: 'light',
+      notificationsEnabled: false,
+    });
+    expect(result).toEqual({
+      displayName: 'Mestre Capoeira',
+      theme: 'light',
+      notificationsEnabled: false,
+    });
   });
 });

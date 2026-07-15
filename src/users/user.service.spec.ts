@@ -16,10 +16,8 @@ function buildAuth(userId = 'user_clerk_1'): AuthContext {
 function buildClerkUser(overrides: Record<string, unknown> = {}) {
   return {
     id: 'user_clerk_1',
-    firstName: 'Ada',
-    lastName: 'Lovelace',
     imageUrl: 'https://img.clerk.com/ada.png',
-    primaryEmailAddress: { emailAddress: 'Ada@Example.com' },
+    primaryEmailAddress: { emailAddress: 'Ada.Lovelace@Example.com' },
     ...overrides,
   };
 }
@@ -28,14 +26,21 @@ describe('UserService', () => {
   function buildService(options: {
     findOne?: jest.Mock;
     getUser?: jest.Mock;
+    deleteUser?: jest.Mock;
   }): {
     service: UserService;
-    em: { flush: jest.Mock; persistAndFlush: jest.Mock };
+    em: {
+      flush: jest.Mock;
+      persistAndFlush: jest.Mock;
+      removeAndFlush: jest.Mock;
+    };
     userRepository: { findOne: jest.Mock };
+    clerkClient: { users: { getUser: jest.Mock; deleteUser: jest.Mock } };
   } {
     const em = {
       flush: jest.fn().mockResolvedValue(undefined),
       persistAndFlush: jest.fn().mockResolvedValue(undefined),
+      removeAndFlush: jest.fn().mockResolvedValue(undefined),
     };
     const userRepository = {
       findOne: options.findOne ?? jest.fn().mockResolvedValue(null),
@@ -44,6 +49,8 @@ describe('UserService', () => {
       users: {
         getUser:
           options.getUser ?? jest.fn().mockResolvedValue(buildClerkUser()),
+        deleteUser:
+          options.deleteUser ?? jest.fn().mockResolvedValue(undefined),
       },
     };
 
@@ -53,7 +60,7 @@ describe('UserService', () => {
       clerkClient as unknown as ClerkClient,
     );
 
-    return { service, em, userRepository };
+    return { service, em, userRepository, clerkClient };
   }
 
   describe('findOrCreateFromClerk', () => {
@@ -66,11 +73,30 @@ describe('UserService', () => {
 
       expect(user).toBeInstanceOf(User);
       expect(user.clerkUserId).toBe('user_clerk_1');
-      expect(user.email).toBe('ada@example.com');
-      expect(user.firstName).toBe('Ada');
-      expect(user.lastName).toBe('Lovelace');
-      expect(user.imageUrl).toBe('https://img.clerk.com/ada.png');
+      expect(user.email).toBe('ada.lovelace@example.com');
+      expect(user.avatarUrl).toBe('https://img.clerk.com/ada.png');
       expect(em.persistAndFlush).toHaveBeenCalledWith(user);
+    });
+
+    it('generates displayName from the email local part on create', async () => {
+      const { service } = buildService({
+        findOne: jest.fn().mockResolvedValue(null),
+      });
+
+      const user = await service.findOrCreateFromClerk(buildAuth());
+
+      expect(user.displayName).toBe('Ada Lovelace');
+    });
+
+    it('defaults theme to system and notificationsEnabled to true on create', async () => {
+      const { service } = buildService({
+        findOne: jest.fn().mockResolvedValue(null),
+      });
+
+      const user = await service.findOrCreateFromClerk(buildAuth());
+
+      expect(user.theme).toBe('system');
+      expect(user.notificationsEnabled).toBe(true);
     });
 
     it('sets lastLoginAt when creating a new user', async () => {
@@ -102,15 +128,12 @@ describe('UserService', () => {
       expect(user.email).toBe('ada@example.com');
     });
 
-    it('updates changed email/imageUrl for an existing user, but never firstName/lastName', async () => {
-      // firstName/lastName are locally owned once a user exists (editable
-      // via PATCH /users/me) - only email/imageUrl keep syncing from Clerk.
+    it('updates changed email/avatarUrl for an existing user, but never displayName', async () => {
       const existing = new User();
       existing.clerkUserId = 'user_clerk_1';
       existing.email = 'old@example.com';
-      existing.firstName = 'Local Edit';
-      existing.lastName = 'Kept As Is';
-      existing.imageUrl = 'https://img.clerk.com/old.png';
+      existing.displayName = 'My Custom Name';
+      existing.avatarUrl = 'https://img.clerk.com/old.png';
 
       const { service, em } = buildService({
         findOne: jest.fn().mockResolvedValue(existing),
@@ -120,22 +143,21 @@ describe('UserService', () => {
       const user = await service.findOrCreateFromClerk(buildAuth());
 
       expect(user).toBe(existing);
-      expect(user.email).toBe('ada@example.com');
-      expect(user.imageUrl).toBe('https://img.clerk.com/ada.png');
-      expect(user.firstName).toBe('Local Edit');
-      expect(user.lastName).toBe('Kept As Is');
+      expect(user.email).toBe('ada.lovelace@example.com');
+      expect(user.avatarUrl).toBe('https://img.clerk.com/ada.png');
+      expect(user.displayName).toBe('My Custom Name');
       expect(em.flush).toHaveBeenCalled();
       expect(em.persistAndFlush).not.toHaveBeenCalled();
     });
 
-    it('leaves fields untouched and still updates lastLoginAt when nothing changed', async () => {
+    it('does not update lastLoginAt for an existing user (login-only, not activity)', async () => {
+      const originalLastLoginAt = new Date('2020-01-01T00:00:00.000Z');
       const existing = new User();
       existing.clerkUserId = 'user_clerk_1';
-      existing.email = 'ada@example.com';
-      existing.firstName = 'Ada';
-      existing.lastName = 'Lovelace';
-      existing.imageUrl = 'https://img.clerk.com/ada.png';
-      existing.lastLoginAt = new Date('2020-01-01T00:00:00.000Z');
+      existing.email = 'ada.lovelace@example.com';
+      existing.displayName = 'Ada Lovelace';
+      existing.avatarUrl = 'https://img.clerk.com/ada.png';
+      existing.lastLoginAt = originalLastLoginAt;
 
       const { service, em } = buildService({
         findOne: jest.fn().mockResolvedValue(existing),
@@ -144,12 +166,26 @@ describe('UserService', () => {
 
       const user = await service.findOrCreateFromClerk(buildAuth());
 
-      expect(user.email).toBe('ada@example.com');
-      expect(user.imageUrl).toBe('https://img.clerk.com/ada.png');
-      expect(user.lastLoginAt?.getTime()).toBeGreaterThan(
-        new Date('2020-01-01T00:00:00.000Z').getTime(),
-      );
+      expect(user.lastLoginAt).toBe(originalLastLoginAt);
       expect(em.flush).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves email/avatarUrl untouched when nothing changed', async () => {
+      const existing = new User();
+      existing.clerkUserId = 'user_clerk_1';
+      existing.email = 'ada.lovelace@example.com';
+      existing.displayName = 'Ada Lovelace';
+      existing.avatarUrl = 'https://img.clerk.com/ada.png';
+
+      const { service } = buildService({
+        findOne: jest.fn().mockResolvedValue(existing),
+        getUser: jest.fn().mockResolvedValue(buildClerkUser()),
+      });
+
+      const user = await service.findOrCreateFromClerk(buildAuth());
+
+      expect(user.email).toBe('ada.lovelace@example.com');
+      expect(user.avatarUrl).toBe('https://img.clerk.com/ada.png');
     });
 
     it('looks up the existing user by clerkUserId', async () => {
@@ -175,45 +211,90 @@ describe('UserService', () => {
     });
   });
 
-  describe('updateProfile', () => {
-    it('updates firstName and lastName', async () => {
+  describe('deleteAccount', () => {
+    it('deletes the Clerk account before removing the local user', async () => {
       const user = new User();
-      user.firstName = 'Old';
-      user.lastName = 'Name';
+      user.clerkUserId = 'user_clerk_1';
+      const calls: string[] = [];
+
+      const deleteUser = jest.fn().mockImplementation(() => {
+        calls.push('clerk');
+        return Promise.resolve();
+      });
+      const { service, em } = buildService({ deleteUser });
+      em.removeAndFlush.mockImplementation(() => {
+        calls.push('local');
+        return Promise.resolve();
+      });
+
+      await service.deleteAccount(user);
+
+      expect(deleteUser).toHaveBeenCalledWith('user_clerk_1');
+      expect(em.removeAndFlush).toHaveBeenCalledWith(user);
+      expect(calls).toEqual(['clerk', 'local']);
+    });
+  });
+
+  describe('updateProfile', () => {
+    it('updates displayName', async () => {
+      const user = new User();
+      user.displayName = 'Old Name';
       const { service, em } = buildService({});
 
       const updated = await service.updateProfile(user, {
-        firstName: 'New',
-        lastName: 'Value',
+        displayName: 'New Name',
       });
 
-      expect(updated.firstName).toBe('New');
-      expect(updated.lastName).toBe('Value');
+      expect(updated.displayName).toBe('New Name');
       expect(em.flush).toHaveBeenCalled();
     });
 
-    it('clears a field when given null', async () => {
+    it('updates theme', async () => {
       const user = new User();
-      user.firstName = 'Old';
       const { service } = buildService({});
 
-      const updated = await service.updateProfile(user, { firstName: null });
+      const updated = await service.updateProfile(user, { theme: 'dark' });
 
-      expect(updated.firstName).toBeNull();
+      expect(updated.theme).toBe('dark');
     });
 
-    it('leaves a field untouched when omitted (undefined)', async () => {
+    it('updates notificationsEnabled', async () => {
       const user = new User();
-      user.firstName = 'Keep';
-      user.lastName = 'Me';
       const { service } = buildService({});
 
       const updated = await service.updateProfile(user, {
-        firstName: 'Changed',
+        notificationsEnabled: false,
       });
 
-      expect(updated.firstName).toBe('Changed');
-      expect(updated.lastName).toBe('Me');
+      expect(updated.notificationsEnabled).toBe(false);
+    });
+
+    it('leaves fields untouched when omitted (undefined)', async () => {
+      const user = new User();
+      user.displayName = 'Keep Me';
+      user.theme = 'light';
+      user.notificationsEnabled = false;
+      const { service } = buildService({});
+
+      const updated = await service.updateProfile(user, { theme: 'dark' });
+
+      expect(updated.displayName).toBe('Keep Me');
+      expect(updated.theme).toBe('dark');
+      expect(updated.notificationsEnabled).toBe(false);
+    });
+
+    it('never touches email or avatarUrl', async () => {
+      const user = new User();
+      user.email = 'untouched@example.com';
+      user.avatarUrl = 'https://img.clerk.com/untouched.png';
+      const { service } = buildService({});
+
+      const updated = await service.updateProfile(user, {
+        displayName: 'New Name',
+      });
+
+      expect(updated.email).toBe('untouched@example.com');
+      expect(updated.avatarUrl).toBe('https://img.clerk.com/untouched.png');
     });
   });
 });
