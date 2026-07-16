@@ -1,6 +1,7 @@
 import { EntityManager, EntityRepository } from '@mikro-orm/core';
 import type { ClerkClient } from '@clerk/backend';
 import { AuthContext } from '../auth/types/auth-context.type';
+import { GlobalRole } from '../auth/permissions/global-role.enum';
 import { User } from './entities/user.entity';
 import { UserService } from './user.service';
 
@@ -97,6 +98,34 @@ describe('UserService', () => {
 
       expect(user.theme).toBe('system');
       expect(user.notificationsEnabled).toBe(true);
+    });
+
+    it('defaults globalRole to USER on create', async () => {
+      const { service } = buildService({
+        findOne: jest.fn().mockResolvedValue(null),
+      });
+
+      const user = await service.findOrCreateFromClerk(buildAuth());
+
+      expect(user.globalRole).toBe(GlobalRole.USER);
+    });
+
+    it('never changes globalRole for an existing user', async () => {
+      const existing = new User();
+      existing.clerkUserId = 'user_clerk_1';
+      existing.email = 'ada.lovelace@example.com';
+      existing.displayName = 'Ada Lovelace';
+      existing.avatarUrl = 'https://img.clerk.com/ada.png';
+      existing.globalRole = GlobalRole.ADMIN;
+
+      const { service } = buildService({
+        findOne: jest.fn().mockResolvedValue(existing),
+        getUser: jest.fn().mockResolvedValue(buildClerkUser()),
+      });
+
+      const user = await service.findOrCreateFromClerk(buildAuth());
+
+      expect(user.globalRole).toBe(GlobalRole.ADMIN);
     });
 
     it('sets lastLoginAt when creating a new user', async () => {
@@ -295,6 +324,23 @@ describe('UserService', () => {
 
       expect(updated.email).toBe('untouched@example.com');
       expect(updated.avatarUrl).toBe('https://img.clerk.com/untouched.png');
+    });
+
+    it('never changes globalRole, even if present in the input object', async () => {
+      const user = new User();
+      user.globalRole = GlobalRole.USER;
+      const { service } = buildService({});
+
+      // updateProfile()'s parameter type has no globalRole field at all - this
+      // cast simulates a caller trying to sneak it in anyway.
+      const maliciousChanges = {
+        displayName: 'New Name',
+        globalRole: GlobalRole.SUPER_ADMIN,
+      } as unknown as Parameters<typeof service.updateProfile>[1];
+
+      const updated = await service.updateProfile(user, maliciousChanges);
+
+      expect(updated.globalRole).toBe(GlobalRole.USER);
     });
   });
 });

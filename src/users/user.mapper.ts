@@ -10,6 +10,7 @@ export function toUserResponseDto(user: User): UserResponseDto {
     avatarUrl: user.avatarUrl,
     theme: user.theme,
     notificationsEnabled: user.notificationsEnabled,
+    globalRole: user.globalRole,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };

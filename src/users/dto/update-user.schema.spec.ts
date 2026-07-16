@@ -85,6 +85,17 @@ describe('updateUserSchema', () => {
     expect(result.data).not.toHaveProperty('email');
   });
 
+  it('strips globalRole - it can never be changed via PATCH /users/me', () => {
+    const result = updateUserSchema.safeParse({
+      displayName: 'Ada',
+      globalRole: 'ADMIN',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).not.toHaveProperty('globalRole');
+    expect(result.data).toEqual({ displayName: 'Ada' });
+  });
+
   it('updates all three fields together', () => {
     const result = updateUserSchema.parse({
       displayName: ' Mestre Capoeira ',

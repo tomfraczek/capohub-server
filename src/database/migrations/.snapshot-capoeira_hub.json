@@ -185,6 +185,28 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "boolean"
+        },
+        "global_role": {
+          "name": "global_role",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'USER'",
+          "comment": null,
+          "enumItems": [
+            "USER",
+            "EDITOR",
+            "MODERATOR",
+            "ADMIN",
+            "SUPER_ADMIN"
+          ],
+          "mappedType": "enum"
         }
       },
       "name": "users",

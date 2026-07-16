@@ -1,3 +1,4 @@
+import { GlobalRole } from '../auth/permissions/global-role.enum';
 import { User } from './entities/user.entity';
 import { toUserResponseDto } from './user.mapper';
 
@@ -10,6 +11,7 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.avatarUrl = 'https://img.clerk.com/ada.png';
   user.theme = 'dark';
   user.notificationsEnabled = false;
+  user.globalRole = GlobalRole.EDITOR;
   user.isActive = true;
   user.lastLoginAt = new Date('2026-07-10T10:00:00.000Z');
   user.createdAt = new Date('2026-01-01T00:00:00.000Z');
@@ -28,6 +30,7 @@ describe('toUserResponseDto', () => {
       avatarUrl: 'https://img.clerk.com/ada.png',
       theme: 'dark',
       notificationsEnabled: false,
+      globalRole: GlobalRole.EDITOR,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-02-01T00:00:00.000Z',
     });

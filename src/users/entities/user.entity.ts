@@ -1,4 +1,5 @@
 import { Entity, Enum, Index, Property, Unique } from '@mikro-orm/core';
+import { GlobalRole } from '../../auth/permissions/global-role.enum';
 import { BaseEntity } from '../../database/entities/base.entity';
 
 export const THEMES = ['system', 'light', 'dark'] as const;
@@ -34,6 +35,11 @@ export class User extends BaseEntity {
 
   @Property()
   isActive: boolean = true;
+
+  // Global role only - independent from (future) group-level roles.
+  // Never settable via PATCH /users/me; see users.controller.ts.
+  @Enum({ items: () => Object.values(GlobalRole) })
+  globalRole: GlobalRole = GlobalRole.USER;
 
   // Set once, when the user is first created - marks the moment of login,
   // not of last activity, so it is never touched on later requests.

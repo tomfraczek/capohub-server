@@ -5,9 +5,10 @@ import { AuthController } from './auth.controller';
 import { ClerkAuthService } from './clerk/clerk-auth.service';
 import { ClerkModule } from './clerk/clerk.module';
 import { ClerkAuthGuard } from './guards/clerk-auth.guard';
+import { PermissionsModule } from './permissions/permissions.module';
 
 @Module({
-  imports: [ClerkModule, UsersModule],
+  imports: [ClerkModule, UsersModule, PermissionsModule],
   controllers: [AuthController],
   providers: [
     ClerkAuthService,

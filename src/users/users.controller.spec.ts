@@ -1,3 +1,4 @@
+import { GlobalRole } from '../auth/permissions/global-role.enum';
 import { UserService } from './user.service';
 import { User } from './entities/user.entity';
 import { UsersController } from './users.controller';
@@ -11,6 +12,7 @@ function buildUser(): User {
   user.avatarUrl = 'https://img.clerk.com/ada.png';
   user.theme = 'system';
   user.notificationsEnabled = true;
+  user.globalRole = GlobalRole.USER;
   user.isActive = true;
   user.lastLoginAt = new Date('2026-07-10T10:00:00.000Z');
   user.createdAt = new Date('2026-01-01T00:00:00.000Z');
@@ -32,6 +34,7 @@ describe('UsersController', () => {
         avatarUrl: 'https://img.clerk.com/ada.png',
         theme: 'system',
         notificationsEnabled: true,
+        globalRole: GlobalRole.USER,
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-02-01T00:00:00.000Z',
       });

@@ -10,6 +10,7 @@ import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { ClerkAuthService } from './../src/auth/clerk/clerk-auth.service';
 import { CLERK_CLIENT } from './../src/auth/clerk/clerk-client.provider';
+import { GlobalRole } from './../src/auth/permissions/global-role.enum';
 import { AuthContext } from './../src/auth/types/auth-context.type';
 import { AppConfigService } from './../src/config/app.config';
 import { HttpExceptionFilter } from './../src/common/filters/http-exception.filter';
@@ -186,6 +187,7 @@ describe('App (e2e)', () => {
         displayName: 'Flow Tester',
         theme: 'system',
         notificationsEnabled: true,
+        globalRole: GlobalRole.USER,
       });
       expect(firstResponse.body).not.toHaveProperty('clerkUserId');
 
@@ -273,6 +275,30 @@ describe('App (e2e)', () => {
       .expect(401);
   });
 
+  it('PATCH /api/v1/users/me cannot change globalRole', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/users/me')
+      .set('Authorization', 'Bearer valid-flow-token')
+      .expect(200);
+
+    const patchResponse = await request(app.getHttpServer())
+      .patch('/api/v1/users/me')
+      .set('Authorization', 'Bearer valid-flow-token')
+      .send({ displayName: 'Still Just A User', globalRole: 'SUPER_ADMIN' })
+      .expect(200);
+
+    expect(patchResponse.body).toMatchObject({
+      displayName: 'Still Just A User',
+      globalRole: GlobalRole.USER,
+    });
+
+    const em = app.get(EntityManager).fork();
+    const persisted = await em.findOneOrFail(User, {
+      clerkUserId: 'user_test_flow',
+    });
+    expect(persisted.globalRole).toBe(GlobalRole.USER);
+  });
+
   it('DELETE /api/v1/users/me deletes the local user (and the Clerk account)', async () => {
     const em = app.get(EntityManager).fork();
 
@@ -292,6 +318,50 @@ describe('App (e2e)', () => {
 
   it('DELETE /api/v1/users/me without a token returns 401', async () => {
     await request(app.getHttpServer()).delete('/api/v1/users/me').expect(401);
+  });
+
+  describe('GET /api/v1/auth/permissions-test', () => {
+    it('without a token returns 401', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/auth/permissions-test')
+        .expect(401);
+    });
+
+    it('with a USER-role account returns 403 (missing USER_MANAGE)', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/users/me')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .get('/api/v1/auth/permissions-test')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .expect(403);
+    });
+
+    it('with an ADMIN-role account returns 200', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/users/me')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .expect(200);
+
+      const em = app.get(EntityManager).fork();
+      const user = await em.findOneOrFail(User, {
+        clerkUserId: 'user_test_flow',
+      });
+      user.globalRole = GlobalRole.ADMIN;
+      await em.flush();
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/auth/permissions-test')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        ok: true,
+        globalRole: GlobalRole.ADMIN,
+      });
+    });
   });
 
   afterEach(async () => {
