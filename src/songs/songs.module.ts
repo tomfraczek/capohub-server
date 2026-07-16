@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
+import { PermissionsModule } from '../auth/permissions/permissions.module';
 import { SongCategory } from './entities/song-category.entity';
 import { Tag } from './entities/tag.entity';
 import { SongCategoriesController } from './song-categories.controller';
@@ -14,8 +15,9 @@ import { TagsService } from './tags.service';
   // injected via @InjectRepository. SongsService drives every other Songbook
   // entity through the plain EntityManager (auto-discovered globally, see
   // mikro-orm-options.factory.ts), so registering them here would add
-  // nothing.
-  imports: [MikroOrmModule.forFeature([SongCategory, Tag])],
+  // nothing. PermissionsModule is imported for PermissionsGuard, used by the
+  // media verify/unverify endpoints.
+  imports: [MikroOrmModule.forFeature([SongCategory, Tag]), PermissionsModule],
   controllers: [SongsController, SongCategoriesController, TagsController],
   providers: [SongsService, SongCategoriesService, TagsService],
 })

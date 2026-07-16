@@ -1,5 +1,12 @@
+import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { Reflector } from '@nestjs/core';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { PERMISSIONS_KEY } from '../auth/decorators/permissions.decorator';
+import { Permission } from '../auth/permissions/permission.enum';
 import { User } from '../users/entities/user.entity';
 import { SongDetailsResponseDto } from './dto/song-details-response.dto';
+import { SongMediaDetailsResponseDto } from './dto/song-media-details-response.dto';
+import { SongMediaProvider } from './enums/song-media-provider.enum';
 import { SongStatus } from './enums/song-status.enum';
 import { SongsController } from './songs.controller';
 import { SongsService } from './songs.service';
@@ -30,6 +37,24 @@ function buildDetailsResponse(
     meaningHistory: null,
     meaningContext: null,
     meaningTrivia: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function buildMediaResponse(
+  overrides: Partial<SongMediaDetailsResponseDto> = {},
+): SongMediaDetailsResponseDto {
+  return {
+    id: 'media-uuid-1',
+    songId: 'song-uuid-1',
+    provider: SongMediaProvider.YOUTUBE,
+    url: 'https://www.youtube.com/watch?v=abc',
+    title: null,
+    position: 1,
+    isVerified: true,
+    createdBy: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -148,5 +173,65 @@ describe('SongsController', () => {
       expect(serviceFn).toHaveBeenCalledWith('song-uuid-1');
       expect(response).toBe(dto);
     });
+  });
+
+  describe('media verification', () => {
+    it('verifyMedia delegates to SongsService.verifyMedia with songId and mediaId, returning its DTO', async () => {
+      const dto = buildMediaResponse({ isVerified: true });
+      const verifyMedia = jest.fn().mockResolvedValue(dto);
+      const controller = new SongsController({
+        verifyMedia,
+      } as unknown as SongsService);
+
+      const response = await controller.verifyMedia(
+        'song-uuid-1',
+        'media-uuid-1',
+      );
+
+      expect(verifyMedia).toHaveBeenCalledWith('song-uuid-1', 'media-uuid-1');
+      expect(response).toBe(dto);
+    });
+
+    it('unverifyMedia delegates to SongsService.unverifyMedia with songId and mediaId, returning its DTO', async () => {
+      const dto = buildMediaResponse({ isVerified: false });
+      const unverifyMedia = jest.fn().mockResolvedValue(dto);
+      const controller = new SongsController({
+        unverifyMedia,
+      } as unknown as SongsService);
+
+      const response = await controller.unverifyMedia(
+        'song-uuid-1',
+        'media-uuid-1',
+      );
+
+      expect(unverifyMedia).toHaveBeenCalledWith('song-uuid-1', 'media-uuid-1');
+      expect(response).toBe(dto);
+    });
+
+    describe.each([['verifyMedia'] as const, ['unverifyMedia'] as const])(
+      '%s guard/permission metadata',
+      (methodName) => {
+        it('is guarded by PermissionsGuard', () => {
+          const reflector = new Reflector();
+
+          const handlerRef = SongsController.prototype[methodName];
+          const guards = reflector.get<unknown[]>(GUARDS_METADATA, handlerRef);
+
+          expect(guards).toEqual([PermissionsGuard]);
+        });
+
+        it('requires Permission.CONTENT_APPROVE', () => {
+          const reflector = new Reflector();
+
+          const handlerRef = SongsController.prototype[methodName];
+          const permissions = reflector.get<Permission[]>(
+            PERMISSIONS_KEY,
+            handlerRef,
+          );
+
+          expect(permissions).toEqual([Permission.CONTENT_APPROVE]);
+        });
+      },
+    );
   });
 });

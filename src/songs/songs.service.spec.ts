@@ -17,6 +17,7 @@ import { SongMedia } from './entities/song-media.entity';
 import { SongPart } from './entities/song-part.entity';
 import { SongTag } from './entities/song-tag.entity';
 import { Song } from './entities/song.entity';
+import { SongMediaProvider } from './enums/song-media-provider.enum';
 import { SongPerformer } from './enums/song-performer.enum';
 import { SongStatus } from './enums/song-status.enum';
 import { SongsService } from './songs.service';
@@ -48,6 +49,17 @@ function buildPopulatedSong(overrides: Partial<Song> = {}): Song {
   song.parts = new Collection<SongPart>(song, []);
   song.media = new Collection<SongMedia>(song, []);
   return Object.assign(song, overrides);
+}
+
+function buildSongMedia(overrides: Partial<SongMedia> = {}): SongMedia {
+  const media = new SongMedia();
+  media.song = buildPopulatedSong();
+  media.provider = SongMediaProvider.YOUTUBE;
+  media.url = 'https://www.youtube.com/watch?v=abc';
+  media.title = 'Wersja koncertowa';
+  media.position = 1;
+  media.isVerified = false;
+  return Object.assign(media, overrides);
 }
 
 function buildCreateInput(
@@ -86,6 +98,7 @@ interface FindOneRouting {
   category?: SongCategory | null;
   existingSongForSlug?: Song | null;
   detailsSong?: Song | null;
+  media?: SongMedia | null;
 }
 
 function buildMockEm(routing: FindOneRouting = {}) {
@@ -113,6 +126,11 @@ function buildMockEm(routing: FindOneRouting = {}) {
           routing.detailsSong === undefined
             ? buildPopulatedSong()
             : routing.detailsSong,
+        );
+      }
+      if (entity === SongMedia) {
+        return Promise.resolve(
+          routing.media === undefined ? buildSongMedia() : routing.media,
         );
       }
       return Promise.resolve(null);
@@ -428,6 +446,112 @@ describe('SongsService', () => {
 
       await expect(service.delete(song.id)).rejects.toThrow(ConflictException);
       expect(em.remove).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('media verification', () => {
+    it('verifyMedia sets isVerified from false to true', async () => {
+      const media = buildSongMedia({ isVerified: false });
+      const em = buildMockEm({ media });
+      const service = new SongsService(em);
+
+      const result = await service.verifyMedia(media.song.id, media.id);
+
+      expect(result.isVerified).toBe(true);
+      expect(media.isVerified).toBe(true);
+      expect(em.flush).toHaveBeenCalled();
+    });
+
+    it('unverifyMedia sets isVerified from true to false', async () => {
+      const media = buildSongMedia({ isVerified: true });
+      const em = buildMockEm({ media });
+      const service = new SongsService(em);
+
+      const result = await service.unverifyMedia(media.song.id, media.id);
+
+      expect(result.isVerified).toBe(false);
+      expect(media.isVerified).toBe(false);
+      expect(em.flush).toHaveBeenCalled();
+    });
+
+    it('verifyMedia is idempotent when already verified (no unnecessary flush)', async () => {
+      const media = buildSongMedia({ isVerified: true });
+      const em = buildMockEm({ media });
+      const service = new SongsService(em);
+
+      const result = await service.verifyMedia(media.song.id, media.id);
+
+      expect(result.isVerified).toBe(true);
+      expect(em.flush).not.toHaveBeenCalled();
+    });
+
+    it('unverifyMedia is idempotent when already unverified (no unnecessary flush)', async () => {
+      const media = buildSongMedia({ isVerified: false });
+      const em = buildMockEm({ media });
+      const service = new SongsService(em);
+
+      const result = await service.unverifyMedia(media.song.id, media.id);
+
+      expect(result.isVerified).toBe(false);
+      expect(em.flush).not.toHaveBeenCalled();
+    });
+
+    it('throws SONG_MEDIA_NOT_FOUND (404) when the media does not exist', async () => {
+      const em = buildMockEm({ media: null });
+      const service = new SongsService(em);
+
+      await expect(
+        service.verifyMedia('song-id', 'missing-media-id'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws 404 (not a leaked detail) when the media belongs to a different song, scoping the lookup by both ids', async () => {
+      const em = buildMockEm({ media: null });
+      const service = new SongsService(em);
+
+      await expect(
+        service.verifyMedia('song-a', 'media-from-song-b'),
+      ).rejects.toThrow(NotFoundException);
+      expect(em.findOne).toHaveBeenCalledWith(SongMedia, {
+        id: 'media-from-song-b',
+        song: 'song-a',
+      });
+    });
+
+    it('verifyMedia does not change any other SongMedia field', async () => {
+      const media = buildSongMedia({
+        isVerified: false,
+        url: 'https://www.youtube.com/watch?v=untouched',
+        title: 'Untouched title',
+        position: 3,
+      });
+      const em = buildMockEm({ media });
+      const service = new SongsService(em);
+
+      const result = await service.verifyMedia(media.song.id, media.id);
+
+      expect(result.url).toBe('https://www.youtube.com/watch?v=untouched');
+      expect(result.title).toBe('Untouched title');
+      expect(result.position).toBe(3);
+      expect(result.provider).toBe(SongMediaProvider.YOUTUBE);
+    });
+
+    it('unverifyMedia does not change any other SongMedia field', async () => {
+      const media = buildSongMedia({
+        isVerified: true,
+        url: 'https://www.youtube.com/watch?v=untouched',
+        title: 'Untouched title',
+        position: 3,
+      });
+      const em = buildMockEm({ media });
+      const service = new SongsService(em);
+
+      const result = await service.unverifyMedia(media.song.id, media.id);
+
+      expect(result.url).toBe('https://www.youtube.com/watch?v=untouched');
+      expect(result.title).toBe('Untouched title');
+      expect(result.position).toBe(3);
+      expect(result.provider).toBe(SongMediaProvider.YOUTUBE);
     });
   });
 });

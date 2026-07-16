@@ -9,8 +9,12 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Permissions } from '../auth/decorators/permissions.decorator';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permission } from '../auth/permissions/permission.enum';
 import { PaginatedResponse } from '../common/pagination/pagination.types';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { User } from '../users/entities/user.entity';
@@ -20,6 +24,7 @@ import {
   ListSongsQueryDto,
   listSongsQuerySchema,
 } from './dto/song-list-query.schema';
+import { SongMediaDetailsResponseDto } from './dto/song-media-details-response.dto';
 import { SongSummaryResponseDto } from './dto/song-summary-response.dto';
 import { UpdateSongDto, updateSongSchema } from './dto/update-song.schema';
 import { SongsService } from './songs.service';
@@ -101,5 +106,27 @@ export class SongsController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<SongDetailsResponseDto> {
     return this.songsService.restore(id);
+  }
+
+  @Post(':songId/media/:mediaId/verify')
+  @HttpCode(200)
+  @UseGuards(PermissionsGuard)
+  @Permissions(Permission.CONTENT_APPROVE)
+  verifyMedia(
+    @Param('songId', ParseUUIDPipe) songId: string,
+    @Param('mediaId', ParseUUIDPipe) mediaId: string,
+  ): Promise<SongMediaDetailsResponseDto> {
+    return this.songsService.verifyMedia(songId, mediaId);
+  }
+
+  @Post(':songId/media/:mediaId/unverify')
+  @HttpCode(200)
+  @UseGuards(PermissionsGuard)
+  @Permissions(Permission.CONTENT_APPROVE)
+  unverifyMedia(
+    @Param('songId', ParseUUIDPipe) songId: string,
+    @Param('mediaId', ParseUUIDPipe) mediaId: string,
+  ): Promise<SongMediaDetailsResponseDto> {
+    return this.songsService.unverifyMedia(songId, mediaId);
   }
 }

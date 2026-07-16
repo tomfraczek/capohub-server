@@ -20,6 +20,7 @@ import {
 } from './dto/create-song.schema';
 import { ListSongsQuery } from './dto/song-list-query.schema';
 import { SongDetailsResponseDto } from './dto/song-details-response.dto';
+import { SongMediaDetailsResponseDto } from './dto/song-media-details-response.dto';
 import { SongSummaryResponseDto } from './dto/song-summary-response.dto';
 import { UpdateSongInput } from './dto/update-song.schema';
 import { SongAlternativeTitle } from './entities/song-alternative-title.entity';
@@ -34,6 +35,7 @@ import { Tag } from './entities/tag.entity';
 import { SongStatus } from './enums/song-status.enum';
 import {
   toSongDetailsResponseDto,
+  toSongMediaDetailsResponseDto,
   toSongSummaryResponseDto,
 } from './mappers/song.mapper';
 import {
@@ -260,6 +262,56 @@ export class SongsService {
       // DB-level ON DELETE CASCADE removes every child row (parts, lines,
       // translations, alternative titles, tags, media) with this single delete.
       await em.remove(song).flush();
+    });
+  }
+
+  async verifyMedia(
+    songId: string,
+    mediaId: string,
+  ): Promise<SongMediaDetailsResponseDto> {
+    return this.setMediaVerified(songId, mediaId, true);
+  }
+
+  async unverifyMedia(
+    songId: string,
+    mediaId: string,
+  ): Promise<SongMediaDetailsResponseDto> {
+    return this.setMediaVerified(songId, mediaId, false);
+  }
+
+  // Scoping the lookup by both id and song in one query - rather than
+  // fetching by mediaId alone and checking song.id afterwards - is what
+  // makes "media exists but belongs to a different song" indistinguishable
+  // from "media doesn't exist", which is the point: neither leaks anything
+  // about media the caller didn't ask for by songId.
+  //
+  // Wrapped in em.transactional for consistency with every other mutation
+  // in this service, even though a single-field UPDATE is already atomic on
+  // its own - see the Etap 8.2.1 report for this call.
+  private async setMediaVerified(
+    songId: string,
+    mediaId: string,
+    isVerified: boolean,
+  ): Promise<SongMediaDetailsResponseDto> {
+    return this.em.transactional(async (em) => {
+      const media = await em.findOne(SongMedia, {
+        id: mediaId,
+        song: songId,
+      });
+
+      if (!media) {
+        throw new NotFoundException({
+          code: 'SONG_MEDIA_NOT_FOUND',
+          message: 'Song media not found',
+        });
+      }
+
+      if (media.isVerified !== isVerified) {
+        media.isVerified = isVerified;
+        await em.flush();
+      }
+
+      return toSongMediaDetailsResponseDto(media);
     });
   }
 

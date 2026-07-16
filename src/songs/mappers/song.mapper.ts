@@ -6,11 +6,28 @@ import {
   SongMediaResponseDto,
   SongPartResponseDto,
 } from '../dto/song-details-response.dto';
+import { SongMediaDetailsResponseDto } from '../dto/song-media-details-response.dto';
 import { SongSummaryResponseDto } from '../dto/song-summary-response.dto';
 import { SongUserRefDto } from '../dto/song-user-ref.dto';
+import { SongMedia } from '../entities/song-media.entity';
 import { Song } from '../entities/song.entity';
 import { toSongCategoryResponseDto } from './song-category.mapper';
 import { toTagResponseDto } from './tag.mapper';
+
+// Shared by toSongDetailsResponseDto's nested `media` array and by
+// toSongMediaDetailsResponseDto (verify/unverify endpoints), so the field
+// list is only written once.
+function mapSongMediaFields(media: SongMedia): SongMediaResponseDto {
+  return {
+    id: media.id,
+    provider: media.provider,
+    url: media.url,
+    title: media.title,
+    position: media.position,
+    isVerified: media.isVerified,
+    createdBy: toSongUserRefDto(media.createdBy),
+  };
+}
 
 // clerkUserId, email and globalRole are deliberately never exposed here.
 export function toSongUserRefDto(user: User | null): SongUserRefDto | null {
@@ -61,20 +78,28 @@ export function toSongDetailsResponseDto(song: Song): SongDetailsResponseDto {
         })),
       })),
     })),
-    media: song.media.getItems().map((media): SongMediaResponseDto => ({
-      id: media.id,
-      provider: media.provider,
-      url: media.url,
-      title: media.title,
-      position: media.position,
-      isVerified: media.isVerified,
-      createdBy: toSongUserRefDto(media.createdBy),
-    })),
+    media: song.media.getItems().map(mapSongMediaFields),
     meaningHistory: song.meaningHistory,
     meaningContext: song.meaningContext,
     meaningTrivia: song.meaningTrivia,
     createdAt: song.createdAt.toISOString(),
     updatedAt: song.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Maps a single SongMedia row to the standalone response returned by the
+ * verify/unverify endpoints. `media.song` only needs its id (the FK), which
+ * MikroORM always has available without an explicit populate.
+ */
+export function toSongMediaDetailsResponseDto(
+  media: SongMedia,
+): SongMediaDetailsResponseDto {
+  return {
+    ...mapSongMediaFields(media),
+    songId: media.song.id,
+    createdAt: media.createdAt.toISOString(),
+    updatedAt: media.updatedAt.toISOString(),
   };
 }
 

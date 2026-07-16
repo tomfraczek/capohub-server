@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { AppModule } from '../src/app.module';
 import { ClerkAuthService } from '../src/auth/clerk/clerk-auth.service';
 import { CLERK_CLIENT } from '../src/auth/clerk/clerk-client.provider';
+import { GlobalRole } from '../src/auth/permissions/global-role.enum';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
@@ -18,6 +19,7 @@ import { PaginatedResponse } from '../src/common/pagination/pagination.types';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { SongDetailsResponseDto } from '../src/songs/dto/song-details-response.dto';
+import { SongMediaDetailsResponseDto } from '../src/songs/dto/song-media-details-response.dto';
 import { SongSummaryResponseDto } from '../src/songs/dto/song-summary-response.dto';
 import { Song } from '../src/songs/entities/song.entity';
 import { SongCategory } from '../src/songs/entities/song-category.entity';
@@ -26,8 +28,10 @@ import { Tag } from '../src/songs/entities/tag.entity';
 
 const OWNER_TOKEN = 'valid-songs-owner-token';
 const OTHER_TOKEN = 'valid-songs-other-token';
+const MODERATOR_TOKEN = 'valid-songs-moderator-token';
 const OWNER_CLERK_ID = 'user_test_songs_owner';
 const OTHER_CLERK_ID = 'user_test_songs_other';
+const MODERATOR_CLERK_ID = 'user_test_songs_moderator';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
   [OWNER_TOKEN]: {
@@ -42,6 +46,12 @@ const TOKEN_TO_AUTH: Record<string, AuthContext> = {
     tokenType: 'session_token',
     claims: { sub: OTHER_CLERK_ID, sid: 'sess_songs_other' },
   },
+  [MODERATOR_TOKEN]: {
+    userId: MODERATOR_CLERK_ID,
+    sessionId: 'sess_songs_moderator',
+    tokenType: 'session_token',
+    claims: { sub: MODERATOR_CLERK_ID, sid: 'sess_songs_moderator' },
+  },
 };
 
 const FIXTURE_CLERK_PROFILES: Record<
@@ -55,6 +65,10 @@ const FIXTURE_CLERK_PROFILES: Record<
   [OTHER_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/songs-other.png',
     primaryEmailAddress: { emailAddress: 'songs.other@example.com' },
+  },
+  [MODERATOR_CLERK_ID]: {
+    imageUrl: 'https://img.clerk.com/songs-moderator.png',
+    primaryEmailAddress: { emailAddress: 'songs.moderator@example.com' },
   },
 };
 
@@ -261,6 +275,25 @@ describe('Songs (e2e)', () => {
         .set('Authorization', `Bearer ${token}`)
         .expect(200),
     );
+  }
+
+  // Grants CONTENT_APPROVE by setting globalRole directly through the
+  // EntityManager fixture, never through a public endpoint (there is none -
+  // globalRole is never settable via the API, see UserService). The first
+  // authenticated request is what creates the local User row via
+  // findOrCreateFromClerk, so it must happen before we can look the row up.
+  async function grantContentApprove(token: string): Promise<void> {
+    await request(app.getHttpServer())
+      .get('/api/v1/songs')
+      .query({ page: 1, limit: 1 })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    const em = app.get(EntityManager).fork();
+    const auth = TOKEN_TO_AUTH[token];
+    const user = await em.findOneOrFail(User, { clerkUserId: auth.userId });
+    user.globalRole = GlobalRole.MODERATOR;
+    await em.flush();
   }
 
   describe('CRUD', () => {
@@ -768,6 +801,146 @@ describe('Songs (e2e)', () => {
           .expect(409),
       );
       expect(response.code).toBe('SONG_NOT_DELETABLE');
+    });
+  });
+
+  describe('media verification', () => {
+    it('verifies and unverifies a media source, idempotently, as a moderator', async () => {
+      await grantContentApprove(MODERATOR_TOKEN);
+
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      const mediaId = song.media[0].id;
+      expect(song.media[0].isVerified).toBe(false);
+
+      const verified = await bodyOf<SongMediaDetailsResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/songs/${song.id}/media/${mediaId}/verify`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+          .expect(200),
+      );
+      expect(verified).toMatchObject({
+        id: mediaId,
+        songId: song.id,
+        isVerified: true,
+      });
+
+      const detailsAfterVerify = await bodyOf<SongDetailsResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/songs/${song.id}`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+          .expect(200),
+      );
+      expect(detailsAfterVerify.media[0].isVerified).toBe(true);
+
+      // Re-verify is idempotent - still 200, still true.
+      const reVerified = await bodyOf<SongMediaDetailsResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/songs/${song.id}/media/${mediaId}/verify`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+          .expect(200),
+      );
+      expect(reVerified.isVerified).toBe(true);
+
+      const unverified = await bodyOf<SongMediaDetailsResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/songs/${song.id}/media/${mediaId}/unverify`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+          .expect(200),
+      );
+      expect(unverified.isVerified).toBe(false);
+
+      // Re-unverify is idempotent - still 200, still false.
+      const reUnverified = await bodyOf<SongMediaDetailsResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/songs/${song.id}/media/${mediaId}/unverify`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+          .expect(200),
+      );
+      expect(reUnverified.isVerified).toBe(false);
+    });
+
+    it('rejects verify without CONTENT_APPROVE with 403', async () => {
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      const mediaId = song.media[0].id;
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/media/${mediaId}/verify`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(403);
+    });
+
+    it('rejects verify without a token with 401', async () => {
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      const mediaId = song.media[0].id;
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/media/${mediaId}/verify`)
+        .expect(401);
+    });
+
+    it('rejects a malformed songId or mediaId with 400', async () => {
+      await grantContentApprove(MODERATOR_TOKEN);
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      const mediaId = song.media[0].id;
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/not-a-uuid/media/${mediaId}/verify`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/media/not-a-uuid/verify`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .expect(400);
+    });
+
+    it('returns 404 SONG_MEDIA_NOT_FOUND for a non-existent media id', async () => {
+      await grantContentApprove(MODERATOR_TOKEN);
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/songs/${song.id}/media/${randomUUID()}/verify`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+          .expect(404),
+      );
+      expect(response.code).toBe('SONG_MEDIA_NOT_FOUND');
+    });
+
+    it('returns 404 when the media belongs to a different song', async () => {
+      await grantContentApprove(MODERATOR_TOKEN);
+      const songA = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      const songB = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      const mediaFromSongB = songB.media[0].id;
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/songs/${songA.id}/media/${mediaFromSongB}/verify`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+          .expect(404),
+      );
+      expect(response.code).toBe('SONG_MEDIA_NOT_FOUND');
     });
   });
 });
