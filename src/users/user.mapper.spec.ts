@@ -1,4 +1,5 @@
 import { GlobalRole } from '../auth/permissions/global-role.enum';
+import { AvatarType } from './enums/avatar-type.enum';
 import { User } from './entities/user.entity';
 import { toUserResponseDto } from './user.mapper';
 
@@ -8,7 +9,9 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.clerkUserId = 'user_clerk_1';
   user.email = 'dev@example.com';
   user.displayName = 'Ada Lovelace';
+  user.avatarType = AvatarType.CLERK;
   user.avatarUrl = 'https://img.clerk.com/ada.png';
+  user.presetAvatarId = null;
   user.theme = 'dark';
   user.notificationsEnabled = false;
   user.globalRole = GlobalRole.EDITOR;
@@ -27,7 +30,9 @@ describe('toUserResponseDto', () => {
       id: 'user-uuid-1',
       email: 'dev@example.com',
       displayName: 'Ada Lovelace',
+      avatarType: AvatarType.CLERK,
       avatarUrl: 'https://img.clerk.com/ada.png',
+      presetAvatarId: null,
       theme: 'dark',
       notificationsEnabled: false,
       globalRole: GlobalRole.EDITOR,
@@ -48,6 +53,20 @@ describe('toUserResponseDto', () => {
     const user = buildUser({ avatarUrl: null });
 
     expect(toUserResponseDto(user)).toMatchObject({ avatarUrl: null });
+  });
+
+  it('maps a PRESET avatar (presetAvatarId set, avatarUrl null)', () => {
+    const user = buildUser({
+      avatarType: AvatarType.PRESET,
+      presetAvatarId: 'berimbau-01',
+      avatarUrl: null,
+    });
+
+    expect(toUserResponseDto(user)).toMatchObject({
+      avatarType: AvatarType.PRESET,
+      presetAvatarId: 'berimbau-01',
+      avatarUrl: null,
+    });
   });
 
   it('never includes clerkUserId, isActive, or lastLoginAt', () => {

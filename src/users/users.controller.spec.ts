@@ -1,4 +1,5 @@
 import { GlobalRole } from '../auth/permissions/global-role.enum';
+import { AvatarType } from './enums/avatar-type.enum';
 import { UserService } from './user.service';
 import { User } from './entities/user.entity';
 import { UsersController } from './users.controller';
@@ -9,7 +10,9 @@ function buildUser(): User {
   user.clerkUserId = 'user_clerk_1';
   user.email = 'ada@example.com';
   user.displayName = 'Ada Lovelace';
+  user.avatarType = AvatarType.CLERK;
   user.avatarUrl = 'https://img.clerk.com/ada.png';
+  user.presetAvatarId = null;
   user.theme = 'system';
   user.notificationsEnabled = true;
   user.globalRole = GlobalRole.USER;
@@ -31,7 +34,9 @@ describe('UsersController', () => {
         id: 'user-uuid-1',
         email: 'ada@example.com',
         displayName: 'Ada Lovelace',
+        avatarType: AvatarType.CLERK,
         avatarUrl: 'https://img.clerk.com/ada.png',
+        presetAvatarId: null,
         theme: 'system',
         notificationsEnabled: true,
         globalRole: GlobalRole.USER,
@@ -70,6 +75,50 @@ describe('UsersController', () => {
         displayName: 'Updated Name',
       });
       expect(response.displayName).toBe('Updated Name');
+    });
+  });
+
+  describe('setAvatarPreset', () => {
+    it('delegates to UserService.setAvatarPreset and maps the result', async () => {
+      const user = buildUser();
+      const setAvatarPreset = jest.fn().mockImplementation((u: User) => {
+        u.avatarType = AvatarType.PRESET;
+        u.presetAvatarId = 'berimbau-01';
+        u.avatarUrl = null;
+        return Promise.resolve(u);
+      });
+      const userService = { setAvatarPreset } as unknown as UserService;
+      const controller = new UsersController(userService);
+
+      const response = await controller.setAvatarPreset(user, {
+        presetAvatarId: 'berimbau-01',
+      });
+
+      expect(setAvatarPreset).toHaveBeenCalledWith(user, 'berimbau-01');
+      expect(response.avatarType).toBe(AvatarType.PRESET);
+      expect(response.presetAvatarId).toBe('berimbau-01');
+      expect(response.avatarUrl).toBeNull();
+    });
+  });
+
+  describe('resetAvatarToClerk', () => {
+    it('delegates to UserService.resetAvatarToClerk and maps the result', async () => {
+      const user = buildUser();
+      const resetAvatarToClerk = jest.fn().mockImplementation((u: User) => {
+        u.avatarType = AvatarType.CLERK;
+        u.avatarUrl = 'https://img.clerk.com/fresh.png';
+        u.presetAvatarId = null;
+        return Promise.resolve(u);
+      });
+      const userService = { resetAvatarToClerk } as unknown as UserService;
+      const controller = new UsersController(userService);
+
+      const response = await controller.resetAvatarToClerk(user);
+
+      expect(resetAvatarToClerk).toHaveBeenCalledWith(user);
+      expect(response.avatarType).toBe(AvatarType.CLERK);
+      expect(response.avatarUrl).toBe('https://img.clerk.com/fresh.png');
+      expect(response.presetAvatarId).toBeNull();
     });
   });
 

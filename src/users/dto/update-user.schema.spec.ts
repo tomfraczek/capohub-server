@@ -96,6 +96,18 @@ describe('updateUserSchema', () => {
     expect(result.data).toEqual({ displayName: 'Ada' });
   });
 
+  it('strips avatarType/avatarUrl/presetAvatarId - avatar changes go through their own endpoints', () => {
+    const result = updateUserSchema.safeParse({
+      displayName: 'Ada',
+      avatarType: 'UPLOAD',
+      avatarUrl: 'https://evil.example.com/avatar.png',
+      presetAvatarId: 'berimbau-01',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual({ displayName: 'Ada' });
+  });
+
   it('updates all three fields together', () => {
     const result = updateUserSchema.parse({
       displayName: ' Mestre Capoeira ',

@@ -15,6 +15,7 @@ import { AuthContext } from './../src/auth/types/auth-context.type';
 import { AppConfigService } from './../src/config/app.config';
 import { HttpExceptionFilter } from './../src/common/filters/http-exception.filter';
 import { User } from './../src/users/entities/user.entity';
+import { AvatarType } from './../src/users/enums/avatar-type.enum';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
   'valid-test-token': {
@@ -297,6 +298,135 @@ describe('App (e2e)', () => {
       clerkUserId: 'user_test_flow',
     });
     expect(persisted.globalRole).toBe(GlobalRole.USER);
+  });
+
+  describe('avatar', () => {
+    it('GET /api/v1/users/me returns avatarType and presetAvatarId', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/users/me')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        avatarType: 'CLERK',
+        avatarUrl: 'https://img.clerk.com/flow-tester.png',
+        presetAvatarId: null,
+      });
+    });
+
+    it('PUT /api/v1/users/me/avatar/preset sets a PRESET avatar and clears avatarUrl', async () => {
+      const response = await request(app.getHttpServer())
+        .put('/api/v1/users/me/avatar/preset')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .send({ presetAvatarId: 'berimbau-01' })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        avatarType: 'PRESET',
+        presetAvatarId: 'berimbau-01',
+        avatarUrl: null,
+      });
+    });
+
+    it('PUT /api/v1/users/me/avatar/preset rejects an invalid presetAvatarId', async () => {
+      await request(app.getHttpServer())
+        .put('/api/v1/users/me/avatar/preset')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .send({ presetAvatarId: 'Not Valid!' })
+        .expect(400);
+    });
+
+    it('PUT /api/v1/users/me/avatar/preset without a token returns 401', async () => {
+      await request(app.getHttpServer())
+        .put('/api/v1/users/me/avatar/preset')
+        .send({ presetAvatarId: 'berimbau-01' })
+        .expect(401);
+    });
+
+    it('a subsequent GET keeps PRESET - Clerk sync must not overwrite it', async () => {
+      await request(app.getHttpServer())
+        .put('/api/v1/users/me/avatar/preset')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .send({ presetAvatarId: 'berimbau-02' })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/users/me')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        avatarType: 'PRESET',
+        presetAvatarId: 'berimbau-02',
+        avatarUrl: null,
+      });
+    });
+
+    it('PUT /api/v1/users/me/avatar/clerk restores the current Clerk avatar and clears presetAvatarId', async () => {
+      await request(app.getHttpServer())
+        .put('/api/v1/users/me/avatar/preset')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .send({ presetAvatarId: 'berimbau-01' })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .put('/api/v1/users/me/avatar/clerk')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        avatarType: 'CLERK',
+        avatarUrl: 'https://img.clerk.com/flow-tester.png',
+        presetAvatarId: null,
+      });
+
+      const em = app.get(EntityManager).fork();
+      const persisted = await em.findOneOrFail(User, {
+        clerkUserId: 'user_test_flow',
+      });
+      expect(persisted.avatarType).toBe(AvatarType.CLERK);
+      expect(persisted.presetAvatarId).toBeNull();
+    });
+
+    it('PUT /api/v1/users/me/avatar/clerk without a token returns 401', async () => {
+      await request(app.getHttpServer())
+        .put('/api/v1/users/me/avatar/clerk')
+        .expect(401);
+    });
+
+    it('PATCH /api/v1/users/me cannot change avatarType, avatarUrl or presetAvatarId', async () => {
+      await request(app.getHttpServer())
+        .put('/api/v1/users/me/avatar/preset')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .send({ presetAvatarId: 'berimbau-01' })
+        .expect(200);
+
+      const patchResponse = await request(app.getHttpServer())
+        .patch('/api/v1/users/me')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .send({
+          displayName: 'Still Mine',
+          avatarType: 'UPLOAD',
+          avatarUrl: 'https://evil.example.com/avatar.png',
+          presetAvatarId: 'hacked',
+        })
+        .expect(200);
+
+      expect(patchResponse.body).toMatchObject({
+        displayName: 'Still Mine',
+        avatarType: 'PRESET',
+        presetAvatarId: 'berimbau-01',
+        avatarUrl: null,
+      });
+
+      const em = app.get(EntityManager).fork();
+      const persisted = await em.findOneOrFail(User, {
+        clerkUserId: 'user_test_flow',
+      });
+      expect(persisted.avatarType).toBe(AvatarType.PRESET);
+      expect(persisted.presetAvatarId).toBe('berimbau-01');
+      expect(persisted.avatarUrl).toBeNull();
+    });
   });
 
   it('DELETE /api/v1/users/me deletes the local user (and the Clerk account)', async () => {

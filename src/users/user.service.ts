@@ -5,6 +5,7 @@ import type { ClerkClient } from '@clerk/backend';
 import { CLERK_CLIENT } from '../auth/clerk/clerk-client.provider';
 import { AuthContext } from '../auth/types/auth-context.type';
 import { ClerkProfile } from './clerk-profile.type';
+import { AvatarType } from './enums/avatar-type.enum';
 import { User, Theme } from './entities/user.entity';
 import { generateDisplayNameFromEmail } from './generate-display-name';
 
@@ -78,6 +79,30 @@ export class UserService {
     return user;
   }
 
+  // PUT /users/me/avatar/preset. Switches the avatar to a built-in preset
+  // identified only by id - the backend does not know or validate the list
+  // of valid presets, that lives in the mobile app as static assets.
+  async setAvatarPreset(user: User, presetAvatarId: string): Promise<User> {
+    user.avatarType = AvatarType.PRESET;
+    user.presetAvatarId = presetAvatarId;
+    user.avatarUrl = null;
+    await this.em.flush();
+    return user;
+  }
+
+  // PUT /users/me/avatar/clerk. Switches the avatar back to Clerk, fetching
+  // the current profile rather than trusting whatever was last synced, since
+  // the user's avatar may have changed on Clerk's side while UPLOAD/PRESET
+  // was active and applyProfileChanges would not have picked it up.
+  async resetAvatarToClerk(user: User): Promise<User> {
+    const profile = await this.fetchClerkProfile(user.clerkUserId);
+    user.avatarType = AvatarType.CLERK;
+    user.avatarUrl = profile.avatarUrl;
+    user.presetAvatarId = null;
+    await this.em.flush();
+    return user;
+  }
+
   // Deletes everything this user owns. Only the User row exists today;
   // future modules (playlists, notes, learning progress, favorites, ...)
   // should extend this method with their own cascade-delete calls.
@@ -89,19 +114,27 @@ export class UserService {
     const user = new User();
     user.clerkUserId = clerkUserId;
     user.email = profile.email;
+    user.avatarType = AvatarType.CLERK;
     user.avatarUrl = profile.avatarUrl;
+    user.presetAvatarId = null;
     user.displayName = generateDisplayNameFromEmail(profile.email);
     return user;
   }
 
   // displayName is deliberately excluded here: it's local/user-owned (see
   // PATCH /users/me), and re-syncing it from Clerk would silently overwrite
-  // a user's edit on the very next request.
+  // a user's edit on the very next request. avatarUrl is only synced while
+  // avatarType is CLERK - once the user picks UPLOAD or PRESET, this method
+  // must not touch avatarUrl/presetAvatarId again (see avatar/preset and
+  // avatar/clerk endpoints for the only ways to change avatarType).
   private applyProfileChanges(user: User, profile: ClerkProfile): void {
     if (user.email !== profile.email) {
       user.email = profile.email;
     }
-    if (user.avatarUrl !== profile.avatarUrl) {
+    if (
+      user.avatarType === AvatarType.CLERK &&
+      user.avatarUrl !== profile.avatarUrl
+    ) {
       user.avatarUrl = profile.avatarUrl;
     }
   }

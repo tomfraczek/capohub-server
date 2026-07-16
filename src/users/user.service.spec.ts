@@ -2,6 +2,7 @@ import { EntityManager, EntityRepository } from '@mikro-orm/core';
 import type { ClerkClient } from '@clerk/backend';
 import { AuthContext } from '../auth/types/auth-context.type';
 import { GlobalRole } from '../auth/permissions/global-role.enum';
+import { AvatarType } from './enums/avatar-type.enum';
 import { User } from './entities/user.entity';
 import { UserService } from './user.service';
 
@@ -77,6 +78,33 @@ describe('UserService', () => {
       expect(user.email).toBe('ada.lovelace@example.com');
       expect(user.avatarUrl).toBe('https://img.clerk.com/ada.png');
       expect(em.persistAndFlush).toHaveBeenCalledWith(user);
+    });
+
+    it('sets avatarType CLERK, avatarUrl and null presetAvatarId when Clerk returns an imageUrl', async () => {
+      const { service } = buildService({
+        findOne: jest.fn().mockResolvedValue(null),
+      });
+
+      const user = await service.findOrCreateFromClerk(buildAuth());
+
+      expect(user.avatarType).toBe(AvatarType.CLERK);
+      expect(user.avatarUrl).toBe('https://img.clerk.com/ada.png');
+      expect(user.presetAvatarId).toBeNull();
+    });
+
+    it('sets avatarType CLERK and null avatarUrl/presetAvatarId when Clerk has no imageUrl', async () => {
+      const { service } = buildService({
+        findOne: jest.fn().mockResolvedValue(null),
+        getUser: jest
+          .fn()
+          .mockResolvedValue(buildClerkUser({ imageUrl: null })),
+      });
+
+      const user = await service.findOrCreateFromClerk(buildAuth());
+
+      expect(user.avatarType).toBe(AvatarType.CLERK);
+      expect(user.avatarUrl).toBeNull();
+      expect(user.presetAvatarId).toBeNull();
     });
 
     it('generates displayName from the email local part on create', async () => {
@@ -179,6 +207,65 @@ describe('UserService', () => {
       expect(em.persistAndFlush).not.toHaveBeenCalled();
     });
 
+    it('syncs avatarUrl from Clerk for an existing user with avatarType CLERK', async () => {
+      const existing = new User();
+      existing.clerkUserId = 'user_clerk_1';
+      existing.email = 'ada.lovelace@example.com';
+      existing.displayName = 'Ada Lovelace';
+      existing.avatarType = AvatarType.CLERK;
+      existing.avatarUrl = 'https://img.clerk.com/old.png';
+
+      const { service } = buildService({
+        findOne: jest.fn().mockResolvedValue(existing),
+        getUser: jest.fn().mockResolvedValue(buildClerkUser()),
+      });
+
+      const user = await service.findOrCreateFromClerk(buildAuth());
+
+      expect(user.avatarType).toBe(AvatarType.CLERK);
+      expect(user.avatarUrl).toBe('https://img.clerk.com/ada.png');
+    });
+
+    it('does not overwrite avatarUrl for an existing user with avatarType UPLOAD', async () => {
+      const existing = new User();
+      existing.clerkUserId = 'user_clerk_1';
+      existing.email = 'ada.lovelace@example.com';
+      existing.displayName = 'Ada Lovelace';
+      existing.avatarType = AvatarType.UPLOAD;
+      existing.avatarUrl = 'https://uploads.capohub.app/ada.png';
+
+      const { service } = buildService({
+        findOne: jest.fn().mockResolvedValue(existing),
+        getUser: jest.fn().mockResolvedValue(buildClerkUser()),
+      });
+
+      const user = await service.findOrCreateFromClerk(buildAuth());
+
+      expect(user.avatarType).toBe(AvatarType.UPLOAD);
+      expect(user.avatarUrl).toBe('https://uploads.capohub.app/ada.png');
+    });
+
+    it('does not overwrite presetAvatarId/avatarUrl for an existing user with avatarType PRESET', async () => {
+      const existing = new User();
+      existing.clerkUserId = 'user_clerk_1';
+      existing.email = 'ada.lovelace@example.com';
+      existing.displayName = 'Ada Lovelace';
+      existing.avatarType = AvatarType.PRESET;
+      existing.presetAvatarId = 'berimbau-01';
+      existing.avatarUrl = null;
+
+      const { service } = buildService({
+        findOne: jest.fn().mockResolvedValue(existing),
+        getUser: jest.fn().mockResolvedValue(buildClerkUser()),
+      });
+
+      const user = await service.findOrCreateFromClerk(buildAuth());
+
+      expect(user.avatarType).toBe(AvatarType.PRESET);
+      expect(user.presetAvatarId).toBe('berimbau-01');
+      expect(user.avatarUrl).toBeNull();
+    });
+
     it('does not update lastLoginAt for an existing user (login-only, not activity)', async () => {
       const originalLastLoginAt = new Date('2020-01-01T00:00:00.000Z');
       const existing = new User();
@@ -261,6 +348,83 @@ describe('UserService', () => {
       expect(deleteUser).toHaveBeenCalledWith('user_clerk_1');
       expect(em.removeAndFlush).toHaveBeenCalledWith(user);
       expect(calls).toEqual(['clerk', 'local']);
+    });
+  });
+
+  describe('setAvatarPreset', () => {
+    it('sets avatarType PRESET, presetAvatarId, and clears avatarUrl', async () => {
+      const user = new User();
+      user.avatarType = AvatarType.CLERK;
+      user.avatarUrl = 'https://img.clerk.com/ada.png';
+      const { service, em } = buildService({});
+
+      const updated = await service.setAvatarPreset(user, 'berimbau-01');
+
+      expect(updated.avatarType).toBe(AvatarType.PRESET);
+      expect(updated.presetAvatarId).toBe('berimbau-01');
+      expect(updated.avatarUrl).toBeNull();
+      expect(em.flush).toHaveBeenCalled();
+    });
+
+    it('never touches displayName', async () => {
+      const user = new User();
+      user.displayName = 'Keep Me';
+      const { service } = buildService({});
+
+      const updated = await service.setAvatarPreset(user, 'berimbau-01');
+
+      expect(updated.displayName).toBe('Keep Me');
+    });
+  });
+
+  describe('resetAvatarToClerk', () => {
+    it('fetches the current Clerk profile and sets avatarType CLERK with its imageUrl', async () => {
+      const user = new User();
+      user.clerkUserId = 'user_clerk_1';
+      user.avatarType = AvatarType.PRESET;
+      user.presetAvatarId = 'berimbau-01';
+      user.avatarUrl = null;
+      const getUser = jest.fn().mockResolvedValue(buildClerkUser());
+      const { service, em } = buildService({ getUser });
+
+      const updated = await service.resetAvatarToClerk(user);
+
+      expect(getUser).toHaveBeenCalledWith('user_clerk_1');
+      expect(updated.avatarType).toBe(AvatarType.CLERK);
+      expect(updated.avatarUrl).toBe('https://img.clerk.com/ada.png');
+      expect(updated.presetAvatarId).toBeNull();
+      expect(em.flush).toHaveBeenCalled();
+    });
+
+    it('sets avatarUrl to null when Clerk has no imageUrl', async () => {
+      const user = new User();
+      user.clerkUserId = 'user_clerk_1';
+      user.avatarType = AvatarType.UPLOAD;
+      user.avatarUrl = 'https://uploads.capohub.app/ada.png';
+      const { service } = buildService({
+        getUser: jest
+          .fn()
+          .mockResolvedValue(buildClerkUser({ imageUrl: null })),
+      });
+
+      const updated = await service.resetAvatarToClerk(user);
+
+      expect(updated.avatarType).toBe(AvatarType.CLERK);
+      expect(updated.avatarUrl).toBeNull();
+      expect(updated.presetAvatarId).toBeNull();
+    });
+
+    it('never touches displayName', async () => {
+      const user = new User();
+      user.clerkUserId = 'user_clerk_1';
+      user.displayName = 'Keep Me';
+      const { service } = buildService({
+        getUser: jest.fn().mockResolvedValue(buildClerkUser()),
+      });
+
+      const updated = await service.resetAvatarToClerk(user);
+
+      expect(updated.displayName).toBe('Keep Me');
     });
   });
 
