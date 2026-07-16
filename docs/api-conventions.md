@@ -45,6 +45,19 @@ endpoint defines its own allowlist of sortable fields.
 
 See `src/common/sorting/`.
 
+## Multi-value filters
+
+A filter that accepts several ids (e.g. `tagIds` on `GET /songs`) is passed
+as one comma-separated query param, not repeated params:
+
+```
+?tagIds=uuid1,uuid2
+```
+
+Unless an endpoint says otherwise, this semantics is **AND**: a matching
+record must satisfy every value in the list (e.g. `GET /songs?tagIds=a,b`
+returns only songs tagged with both `a` and `b`, not either).
+
 ## List response shape
 
 ```json

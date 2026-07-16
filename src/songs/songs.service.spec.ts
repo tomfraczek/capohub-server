@@ -1,0 +1,433 @@
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  Collection,
+  UniqueConstraintViolationException,
+} from '@mikro-orm/core';
+import type { EntityManager } from '@mikro-orm/postgresql';
+import { User } from '../users/entities/user.entity';
+import { CreateSongInput } from './dto/create-song.schema';
+import { SongAlternativeTitle } from './entities/song-alternative-title.entity';
+import { SongCategory } from './entities/song-category.entity';
+import { SongLine } from './entities/song-line.entity';
+import { SongMedia } from './entities/song-media.entity';
+import { SongPart } from './entities/song-part.entity';
+import { SongTag } from './entities/song-tag.entity';
+import { Song } from './entities/song.entity';
+import { SongPerformer } from './enums/song-performer.enum';
+import { SongStatus } from './enums/song-status.enum';
+import { SongsService } from './songs.service';
+
+function buildCategory(overrides: Partial<SongCategory> = {}): SongCategory {
+  const category = new SongCategory();
+  category.code = 'CORRIDO';
+  category.name = 'Corrido';
+  category.position = 1;
+  category.isActive = true;
+  return Object.assign(category, overrides);
+}
+
+function buildUser(overrides: Partial<User> = {}): User {
+  const user = new User();
+  user.email = 'user@example.com';
+  user.displayName = 'Test User';
+  return Object.assign(user, overrides);
+}
+
+function buildPopulatedSong(overrides: Partial<Song> = {}): Song {
+  const song = new Song();
+  song.title = 'Title';
+  song.slug = 'title';
+  song.category = buildCategory();
+  song.status = SongStatus.DRAFT;
+  song.alternativeTitles = new Collection<SongAlternativeTitle>(song, []);
+  song.tags = new Collection<SongTag>(song, []);
+  song.parts = new Collection<SongPart>(song, []);
+  song.media = new Collection<SongMedia>(song, []);
+  return Object.assign(song, overrides);
+}
+
+function buildCreateInput(
+  overrides: Partial<CreateSongInput> = {},
+): CreateSongInput {
+  return {
+    title: 'Paranauê',
+    slug: 'paranaue',
+    authorName: null,
+    categoryId: 'category-id',
+    alternativeTitles: [],
+    tagIds: [],
+    parts: [
+      {
+        performer: SongPerformer.LEAD,
+        position: 1,
+        lines: [
+          {
+            originalText: 'a',
+            phoneticText: null,
+            position: 1,
+            translations: [],
+          },
+        ],
+      },
+    ],
+    media: [],
+    meaningHistory: null,
+    meaningContext: null,
+    meaningTrivia: null,
+    ...overrides,
+  };
+}
+
+interface FindOneRouting {
+  category?: SongCategory | null;
+  existingSongForSlug?: Song | null;
+  detailsSong?: Song | null;
+}
+
+function buildMockEm(routing: FindOneRouting = {}) {
+  const flush = jest.fn().mockResolvedValue(undefined);
+  const persist = jest
+    .fn<{ flush: jest.Mock }, [object[]]>()
+    .mockReturnValue({ flush });
+  const remove = jest.fn().mockReturnValue({ flush });
+  const nativeDelete = jest.fn().mockResolvedValue(0);
+  const find = jest.fn().mockResolvedValue([]);
+
+  const findOne = jest
+    .fn()
+    .mockImplementation((entity: unknown, where: Record<string, unknown>) => {
+      if (entity === SongCategory) {
+        return Promise.resolve(
+          routing.category === undefined ? buildCategory() : routing.category,
+        );
+      }
+      if (entity === Song) {
+        if ('slug' in where) {
+          return Promise.resolve(routing.existingSongForSlug ?? null);
+        }
+        return Promise.resolve(
+          routing.detailsSong === undefined
+            ? buildPopulatedSong()
+            : routing.detailsSong,
+        );
+      }
+      return Promise.resolve(null);
+    });
+
+  const em = {
+    findOne,
+    find,
+    persist,
+    remove,
+    nativeDelete,
+    flush,
+    transactional: undefined as unknown as jest.Mock,
+  };
+  em.transactional = jest.fn((cb: (em: unknown) => unknown) => cb(em));
+
+  return em as unknown as EntityManager & {
+    transactional: jest.Mock;
+    findOne: jest.Mock;
+    find: jest.Mock;
+    persist: jest.Mock<{ flush: jest.Mock }, [object[]]>;
+    remove: jest.Mock;
+    nativeDelete: jest.Mock;
+    flush: jest.Mock;
+  };
+}
+
+describe('SongsService', () => {
+  describe('create', () => {
+    it('creates a song as DRAFT, owned by the current user, with unverified media', async () => {
+      const em = buildMockEm({
+        detailsSong: buildPopulatedSong({ createdBy: buildUser() }),
+      });
+      const service = new SongsService(em);
+      const user = buildUser();
+
+      let createdSong: Song | undefined;
+      em.persist.mockImplementation((entities: object[]) => {
+        createdSong = entities.find(
+          (entity): entity is Song => entity instanceof Song,
+        );
+        return { flush: em.flush };
+      });
+
+      await service.create(
+        user,
+        buildCreateInput({
+          media: [
+            {
+              provider: 'YOUTUBE' as never,
+              url: 'https://www.youtube.com/watch?v=abc',
+              title: null,
+              position: 1,
+            },
+          ],
+        }),
+      );
+
+      expect(createdSong).toBeDefined();
+      expect(createdSong?.status).toBe(SongStatus.DRAFT);
+      expect(createdSong?.createdBy).toBe(user);
+
+      const persistedEntities = em.persist.mock.calls[0][0];
+      const media = persistedEntities.find(
+        (entity): entity is SongMedia => entity instanceof SongMedia,
+      );
+      expect(media?.isVerified).toBe(false);
+      expect(media?.createdBy).toBe(user);
+    });
+
+    it('runs inside a transaction', async () => {
+      const em = buildMockEm();
+      const service = new SongsService(em);
+
+      await service.create(buildUser(), buildCreateInput());
+
+      expect(em.transactional).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects when categoryId does not reference an existing category', async () => {
+      const em = buildMockEm({ category: null });
+      const service = new SongsService(em);
+
+      await expect(
+        service.create(buildUser(), buildCreateInput()),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects when the category is not active', async () => {
+      const em = buildMockEm({ category: buildCategory({ isActive: false }) });
+      const service = new SongsService(em);
+
+      await expect(
+        service.create(buildUser(), buildCreateInput()),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects when a tagId does not resolve to an active tag', async () => {
+      const em = buildMockEm();
+      em.find.mockResolvedValue([]); // fewer tags returned than requested
+
+      const service = new SongsService(em);
+
+      await expect(
+        service.create(
+          buildUser(),
+          buildCreateInput({ tagIds: ['missing-tag-id'] }),
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects a duplicate slug', async () => {
+      const em = buildMockEm({ existingSongForSlug: buildPopulatedSong() });
+      const service = new SongsService(em);
+
+      await expect(
+        service.create(buildUser(), buildCreateInput()),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('maps a unique constraint violation on flush to a 409 Conflict', async () => {
+      const em = buildMockEm();
+      em.persist.mockReturnValue({
+        flush: jest
+          .fn()
+          .mockRejectedValue(
+            new UniqueConstraintViolationException(new Error('duplicate key')),
+          ),
+      });
+      const service = new SongsService(em);
+
+      await expect(
+        service.create(buildUser(), buildCreateInput()),
+      ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('getDetails', () => {
+    it('throws NotFoundException when the song does not exist', async () => {
+      const em = buildMockEm({ detailsSong: null });
+      const service = new SongsService(em);
+
+      await expect(service.getDetails('missing-id')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('update', () => {
+    it('replaces child collections and never changes createdBy or status', async () => {
+      const owner = buildUser({ email: 'owner@example.com' });
+      const editor = buildUser({ email: 'editor@example.com' });
+      const existingSong = buildPopulatedSong({
+        createdBy: owner,
+        status: SongStatus.PUBLISHED,
+      });
+
+      const em = buildMockEm({ detailsSong: existingSong });
+      em.findOne.mockImplementation(
+        (entity: unknown, where: Record<string, unknown>) => {
+          if (entity === SongCategory) return Promise.resolve(buildCategory());
+          if (entity === Song) {
+            if ('slug' in where) return Promise.resolve(null);
+            return Promise.resolve(existingSong);
+          }
+          return Promise.resolve(null);
+        },
+      );
+
+      const service = new SongsService(em);
+      await service.update(
+        existingSong.id,
+        editor,
+        buildCreateInput({ title: 'New title' }),
+      );
+
+      expect(em.nativeDelete).toHaveBeenCalledWith(SongAlternativeTitle, {
+        song: existingSong.id,
+      });
+      expect(em.nativeDelete).toHaveBeenCalledWith(SongTag, {
+        song: existingSong.id,
+      });
+      expect(em.nativeDelete).toHaveBeenCalledWith(SongPart, {
+        song: existingSong.id,
+      });
+      expect(em.nativeDelete).toHaveBeenCalledWith(SongMedia, {
+        song: existingSong.id,
+      });
+
+      expect(existingSong.createdBy).toBe(owner);
+      expect(existingSong.status).toBe(SongStatus.PUBLISHED);
+      expect(existingSong.title).toBe('New title');
+    });
+
+    it('throws NotFoundException for a missing song', async () => {
+      const em = buildMockEm({ detailsSong: null });
+      em.findOne.mockImplementation(
+        (entity: unknown, where: Record<string, unknown>) => {
+          if (entity === Song && 'id' in where) return Promise.resolve(null);
+          return Promise.resolve(buildCategory());
+        },
+      );
+      const service = new SongsService(em);
+
+      await expect(
+        service.update('missing-id', buildUser(), buildCreateInput()),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('moderation transitions', () => {
+    it('submit: moves DRAFT to PENDING_REVIEW when the song is complete', async () => {
+      const song = buildPopulatedSong({ status: SongStatus.DRAFT });
+      const part = new SongPart();
+      part.song = song;
+      part.performer = SongPerformer.LEAD;
+      part.position = 1;
+      const line = new SongLine();
+      line.part = part;
+      line.originalText = 'Meu mestre mandou chamar';
+      line.position = 1;
+      part.lines = new Collection<SongLine>(part, [line]);
+      song.parts = new Collection<SongPart>(song, [part]);
+
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(em);
+
+      await service.submit(song.id);
+
+      expect(song.status).toBe(SongStatus.PENDING_REVIEW);
+    });
+
+    it('submit: rejects an incomplete song (no parts) with 409', async () => {
+      const song = buildPopulatedSong({ status: SongStatus.DRAFT });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(em);
+
+      await expect(service.submit(song.id)).rejects.toThrow(ConflictException);
+    });
+
+    it('submit: rejects from an invalid source status (PUBLISHED)', async () => {
+      const song = buildPopulatedSong({ status: SongStatus.PUBLISHED });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(em);
+
+      await expect(service.submit(song.id)).rejects.toThrow(ConflictException);
+    });
+
+    it('publish: PENDING_REVIEW -> PUBLISHED', async () => {
+      const song = buildPopulatedSong({ status: SongStatus.PENDING_REVIEW });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(em);
+
+      await service.publish(song.id);
+
+      expect(song.status).toBe(SongStatus.PUBLISHED);
+    });
+
+    it('publish: rejects from DRAFT with 409', async () => {
+      const song = buildPopulatedSong({ status: SongStatus.DRAFT });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(em);
+
+      await expect(service.publish(song.id)).rejects.toThrow(ConflictException);
+    });
+
+    it('reject: PENDING_REVIEW -> REJECTED', async () => {
+      const song = buildPopulatedSong({ status: SongStatus.PENDING_REVIEW });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(em);
+
+      await service.reject(song.id);
+
+      expect(song.status).toBe(SongStatus.REJECTED);
+    });
+
+    it('hide: PUBLISHED -> HIDDEN', async () => {
+      const song = buildPopulatedSong({ status: SongStatus.PUBLISHED });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(em);
+
+      await service.hide(song.id);
+
+      expect(song.status).toBe(SongStatus.HIDDEN);
+    });
+
+    it('restore: HIDDEN -> PUBLISHED', async () => {
+      const song = buildPopulatedSong({ status: SongStatus.HIDDEN });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(em);
+
+      await service.restore(song.id);
+
+      expect(song.status).toBe(SongStatus.PUBLISHED);
+    });
+  });
+
+  describe('delete', () => {
+    it('physically deletes a DRAFT song', async () => {
+      const song = buildPopulatedSong({ status: SongStatus.DRAFT });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(em);
+
+      await service.delete(song.id);
+
+      expect(em.remove).toHaveBeenCalledWith(song);
+    });
+
+    it('rejects deleting a PUBLISHED song with 409', async () => {
+      const song = buildPopulatedSong({ status: SongStatus.PUBLISHED });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(em);
+
+      await expect(service.delete(song.id)).rejects.toThrow(ConflictException);
+      expect(em.remove).not.toHaveBeenCalled();
+    });
+  });
+});
