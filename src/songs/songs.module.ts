@@ -5,6 +5,7 @@ import { SongCategory } from './entities/song-category.entity';
 import { Tag } from './entities/tag.entity';
 import { SongCategoriesController } from './song-categories.controller';
 import { SongCategoriesService } from './song-categories.service';
+import { SongDuplicateService } from './song-duplicate.service';
 import { SongsController } from './songs.controller';
 import { SongsService } from './songs.service';
 import { TagsController } from './tags.controller';
@@ -19,6 +20,11 @@ import { TagsService } from './tags.service';
   // media verify/unverify endpoints.
   imports: [MikroOrmModule.forFeature([SongCategory, Tag]), PermissionsModule],
   controllers: [SongsController, SongCategoriesController, TagsController],
-  providers: [SongsService, SongCategoriesService, TagsService],
+  providers: [
+    SongsService,
+    SongDuplicateService,
+    SongCategoriesService,
+    TagsService,
+  ],
 })
 export class SongsModule {}

@@ -18,6 +18,7 @@ import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter
 import { PaginatedResponse } from '../src/common/pagination/pagination.types';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
+import { DuplicateSuggestionsResponseDto } from '../src/songs/dto/duplicate-suggestion-response.dto';
 import { SongDetailsResponseDto } from '../src/songs/dto/song-details-response.dto';
 import { SongMediaDetailsResponseDto } from '../src/songs/dto/song-media-details-response.dto';
 import { SongMediaVoteResponseDto } from '../src/songs/dto/song-media-vote-response.dto';
@@ -317,6 +318,56 @@ describe('Songs (e2e)', () => {
     return bodyOf<SongMediaVoteResponseDto>(
       request(app.getHttpServer())
         .put(`/api/v1/songs/${songId}/media/${mediaId}/vote`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200),
+    );
+  }
+
+  // A single-part, single-line payload with a fully controlled title and
+  // first line - unlike minimalSongPayload's random title suffix, tests in
+  // the "duplicate detection" block need two songs to genuinely share (or
+  // deliberately differ in) their title/first line.
+  function duplicateTestPayload(
+    categoryId: string,
+    title: string,
+    firstLine: string,
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return minimalSongPayload(categoryId, {
+      title,
+      alternativeTitles: [],
+      parts: [
+        {
+          performer: 'LEAD',
+          position: 1,
+          lines: [
+            {
+              originalText: firstLine,
+              phoneticText: null,
+              position: 1,
+              translations: [],
+            },
+          ],
+        },
+      ],
+      media: [],
+      ...overrides,
+    });
+  }
+
+  async function getDuplicateSuggestions(
+    token: string,
+    title: string,
+    limit?: number,
+  ): Promise<DuplicateSuggestionsResponseDto> {
+    const query: Record<string, string> = { title };
+    if (limit !== undefined) {
+      query.limit = String(limit);
+    }
+    return bodyOf<DuplicateSuggestionsResponseDto>(
+      request(app.getHttpServer())
+        .get('/api/v1/songs/duplicate-suggestions')
+        .query(query)
         .set('Authorization', `Bearer ${token}`)
         .expect(200),
     );
@@ -1132,6 +1183,391 @@ describe('Songs (e2e)', () => {
       // OTHER_TOKEN's user defaults to globalRole USER, which has no
       // CONTENT_APPROVE - voting must still succeed.
       await voteFor(OTHER_TOKEN, song.id, song.media[0].id);
+    });
+  });
+
+  describe('duplicate detection', () => {
+    describe('GET /songs/duplicate-suggestions', () => {
+      it('returns an empty list for a title shorter than 3 characters, without erroring', async () => {
+        const response = await getDuplicateSuggestions(OWNER_TOKEN, 'ab');
+        expect(response).toEqual({ items: [] });
+      });
+
+      it('finds an identical title at the top of the results', async () => {
+        const marker = randomUUID().slice(0, 8);
+        const title = `Suggestion Marker Exact ${marker}`;
+        const song = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(category.id, title, 'Some first line'),
+        );
+        await publishSong(OWNER_TOKEN, song.id);
+
+        const response = await getDuplicateSuggestions(OTHER_TOKEN, title);
+
+        expect(response.items[0]).toMatchObject({
+          id: song.id,
+          title,
+          firstLine: 'Some first line',
+          status: 'PUBLISHED',
+          similarity: 1,
+        });
+      });
+
+      it('finds a title with diacritics when the query has none', async () => {
+        const marker = randomUUID().slice(0, 8);
+        const title = `Paranauê Suggestion ${marker}`;
+        const song = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(category.id, title, 'Paranauê, paranauê Paraná'),
+        );
+        await publishSong(OWNER_TOKEN, song.id);
+
+        // Deliberately no diacritics in the search term.
+        const response = await getDuplicateSuggestions(
+          OTHER_TOKEN,
+          `paranaue suggestion ${marker}`,
+        );
+
+        expect(response.items.map((item) => item.id)).toContain(song.id);
+      });
+
+      it('respects the limit query param', async () => {
+        const marker = randomUUID().slice(0, 8);
+        const title = `Limit Marker ${marker}`;
+        const songA = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(category.id, title, 'Line A'),
+        );
+        await publishSong(OWNER_TOKEN, songA.id);
+        const songB = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(category.id, `${title} variant`, 'Line B'),
+        );
+        await publishSong(OWNER_TOKEN, songB.id);
+
+        const response = await getDuplicateSuggestions(OTHER_TOKEN, title, 1);
+
+        expect(response.items).toHaveLength(1);
+      });
+
+      it("does not return another user's DRAFT, but does return the owner's own DRAFT", async () => {
+        const marker = randomUUID().slice(0, 8);
+        const title = `Draft Visibility Marker ${marker}`;
+        const song = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(category.id, title, 'Draft line'),
+        );
+
+        const asOwner = await getDuplicateSuggestions(OWNER_TOKEN, title);
+        expect(asOwner.items.map((item) => item.id)).toContain(song.id);
+
+        const asOther = await getDuplicateSuggestions(OTHER_TOKEN, title);
+        expect(asOther.items.map((item) => item.id)).not.toContain(song.id);
+      });
+
+      it('returns a PENDING_REVIEW song to any authenticated user', async () => {
+        const marker = randomUUID().slice(0, 8);
+        const title = `Pending Marker ${marker}`;
+        const song = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(category.id, title, 'Pending line'),
+        );
+        await request(app.getHttpServer())
+          .post(`/api/v1/songs/${song.id}/submit`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(201);
+
+        const response = await getDuplicateSuggestions(OTHER_TOKEN, title);
+
+        expect(response.items).toContainEqual(
+          expect.objectContaining({ id: song.id, status: 'PENDING_REVIEW' }),
+        );
+      });
+
+      it('computes firstLine as the first non-empty lyric line in part/line position order', async () => {
+        const marker = randomUUID().slice(0, 8);
+        const title = `First Line Marker ${marker}`;
+        const song = await createSong(
+          OWNER_TOKEN,
+          minimalSongPayload(category.id, {
+            title,
+            alternativeTitles: [],
+            parts: [
+              {
+                performer: 'LEAD',
+                position: 1,
+                lines: [
+                  {
+                    originalText: 'The actual first line',
+                    phoneticText: null,
+                    position: 1,
+                    translations: [],
+                  },
+                  {
+                    originalText: 'The second line',
+                    phoneticText: null,
+                    position: 2,
+                    translations: [],
+                  },
+                ],
+              },
+              {
+                performer: 'CHORUS',
+                position: 2,
+                lines: [
+                  {
+                    originalText: 'A later part line',
+                    phoneticText: null,
+                    position: 1,
+                    translations: [],
+                  },
+                ],
+              },
+            ],
+            media: [],
+          }),
+        );
+        await publishSong(OWNER_TOKEN, song.id);
+
+        const response = await getDuplicateSuggestions(OTHER_TOKEN, title);
+
+        expect(response.items[0]).toMatchObject({
+          id: song.id,
+          firstLine: 'The actual first line',
+        });
+      });
+
+      it('does not return titles with low similarity', async () => {
+        const marker = randomUUID().slice(0, 8);
+        const song = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(
+            category.id,
+            `Zzyzx Nonmatching Title ${marker}`,
+            'Irrelevant line',
+          ),
+        );
+        await publishSong(OWNER_TOKEN, song.id);
+
+        const response = await getDuplicateSuggestions(
+          OTHER_TOKEN,
+          `Completely unrelated search ${marker}`,
+        );
+
+        expect(response.items.map((item) => item.id)).not.toContain(song.id);
+      });
+
+      it('rejects an unauthenticated request with 401', async () => {
+        await request(app.getHttpServer())
+          .get('/api/v1/songs/duplicate-suggestions')
+          .query({ title: 'Paranauê' })
+          .expect(401);
+      });
+    });
+
+    describe('POST /songs/:id/submit duplicate blocking', () => {
+      it('blocks submit with 409 DUPLICATE_SONG against a PUBLISHED near-duplicate', async () => {
+        const marker = randomUUID().slice(0, 8);
+        const title = `Block Published Marker ${marker}`;
+        const firstLine = 'This exact line repeats';
+
+        const original = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(category.id, title, firstLine),
+        );
+        await publishSong(OWNER_TOKEN, original.id);
+
+        const attempt = await createSong(
+          OTHER_TOKEN,
+          duplicateTestPayload(category.id, title, firstLine),
+        );
+
+        const response = await bodyOf<HttpErrorResponse>(
+          request(app.getHttpServer())
+            .post(`/api/v1/songs/${attempt.id}/submit`)
+            .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+            .expect(409),
+        );
+
+        expect(response.code).toBe('DUPLICATE_SONG');
+        expect(response.duplicates).toBeDefined();
+        expect(response.duplicates?.length).toBeGreaterThan(0);
+        expect(response.duplicates?.length).toBeLessThanOrEqual(3);
+        expect(response.duplicates?.[0]).toMatchObject({
+          id: original.id,
+          status: 'PUBLISHED',
+        });
+        // No private/internal data leaked in the duplicate entries.
+        const keys = Object.keys(
+          (response.duplicates as Record<string, unknown>[])[0],
+        );
+        expect(keys.sort()).toEqual(
+          ['id', 'title', 'firstLine', 'status', 'similarity'].sort(),
+        );
+
+        const afterAttempt = await getSongDetails(OTHER_TOKEN, attempt.id);
+        expect(afterAttempt.status).toBe('DRAFT');
+      });
+
+      it('blocks submit with 409 against a PENDING_REVIEW near-duplicate from another user', async () => {
+        const marker = randomUUID().slice(0, 8);
+        const title = `Block Pending Marker ${marker}`;
+        const firstLine = 'Shared pending line';
+
+        const pending = await createSong(
+          OTHER_TOKEN,
+          duplicateTestPayload(category.id, title, firstLine),
+        );
+        await request(app.getHttpServer())
+          .post(`/api/v1/songs/${pending.id}/submit`)
+          .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+          .expect(201);
+
+        const attempt = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(category.id, title, firstLine),
+        );
+
+        const response = await bodyOf<HttpErrorResponse>(
+          request(app.getHttpServer())
+            .post(`/api/v1/songs/${attempt.id}/submit`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(409),
+        );
+
+        expect(response.code).toBe('DUPLICATE_SONG');
+      });
+
+      it('allows submit when the title matches exactly but the lyrics are clearly different', async () => {
+        const marker = randomUUID().slice(0, 8);
+        const title = `Same Title Different Song ${marker}`;
+
+        const original = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(
+            category.id,
+            title,
+            'Uma historia completamente diferente aqui meu amigo',
+          ),
+        );
+        await publishSong(OWNER_TOKEN, original.id);
+
+        const variant = await createSong(
+          OTHER_TOKEN,
+          duplicateTestPayload(
+            category.id,
+            title,
+            'Vou falar de outra coisa agora mesmo pessoal',
+          ),
+        );
+
+        const submitted = await bodyOf<SongDetailsResponseDto>(
+          request(app.getHttpServer())
+            .post(`/api/v1/songs/${variant.id}/submit`)
+            .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+            .expect(201),
+        );
+        expect(submitted.status).toBe('PENDING_REVIEW');
+      });
+
+      it("does not block on another user's DRAFT with the same title/line", async () => {
+        const marker = randomUUID().slice(0, 8);
+        const title = `Foreign Draft Marker ${marker}`;
+        const firstLine = 'A line only a draft owner can see';
+
+        await createSong(
+          OTHER_TOKEN,
+          duplicateTestPayload(category.id, title, firstLine),
+        );
+
+        const own = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(category.id, title, firstLine),
+        );
+
+        const submitted = await bodyOf<SongDetailsResponseDto>(
+          request(app.getHttpServer())
+            .post(`/api/v1/songs/${own.id}/submit`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(201),
+        );
+        expect(submitted.status).toBe('PENDING_REVIEW');
+      });
+
+      it("blocks on the same user's own other DRAFT with the same title/line", async () => {
+        const marker = randomUUID().slice(0, 8);
+        const title = `Own Draft Marker ${marker}`;
+        const firstLine = 'A line the same owner wrote twice';
+
+        await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(category.id, title, firstLine),
+        );
+        const second = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(category.id, title, firstLine),
+        );
+
+        const response = await bodyOf<HttpErrorResponse>(
+          request(app.getHttpServer())
+            .post(`/api/v1/songs/${second.id}/submit`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(409),
+        );
+        expect(response.code).toBe('DUPLICATE_SONG');
+      });
+
+      it('never compares a song against itself (resubmit after reject succeeds)', async () => {
+        const marker = randomUUID().slice(0, 8);
+        const title = `Resubmit Marker ${marker}`;
+        const song = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(category.id, title, 'Resubmit line'),
+        );
+
+        await request(app.getHttpServer())
+          .post(`/api/v1/songs/${song.id}/submit`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(201);
+        await request(app.getHttpServer())
+          .post(`/api/v1/songs/${song.id}/reject`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(201);
+
+        const resubmitted = await bodyOf<SongDetailsResponseDto>(
+          request(app.getHttpServer())
+            .post(`/api/v1/songs/${song.id}/submit`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(201),
+        );
+        expect(resubmitted.status).toBe('PENDING_REVIEW');
+      });
+
+      it('caps the duplicates payload at 3 entries even with more matches', async () => {
+        const marker = randomUUID().slice(0, 8);
+        const title = `Many Matches Marker ${marker}`;
+        const firstLine = 'A very shared line indeed';
+
+        for (let i = 0; i < 4; i += 1) {
+          await createSong(
+            OWNER_TOKEN,
+            duplicateTestPayload(category.id, title, firstLine),
+          );
+        }
+        const attempt = await createSong(
+          OWNER_TOKEN,
+          duplicateTestPayload(category.id, title, firstLine),
+        );
+
+        const response = await bodyOf<HttpErrorResponse>(
+          request(app.getHttpServer())
+            .post(`/api/v1/songs/${attempt.id}/submit`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(409),
+        );
+
+        expect(response.duplicates?.length).toBeLessThanOrEqual(3);
+      });
     });
   });
 });

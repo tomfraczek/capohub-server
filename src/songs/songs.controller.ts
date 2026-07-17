@@ -20,6 +20,11 @@ import { PaginatedResponse } from '../common/pagination/pagination.types';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { User } from '../users/entities/user.entity';
 import { CreateSongDto, createSongSchema } from './dto/create-song.schema';
+import { DuplicateSuggestionsResponseDto } from './dto/duplicate-suggestion-response.dto';
+import {
+  DuplicateSuggestionsQueryDto,
+  duplicateSuggestionsQuerySchema,
+} from './dto/duplicate-suggestions-query.schema';
 import { SongDetailsResponseDto } from './dto/song-details-response.dto';
 import {
   ListSongsQueryDto,
@@ -53,6 +58,22 @@ export class SongsController {
     return this.songsService.list(user, query);
   }
 
+  // Must stay registered before GET /:id - otherwise "duplicate-suggestions"
+  // would be swallowed by the :id param route (and rejected by
+  // ParseUUIDPipe, since it isn't a UUID).
+  @Get('duplicate-suggestions')
+  getDuplicateSuggestions(
+    @CurrentUser() user: User,
+    @Query(new ZodValidationPipe(duplicateSuggestionsQuerySchema))
+    query: DuplicateSuggestionsQueryDto,
+  ): Promise<DuplicateSuggestionsResponseDto> {
+    return this.songsService.getDuplicateSuggestions(
+      user,
+      query.title,
+      query.limit,
+    );
+  }
+
   @Get(':id')
   getDetails(
     @Param('id', ParseUUIDPipe) id: string,
@@ -79,8 +100,9 @@ export class SongsController {
   @Post(':id/submit')
   submit(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
   ): Promise<SongDetailsResponseDto> {
-    return this.songsService.submit(id);
+    return this.songsService.submit(id, user);
   }
 
   @Post(':id/publish')

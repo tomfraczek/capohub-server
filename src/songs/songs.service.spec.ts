@@ -21,7 +21,27 @@ import { Song } from './entities/song.entity';
 import { SongMediaProvider } from './enums/song-media-provider.enum';
 import { SongPerformer } from './enums/song-performer.enum';
 import { SongStatus } from './enums/song-status.enum';
+import { DuplicateSongSuggestionDto } from './dto/duplicate-suggestion-response.dto';
+import { SongDuplicateService } from './song-duplicate.service';
 import { SongsService } from './songs.service';
+
+// Every existing test builds a SongsService that should behave exactly as
+// before this file's duplicate-detection change: no blocking duplicate
+// found, submit proceeds normally. Tests that specifically exercise the
+// duplicate flow pass their own findBlockingDuplicates/findSuggestions mock.
+function buildMockDuplicateService(
+  overrides: {
+    findBlockingDuplicates?: jest.Mock;
+    findSuggestions?: jest.Mock;
+  } = {},
+): SongDuplicateService {
+  return {
+    findBlockingDuplicates:
+      overrides.findBlockingDuplicates ?? jest.fn().mockResolvedValue([]),
+    findSuggestions:
+      overrides.findSuggestions ?? jest.fn().mockResolvedValue([]),
+  } as unknown as SongDuplicateService;
+}
 
 function buildCategory(overrides: Partial<SongCategory> = {}): SongCategory {
   const category = new SongCategory();
@@ -49,6 +69,24 @@ function buildPopulatedSong(overrides: Partial<Song> = {}): Song {
   song.parts = new Collection<SongPart>(song, []);
   song.media = new Collection<SongMedia>(song, []);
   return Object.assign(song, overrides);
+}
+
+// A DRAFT song that passes assertReadyForReview as-is, for submit() tests
+// that care about what happens *after* the readiness check (duplicate
+// detection, status transition).
+function buildCompleteDraftSong(overrides: Partial<Song> = {}): Song {
+  const song = buildPopulatedSong({ status: SongStatus.DRAFT, ...overrides });
+  const part = new SongPart();
+  part.song = song;
+  part.performer = SongPerformer.LEAD;
+  part.position = 1;
+  const line = new SongLine();
+  line.part = part;
+  line.originalText = 'Paranauê, paranauê Paraná';
+  line.position = 1;
+  part.lines = new Collection<SongLine>(part, [line]);
+  song.parts = new Collection<SongPart>(song, [part]);
+  return song;
 }
 
 function buildSongMedia(overrides: Partial<SongMedia> = {}): SongMedia {
@@ -195,7 +233,7 @@ describe('SongsService', () => {
       const em = buildMockEm({
         detailsSong: buildPopulatedSong({ createdBy: buildUser() }),
       });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
       const user = buildUser();
 
       let createdSong: Song | undefined;
@@ -234,7 +272,7 @@ describe('SongsService', () => {
 
     it('runs inside a transaction', async () => {
       const em = buildMockEm();
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await service.create(buildUser(), buildCreateInput());
 
@@ -243,7 +281,7 @@ describe('SongsService', () => {
 
     it('rejects when categoryId does not reference an existing category', async () => {
       const em = buildMockEm({ category: null });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await expect(
         service.create(buildUser(), buildCreateInput()),
@@ -252,7 +290,7 @@ describe('SongsService', () => {
 
     it('rejects when the category is not active', async () => {
       const em = buildMockEm({ category: buildCategory({ isActive: false }) });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await expect(
         service.create(buildUser(), buildCreateInput()),
@@ -263,7 +301,7 @@ describe('SongsService', () => {
       const em = buildMockEm();
       em.find.mockResolvedValue([]); // fewer tags returned than requested
 
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await expect(
         service.create(
@@ -282,7 +320,7 @@ describe('SongsService', () => {
             new UniqueConstraintViolationException(new Error('duplicate key')),
           ),
       });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await expect(
         service.create(buildUser(), buildCreateInput()),
@@ -293,11 +331,48 @@ describe('SongsService', () => {
   describe('getDetails', () => {
     it('throws NotFoundException when the song does not exist', async () => {
       const em = buildMockEm({ detailsSong: null });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await expect(service.getDetails('missing-id')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('getDuplicateSuggestions', () => {
+    it('delegates to SongDuplicateService.findSuggestions and wraps the result in { items }', async () => {
+      const em = buildMockEm();
+      const suggestion: DuplicateSongSuggestionDto = {
+        id: 'song-1',
+        title: 'Paranauê',
+        firstLine: 'Paranauê, paranauê Paraná',
+        status: SongStatus.PUBLISHED,
+        similarity: 0.9,
+      };
+      const findSuggestions = jest.fn().mockResolvedValue([suggestion]);
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService({ findSuggestions }),
+      );
+      const user = buildUser();
+
+      const result = await service.getDuplicateSuggestions(user, 'Paranauê', 5);
+
+      expect(findSuggestions).toHaveBeenCalledWith(em, user.id, 'Paranauê', 5);
+      expect(result).toEqual({ items: [suggestion] });
+    });
+
+    it('returns { items: [] } when SongDuplicateService finds nothing', async () => {
+      const em = buildMockEm();
+      const service = new SongsService(em, buildMockDuplicateService());
+
+      const result = await service.getDuplicateSuggestions(
+        buildUser(),
+        'ab',
+        5,
+      );
+
+      expect(result).toEqual({ items: [] });
     });
   });
 
@@ -317,7 +392,7 @@ describe('SongsService', () => {
         return Promise.resolve(null);
       });
 
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
       await service.update(
         existingSong.id,
         editor,
@@ -350,7 +425,7 @@ describe('SongsService', () => {
           return Promise.resolve(buildCategory());
         },
       );
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await expect(
         service.update('missing-id', buildUser(), buildCreateInput()),
@@ -373,9 +448,9 @@ describe('SongsService', () => {
       song.parts = new Collection<SongPart>(song, [part]);
 
       const em = buildMockEm({ detailsSong: song });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
-      await service.submit(song.id);
+      await service.submit(song.id, buildUser());
 
       expect(song.status).toBe(SongStatus.PENDING_REVIEW);
     });
@@ -383,23 +458,83 @@ describe('SongsService', () => {
     it('submit: rejects an incomplete song (no parts) with 409', async () => {
       const song = buildPopulatedSong({ status: SongStatus.DRAFT });
       const em = buildMockEm({ detailsSong: song });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
-      await expect(service.submit(song.id)).rejects.toThrow(ConflictException);
+      await expect(service.submit(song.id, buildUser())).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('submit: rejects from an invalid source status (PUBLISHED)', async () => {
       const song = buildPopulatedSong({ status: SongStatus.PUBLISHED });
       const em = buildMockEm({ detailsSong: song });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
-      await expect(service.submit(song.id)).rejects.toThrow(ConflictException);
+      await expect(service.submit(song.id, buildUser())).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('submit: throws 409 DUPLICATE_SONG and never changes status or flushes when a blocking duplicate is found', async () => {
+      const song = buildCompleteDraftSong();
+      const em = buildMockEm({ detailsSong: song });
+      const duplicate: DuplicateSongSuggestionDto = {
+        id: 'existing-song-id',
+        title: 'Paranauê',
+        firstLine: 'Paranauê, paranauê Paraná',
+        status: SongStatus.PUBLISHED,
+        similarity: 0.99,
+      };
+      const findBlockingDuplicates = jest.fn().mockResolvedValue([duplicate]);
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService({ findBlockingDuplicates }),
+      );
+      const user = buildUser();
+
+      const error: unknown = await service
+        .submit(song.id, user)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).getResponse()).toMatchObject({
+        code: 'DUPLICATE_SONG',
+        duplicates: [duplicate],
+      });
+      expect(song.status).toBe(SongStatus.DRAFT);
+      expect(em.flush).not.toHaveBeenCalled();
+    });
+
+    it('submit: calls findBlockingDuplicates with the current user and the loaded song, excluding nothing else', async () => {
+      const song = buildCompleteDraftSong();
+      const em = buildMockEm({ detailsSong: song });
+      const findBlockingDuplicates = jest.fn().mockResolvedValue([]);
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService({ findBlockingDuplicates }),
+      );
+      const user = buildUser({ email: 'submitter@example.com' });
+
+      await service.submit(song.id, user);
+
+      expect(findBlockingDuplicates).toHaveBeenCalledWith(em, user.id, song);
+    });
+
+    it('submit: proceeds normally when findBlockingDuplicates finds nothing', async () => {
+      const song = buildCompleteDraftSong();
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(em, buildMockDuplicateService());
+
+      await service.submit(song.id, buildUser());
+
+      expect(song.status).toBe(SongStatus.PENDING_REVIEW);
+      expect(em.flush).toHaveBeenCalled();
     });
 
     it('publish: PENDING_REVIEW -> PUBLISHED', async () => {
       const song = buildPopulatedSong({ status: SongStatus.PENDING_REVIEW });
       const em = buildMockEm({ detailsSong: song });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await service.publish(song.id);
 
@@ -409,7 +544,7 @@ describe('SongsService', () => {
     it('publish: rejects from DRAFT with 409', async () => {
       const song = buildPopulatedSong({ status: SongStatus.DRAFT });
       const em = buildMockEm({ detailsSong: song });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await expect(service.publish(song.id)).rejects.toThrow(ConflictException);
     });
@@ -417,7 +552,7 @@ describe('SongsService', () => {
     it('reject: PENDING_REVIEW -> REJECTED', async () => {
       const song = buildPopulatedSong({ status: SongStatus.PENDING_REVIEW });
       const em = buildMockEm({ detailsSong: song });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await service.reject(song.id);
 
@@ -427,7 +562,7 @@ describe('SongsService', () => {
     it('hide: PUBLISHED -> HIDDEN', async () => {
       const song = buildPopulatedSong({ status: SongStatus.PUBLISHED });
       const em = buildMockEm({ detailsSong: song });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await service.hide(song.id);
 
@@ -437,7 +572,7 @@ describe('SongsService', () => {
     it('restore: HIDDEN -> PUBLISHED', async () => {
       const song = buildPopulatedSong({ status: SongStatus.HIDDEN });
       const em = buildMockEm({ detailsSong: song });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await service.restore(song.id);
 
@@ -449,7 +584,7 @@ describe('SongsService', () => {
     it('physically deletes a DRAFT song', async () => {
       const song = buildPopulatedSong({ status: SongStatus.DRAFT });
       const em = buildMockEm({ detailsSong: song });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await service.delete(song.id);
 
@@ -459,7 +594,7 @@ describe('SongsService', () => {
     it('rejects deleting a PUBLISHED song with 409', async () => {
       const song = buildPopulatedSong({ status: SongStatus.PUBLISHED });
       const em = buildMockEm({ detailsSong: song });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await expect(service.delete(song.id)).rejects.toThrow(ConflictException);
       expect(em.remove).not.toHaveBeenCalled();
@@ -470,7 +605,7 @@ describe('SongsService', () => {
     it('verifyMedia sets isVerified from false to true', async () => {
       const media = buildSongMedia({ isVerified: false });
       const em = buildMockEm({ media });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       const result = await service.verifyMedia(media.song.id, media.id);
 
@@ -482,7 +617,7 @@ describe('SongsService', () => {
     it('unverifyMedia sets isVerified from true to false', async () => {
       const media = buildSongMedia({ isVerified: true });
       const em = buildMockEm({ media });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       const result = await service.unverifyMedia(media.song.id, media.id);
 
@@ -494,7 +629,7 @@ describe('SongsService', () => {
     it('verifyMedia is idempotent when already verified (no unnecessary flush)', async () => {
       const media = buildSongMedia({ isVerified: true });
       const em = buildMockEm({ media });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       const result = await service.verifyMedia(media.song.id, media.id);
 
@@ -505,7 +640,7 @@ describe('SongsService', () => {
     it('unverifyMedia is idempotent when already unverified (no unnecessary flush)', async () => {
       const media = buildSongMedia({ isVerified: false });
       const em = buildMockEm({ media });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       const result = await service.unverifyMedia(media.song.id, media.id);
 
@@ -515,7 +650,7 @@ describe('SongsService', () => {
 
     it('throws SONG_MEDIA_NOT_FOUND (404) when the media does not exist', async () => {
       const em = buildMockEm({ media: null });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await expect(
         service.verifyMedia('song-id', 'missing-media-id'),
@@ -524,7 +659,7 @@ describe('SongsService', () => {
 
     it('throws 404 (not a leaked detail) when the media belongs to a different song, scoping the lookup by both ids', async () => {
       const em = buildMockEm({ media: null });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       await expect(
         service.verifyMedia('song-a', 'media-from-song-b'),
@@ -543,7 +678,7 @@ describe('SongsService', () => {
         position: 3,
       });
       const em = buildMockEm({ media });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       const result = await service.verifyMedia(media.song.id, media.id);
 
@@ -561,7 +696,7 @@ describe('SongsService', () => {
         position: 3,
       });
       const em = buildMockEm({ media });
-      const service = new SongsService(em);
+      const service = new SongsService(em, buildMockDuplicateService());
 
       const result = await service.unverifyMedia(media.song.id, media.id);
 
@@ -583,7 +718,7 @@ describe('SongsService', () => {
           voteCounts: [{ mediaId: media.id, voteCount: 1 }],
           votedMediaId: media.id,
         });
-        const service = new SongsService(em);
+        const service = new SongsService(em, buildMockDuplicateService());
 
         let persistedVote: SongMediaVote | undefined;
         em.persist.mockImplementation((entity: unknown) => {
@@ -615,7 +750,7 @@ describe('SongsService', () => {
         const user = buildUser();
         const vote = buildVote({ song: media.song, media, user });
         const em = buildMockEm({ media, existingVote: vote });
-        const service = new SongsService(em);
+        const service = new SongsService(em, buildMockDuplicateService());
 
         await service.setMediaVote(media.song.id, media.id, user);
 
@@ -633,7 +768,7 @@ describe('SongsService', () => {
         const vote = buildVote({ song, media: oldMedia, user });
 
         const em = buildMockEm({ media: newMedia, existingVote: vote });
-        const service = new SongsService(em);
+        const service = new SongsService(em, buildMockDuplicateService());
 
         await service.setMediaVote(song.id, newMedia.id, user);
 
@@ -646,7 +781,7 @@ describe('SongsService', () => {
         const media = buildSongMedia();
         const user = buildUser();
         const em = buildMockEm({ media, existingVote: null });
-        const service = new SongsService(em);
+        const service = new SongsService(em, buildMockDuplicateService());
 
         await service.setMediaVote('song-a', media.id, user);
 
@@ -658,7 +793,7 @@ describe('SongsService', () => {
 
       it('throws 404 SONG_MEDIA_NOT_FOUND when the media does not exist', async () => {
         const em = buildMockEm({ media: null });
-        const service = new SongsService(em);
+        const service = new SongsService(em, buildMockDuplicateService());
 
         await expect(
           service.setMediaVote('song-a', 'missing-media-id', buildUser()),
@@ -667,7 +802,7 @@ describe('SongsService', () => {
 
       it('throws 404 when the media belongs to a different song, scoping the lookup by both ids', async () => {
         const em = buildMockEm({ media: null });
-        const service = new SongsService(em);
+        const service = new SongsService(em, buildMockDuplicateService());
 
         await expect(
           service.setMediaVote('song-a', 'media-from-song-b', buildUser()),
@@ -687,7 +822,7 @@ describe('SongsService', () => {
           voteCounts: [{ mediaId: media.id, voteCount: 3 }],
           votedMediaId: media.id,
         });
-        const service = new SongsService(em);
+        const service = new SongsService(em, buildMockDuplicateService());
 
         const result = await service.setMediaVote(
           media.song.id,
@@ -713,7 +848,7 @@ describe('SongsService', () => {
           createdBy: creator,
         });
         const em = buildMockEm({ media, existingVote: null });
-        const service = new SongsService(em);
+        const service = new SongsService(em, buildMockDuplicateService());
 
         await service.setMediaVote(media.song.id, media.id, buildUser());
 
@@ -730,7 +865,7 @@ describe('SongsService', () => {
       it('deletes an existing vote', async () => {
         const vote = buildVote();
         const em = buildMockEm({ existingVote: vote });
-        const service = new SongsService(em);
+        const service = new SongsService(em, buildMockDuplicateService());
 
         await service.removeMediaVote(vote.song.id, vote.user);
 
@@ -739,7 +874,7 @@ describe('SongsService', () => {
 
       it('is idempotent when no vote exists', async () => {
         const em = buildMockEm({ existingVote: null });
-        const service = new SongsService(em);
+        const service = new SongsService(em, buildMockDuplicateService());
 
         await service.removeMediaVote('song-a', buildUser());
 
@@ -761,7 +896,7 @@ describe('SongsService', () => {
           voteCounts: [{ mediaId: 'media-a', voteCount: 2 }],
           votedMediaId: 'media-a',
         });
-        const service = new SongsService(em);
+        const service = new SongsService(em, buildMockDuplicateService());
 
         const result = await service.getDetails(song.id, 'current-user-id');
 
@@ -783,7 +918,7 @@ describe('SongsService', () => {
           voteCounts: [{ mediaId: media.id, voteCount: 5 }],
           votedMediaId: media.id,
         });
-        const service = new SongsService(em);
+        const service = new SongsService(em, buildMockDuplicateService());
 
         const result = await service.getDetails(song.id);
 

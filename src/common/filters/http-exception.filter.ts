@@ -25,6 +25,7 @@ interface HttpExceptionBody {
   code?: unknown;
   message?: unknown;
   errors?: unknown;
+  duplicates?: unknown;
 }
 
 function isHttpExceptionBody(value: unknown): value is HttpExceptionBody {
@@ -44,7 +45,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const { status, code, message, errors } =
+    const { status, code, message, errors, duplicates } =
       this.resolveExceptionDetails(exception);
 
     if (status >= Number(HttpStatus.INTERNAL_SERVER_ERROR)) {
@@ -61,6 +62,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       path: request.url,
       timestamp: new Date().toISOString(),
       ...(errors ? { errors } : {}),
+      ...(duplicates ? { duplicates } : {}),
     };
 
     response.status(status).json(body);
@@ -71,6 +73,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     code: string;
     message: string;
     errors?: HttpFieldError[];
+    duplicates?: unknown[];
   } {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
@@ -92,7 +95,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
           ? (responseBody.errors as HttpFieldError[])
           : undefined;
 
-        return { status, code, message, errors };
+        const duplicates = Array.isArray(responseBody.duplicates)
+          ? responseBody.duplicates
+          : undefined;
+
+        return { status, code, message, errors, duplicates };
       }
 
       return {

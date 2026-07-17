@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { UniqueConstraintViolationException } from '@mikro-orm/core';
@@ -18,6 +19,7 @@ import {
   CreateSongMediaInput,
   CreateSongPartInput,
 } from './dto/create-song.schema';
+import { DuplicateSuggestionsResponseDto } from './dto/duplicate-suggestion-response.dto';
 import { ListSongsQuery } from './dto/song-list-query.schema';
 import { SongDetailsResponseDto } from './dto/song-details-response.dto';
 import { SongMediaDetailsResponseDto } from './dto/song-media-details-response.dto';
@@ -41,6 +43,7 @@ import {
   toSongSummaryResponseDto,
 } from './mappers/song.mapper';
 import { loadSongMediaVoteAggregates } from './song-media-vote-aggregates';
+import { SongDuplicateService } from './song-duplicate.service';
 import {
   loadSongSummaryAggregates,
   queryVisibleSongIds,
@@ -57,7 +60,12 @@ const DETAILS_POPULATE = [
 
 @Injectable()
 export class SongsService {
-  constructor(private readonly em: EntityManager) {}
+  private readonly logger = new Logger(SongsService.name);
+
+  constructor(
+    private readonly em: EntityManager,
+    private readonly songDuplicateService: SongDuplicateService,
+  ) {}
 
   async create(
     user: User,
@@ -206,7 +214,7 @@ export class SongsService {
     };
   }
 
-  async submit(id: string): Promise<SongDetailsResponseDto> {
+  async submit(id: string, user: User): Promise<SongDetailsResponseDto> {
     await this.em.transactional(async (em) => {
       const song = await em.findOne(
         Song,
@@ -223,11 +231,52 @@ export class SongsService {
       ]);
       this.assertReadyForReview(song);
 
+      // Duplicate check runs inside the same transaction as the status
+      // change and flush (spec section 21): the candidate query, the
+      // status write and the commit all happen atomically from this
+      // service's point of view. That does not add a table- or row-level
+      // lock, so it does not fully rule out two near-simultaneous submits
+      // of the same new song both passing the check before either commits
+      // - see the Etap report for why a heavier lock isn't justified here.
+      const duplicates = await this.songDuplicateService.findBlockingDuplicates(
+        em,
+        user.id,
+        song,
+      );
+      if (duplicates.length > 0) {
+        this.logger.warn(
+          `Blocked submit of song ${song.id}: likely duplicate of ${duplicates
+            .map(
+              (d) => `${d.id} (similarity=${d.similarity}, status=${d.status})`,
+            )
+            .join(', ')}`,
+        );
+        throw new ConflictException({
+          code: 'DUPLICATE_SONG',
+          message: 'A very similar song already exists.',
+          duplicates,
+        });
+      }
+
       song.status = SongStatus.PENDING_REVIEW;
       await em.flush();
     });
 
     return this.getDetails(id);
+  }
+
+  async getDuplicateSuggestions(
+    user: User,
+    title: string,
+    limit: number,
+  ): Promise<DuplicateSuggestionsResponseDto> {
+    const items = await this.songDuplicateService.findSuggestions(
+      this.em,
+      user.id,
+      title,
+      limit,
+    );
+    return { items };
   }
 
   async publish(id: string): Promise<SongDetailsResponseDto> {

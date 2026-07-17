@@ -4,6 +4,7 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { PERMISSIONS_KEY } from '../auth/decorators/permissions.decorator';
 import { Permission } from '../auth/permissions/permission.enum';
 import { User } from '../users/entities/user.entity';
+import { DuplicateSuggestionsResponseDto } from './dto/duplicate-suggestion-response.dto';
 import { SongDetailsResponseDto } from './dto/song-details-response.dto';
 import { SongMediaDetailsResponseDto } from './dto/song-media-details-response.dto';
 import { SongMediaVoteResponseDto } from './dto/song-media-vote-response.dto';
@@ -113,6 +114,23 @@ describe('SongsController', () => {
     });
   });
 
+  describe('getDuplicateSuggestions', () => {
+    it('delegates to SongsService.getDuplicateSuggestions with user, title and limit', async () => {
+      const user = buildUser();
+      const dto: DuplicateSuggestionsResponseDto = { items: [] };
+      const getDuplicateSuggestions = jest.fn().mockResolvedValue(dto);
+      const controller = new SongsController({
+        getDuplicateSuggestions,
+      } as unknown as SongsService);
+
+      const query = { title: 'Paranauê', limit: 5 };
+      const response = await controller.getDuplicateSuggestions(user, query);
+
+      expect(getDuplicateSuggestions).toHaveBeenCalledWith(user, 'Paranauê', 5);
+      expect(response).toBe(dto);
+    });
+  });
+
   describe('getDetails', () => {
     it('delegates to SongsService.getDetails with the id param and current user id', async () => {
       const user = buildUser();
@@ -162,8 +180,23 @@ describe('SongsController', () => {
     });
   });
 
+  describe('submit', () => {
+    it('delegates to SongsService.submit with the id param and current user', async () => {
+      const user = buildUser();
+      const dto = buildDetailsResponse();
+      const submit = jest.fn().mockResolvedValue(dto);
+      const controller = new SongsController({
+        submit,
+      } as unknown as SongsService);
+
+      const response = await controller.submit('song-uuid-1', user);
+
+      expect(submit).toHaveBeenCalledWith('song-uuid-1', user);
+      expect(response).toBe(dto);
+    });
+  });
+
   describe.each([
-    ['submit', 'submit'] as const,
     ['publish', 'publish'] as const,
     ['reject', 'reject'] as const,
     ['hide', 'hide'] as const,
