@@ -42,7 +42,6 @@ function buildUser(overrides: Partial<User> = {}): User {
 function buildPopulatedSong(overrides: Partial<Song> = {}): Song {
   const song = new Song();
   song.title = 'Title';
-  song.slug = 'title';
   song.category = buildCategory();
   song.status = SongStatus.DRAFT;
   song.alternativeTitles = new Collection<SongAlternativeTitle>(song, []);
@@ -76,7 +75,6 @@ function buildCreateInput(
 ): CreateSongInput {
   return {
     title: 'Paranauê',
-    slug: 'paranaue',
     authorName: null,
     categoryId: 'category-id',
     alternativeTitles: [],
@@ -105,7 +103,6 @@ function buildCreateInput(
 
 interface FindOneRouting {
   category?: SongCategory | null;
-  existingSongForSlug?: Song | null;
   detailsSong?: Song | null;
   media?: SongMedia | null;
   existingVote?: SongMediaVote | null;
@@ -122,46 +119,39 @@ function buildMockEm(routing: FindOneRouting = {}) {
   const nativeDelete = jest.fn().mockResolvedValue(0);
   const find = jest.fn().mockResolvedValue([]);
 
-  const findOne = jest
-    .fn()
-    .mockImplementation((entity: unknown, where: Record<string, unknown>) => {
-      if (entity === SongCategory) {
-        return Promise.resolve(
-          routing.category === undefined ? buildCategory() : routing.category,
-        );
-      }
-      if (entity === Song) {
-        if ('slug' in where) {
-          return Promise.resolve(routing.existingSongForSlug ?? null);
-        }
-        return Promise.resolve(
-          routing.detailsSong === undefined
-            ? buildPopulatedSong()
-            : routing.detailsSong,
-        );
-      }
-      if (entity === SongMedia) {
-        return Promise.resolve(
-          routing.media === undefined ? buildSongMedia() : routing.media,
-        );
-      }
-      if (entity === SongMediaVote) {
-        return Promise.resolve(routing.existingVote ?? null);
-      }
-      return Promise.resolve(null);
-    });
+  const findOne = jest.fn().mockImplementation((entity: unknown) => {
+    if (entity === SongCategory) {
+      return Promise.resolve(
+        routing.category === undefined ? buildCategory() : routing.category,
+      );
+    }
+    if (entity === Song) {
+      return Promise.resolve(
+        routing.detailsSong === undefined
+          ? buildPopulatedSong()
+          : routing.detailsSong,
+      );
+    }
+    if (entity === SongMedia) {
+      return Promise.resolve(
+        routing.media === undefined ? buildSongMedia() : routing.media,
+      );
+    }
+    if (entity === SongMediaVote) {
+      return Promise.resolve(routing.existingVote ?? null);
+    }
+    return Promise.resolve(null);
+  });
 
   const findOneOrFail = jest
     .fn()
-    .mockImplementation(
-      async (entity: unknown, where: Record<string, unknown>) => {
-        const result: unknown = await findOne(entity, where);
-        if (!result) {
-          throw new Error('not found');
-        }
-        return result;
-      },
-    );
+    .mockImplementation(async (entity: unknown) => {
+      const result: unknown = await findOne(entity);
+      if (!result) {
+        throw new Error('not found');
+      }
+      return result;
+    });
 
   const execute = jest.fn().mockImplementation((sql: string) => {
     if (sql.includes('group by media_id')) {
@@ -283,15 +273,6 @@ describe('SongsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('rejects a duplicate slug', async () => {
-      const em = buildMockEm({ existingSongForSlug: buildPopulatedSong() });
-      const service = new SongsService(em);
-
-      await expect(
-        service.create(buildUser(), buildCreateInput()),
-      ).rejects.toThrow(ConflictException);
-    });
-
     it('maps a unique constraint violation on flush to a 409 Conflict', async () => {
       const em = buildMockEm();
       em.persist.mockReturnValue({
@@ -330,16 +311,11 @@ describe('SongsService', () => {
       });
 
       const em = buildMockEm({ detailsSong: existingSong });
-      em.findOne.mockImplementation(
-        (entity: unknown, where: Record<string, unknown>) => {
-          if (entity === SongCategory) return Promise.resolve(buildCategory());
-          if (entity === Song) {
-            if ('slug' in where) return Promise.resolve(null);
-            return Promise.resolve(existingSong);
-          }
-          return Promise.resolve(null);
-        },
-      );
+      em.findOne.mockImplementation((entity: unknown) => {
+        if (entity === SongCategory) return Promise.resolve(buildCategory());
+        if (entity === Song) return Promise.resolve(existingSong);
+        return Promise.resolve(null);
+      });
 
       const service = new SongsService(em);
       await service.update(

@@ -113,7 +113,6 @@ function minimalSongPayload(
   const suffix = randomUUID().slice(0, 8);
   return {
     title: `Paranauê ${suffix}`,
-    slug: `paranaue-${suffix}`,
     authorName: 'Mestre Test',
     categoryId,
     alternativeTitles: [{ title: `Paraná ${suffix}`, position: 1 }],
@@ -332,7 +331,6 @@ describe('Songs (e2e)', () => {
 
       expect(created).toMatchObject({
         title: payload.title,
-        slug: payload.slug,
         status: 'DRAFT',
         category: { code: category.code },
       });
@@ -425,21 +423,6 @@ describe('Songs (e2e)', () => {
       );
 
       expect(response.code).toBe('VALIDATION_ERROR');
-    });
-
-    it('POST /songs returns 409 SLUG_CONFLICT for a duplicate slug', async () => {
-      const payload = minimalSongPayload(category.id);
-      await createSong(OWNER_TOKEN, payload);
-
-      const response = await bodyOf<HttpErrorResponse>(
-        request(app.getHttpServer())
-          .post('/api/v1/songs')
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .send({ ...payload, title: 'Another title' })
-          .expect(409),
-      );
-
-      expect(response.code).toBe('SLUG_CONFLICT');
     });
   });
 

@@ -6,7 +6,6 @@ const VALID_TAG_ID = '22222222-2222-4222-8222-222222222222';
 function validPayload(): Record<string, unknown> {
   return {
     title: 'Paranauê',
-    slug: 'paranaue',
     authorName: 'Mestre Test',
     categoryId: VALID_CATEGORY_ID,
     alternativeTitles: [{ title: 'Paranauê Paraná', position: 1 }],
@@ -76,14 +75,6 @@ describe('createSongSchema', () => {
     const result = createSongSchema.safeParse(payload);
     expect(result.success).toBe(false);
   });
-
-  it.each(['Bad Slug!', 'bad--slug', '-bad-slug', 'bad-slug-', 'bad slug'])(
-    'rejects an invalid slug "%s"',
-    (slug) => {
-      const result = createSongSchema.safeParse({ ...validPayload(), slug });
-      expect(result.success).toBe(false);
-    },
-  );
 
   it('rejects non-contiguous part positions', () => {
     const payload = validPayload();
@@ -234,6 +225,14 @@ describe('createSongSchema', () => {
     const result = createSongSchema.safeParse({
       ...validPayload(),
       createdBy: '33333333-3333-4333-8333-333333333333',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an attempt to set slug (removed from the model - songs are identified by id)', () => {
+    const result = createSongSchema.safeParse({
+      ...validPayload(),
+      slug: 'paranaue',
     });
     expect(result.success).toBe(false);
   });

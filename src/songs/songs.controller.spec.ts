@@ -26,7 +26,6 @@ function buildDetailsResponse(
   return {
     id: 'song-uuid-1',
     title: 'Paranauê',
-    slug: 'paranaue',
     authorName: null,
     status: SongStatus.DRAFT,
     category: { id: 'cat-1', code: 'CORRIDO', name: 'Corrido', position: 1 },
@@ -86,7 +85,6 @@ describe('SongsController', () => {
 
       const body = {
         title: 'Paranauê',
-        slug: 'paranaue',
       } as unknown as Parameters<SongsController['create']>[1];
 
       const response = await controller.create(user, body);

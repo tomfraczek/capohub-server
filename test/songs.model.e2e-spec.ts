@@ -84,7 +84,6 @@ describe('Songbook model (integration)', () => {
   function buildSong(category: SongCategory): Song {
     const song = new Song();
     song.title = 'Paranauê';
-    song.slug = `paranaue-${randomUUID()}`;
     song.category = category;
     songIds.push(song.id);
     return song;

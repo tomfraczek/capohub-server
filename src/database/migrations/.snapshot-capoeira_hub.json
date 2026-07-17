@@ -1420,22 +1420,6 @@
           "enumItems": [],
           "mappedType": "string"
         },
-        "slug": {
-          "name": "slug",
-          "type": "varchar(250)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": true,
-          "length": 250,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
         "author_name": {
           "name": "author_name",
           "type": "varchar(150)",
@@ -1597,16 +1581,6 @@
           "keyName": "songs_pkey",
           "unique": true,
           "primary": true
-        },
-        {
-          "columnNames": [
-            "slug"
-          ],
-          "composite": false,
-          "constraint": true,
-          "keyName": "songs_slug_unique",
-          "unique": true,
-          "primary": false
         },
         {
           "columnNames": [
