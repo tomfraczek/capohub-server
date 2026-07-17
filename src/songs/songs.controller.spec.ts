@@ -6,6 +6,7 @@ import { Permission } from '../auth/permissions/permission.enum';
 import { User } from '../users/entities/user.entity';
 import { SongDetailsResponseDto } from './dto/song-details-response.dto';
 import { SongMediaDetailsResponseDto } from './dto/song-media-details-response.dto';
+import { SongMediaVoteResponseDto } from './dto/song-media-vote-response.dto';
 import { SongMediaProvider } from './enums/song-media-provider.enum';
 import { SongStatus } from './enums/song-status.enum';
 import { SongsController } from './songs.controller';
@@ -61,6 +62,18 @@ function buildMediaResponse(
   };
 }
 
+function buildVoteResponse(
+  overrides: Partial<SongMediaVoteResponseDto> = {},
+): SongMediaVoteResponseDto {
+  return {
+    songId: 'song-uuid-1',
+    mediaId: 'media-uuid-1',
+    voteCount: 1,
+    isVotedByCurrentUser: true,
+    ...overrides,
+  };
+}
+
 describe('SongsController', () => {
   describe('create', () => {
     it('passes @CurrentUser() and the validated body to SongsService.create', async () => {
@@ -103,16 +116,17 @@ describe('SongsController', () => {
   });
 
   describe('getDetails', () => {
-    it('delegates to SongsService.getDetails with the id param', async () => {
+    it('delegates to SongsService.getDetails with the id param and current user id', async () => {
+      const user = buildUser();
       const dto = buildDetailsResponse();
       const getDetails = jest.fn().mockResolvedValue(dto);
       const controller = new SongsController({
         getDetails,
       } as unknown as SongsService);
 
-      const response = await controller.getDetails('song-uuid-1');
+      const response = await controller.getDetails('song-uuid-1', user);
 
-      expect(getDetails).toHaveBeenCalledWith('song-uuid-1');
+      expect(getDetails).toHaveBeenCalledWith('song-uuid-1', user.id);
       expect(response).toBe(dto);
     });
   });
@@ -233,5 +247,63 @@ describe('SongsController', () => {
         });
       },
     );
+  });
+
+  describe('media voting', () => {
+    it('setMediaVote delegates songId, mediaId and @CurrentUser() to SongsService.setMediaVote', async () => {
+      const user = buildUser();
+      const dto = buildVoteResponse();
+      const setMediaVote = jest.fn().mockResolvedValue(dto);
+      const controller = new SongsController({
+        setMediaVote,
+      } as unknown as SongsService);
+
+      const response = await controller.setMediaVote(
+        'song-uuid-1',
+        'media-uuid-1',
+        user,
+      );
+
+      expect(setMediaVote).toHaveBeenCalledWith(
+        'song-uuid-1',
+        'media-uuid-1',
+        user,
+      );
+      expect(response).toBe(dto);
+    });
+
+    it('removeMediaVote delegates songId and @CurrentUser() to SongsService.removeMediaVote', async () => {
+      const user = buildUser();
+      const removeMediaVote = jest.fn().mockResolvedValue(undefined);
+      const controller = new SongsController({
+        removeMediaVote,
+      } as unknown as SongsService);
+
+      const response = await controller.removeMediaVote('song-uuid-1', user);
+
+      expect(removeMediaVote).toHaveBeenCalledWith('song-uuid-1', user);
+      expect(response).toBeUndefined();
+    });
+
+    it('setMediaVote and removeMediaVote have no PermissionsGuard - only the global ClerkAuthGuard applies', () => {
+      const reflector = new Reflector();
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method -- used only as a metadata target, never invoked
+      const setMediaVoteRef = SongsController.prototype.setMediaVote;
+      // eslint-disable-next-line @typescript-eslint/unbound-method -- used only as a metadata target, never invoked
+      const removeMediaVoteRef = SongsController.prototype.removeMediaVote;
+
+      const setGuards = reflector.get<unknown[]>(
+        GUARDS_METADATA,
+        setMediaVoteRef,
+      );
+      const removeGuards = reflector.get<unknown[]>(
+        GUARDS_METADATA,
+        removeMediaVoteRef,
+      );
+
+      expect(setGuards).toBeUndefined();
+      expect(removeGuards).toBeUndefined();
+    });
   });
 });

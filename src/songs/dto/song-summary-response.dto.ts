@@ -6,7 +6,6 @@ import { SongUserRefDto } from './song-user-ref.dto';
 export interface SongSummaryResponseDto {
   id: string;
   title: string;
-  slug: string;
   authorName: string | null;
   status: SongStatus;
   category: SongCategoryResponseDto;

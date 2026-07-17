@@ -10,6 +10,7 @@ import { SongAlternativeTitle } from '../src/songs/entities/song-alternative-tit
 import { SongCategory } from '../src/songs/entities/song-category.entity';
 import { SongLineTranslation } from '../src/songs/entities/song-line-translation.entity';
 import { SongLine } from '../src/songs/entities/song-line.entity';
+import { SongMediaVote } from '../src/songs/entities/song-media-vote.entity';
 import { SongMedia } from '../src/songs/entities/song-media.entity';
 import { SongPart } from '../src/songs/entities/song-part.entity';
 import { SongTag } from '../src/songs/entities/song-tag.entity';
@@ -17,6 +18,7 @@ import { Song } from '../src/songs/entities/song.entity';
 import { Tag } from '../src/songs/entities/tag.entity';
 import { SongMediaProvider } from '../src/songs/enums/song-media-provider.enum';
 import { SongPerformer } from '../src/songs/enums/song-performer.enum';
+import { User } from '../src/users/entities/user.entity';
 
 // Direct MikroORM/Postgres integration tests for the Songbook data model.
 // There is no SongsController/SongsService yet (Etap 8.1 is model-only), so
@@ -28,6 +30,7 @@ describe('Songbook model (integration)', () => {
   const categoryIds: string[] = [];
   const tagIds: string[] = [];
   const songIds: string[] = [];
+  const userIds: string[] = [];
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -53,6 +56,10 @@ describe('Songbook model (integration)', () => {
     if (categoryIds.length > 0) {
       await cleanup.nativeDelete(SongCategory, { id: { $in: categoryIds } });
       categoryIds.length = 0;
+    }
+    if (userIds.length > 0) {
+      await cleanup.nativeDelete(User, { id: { $in: userIds } });
+      userIds.length = 0;
     }
   });
 
@@ -81,6 +88,25 @@ describe('Songbook model (integration)', () => {
     song.category = category;
     songIds.push(song.id);
     return song;
+  }
+
+  function buildUser(): User {
+    const suffix = randomUUID();
+    const user = new User();
+    user.clerkUserId = `user_test_model_${suffix}`;
+    user.email = `model-test-${suffix}@example.com`;
+    user.displayName = 'Model Test User';
+    userIds.push(user.id);
+    return user;
+  }
+
+  function buildMedia(song: Song, position = 1): SongMedia {
+    const media = new SongMedia();
+    media.song = song;
+    media.provider = SongMediaProvider.YOUTUBE;
+    media.url = `https://www.youtube.com/watch?v=${randomUUID()}`;
+    media.position = position;
+    return media;
   }
 
   it('persists a full Song -> Part -> Line -> Translation structure, alternative titles, tags and media', async () => {
@@ -344,5 +370,142 @@ describe('Songbook model (integration)', () => {
     // never take them down with it.
     expect(await verify.count(SongCategory, { id: category.id })).toBe(1);
     expect(await verify.count(Tag, { id: tag.id })).toBe(1);
+  });
+
+  describe('SongMediaVote', () => {
+    it('persists song, media and user, and is readable back by id', async () => {
+      const fork = em.fork();
+      const category = buildCategory();
+      const song = buildSong(category);
+      const media = buildMedia(song);
+      const user = buildUser();
+
+      const vote = new SongMediaVote();
+      vote.song = song;
+      vote.media = media;
+      vote.user = user;
+
+      await fork.persist([category, song, media, user, vote]).flush();
+
+      const verify = em.fork();
+      const persisted = await verify.findOneOrFail(SongMediaVote, vote.id, {
+        populate: ['song', 'media', 'user'],
+      });
+      expect(persisted.song.id).toBe(song.id);
+      expect(persisted.media.id).toBe(media.id);
+      expect(persisted.user.id).toBe(user.id);
+    });
+
+    it('rejects a second vote row for the same song and user (unique song+user)', async () => {
+      const fork = em.fork();
+      const category = buildCategory();
+      const song = buildSong(category);
+      const mediaA = buildMedia(song, 1);
+      const mediaB = buildMedia(song, 2);
+      const user = buildUser();
+
+      const first = new SongMediaVote();
+      first.song = song;
+      first.media = mediaA;
+      first.user = user;
+      await fork.persist([category, song, mediaA, mediaB, user, first]).flush();
+
+      const duplicate = new SongMediaVote();
+      duplicate.song = song;
+      duplicate.media = mediaB;
+      duplicate.user = user;
+
+      await expect(fork.persist(duplicate).flush()).rejects.toThrow(
+        UniqueConstraintViolationException,
+      );
+    });
+
+    it('allows the same user to hold one vote per song across two different songs', async () => {
+      const fork = em.fork();
+      const category = buildCategory();
+      const songA = buildSong(category);
+      const songB = buildSong(category);
+      const mediaA = buildMedia(songA);
+      const mediaB = buildMedia(songB);
+      const user = buildUser();
+
+      const voteA = new SongMediaVote();
+      voteA.song = songA;
+      voteA.media = mediaA;
+      voteA.user = user;
+
+      const voteB = new SongMediaVote();
+      voteB.song = songB;
+      voteB.media = mediaB;
+      voteB.user = user;
+
+      await fork
+        .persist([category, songA, songB, mediaA, mediaB, user, voteA, voteB])
+        .flush();
+
+      const verify = em.fork();
+      expect(await verify.count(SongMediaVote, { user: user.id })).toBe(2);
+    });
+
+    it('cascades a physical Song delete to its SongMediaVote rows', async () => {
+      const fork = em.fork();
+      const category = buildCategory();
+      const song = buildSong(category);
+      const media = buildMedia(song);
+      const user = buildUser();
+      const vote = new SongMediaVote();
+      vote.song = song;
+      vote.media = media;
+      vote.user = user;
+      await fork.persist([category, song, media, user, vote]).flush();
+
+      const deleter = em.fork();
+      await deleter.nativeDelete(Song, { id: song.id });
+
+      const verify = em.fork();
+      expect(await verify.count(SongMediaVote, { id: vote.id })).toBe(0);
+    });
+
+    it('cascades a physical SongMedia delete to its SongMediaVote rows', async () => {
+      const fork = em.fork();
+      const category = buildCategory();
+      const song = buildSong(category);
+      const media = buildMedia(song);
+      const user = buildUser();
+      const vote = new SongMediaVote();
+      vote.song = song;
+      vote.media = media;
+      vote.user = user;
+      await fork.persist([category, song, media, user, vote]).flush();
+
+      const deleter = em.fork();
+      await deleter.nativeDelete(SongMedia, { id: media.id });
+
+      const verify = em.fork();
+      expect(await verify.count(SongMediaVote, { id: vote.id })).toBe(0);
+      // The song itself must survive - only its media (and that media's
+      // votes) are gone.
+      expect(await verify.count(Song, { id: song.id })).toBe(1);
+    });
+
+    it('cascades a physical User delete to their SongMediaVote rows', async () => {
+      const fork = em.fork();
+      const category = buildCategory();
+      const song = buildSong(category);
+      const media = buildMedia(song);
+      const user = buildUser();
+      const vote = new SongMediaVote();
+      vote.song = song;
+      vote.media = media;
+      vote.user = user;
+      await fork.persist([category, song, media, user, vote]).flush();
+
+      const deleter = em.fork();
+      await deleter.nativeDelete(User, { id: user.id });
+      userIds.splice(userIds.indexOf(user.id), 1); // already deleted
+
+      const verify = em.fork();
+      expect(await verify.count(SongMediaVote, { id: vote.id })).toBe(0);
+    });
   });
 });

@@ -21,12 +21,14 @@ import {
 import { ListSongsQuery } from './dto/song-list-query.schema';
 import { SongDetailsResponseDto } from './dto/song-details-response.dto';
 import { SongMediaDetailsResponseDto } from './dto/song-media-details-response.dto';
+import { SongMediaVoteResponseDto } from './dto/song-media-vote-response.dto';
 import { SongSummaryResponseDto } from './dto/song-summary-response.dto';
 import { UpdateSongInput } from './dto/update-song.schema';
 import { SongAlternativeTitle } from './entities/song-alternative-title.entity';
 import { SongCategory } from './entities/song-category.entity';
 import { SongLine } from './entities/song-line.entity';
 import { SongLineTranslation } from './entities/song-line-translation.entity';
+import { SongMediaVote } from './entities/song-media-vote.entity';
 import { SongMedia } from './entities/song-media.entity';
 import { SongPart } from './entities/song-part.entity';
 import { SongTag } from './entities/song-tag.entity';
@@ -38,6 +40,7 @@ import {
   toSongMediaDetailsResponseDto,
   toSongSummaryResponseDto,
 } from './mappers/song.mapper';
+import { loadSongMediaVoteAggregates } from './song-media-vote-aggregates';
 import {
   loadSongSummaryAggregates,
   queryVisibleSongIds,
@@ -61,7 +64,6 @@ export class SongsService {
     input: CreateSongInput,
   ): Promise<SongDetailsResponseDto> {
     const songId = await this.em.transactional(async (em) => {
-      await this.assertSlugAvailable(em, input.slug);
       const category = await this.loadActiveCategoryOrFail(
         em,
         input.categoryId,
@@ -80,7 +82,7 @@ export class SongsService {
       return song.id;
     });
 
-    return this.getDetails(songId);
+    return this.getDetails(songId, user.id);
   }
 
   async update(
@@ -94,7 +96,6 @@ export class SongsService {
         throw this.notFound();
       }
 
-      await this.assertSlugAvailable(em, input.slug, song.id);
       const category = await this.loadActiveCategoryOrFail(
         em,
         input.categoryId,
@@ -117,10 +118,19 @@ export class SongsService {
       await this.persistOrThrowConflict(em, [song, ...children]);
     });
 
-    return this.getDetails(id);
+    return this.getDetails(id, user.id);
   }
 
-  async getDetails(id: string): Promise<SongDetailsResponseDto> {
+  // currentUserId is only known for a real GET /songs/:id (see the
+  // controller) or right after the acting user's own create/update. Every
+  // other internal caller (submit/publish/reject/hide/restore) doesn't have
+  // a meaningful "current viewer" to compute isVotedByCurrentUser against,
+  // so it defaults to null - voteCount is unaffected either way, since it
+  // never depends on the caller's identity.
+  async getDetails(
+    id: string,
+    currentUserId: string | null = null,
+  ): Promise<SongDetailsResponseDto> {
     const song = await this.em.findOne(
       Song,
       { id },
@@ -131,7 +141,13 @@ export class SongsService {
       throw this.notFound();
     }
 
-    return toSongDetailsResponseDto(song);
+    const voteAggregates = await loadSongMediaVoteAggregates(
+      this.em,
+      id,
+      currentUserId,
+    );
+
+    return toSongDetailsResponseDto(song, voteAggregates);
   }
 
   async list(
@@ -279,6 +295,106 @@ export class SongsService {
     return this.setMediaVerified(songId, mediaId, false);
   }
 
+  // A user has zero or exactly one vote per song (song+user is unique - see
+  // the SongMediaVote entity), so "vote for media X" is really "point my
+  // one song-level vote at X", not "add a vote to X".
+  async setMediaVote(
+    songId: string,
+    mediaId: string,
+    user: User,
+  ): Promise<SongMediaVoteResponseDto> {
+    await this.em.transactional(async (em) => {
+      const media = await em.findOne(SongMedia, { id: mediaId, song: songId });
+      if (!media) {
+        throw new NotFoundException({
+          code: 'SONG_MEDIA_NOT_FOUND',
+          message: 'Song media not found',
+        });
+      }
+
+      const existingVote = await em.findOne(SongMediaVote, {
+        song: songId,
+        user: user.id,
+      });
+
+      if (!existingVote) {
+        await this.createVoteOrRecoverFromRace(em, songId, media, user);
+      } else if (existingVote.media.id !== mediaId) {
+        existingVote.media = media;
+        await em.flush();
+      }
+      // else: existingVote already points at mediaId - idempotent no-op.
+    });
+
+    return this.buildVoteResponse(songId, mediaId, user.id);
+  }
+
+  async removeMediaVote(songId: string, user: User): Promise<void> {
+    await this.em.transactional(async (em) => {
+      const vote = await em.findOne(SongMediaVote, {
+        song: songId,
+        user: user.id,
+      });
+      if (vote) {
+        await em.remove(vote).flush();
+      }
+      // else: no-op - DELETE is idempotent, see the controller (204 either way).
+    });
+  }
+
+  // The song+user unique constraint is what actually prevents two
+  // concurrent first-votes from both succeeding - this only turns the loser
+  // of that race into a graceful "update to the requested media" instead of
+  // a raw 500 from an unhandled UniqueConstraintViolationException. No
+  // SELECT ... FOR UPDATE or app-level locking: the constraint is the lock.
+  private async createVoteOrRecoverFromRace(
+    em: EntityManager,
+    songId: string,
+    media: SongMedia,
+    user: User,
+  ): Promise<void> {
+    const vote = new SongMediaVote();
+    vote.song = media.song;
+    vote.media = media;
+    vote.user = user;
+
+    try {
+      await em.persist(vote).flush();
+    } catch (error) {
+      if (!(error instanceof UniqueConstraintViolationException)) {
+        throw error;
+      }
+
+      const raceVote = await em.findOneOrFail(SongMediaVote, {
+        song: songId,
+        user: user.id,
+      });
+      if (raceVote.media.id !== media.id) {
+        raceVote.media = media;
+        await em.flush();
+      }
+    }
+  }
+
+  private async buildVoteResponse(
+    songId: string,
+    mediaId: string,
+    currentUserId: string,
+  ): Promise<SongMediaVoteResponseDto> {
+    const aggregates = await loadSongMediaVoteAggregates(
+      this.em,
+      songId,
+      currentUserId,
+    );
+
+    return {
+      songId,
+      mediaId,
+      voteCount: aggregates.voteCountsByMediaId.get(mediaId) ?? 0,
+      isVotedByCurrentUser: aggregates.votedMediaId === mediaId,
+    };
+  }
+
   // Scoping the lookup by both id and song in one query - rather than
   // fetching by mediaId alone and checking song.id afterwards - is what
   // makes "media exists but belongs to a different song" indistinguishable
@@ -376,20 +492,6 @@ export class SongsService {
     }
   }
 
-  private async assertSlugAvailable(
-    em: EntityManager,
-    slug: string,
-    excludeSongId?: string,
-  ): Promise<void> {
-    const existing = await em.findOne(Song, { slug });
-    if (existing && existing.id !== excludeSongId) {
-      throw new ConflictException({
-        code: 'SLUG_CONFLICT',
-        message: 'A song with this slug already exists',
-      });
-    }
-  }
-
   private async loadActiveCategoryOrFail(
     em: EntityManager,
     categoryId: string,
@@ -428,7 +530,6 @@ export class SongsService {
     category: SongCategory,
   ): void {
     song.title = input.title;
-    song.slug = input.slug;
     song.authorName = input.authorName;
     song.category = category;
     song.meaningHistory = input.meaningHistory;

@@ -18,20 +18,7 @@ const MAX_PARTS = 200;
 const MAX_LINES_PER_PART = 100;
 const MAX_MEDIA = 30;
 
-const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-
 const titleSchema = z.string().trim().min(1).max(200);
-
-const slugSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .min(1)
-  .max(250)
-  .regex(
-    SLUG_PATTERN,
-    'Must contain only lowercase letters, digits and single hyphens, and must not start or end with a hyphen',
-  );
 
 const alternativeTitleItemSchema = z
   .object({
@@ -154,7 +141,6 @@ const mediaSchema = z
 export const createSongSchema = z
   .object({
     title: titleSchema,
-    slug: slugSchema,
     authorName: optionalNullableText(150),
     categoryId: uuidSchema,
     alternativeTitles: alternativeTitlesSchema,

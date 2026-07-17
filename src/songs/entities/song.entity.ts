@@ -6,7 +6,6 @@ import {
   ManyToOne,
   OneToMany,
   Property,
-  Unique,
 } from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
@@ -23,10 +22,6 @@ export class Song extends BaseEntity {
   @Index()
   @Property({ length: 200 })
   title!: string;
-
-  @Unique()
-  @Property({ length: 250 })
-  slug!: string;
 
   // The person who wrote the song (e.g. a specific Mestre) - not the
   // CapoHub user who added it. Null means a traditional/unknown author.

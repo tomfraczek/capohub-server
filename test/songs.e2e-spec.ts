@@ -20,9 +20,11 @@ import { HttpErrorResponse } from '../src/common/types/http-error-response.type'
 import { User } from '../src/users/entities/user.entity';
 import { SongDetailsResponseDto } from '../src/songs/dto/song-details-response.dto';
 import { SongMediaDetailsResponseDto } from '../src/songs/dto/song-media-details-response.dto';
+import { SongMediaVoteResponseDto } from '../src/songs/dto/song-media-vote-response.dto';
 import { SongSummaryResponseDto } from '../src/songs/dto/song-summary-response.dto';
 import { Song } from '../src/songs/entities/song.entity';
 import { SongCategory } from '../src/songs/entities/song-category.entity';
+import { SongMediaVote } from '../src/songs/entities/song-media-vote.entity';
 import { SongTag } from '../src/songs/entities/song-tag.entity';
 import { Tag } from '../src/songs/entities/tag.entity';
 
@@ -294,6 +296,31 @@ describe('Songs (e2e)', () => {
     const user = await em.findOneOrFail(User, { clerkUserId: auth.userId });
     user.globalRole = GlobalRole.MODERATOR;
     await em.flush();
+  }
+
+  async function getSongDetails(
+    token: string,
+    songId: string,
+  ): Promise<SongDetailsResponseDto> {
+    return bodyOf<SongDetailsResponseDto>(
+      request(app.getHttpServer())
+        .get(`/api/v1/songs/${songId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200),
+    );
+  }
+
+  async function voteFor(
+    token: string,
+    songId: string,
+    mediaId: string,
+  ): Promise<SongMediaVoteResponseDto> {
+    return bodyOf<SongMediaVoteResponseDto>(
+      request(app.getHttpServer())
+        .put(`/api/v1/songs/${songId}/media/${mediaId}/vote`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200),
+    );
   }
 
   describe('CRUD', () => {
@@ -941,6 +968,187 @@ describe('Songs (e2e)', () => {
           .expect(404),
       );
       expect(response.code).toBe('SONG_MEDIA_NOT_FOUND');
+    });
+  });
+
+  describe('media voting', () => {
+    function twoMediaPayload(): Record<string, unknown> {
+      return minimalSongPayload(category.id, {
+        media: [
+          {
+            provider: 'YOUTUBE',
+            url: `https://www.youtube.com/watch?v=${randomUUID().slice(0, 11)}`,
+            title: 'Media A',
+            position: 1,
+          },
+          {
+            provider: 'YOUTUBE',
+            url: `https://www.youtube.com/watch?v=${randomUUID().slice(0, 11)}`,
+            title: 'Media B',
+            position: 2,
+          },
+        ],
+      });
+    }
+
+    it('walks the full vote lifecycle: first vote, move, idempotent re-vote, a second voter, and removal', async () => {
+      const song = await createSong(OWNER_TOKEN, twoMediaPayload());
+      const mediaA = song.media[0].id;
+      const mediaB = song.media[1].id;
+
+      // 1. OWNER votes for media A.
+      const firstVote = await voteFor(OWNER_TOKEN, song.id, mediaA);
+      expect(firstVote).toEqual({
+        songId: song.id,
+        mediaId: mediaA,
+        voteCount: 1,
+        isVotedByCurrentUser: true,
+      });
+
+      const afterFirstVote = await getSongDetails(OWNER_TOKEN, song.id);
+      expect(afterFirstVote.media.find((m) => m.id === mediaA)).toMatchObject({
+        voteCount: 1,
+        isVotedByCurrentUser: true,
+      });
+      expect(afterFirstVote.media.find((m) => m.id === mediaB)).toMatchObject({
+        voteCount: 0,
+        isVotedByCurrentUser: false,
+      });
+
+      // 2. OWNER moves their vote to media B.
+      const movedVote = await voteFor(OWNER_TOKEN, song.id, mediaB);
+      expect(movedVote).toEqual({
+        songId: song.id,
+        mediaId: mediaB,
+        voteCount: 1,
+        isVotedByCurrentUser: true,
+      });
+
+      const em = app.get(EntityManager).fork();
+      const voteCountForOwner = await em.count(SongMediaVote, {
+        song: song.id,
+      });
+      expect(voteCountForOwner).toBe(1);
+
+      const afterMove = await getSongDetails(OWNER_TOKEN, song.id);
+      expect(afterMove.media.find((m) => m.id === mediaA)).toMatchObject({
+        voteCount: 0,
+        isVotedByCurrentUser: false,
+      });
+      expect(afterMove.media.find((m) => m.id === mediaB)).toMatchObject({
+        voteCount: 1,
+        isVotedByCurrentUser: true,
+      });
+
+      // 3. Re-voting for media B is idempotent.
+      const reVote = await voteFor(OWNER_TOKEN, song.id, mediaB);
+      expect(reVote).toEqual(movedVote);
+
+      // 4. A second user votes for media B too.
+      const secondVote = await voteFor(OTHER_TOKEN, song.id, mediaB);
+      expect(secondVote).toMatchObject({ mediaId: mediaB, voteCount: 2 });
+
+      const afterSecondVoter = await getSongDetails(OWNER_TOKEN, song.id);
+      expect(afterSecondVoter.media.find((m) => m.id === mediaB)).toMatchObject(
+        {
+          voteCount: 2,
+          isVotedByCurrentUser: true,
+        },
+      );
+
+      // 5. OWNER removes their vote - media B keeps the other voter's vote.
+      await request(app.getHttpServer())
+        .delete(`/api/v1/songs/${song.id}/vote`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+
+      const afterRemove = await getSongDetails(OWNER_TOKEN, song.id);
+      expect(afterRemove.media.find((m) => m.id === mediaB)).toMatchObject({
+        voteCount: 1,
+        isVotedByCurrentUser: false,
+      });
+
+      // 6. Removing again is idempotent (still 204, not 404).
+      await request(app.getHttpServer())
+        .delete(`/api/v1/songs/${song.id}/vote`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+    });
+
+    it('lets the same user hold independent votes in two different songs', async () => {
+      const songA = await createSong(OWNER_TOKEN, twoMediaPayload());
+      const songB = await createSong(OWNER_TOKEN, twoMediaPayload());
+
+      await voteFor(OWNER_TOKEN, songA.id, songA.media[0].id);
+      const voteInB = await voteFor(OWNER_TOKEN, songB.id, songB.media[1].id);
+
+      expect(voteInB).toEqual({
+        songId: songB.id,
+        mediaId: songB.media[1].id,
+        voteCount: 1,
+        isVotedByCurrentUser: true,
+      });
+
+      const detailsA = await getSongDetails(OWNER_TOKEN, songA.id);
+      expect(
+        detailsA.media.find((m) => m.id === songA.media[0].id),
+      ).toMatchObject({ isVotedByCurrentUser: true });
+    });
+
+    it('returns 404 when the media belongs to a different song', async () => {
+      const songA = await createSong(OWNER_TOKEN, twoMediaPayload());
+      const songB = await createSong(OWNER_TOKEN, twoMediaPayload());
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .put(`/api/v1/songs/${songA.id}/media/${songB.media[0].id}/vote`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(404),
+      );
+      expect(response.code).toBe('SONG_MEDIA_NOT_FOUND');
+    });
+
+    it('rejects voting without a token with 401', async () => {
+      const song = await createSong(OWNER_TOKEN, twoMediaPayload());
+
+      await request(app.getHttpServer())
+        .put(`/api/v1/songs/${song.id}/media/${song.media[0].id}/vote`)
+        .expect(401);
+    });
+
+    it('rejects a malformed songId or mediaId with 400', async () => {
+      const song = await createSong(OWNER_TOKEN, twoMediaPayload());
+
+      await request(app.getHttpServer())
+        .put(`/api/v1/songs/not-a-uuid/media/${song.media[0].id}/vote`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .put(`/api/v1/songs/${song.id}/media/not-a-uuid/vote`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .delete('/api/v1/songs/not-a-uuid/vote')
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(400);
+    });
+
+    it('DELETE without a token returns 401', async () => {
+      const song = await createSong(OWNER_TOKEN, twoMediaPayload());
+
+      await request(app.getHttpServer())
+        .delete(`/api/v1/songs/${song.id}/vote`)
+        .expect(401);
+    });
+
+    it('any authenticated globalRole may vote - no CONTENT_APPROVE required', async () => {
+      const song = await createSong(OWNER_TOKEN, twoMediaPayload());
+
+      // OTHER_TOKEN's user defaults to globalRole USER, which has no
+      // CONTENT_APPROVE - voting must still succeed.
+      await voteFor(OTHER_TOKEN, song.id, song.media[0].id);
     });
   });
 });

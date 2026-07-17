@@ -39,13 +39,14 @@ export interface SongMediaResponseDto {
   title: string | null;
   position: number;
   isVerified: boolean;
+  voteCount: number;
+  isVotedByCurrentUser: boolean;
   createdBy: SongUserRefDto | null;
 }
 
 export interface SongDetailsResponseDto {
   id: string;
   title: string;
-  slug: string;
   authorName: string | null;
   status: SongStatus;
   category: SongCategoryResponseDto;

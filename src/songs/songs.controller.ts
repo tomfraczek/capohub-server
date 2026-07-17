@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -25,6 +26,7 @@ import {
   listSongsQuerySchema,
 } from './dto/song-list-query.schema';
 import { SongMediaDetailsResponseDto } from './dto/song-media-details-response.dto';
+import { SongMediaVoteResponseDto } from './dto/song-media-vote-response.dto';
 import { SongSummaryResponseDto } from './dto/song-summary-response.dto';
 import { UpdateSongDto, updateSongSchema } from './dto/update-song.schema';
 import { SongsService } from './songs.service';
@@ -54,8 +56,9 @@ export class SongsController {
   @Get(':id')
   getDetails(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
   ): Promise<SongDetailsResponseDto> {
-    return this.songsService.getDetails(id);
+    return this.songsService.getDetails(id, user.id);
   }
 
   @Patch(':id')
@@ -128,5 +131,27 @@ export class SongsController {
     @Param('mediaId', ParseUUIDPipe) mediaId: string,
   ): Promise<SongMediaDetailsResponseDto> {
     return this.songsService.unverifyMedia(songId, mediaId);
+  }
+
+  // No body, no ZodValidationPipe - the whole request is just the two path
+  // params + the caller's identity. Any authenticated user may vote,
+  // regardless of globalRole - no PermissionsGuard here (unlike verify/
+  // unverify above).
+  @Put(':songId/media/:mediaId/vote')
+  setMediaVote(
+    @Param('songId', ParseUUIDPipe) songId: string,
+    @Param('mediaId', ParseUUIDPipe) mediaId: string,
+    @CurrentUser() user: User,
+  ): Promise<SongMediaVoteResponseDto> {
+    return this.songsService.setMediaVote(songId, mediaId, user);
+  }
+
+  @Delete(':songId/vote')
+  @HttpCode(204)
+  removeMediaVote(
+    @Param('songId', ParseUUIDPipe) songId: string,
+    @CurrentUser() user: User,
+  ): Promise<void> {
+    return this.songsService.removeMediaVote(songId, user);
   }
 }
