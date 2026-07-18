@@ -1,6 +1,7 @@
 import { User } from '../../users/entities/user.entity';
 import { LearningStatus } from '../../song-library/enums/learning-status.enum';
 import { SongPlaylistRefDto } from '../../playlists/dto/song-playlist-ref.dto';
+import { SongRhythmRefDto } from '../../rhythms/dto/song-rhythm-ref.dto';
 import {
   SongAlternativeTitleResponseDto,
   SongDetailsResponseDto,
@@ -71,6 +72,7 @@ export function toSongDetailsResponseDto(
   song: Song,
   voteAggregates: SongMediaVoteAggregates,
   userContext: SongUserContext,
+  rhythms: SongRhythmRefDto[],
 ): SongDetailsResponseDto {
   return {
     id: song.id,
@@ -111,6 +113,7 @@ export function toSongDetailsResponseDto(
     meaningHistory: song.meaningHistory,
     meaningContext: song.meaningContext,
     meaningTrivia: song.meaningTrivia,
+    rhythms,
     isFavorite: userContext.isFavorite,
     learningStatus: userContext.learningStatus,
     myNote: userContext.myNote,

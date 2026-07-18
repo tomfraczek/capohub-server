@@ -23,4 +23,9 @@ export enum Permission {
 
   USER_MANAGE = 'USER_MANAGE',
   APP_SETTINGS_MANAGE = 'APP_SETTINGS_MANAGE',
+
+  // CMS-managed reference content (Instruments, Rhythms and their media) -
+  // not user- or editor-generated, so it sits at the ADMIN tier alongside
+  // USER_MANAGE rather than with the EDITOR/MODERATOR content permissions.
+  MUSIC_CONTENT_MANAGE = 'MUSIC_CONTENT_MANAGE',
 }

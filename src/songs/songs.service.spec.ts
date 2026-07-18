@@ -23,6 +23,8 @@ import { SongPerformer } from './enums/song-performer.enum';
 import { SongStatus } from './enums/song-status.enum';
 import { DuplicateSongSuggestionDto } from './dto/duplicate-suggestion-response.dto';
 import { PlaylistsService } from '../playlists/playlists.service';
+import { Rhythm } from '../rhythms/entities/rhythm.entity';
+import { SongRhythm } from '../rhythms/entities/song-rhythm.entity';
 import { FavoriteSongsService } from '../song-library/favorite-songs.service';
 import { LearningStatusService } from '../song-library/learning-status.service';
 import { SongNotesService } from '../song-library/song-notes.service';
@@ -460,6 +462,42 @@ describe('SongsService', () => {
       expect(result.myNote).toBe('hello');
       expect(result.playlists).toEqual([
         { id: 'playlist-1', name: 'My playlist' },
+      ]);
+    });
+
+    it('includes rhythms linked to the song via loadRhythmsForSong', async () => {
+      const em = buildMockEm({ detailsSong: buildPopulatedSong() });
+      const rhythmLink = new SongRhythm();
+      rhythmLink.isPrimary = true;
+      rhythmLink.description = 'The main rhythm for this song';
+      rhythmLink.rhythm = Object.assign(new Rhythm(), {
+        id: 'rhythm-1',
+        slug: 'sao-bento-grande',
+        name: 'São Bento Grande',
+        shortDescription: null,
+      });
+      (em.find as jest.Mock).mockImplementation((entity: unknown) =>
+        entity === SongRhythm
+          ? Promise.resolve([rhythmLink])
+          : Promise.resolve([]),
+      );
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      const result = await service.getDetails('song-1');
+
+      expect(result.rhythms).toEqual([
+        {
+          id: 'rhythm-1',
+          slug: 'sao-bento-grande',
+          name: 'São Bento Grande',
+          shortDescription: null,
+          isPrimary: true,
+          description: 'The main rhythm for this song',
+        },
       ]);
     });
   });

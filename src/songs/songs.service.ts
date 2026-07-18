@@ -13,6 +13,7 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { PaginatedResponse } from '../common/pagination/pagination.types';
 import { createPaginationMeta } from '../common/pagination/pagination.utils';
 import { PlaylistsService } from '../playlists/playlists.service';
+import { loadRhythmsForSong } from '../rhythms/song-rhythm-links.query';
 import { FavoriteSongsService } from '../song-library/favorite-songs.service';
 import { LearningStatusService } from '../song-library/learning-status.service';
 import { SongNotesService } from '../song-library/song-notes.service';
@@ -158,12 +159,13 @@ export class SongsService {
       throw this.notFound();
     }
 
-    const [voteAggregates, userContext] = await Promise.all([
+    const [voteAggregates, userContext, rhythms] = await Promise.all([
       loadSongMediaVoteAggregates(this.em, id, currentUserId),
       this.loadUserContext(id, currentUserId),
+      loadRhythmsForSong(this.em, id),
     ]);
 
-    return toSongDetailsResponseDto(song, voteAggregates, userContext);
+    return toSongDetailsResponseDto(song, voteAggregates, userContext, rhythms);
   }
 
   // Every field is private to currentUserId (spec section 6). currentUserId

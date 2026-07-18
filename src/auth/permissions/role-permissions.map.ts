@@ -31,6 +31,7 @@ const ADMIN_PERMISSIONS: readonly Permission[] = [
   ...MODERATOR_PERMISSIONS,
   Permission.SONG_DELETE,
   Permission.USER_MANAGE,
+  Permission.MUSIC_CONTENT_MANAGE,
 ];
 
 // APP_SETTINGS_MANAGE is deliberately withheld from ADMIN and reserved for

@@ -38,6 +38,7 @@ function buildDetailsResponse(
     meaningHistory: null,
     meaningContext: null,
     meaningTrivia: null,
+    rhythms: [],
     isFavorite: false,
     learningStatus: null,
     myNote: null,

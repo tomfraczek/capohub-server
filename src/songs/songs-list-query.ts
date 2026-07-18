@@ -85,7 +85,11 @@ export async function queryVisibleSongIds(
 // the song's own createdBy. This is a deliberately temporary, hard-coded
 // rule (see Etap 8.2 report) pending the PermissionService-based visibility
 // that will ship with moderator roles.
-function applyVisibility(
+//
+// Exported so other modules that need "is this song visible to this user"
+// (e.g. rhythms/rhythm-song-links.query.ts, for a rhythm's related songs)
+// reuse this exact rule instead of re-implementing it - see spec section 8.
+export function applyVisibility(
   qb: QueryBuilder<Song>,
   currentUserId: string,
   statusFilter: SongStatus | undefined,
