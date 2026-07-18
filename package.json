@@ -23,7 +23,8 @@
     "migration:down": "mikro-orm migration:down",
     "migration:list": "mikro-orm migration:list",
     "migration:pending": "mikro-orm migration:pending",
-    "schema:diff": "mikro-orm schema:update --dump"
+    "schema:diff": "mikro-orm schema:update --dump",
+    "seed:music-content": "ts-node -r tsconfig-paths/register src/database/seeds/seed-music-content.ts"
   },
   "dependencies": {
     "@clerk/backend": "^3.11.5",

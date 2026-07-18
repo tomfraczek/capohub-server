@@ -427,6 +427,58 @@ describe('Instruments (e2e)', () => {
       expect(details.media[0].url).toBe('https://example.com/photo.jpg');
     });
 
+    it('includes related rhythms, ordered by displayOrder, excluding inactive ones', async () => {
+      const created = await createInstrument(instrumentPayload());
+      const em = app.get(EntityManager).fork();
+
+      const activeRhythm = new Rhythm();
+      activeRhythm.slug = `test-rhythm-active-${randomUUID().slice(0, 8)}`;
+      activeRhythm.name = 'Active Rhythm';
+      activeRhythm.alternativeNames = [];
+      const inactiveRhythm = new Rhythm();
+      inactiveRhythm.slug = `test-rhythm-inactive-${randomUUID().slice(0, 8)}`;
+      inactiveRhythm.name = 'Inactive Rhythm';
+      inactiveRhythm.alternativeNames = [];
+      inactiveRhythm.isActive = false;
+      await em.persistAndFlush([activeRhythm, inactiveRhythm]);
+
+      const activeLink = new InstrumentRhythm();
+      activeLink.instrument = em.getReference(Instrument, created.id);
+      activeLink.rhythm = activeRhythm;
+      activeLink.roleDescription = 'Marks the base rhythm';
+      activeLink.displayOrder = 1;
+      const inactiveLink = new InstrumentRhythm();
+      inactiveLink.instrument = em.getReference(Instrument, created.id);
+      inactiveLink.rhythm = inactiveRhythm;
+      inactiveLink.displayOrder = 2;
+      await em.persistAndFlush([activeLink, inactiveLink]);
+
+      const details = await bodyOf<InstrumentDetailsResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/instruments/${created.slug}`)
+          .set('Authorization', `Bearer ${USER_TOKEN}`)
+          .expect(200),
+      );
+
+      expect(details.rhythms).toEqual([
+        {
+          id: activeRhythm.id,
+          slug: activeRhythm.slug,
+          name: activeRhythm.name,
+          shortDescription: null,
+          roleDescription: 'Marks the base rhythm',
+          displayOrder: 1,
+        },
+      ]);
+
+      await em.nativeDelete(InstrumentRhythm, {
+        id: { $in: [activeLink.id, inactiveLink.id] },
+      });
+      await em.nativeDelete(Rhythm, {
+        id: { $in: [activeRhythm.id, inactiveRhythm.id] },
+      });
+    });
+
     it('returns 404 for an inactive instrument', async () => {
       const created = await createInstrument(
         instrumentPayload({ isActive: false }),

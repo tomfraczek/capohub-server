@@ -437,14 +437,19 @@ describe('Rhythms (e2e)', () => {
     });
 
     it('does not persist a rhythm when an invalid instrumentLinks reference makes the whole request fail', async () => {
+      // Checked by this specific slug rather than a global Rhythm count -
+      // other e2e spec files create/remove their own Rhythm rows in
+      // parallel test workers against the same database, so a table-wide
+      // count is not stable across files.
       const em = app.get(EntityManager).fork();
-      const before = await em.count(Rhythm, {});
+      const slug = `test-rollback-${randomUUID().slice(0, 8)}`;
 
       await request(app.getHttpServer())
         .post('/api/v1/admin/rhythms')
         .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
         .send(
           rhythmPayload({
+            slug,
             instrumentLinks: [
               {
                 instrumentId: randomUUID(),
@@ -456,8 +461,7 @@ describe('Rhythms (e2e)', () => {
         )
         .expect(400);
 
-      const after = await em.count(Rhythm, {});
-      expect(after).toBe(before);
+      expect(await em.count(Rhythm, { slug })).toBe(0);
     });
 
     it('un-primaries the previous rhythm when a song is assigned a new primary rhythm', async () => {
