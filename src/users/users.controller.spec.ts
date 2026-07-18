@@ -1,8 +1,16 @@
 import { GlobalRole } from '../auth/permissions/global-role.enum';
+import { FavoriteSongsService } from '../song-library/favorite-songs.service';
+import { LearningStatusService } from '../song-library/learning-status.service';
 import { AvatarType } from './enums/avatar-type.enum';
 import { UserService } from './user.service';
 import { User } from './entities/user.entity';
 import { UsersController } from './users.controller';
+
+// Unused by the getMe/updateMe/avatar/deleteMe tests below - only the
+// dedicated "getFavoriteSongs"/"getLearningSongs" describe blocks pass
+// their own mocks.
+const favoriteSongsService = {} as unknown as FavoriteSongsService;
+const learningStatusService = {} as unknown as LearningStatusService;
 
 function buildUser(): User {
   const user = new User();
@@ -27,7 +35,11 @@ describe('UsersController', () => {
   describe('getMe', () => {
     it('maps the current user to a UserResponseDto', () => {
       const userService = {} as unknown as UserService;
-      const controller = new UsersController(userService);
+      const controller = new UsersController(
+        userService,
+        favoriteSongsService,
+        learningStatusService,
+      );
       const user = buildUser();
 
       expect(controller.getMe(user)).toEqual({
@@ -47,7 +59,11 @@ describe('UsersController', () => {
 
     it('never exposes clerkUserId, isActive, or lastLoginAt', () => {
       const userService = {} as unknown as UserService;
-      const controller = new UsersController(userService);
+      const controller = new UsersController(
+        userService,
+        favoriteSongsService,
+        learningStatusService,
+      );
 
       const response = controller.getMe(buildUser());
 
@@ -65,7 +81,11 @@ describe('UsersController', () => {
         return Promise.resolve(u);
       });
       const userService = { updateProfile } as unknown as UserService;
-      const controller = new UsersController(userService);
+      const controller = new UsersController(
+        userService,
+        favoriteSongsService,
+        learningStatusService,
+      );
 
       const response = await controller.updateMe(user, {
         displayName: 'Updated Name',
@@ -88,7 +108,11 @@ describe('UsersController', () => {
         return Promise.resolve(u);
       });
       const userService = { setAvatarPreset } as unknown as UserService;
-      const controller = new UsersController(userService);
+      const controller = new UsersController(
+        userService,
+        favoriteSongsService,
+        learningStatusService,
+      );
 
       const response = await controller.setAvatarPreset(user, {
         presetAvatarId: 'berimbau-01',
@@ -111,7 +135,11 @@ describe('UsersController', () => {
         return Promise.resolve(u);
       });
       const userService = { resetAvatarToClerk } as unknown as UserService;
-      const controller = new UsersController(userService);
+      const controller = new UsersController(
+        userService,
+        favoriteSongsService,
+        learningStatusService,
+      );
 
       const response = await controller.resetAvatarToClerk(user);
 
@@ -127,11 +155,59 @@ describe('UsersController', () => {
       const user = buildUser();
       const deleteAccount = jest.fn().mockResolvedValue(undefined);
       const userService = { deleteAccount } as unknown as UserService;
-      const controller = new UsersController(userService);
+      const controller = new UsersController(
+        userService,
+        favoriteSongsService,
+        learningStatusService,
+      );
 
       await controller.deleteMe(user);
 
       expect(deleteAccount).toHaveBeenCalledWith(user);
+    });
+  });
+
+  describe('getFavoriteSongs', () => {
+    it('delegates to FavoriteSongsService.listFavoriteSongs and wraps the result in items', async () => {
+      const user = buildUser();
+      const items = [{ id: 'song-1' }] as never;
+      const listFavoriteSongs = jest.fn().mockResolvedValue(items);
+      const userService = {} as unknown as UserService;
+      const favoritesService = {
+        listFavoriteSongs,
+      } as unknown as FavoriteSongsService;
+      const controller = new UsersController(
+        userService,
+        favoritesService,
+        learningStatusService,
+      );
+
+      const response = await controller.getFavoriteSongs(user);
+
+      expect(listFavoriteSongs).toHaveBeenCalledWith(user.id);
+      expect(response).toEqual({ items });
+    });
+  });
+
+  describe('getLearningSongs', () => {
+    it('delegates to LearningStatusService.listLearningSongs and wraps the result in items', async () => {
+      const user = buildUser();
+      const items = [{ id: 'song-1', learningStatus: 'LEARNING' }] as never;
+      const listLearningSongs = jest.fn().mockResolvedValue(items);
+      const userService = {} as unknown as UserService;
+      const learningService = {
+        listLearningSongs,
+      } as unknown as LearningStatusService;
+      const controller = new UsersController(
+        userService,
+        favoriteSongsService,
+        learningService,
+      );
+
+      const response = await controller.getLearningSongs(user);
+
+      expect(listLearningSongs).toHaveBeenCalledWith(user.id);
+      expect(response).toEqual({ items });
     });
   });
 });

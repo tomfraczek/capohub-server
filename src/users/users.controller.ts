@@ -9,6 +9,10 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { FavoriteSongsListResponseDto } from '../song-library/dto/favorite-songs-list-response.dto';
+import { LearningSongsListResponseDto } from '../song-library/dto/learning-songs-list-response.dto';
+import { FavoriteSongsService } from '../song-library/favorite-songs.service';
+import { LearningStatusService } from '../song-library/learning-status.service';
 import { SetAvatarPresetDto } from './dto/set-avatar-preset.schema';
 import { UpdateUserDto } from './dto/update-user.schema';
 import type { UserResponseDto } from './dto/user-response.dto';
@@ -18,7 +22,11 @@ import { UserService } from './user.service';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly favoriteSongsService: FavoriteSongsService,
+    private readonly learningStatusService: LearningStatusService,
+  ) {}
 
   @Get('me')
   getMe(@CurrentUser() user: User): UserResponseDto {
@@ -62,5 +70,21 @@ export class UsersController {
   @HttpCode(204)
   async deleteMe(@CurrentUser() user: User): Promise<void> {
     await this.userService.deleteAccount(user);
+  }
+
+  @Get('me/favorite-songs')
+  async getFavoriteSongs(
+    @CurrentUser() user: User,
+  ): Promise<FavoriteSongsListResponseDto> {
+    const items = await this.favoriteSongsService.listFavoriteSongs(user.id);
+    return { items };
+  }
+
+  @Get('me/learning-songs')
+  async getLearningSongs(
+    @CurrentUser() user: User,
+  ): Promise<LearningSongsListResponseDto> {
+    const items = await this.learningStatusService.listLearningSongs(user.id);
+    return { items };
   }
 }

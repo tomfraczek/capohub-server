@@ -1,3 +1,5 @@
+import { LearningStatus } from '../../song-library/enums/learning-status.enum';
+import { SongPlaylistRefDto } from '../../playlists/dto/song-playlist-ref.dto';
 import { SongMediaProvider } from '../enums/song-media-provider.enum';
 import { SongPerformer } from '../enums/song-performer.enum';
 import { SongStatus } from '../enums/song-status.enum';
@@ -58,6 +60,14 @@ export interface SongDetailsResponseDto {
   meaningHistory: string | null;
   meaningContext: string | null;
   meaningTrivia: string | null;
+  // Every field below is private to the current viewer (spec section 6) -
+  // never another user's favorite/status/note/playlists. All default to
+  // "empty" (false/null/[]) when there is no current user, e.g. internal
+  // calls from submit/publish/reject/hide/restore - see SongsService.getDetails.
+  isFavorite: boolean;
+  learningStatus: LearningStatus | null;
+  myNote: string | null;
+  playlists: SongPlaylistRefDto[];
   createdAt: string;
   updatedAt: string;
 }

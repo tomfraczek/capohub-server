@@ -1,4 +1,6 @@
 import { User } from '../../users/entities/user.entity';
+import { LearningStatus } from '../../song-library/enums/learning-status.enum';
+import { SongPlaylistRefDto } from '../../playlists/dto/song-playlist-ref.dto';
 import {
   SongAlternativeTitleResponseDto,
   SongDetailsResponseDto,
@@ -14,6 +16,15 @@ import { Song } from '../entities/song.entity';
 import { SongMediaVoteAggregates } from '../song-media-vote-aggregates';
 import { toSongCategoryResponseDto } from './song-category.mapper';
 import { toTagResponseDto } from './tag.mapper';
+
+// Everything private to the current viewer (spec section 5/6) - always
+// externally computed (see SongsService.getDetails), never queried here.
+export interface SongUserContext {
+  isFavorite: boolean;
+  learningStatus: LearningStatus | null;
+  myNote: string | null;
+  playlists: SongPlaylistRefDto[];
+}
 
 type SongMediaBaseFields = Omit<
   SongMediaResponseDto,
@@ -59,6 +70,7 @@ export function toSongUserRefDto(user: User | null): SongUserRefDto | null {
 export function toSongDetailsResponseDto(
   song: Song,
   voteAggregates: SongMediaVoteAggregates,
+  userContext: SongUserContext,
 ): SongDetailsResponseDto {
   return {
     id: song.id,
@@ -99,6 +111,10 @@ export function toSongDetailsResponseDto(
     meaningHistory: song.meaningHistory,
     meaningContext: song.meaningContext,
     meaningTrivia: song.meaningTrivia,
+    isFavorite: userContext.isFavorite,
+    learningStatus: userContext.learningStatus,
+    myNote: userContext.myNote,
+    playlists: userContext.playlists,
     createdAt: song.createdAt.toISOString(),
     updatedAt: song.updatedAt.toISOString(),
   };

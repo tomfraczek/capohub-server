@@ -12,6 +12,10 @@ import { UniqueConstraintViolationException } from '@mikro-orm/core';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { PaginatedResponse } from '../common/pagination/pagination.types';
 import { createPaginationMeta } from '../common/pagination/pagination.utils';
+import { PlaylistsService } from '../playlists/playlists.service';
+import { FavoriteSongsService } from '../song-library/favorite-songs.service';
+import { LearningStatusService } from '../song-library/learning-status.service';
+import { SongNotesService } from '../song-library/song-notes.service';
 import { User } from '../users/entities/user.entity';
 import {
   CreateSongAlternativeTitleInput,
@@ -38,6 +42,7 @@ import { Song } from './entities/song.entity';
 import { Tag } from './entities/tag.entity';
 import { SongStatus } from './enums/song-status.enum';
 import {
+  SongUserContext,
   toSongDetailsResponseDto,
   toSongMediaDetailsResponseDto,
   toSongSummaryResponseDto,
@@ -65,6 +70,10 @@ export class SongsService {
   constructor(
     private readonly em: EntityManager,
     private readonly songDuplicateService: SongDuplicateService,
+    private readonly favoriteSongsService: FavoriteSongsService,
+    private readonly learningStatusService: LearningStatusService,
+    private readonly songNotesService: SongNotesService,
+    private readonly playlistsService: PlaylistsService,
   ) {}
 
   async create(
@@ -149,13 +158,45 @@ export class SongsService {
       throw this.notFound();
     }
 
-    const voteAggregates = await loadSongMediaVoteAggregates(
-      this.em,
-      id,
-      currentUserId,
-    );
+    const [voteAggregates, userContext] = await Promise.all([
+      loadSongMediaVoteAggregates(this.em, id, currentUserId),
+      this.loadUserContext(id, currentUserId),
+    ]);
 
-    return toSongDetailsResponseDto(song, voteAggregates);
+    return toSongDetailsResponseDto(song, voteAggregates, userContext);
+  }
+
+  // Every field is private to currentUserId (spec section 6). currentUserId
+  // is null for internal callers with no meaningful "current viewer" (see
+  // the comment on getDetails' parameter) - in that case every field
+  // defaults to its "nothing here" value, exactly like
+  // loadSongMediaVoteAggregates' isVotedByCurrentUser.
+  private async loadUserContext(
+    songId: string,
+    currentUserId: string | null,
+  ): Promise<SongUserContext> {
+    if (!currentUserId) {
+      return {
+        isFavorite: false,
+        learningStatus: null,
+        myNote: null,
+        playlists: [],
+      };
+    }
+
+    const [isFavorite, learningStatus, note, playlists] = await Promise.all([
+      this.favoriteSongsService.isFavorite(currentUserId, songId),
+      this.learningStatusService.getStatus(currentUserId, songId),
+      this.songNotesService.getNote(currentUserId, songId),
+      this.playlistsService.getPlaylistsContainingSong(currentUserId, songId),
+    ]);
+
+    return {
+      isFavorite,
+      learningStatus,
+      myNote: note?.content ?? null,
+      playlists,
+    };
   }
 
   async list(

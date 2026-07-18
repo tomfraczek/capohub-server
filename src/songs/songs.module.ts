@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { PermissionsModule } from '../auth/permissions/permissions.module';
+import { PlaylistsModule } from '../playlists/playlists.module';
+import { SongLibraryModule } from '../song-library/song-library.module';
 import { SongCategory } from './entities/song-category.entity';
 import { Tag } from './entities/tag.entity';
 import { SongCategoriesController } from './song-categories.controller';
@@ -17,8 +19,16 @@ import { TagsService } from './tags.service';
   // entity through the plain EntityManager (auto-discovered globally, see
   // mikro-orm-options.factory.ts), so registering them here would add
   // nothing. PermissionsModule is imported for PermissionsGuard, used by the
-  // media verify/unverify endpoints.
-  imports: [MikroOrmModule.forFeature([SongCategory, Tag]), PermissionsModule],
+  // media verify/unverify endpoints. SongLibraryModule/PlaylistsModule are
+  // imported one-directionally (neither imports SongsModule back) so
+  // SongsService can aggregate isFavorite/learningStatus/myNote/playlists
+  // into SongDetails - see SongsService.loadUserContext.
+  imports: [
+    MikroOrmModule.forFeature([SongCategory, Tag]),
+    PermissionsModule,
+    SongLibraryModule,
+    PlaylistsModule,
+  ],
   controllers: [SongsController, SongCategoriesController, TagsController],
   providers: [
     SongsService,
