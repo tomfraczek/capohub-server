@@ -86,7 +86,14 @@ const fixtureClerkClient = {
 describe('App (e2e)', () => {
   let app: INestApplication<App>;
 
-  beforeEach(async () => {
+  // One app (and one MikroORM connection pool) for the whole file, like
+  // every other *.e2e-spec.ts - a previous beforeEach/afterEach here rebuilt
+  // the full app ~25 times per run, which was the dominant source of
+  // connection churn behind the "socket hang up" / pool-exhaustion flakes
+  // seen under parallel e2e execution. Per-test isolation for the shared
+  // Clerk user fixtures is achieved by resetting their rows before each
+  // test instead (see beforeEach below), not by recreating the app.
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
@@ -106,6 +113,15 @@ describe('App (e2e)', () => {
     });
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
+  });
+
+  // Several tests reuse the same fixed Clerk user ids (e.g. user_test_flow)
+  // to exercise "first login creates it" / fresh avatar / fresh globalRole
+  // scenarios - each test needs that row absent at the start, regardless of
+  // what an earlier test left behind.
+  beforeEach(async () => {
+    const em = app.get(EntityManager).fork();
+    await em.nativeDelete(User, { clerkUserId: { $in: TEST_CLERK_USER_IDS } });
   });
 
   // Requires a reachable local PostgreSQL database (see DATABASE_URL in .env).
@@ -494,7 +510,7 @@ describe('App (e2e)', () => {
     });
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     const em = app.get(EntityManager).fork();
     await em.nativeDelete(User, { clerkUserId: { $in: TEST_CLERK_USER_IDS } });
     await app.close();

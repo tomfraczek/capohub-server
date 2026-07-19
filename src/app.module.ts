@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
+import { GroupsModule } from './groups/groups.module';
 import { HealthModule } from './health/health.module';
 import { InstrumentsModule } from './instruments/instruments.module';
 import { PlaylistsModule } from './playlists/playlists.module';
@@ -21,6 +22,7 @@ import { UsersModule } from './users/users.module';
     PlaylistsModule,
     InstrumentsModule,
     RhythmsModule,
+    GroupsModule,
     HealthModule,
   ],
 })
