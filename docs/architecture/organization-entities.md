@@ -22,6 +22,7 @@ last_updated: 2026-07-20
 - [Academy](#academy)
 - [Section](#section)
 - [Membership](#membership)
+- [RoleAssignment](#roleassignment)
 - [Invitation](#invitation)
 - [GraduationSystem](#graduationsystem)
 - [GraduationCategory](#graduationcategory)
@@ -312,28 +313,29 @@ a Child Group - a member's participation in a specific Section within
 that organization is expressed through a separate Section assignment
 (see [Section](#section)), not through a different Membership.
 
-Membership is a distinct concept from Role/Permission and carries no
+Membership is a distinct concept from Role Assignment and carries no
 authority by itself: it only answers "does this User belong to this
-organization." A Role/Permission is assigned directly to one specific
-Group - Root or Child - independently of Membership, and never inherits
-through the hierarchy - see
-[ADR-013](../decisions/ADR-013-no-permission-inheritance.md).
+organization." Membership never stores a Role. A Role is granted through
+a Role Assignment instead - a record entirely independent of Membership,
+targeting one specific Group (Root or Child), never inheriting through
+the hierarchy - see [RoleAssignment](#roleassignment) and
+[ADR-028](../decisions/ADR-028-role-assignment-model.md).
 
 ## Responsibilities
 
 Membership stores all information describing a user's participation in a
-Group and is the source of truth for organizational participation,
+Root Group and is the source of truth for organizational participation,
 including:
 
 - join date
 - leave date
 - current status
 - nickname inside the Group
-- permissions
-- roles
 - graduation
-- instructor assignments
 - internal notes
+
+Which Role(s) the User holds, and in which Group, is not part of
+Membership - see [RoleAssignment](#roleassignment).
 
 ## Business Rules
 
@@ -353,12 +355,10 @@ including:
 - Memberships are never physically deleted; removing a member archives
   the Membership, guaranteeing complete historical integrity. See
   [ADR-007](../decisions/ADR-007-soft-delete.md).
-- A Membership may contain multiple Roles (e.g. `Instructor` +
-  `Treasurer` simultaneously).
-- Permissions may be granted through Roles or direct assignment; direct
-  permissions always override inherited Role permissions. Permissions
-  never inherit through the Group hierarchy - see
-  [ADR-013](../decisions/ADR-013-no-permission-inheritance.md).
+- Membership never stores a Role or a Permission. Which Role(s) a User
+  holds, in which Group, is determined exclusively by Role Assignment
+  records - see [RoleAssignment](#roleassignment) and
+  [ADR-028](../decisions/ADR-028-role-assignment-model.md).
 
 ## Relationships
 
@@ -366,8 +366,9 @@ including:
 - Membership may reference zero or more Section Memberships (see
   [Section](#section)); every referenced Section must belong to the same
   Root Group as the Membership.
-- Membership may carry one or more Roles and zero or more direct
-  Permissions.
+- Membership has zero or more Role Assignments that depend on it (see
+  [RoleAssignment](#roleassignment)) - Membership does not itself carry
+  any Role.
 
 ## Lifecycle
 
@@ -392,6 +393,9 @@ Statuses:
   member held are not removed when the Membership is archived - they
   remain as history alongside it (see [Section](#section)), and simply
   stop granting active access once the Membership is no longer `ACTIVE`.
+  Every Role Assignment tied to this Membership's Root Group also expires
+  logically at the same moment, for the same reason - see
+  [RoleAssignment](#roleassignment).
 
 ## Validation Rules
 
@@ -399,6 +403,123 @@ Statuses:
   time.
 - Section Membership requires an existing active Membership for the same
   user in the Section's Root Group.
+
+---
+
+# RoleAssignment
+
+## Purpose
+
+RoleAssignment grants a Membership a Role for exactly one Group - Root or
+Child - entirely independently of Membership's own fields. Membership
+answers "does this User belong to this organization"; RoleAssignment
+answers "what can this User do, and in which specific Group." CapoHub
+adopted this model (Variant B) instead of storing a Role directly on
+Membership (Variant A) so that a Role held in a Child Group has a
+consistent home even though no Membership exists there - see
+[ADR-028](../decisions/ADR-028-role-assignment-model.md).
+
+Roles and the Permissions each one grants are a **fixed, system-wide
+enum** defined by CapoHub - not by organizations or users. There is no
+Custom Roles feature, no Role or Permission editor, and no
+per-organization Permission configuration. Extending the system Role or
+Permission enum is a CapoHub code change plus a migration, never a
+configuration action available at runtime. See
+[ADR-028](../decisions/ADR-028-role-assignment-model.md).
+
+Example: Jan's Membership belongs to Root Group `Capoeira Brasil`. Jan
+simultaneously holds a `Member` RoleAssignment for `Capoeira Brasil`
+itself, an `Admin` RoleAssignment for Child Group `Poznań`, and an
+`Instructor` RoleAssignment for Child Group `Leszno` - one Role per Group,
+different Roles across Groups, none of them stored on, or inherited
+through, the Membership itself.
+
+## Responsibilities
+
+RoleAssignment stores:
+
+- Membership (identifies the User and the Root Group)
+- Group (Root or Child) the Role applies to
+- Role (one value from the fixed system Role enum)
+- granted date
+
+## Business Rules
+
+- A RoleAssignment always references exactly one Membership, exactly one
+  Group - Root or Child - and exactly one system Role. See
+  [Membership](#membership) and [Group](#group).
+- A RoleAssignment requires its Membership to be active in the same Root
+  Group as the target Group - a Role can never be granted against a
+  Membership that is not currently active in that organization.
+- **At most one active RoleAssignment per (Membership, Group) pair.** A
+  Membership never holds more than one simultaneous Role in the same
+  Group, because a higher Role always carries a broader Permission set
+  than a lower one there - there is no scenario where holding two Roles in
+  the same Group at once would grant anything a single, higher Role does
+  not already grant. Changing a member's Role in a Group replaces the
+  existing RoleAssignment for that (Membership, Group) pair rather than
+  adding a second one alongside it.
+- The same Membership may hold RoleAssignments for **multiple different**
+  Groups at once, each independently - one Role per Group. See the Jan
+  example above.
+- Roles never inherit through the Group hierarchy - a RoleAssignment for
+  a parent Group grants no authority in a Child Group, and vice versa. See
+  [ADR-013](../decisions/ADR-013-no-permission-inheritance.md).
+- A RoleAssignment expires logically the instant the Membership it
+  depends on is no longer `ACTIVE` - it stops granting any authority
+  immediately, without requiring a separate revocation step. See
+  [ADR-028](../decisions/ADR-028-role-assignment-model.md).
+- Ending a Membership does not require deciding what happens to a `role`
+  field, and revoking a single RoleAssignment does not affect Membership -
+  the two lifecycles are independent (see Lifecycle below).
+- Academy and Section never have RoleAssignments of their own - an
+  operation on an Academy or a Section is authorized against the
+  RoleAssignment the caller's Membership holds for the Group that owns
+  it. See [ADR-012](../decisions/ADR-012-academy-not-organizational-unit.md).
+- A guard authorizing an action on a Group resolves Permissions from the
+  single RoleAssignment held directly for that Group - never from a Role
+  held in a different Group, and never by combining Roles.
+
+## Relationships
+
+- RoleAssignment belongs to exactly one Membership and exactly one Group
+  (Root or Child).
+- A (Membership, Group) pair has at most one active RoleAssignment.
+- RoleAssignment's authority depends on its Membership's status; that
+  status governs whether the RoleAssignment currently grants any
+  authority.
+- A Group may have zero or more RoleAssignments, across any number of
+  Memberships.
+
+## Lifecycle
+
+An administrator creates a RoleAssignment for a Membership and a Group,
+provided that Membership is already active in that Group's Root Group.
+Changing a member's Role in a Group replaces the existing RoleAssignment
+for that (Membership, Group) pair - since at most one may be active there
+at a time - rather than creating a second, competing one. An administrator
+may revoke or replace a single RoleAssignment directly (e.g. demoting an
+Admin to a plain Member) without touching Membership at all.
+Independently, every RoleAssignment tied to a Membership expires logically
+- without a separate revocation step - the moment that Membership is no
+longer `ACTIVE`; whether it currently grants authority is resolved
+dynamically by checking Membership status, the same way a Section
+assignment remains in place but stops granting active access once its
+Membership ends (see [Section](#section)).
+
+## Validation Rules
+
+- A RoleAssignment must reference an existing Membership and an existing
+  Group.
+- Creating a RoleAssignment requires its Membership to already be active
+  in the Group's Root Group.
+- A RoleAssignment's Role must be one of the fixed system Role values -
+  custom or organization-defined values are rejected.
+- At most one active RoleAssignment may exist per (Membership, Group)
+  pair; creating a second must either be rejected or replace the
+  existing one, never coexist alongside it.
+- A RoleAssignment must never be evaluated as granting authority while its
+  underlying Membership is not `ACTIVE`.
 
 ---
 

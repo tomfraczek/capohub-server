@@ -17,7 +17,7 @@ docs/
 │   ├── organization-entities.md       # detailed per-entity reference
 │   └── organization-scenarios.md      # business scenarios + integration test recommendations
 ├── decisions/
-│   └── ADR-001 .. ADR-027             # one Architecture Decision Record per file
+│   └── ADR-001 .. ADR-028             # one Architecture Decision Record per file
 ├── diagrams/
 │   └── *.mmd                          # Mermaid diagrams referenced from the docs above
 └── product/
@@ -32,9 +32,9 @@ docs/
 | Document | Purpose |
 |---|---|
 | [architecture/organization-domain.md](architecture/organization-domain.md) | The main architecture document: purpose, design principles, philosophy, organization model, Group/Academy/Section/Membership/Roles/Permissions/Invitations overview, Visibility Scope, Hierarchy, Inheritance, cross-domain principles, aggregate overview, and dependency rules. Start here. |
-| [architecture/organization-entities.md](architecture/organization-entities.md) | Deep-dive reference for every entity (Group, Academy, Section, Membership, Invitation, GraduationSystem, GraduationCategory, GraduationLevel, UserGraduationEntry, UserCurrentGraduation): purpose, responsibilities, business rules, relationships, lifecycle, and validation rules. |
+| [architecture/organization-entities.md](architecture/organization-entities.md) | Deep-dive reference for every entity (Group, Academy, Section, Membership, RoleAssignment, Invitation, GraduationSystem, GraduationCategory, GraduationLevel, UserGraduationEntry, UserCurrentGraduation): purpose, responsibilities, business rules, relationships, lifecycle, and validation rules. |
 | [architecture/organization-scenarios.md](architecture/organization-scenarios.md) | Every business scenario supported by the Organization Domain, normalized to Goal / Initial State / Action / Expected Result, plus integration test recommendations. |
-| [decisions/](decisions/) | One Architecture Decision Record (ADR-001 through ADR-027) per significant decision, each with Status / Context / Decision / Consequences. |
+| [decisions/](decisions/) | One Architecture Decision Record (ADR-001 through ADR-028) per significant decision, each with Status / Context / Decision / Consequences. |
 | [diagrams/](diagrams/) | Mermaid source files (`.mmd`) for every diagram referenced by the documents above. |
 | [product/vision.md](product/vision.md) | CapoHub-wide product philosophy and design principles that apply beyond the Organization Domain (Business First, No Hidden Logic). |
 | [product/glossary.md](product/glossary.md) | Single source of truth for terminology - every term is defined exactly once. |

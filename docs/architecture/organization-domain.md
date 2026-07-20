@@ -229,12 +229,26 @@ concepts are intentionally separated - e.g. `Instructor` is a Role, while
 the ability to edit trainings is a Permission. One does not automatically
 imply the other.
 
-Examples of Roles: `Student`, `Instructor`, `Teacher`, `Coordinator`,
-`Administrator`, `Guest`. Organizations may create their own Roles -
-CapoHub never hardcodes role names.
+Roles are a **fixed, system-wide enum** defined by CapoHub - e.g. `Owner`,
+`Admin`, `Instructor`, `Member`. Organizations and users cannot create
+custom Roles, cannot edit what a Role grants, and cannot define their own
+Permission sets; there is no Role or Permission editor. Extending the set
+of system Roles or Permissions is a CapoHub code change plus a migration,
+never a configuration action available at runtime. See
+[ADR-028](../decisions/ADR-028-role-assignment-model.md).
 
-A Membership may contain multiple Roles simultaneously (e.g. `Instructor`
-+ `Treasurer`).
+A Role is granted through a **Role Assignment** - a record entirely
+independent of Membership; Membership never stores a Role. Every Role
+Assignment references one Membership, one Group (Root or Child), and one
+system Role. A Membership may have at most one active Role Assignment per
+Group - a higher Role always carries a broader Permission set than a
+lower one within the same Group, so there is never a need to hold more
+than one Role there at once - but the same Membership may hold Role
+Assignments in multiple different Groups simultaneously, one Role each
+(e.g. `Admin` of one Child Group and, separately, `Instructor` of
+another). See
+[RoleAssignment](organization-entities.md#roleassignment) for the full
+entity reference.
 
 ---
 
@@ -243,12 +257,14 @@ A Membership may contain multiple Roles simultaneously (e.g. `Instructor`
 Permissions define what a user can do; they never describe who someone
 is. Examples: Create Trainings, Edit Trainings, Delete Trainings, Manage
 Members, Manage Fees, Manage Events, Manage Sections, Manage
-Announcements. Permissions are always explicit.
-
-Permissions may be granted through Roles or direct assignment; direct
-permissions always override inherited Role permissions within a Group.
-Permissions are always evaluated at runtime - no permission snapshots
-should exist, which guarantees immediate effect after permission changes.
+Announcements. Permissions are always explicit, and are a fixed,
+system-wide enum - see [Roles](#roles) and
+[ADR-028](../decisions/ADR-028-role-assignment-model.md). There is no
+mechanism to assign a Permission directly, independently of a Role - a
+caller's Permissions for a Group are entirely determined by the single
+Role Assignment they hold for that Group. Permissions are always
+evaluated at runtime - no permission snapshots should exist, which
+guarantees immediate effect after Role changes.
 
 ## Business Rules
 
@@ -258,18 +274,30 @@ of `Poznań`. Every Group manages its own permissions independently, which
 avoids accidental privilege escalation. See
 [ADR-013](../decisions/ADR-013-no-permission-inheritance.md).
 
-Role/Permission is a separate concept from Membership: Membership only
+Role Assignment is a separate concept from Membership: Membership only
 answers "does this User belong to this organization" and always
-references the Root Group (see [Membership](#membership)), while a
-Role/Permission is assigned directly to one specific Group - Root or
-Child - and grants authority only there. A Root Group administrator's
-authority covers the Root Group itself and the organization-wide
-Graduation System, not the rest of the tree; a Child Group is managed by
-whoever holds a Role directly in that Child Group. Academy and Section
-have no Role/Permission or Membership of their own - operations on them
-are authorized against the Role/Permission the caller holds in the Group
-that owns them. See
-[ADR-013](../decisions/ADR-013-no-permission-inheritance.md).
+references the Root Group (see [Membership](#membership)), and never
+stores a Role. A Role Assignment is granted directly for one specific
+Group - Root or Child - and grants authority only there; every Role
+Assignment requires the User to hold an active Membership in that Group's
+Root Group, and expires logically the moment that Membership is no longer
+`ACTIVE`. A Root Group administrator's authority covers the Root Group
+itself and the organization-wide Graduation System, not the rest of the
+tree; a Child Group is managed by whoever holds a Role Assignment directly
+for that Child Group. Academy and Section have no Role Assignment or
+Membership of their own - operations on them are authorized against the
+Role Assignment the caller holds for the Group that owns them. See
+[ADR-013](../decisions/ADR-013-no-permission-inheritance.md) and
+[ADR-028](../decisions/ADR-028-role-assignment-model.md).
+
+A Membership may have at most one **active** Role Assignment per Group -
+never several Roles at once in the same Group, since a higher Role always
+carries a broader Permission set than a lower one there. The same
+Membership may still hold Role Assignments in several different Groups
+simultaneously, one Role per Group. A guard authorizing an action on a
+Group resolves Permissions from that single Role Assignment held directly
+for the acted-on Group - never from a Role held in a different Group, and
+never by combining Roles.
 
 ---
 
@@ -560,8 +588,8 @@ complete entity-relationship diagram.
 ## Group Aggregate
 
 Aggregate Root: `Group`. Contains: Academy, Section, Membership,
-Invitations. Responsible for organizational hierarchy, members,
-permissions, sections, and academies.
+RoleAssignment, Invitations. Responsible for organizational hierarchy,
+members, permissions, sections, and academies.
 
 ## Graduation Aggregate
 
@@ -589,8 +617,8 @@ occurs through Domain Services. See
 
 The Organization Domain should emit business events, which future
 modules may subscribe to: `GroupCreated`, `GroupArchived`,
-`MembershipCreated`, `MembershipArchived`, `GraduationAssigned`,
-`GraduationCorrected`, `GroupMoved`.
+`MembershipCreated`, `MembershipArchived`, `RoleAssigned`, `RoleRevoked`,
+`GraduationAssigned`, `GraduationCorrected`, `GroupMoved`.
 
 ## Read Models
 

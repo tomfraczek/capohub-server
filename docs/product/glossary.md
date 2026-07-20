@@ -24,8 +24,11 @@ last_updated: 2026-07-20
 | Historical Import | A dedicated administrative operation used to bring in graduation history that predates an organization's adoption of CapoHub. Exempt from normal graduation-order validation, since earlier promotions may be unknown. Distinct from Administrative Override and from Initial Assignment. |
 | Initial Assignment | The operation that grants a User's first Graduation Level within a Root Group's organization (e.g. after joining, or after a Legacy Graduation transfer). It is not a promotion, is not subject to graduation-order validation, and is distinct from both Administrative Override and Historical Import. It creates the `UserCurrentGraduation` record for that (User, Root Group) pair. |
 | Legacy Graduation | A member's graduation from a previous organization. It remains visible and historical permanently but can never become the current graduation inside another organization. |
-| Membership | Relationship between a User and a Root Group - never a Child Group. |
+| Membership | Relationship between a User and a Root Group - never a Child Group. It never stores a Role; see Role Assignment. |
+| Permission | A fixed, system-wide capability a Role grants (e.g. edit trainings). Not organization- or user-configurable; extending the Permission enum requires a CapoHub code change and migration. |
 | Public Code | A stable, immutable public identifier exposed by an object (Group, Academy, User) for use in invitation links and QR codes. It is never a database identifier. |
+| Role | A fixed, system-wide value (e.g. `Owner`, `Admin`, `Instructor`, `Member`) granted through a Role Assignment. Not organization- or user-configurable; there is no Custom Roles feature or Role editor, and extending the Role enum requires a CapoHub code change and migration. |
+| Role Assignment | A grant of one system Role to a Membership for exactly one Group (Root or Child), entirely independent of Membership's own fields. Requires the Membership to be active in that Group's Root Group, and expires logically the moment the Membership is no longer active. A (Membership, Group) pair has at most one active Role Assignment; the same Membership may hold Role Assignments for multiple different Groups at once. |
 | Root Group | A group without a parent. Represents the highest organizational level. |
 | Section | An optional subdivision inside a Group. |
 | Visibility Scope | The shared domain concept used by any module that publishes information to other users, to determine who may access that content. |

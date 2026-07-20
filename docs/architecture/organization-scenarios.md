@@ -40,6 +40,8 @@ last_updated: 2026-07-20
 - [Scenario 18: Local Announcement](#scenario-18-local-announcement)
 - [Scenario 19: Instructor Promotion Validation](#scenario-19-instructor-promotion-validation)
 - [Scenario 20: Administrative Override](#scenario-20-administrative-override)
+- [Scenario 21: Assigning a Role](#scenario-21-assigning-a-role)
+- [Scenario 22: Role Assignment Expires With Membership](#scenario-22-role-assignment-expires-with-membership)
 - [Integration Test Recommendations](#integration-test-recommendations)
 
 ---
@@ -542,6 +544,85 @@ Administrator performs an Administrative Override.
 
 The operation is audited. Current Graduation is recalculated
 automatically.
+
+---
+
+## Scenario 21: Assigning a Role
+
+### Goal
+
+Grant a member authority over a specific Group, independently of
+Membership, using only the fixed system Role enum.
+
+### Initial State
+
+```text
+Capoeira Brasil (Root Group A)
+├── Poznań
+└── Leszno
+```
+
+Jan's Membership belongs to Root Group `Capoeira Brasil` and is `ACTIVE`.
+
+### Action
+
+1. Administrator grants Jan's Membership a `Member` RoleAssignment for
+   `Capoeira Brasil` itself.
+2. Administrator grants Jan's Membership an `Admin` RoleAssignment for
+   Child Group `Poznań`.
+3. Administrator grants Jan's Membership an `Instructor` RoleAssignment
+   for Child Group `Leszno`.
+4. Administrator then attempts to also grant Jan's Membership an
+   `Instructor` RoleAssignment for `Poznań`, where it already holds
+   `Admin`.
+
+### Expected Result
+
+Three independent RoleAssignments exist for Jan's Membership - one per
+Group (`Member` in `Capoeira Brasil`, `Admin` in `Poznań`, `Instructor` in
+`Leszno`). Jan's Membership is untouched throughout; it never stores a
+Role. Holding `Admin` in `Poznań` grants no authority in `Leszno` or in
+`Capoeira Brasil`, and vice versa - Roles never inherit through the
+hierarchy. Step 4 is rejected (or replaces the existing `Admin`
+RoleAssignment, never adds alongside it): a Membership may have at most
+one active RoleAssignment per Group, since a higher Role already carries
+every Permission a lower one would add. A later attempt to grant a
+RoleAssignment for `Poznań` to a *different* user who has no active
+Membership in `Capoeira Brasil` is rejected. An attempt to grant a Role
+outside the fixed system Role enum (a made-up, organization-defined Role
+name) is also rejected - Roles are never configurable.
+
+---
+
+## Scenario 22: Role Assignment Expires With Membership
+
+### Goal
+
+Confirm that ending a Membership immediately removes the authority every
+dependent RoleAssignment granted, without a separate revocation step.
+
+### Initial State
+
+A user holds an active Membership in `Capoeira Brasil`, plus an
+`Instructor` RoleAssignment for `Capoeira Brasil` and a second `Admin`
+RoleAssignment for the Child Group `Poznań`.
+
+### Action
+
+The user leaves `Capoeira Brasil` (or is removed by an administrator);
+the Membership becomes `ARCHIVED`.
+
+### Expected Result
+
+Both RoleAssignments stop granting any authority at that same moment -
+logically, not through a separate revocation action. Neither
+RoleAssignment record is deleted; each remains as a historical record of
+which Roles the user previously held, the same way a Section assignment
+remains in place after Membership ends (see
+[Section](organization-entities.md#section)). If the user later rejoins
+`Capoeira Brasil` with a brand new Membership, an administrator must
+grant fresh RoleAssignments explicitly - none are carried over from the
+archived Membership.
 
 ---
 

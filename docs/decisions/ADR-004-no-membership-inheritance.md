@@ -28,6 +28,13 @@ Memberships are created for ancestor Groups.
 Hierarchy represents organizational structure only. Membership represents
 participation. These concepts are intentionally separated.
 
+Membership is also intentionally separated from Role/Permission: a
+Membership record never stores a Role. Which Role(s) a User holds, and in
+which specific Group, is answered by an independent Role Assignment
+record instead (see
+[ADR-028](ADR-028-role-assignment-model.md)) - Membership only answers
+whether the User belongs to the organization at all.
+
 ### Why
 
 Automatic Membership inheritance introduces unnecessary complexity, including:
@@ -69,4 +76,5 @@ Benefits:
 
 See [Membership](../architecture/organization-entities.md#membership) and
 [ADR-013](ADR-013-no-permission-inheritance.md) for the equivalent decision
-regarding permissions.
+regarding permissions, and [ADR-028](ADR-028-role-assignment-model.md) for
+the Role Assignment model that keeps Roles out of Membership entirely.
