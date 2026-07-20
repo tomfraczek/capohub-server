@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
 import { CreateGroupInput } from './dto/create-group.schema';
@@ -10,23 +15,41 @@ import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
 import { GroupMembership } from './entities/group-membership.entity';
 import { Group } from './entities/group.entity';
+import { loadActiveMembership } from './group-membership.query';
 import {
   toGroupResponseDto,
   toGroupSummaryResponseDto,
 } from './mappers/group.mapper';
+import { GroupPermission } from './permissions/group-permission.enum';
+import { GroupPermissionService } from './permissions/group-permission.service';
 
 @Injectable()
 export class GroupsService {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly groupPermissionService: GroupPermissionService,
+  ) {}
 
   // The creator automatically becomes OWNER (spec: "Po utworzeniu grupy
   // użytkownik automatycznie staje się OWNER") - group + its first
   // membership are created atomically, there is no window where a group
-  // exists without an owner.
+  // exists without an owner. This holds for both a Root Group
+  // (parentGroupId omitted) and a Child Group (parentGroupId present) -
+  // creating a Child Group does not grant the creator any role in the
+  // parent, only in the new Group itself.
   async create(user: User, input: CreateGroupInput): Promise<GroupResponseDto> {
     const group = await this.em.transactional(async (em) => {
+      const parent = input.parentGroupId
+        ? await this.loadUsableParentForCreation(
+            em,
+            input.parentGroupId,
+            user.id,
+          )
+        : null;
+
       const group = new Group();
       this.applyFields(group, input);
+      group.parentGroup = parent;
 
       const membership = new GroupMembership();
       membership.group = group;
@@ -39,6 +62,52 @@ export class GroupsService {
     });
 
     return toGroupResponseDto(group);
+  }
+
+  async listChildren(groupId: string): Promise<GroupResponseDto[]> {
+    const children = await this.em.find(Group, { parentGroup: groupId });
+    return children.map(toGroupResponseDto);
+  }
+
+  // Creating a Child Group requires an active membership with GROUP_EDIT in
+  // the *parent* - without this, any authenticated user could attach a
+  // group under someone else's organization. Mirrors
+  // GroupPermissionsGuard's non-enumeration rule: a caller with no active
+  // membership in the parent gets the same "not found" response as a truly
+  // missing parent, never a 403 that would confirm the parent exists.
+  private async loadUsableParentForCreation(
+    em: EntityManager,
+    parentGroupId: string,
+    userId: string,
+  ): Promise<Group> {
+    const membership = await loadActiveMembership(em, parentGroupId, userId);
+    if (!membership) {
+      throw new NotFoundException({
+        code: 'GROUP_PARENT_NOT_FOUND',
+        message: 'The parent group does not exist',
+      });
+    }
+
+    if (
+      !this.groupPermissionService.hasPermission(
+        membership.role,
+        GroupPermission.GROUP_EDIT,
+      )
+    ) {
+      throw new ForbiddenException({
+        code: 'INSUFFICIENT_GROUP_PERMISSIONS',
+        message: 'Insufficient permissions in the parent group',
+      });
+    }
+
+    if (membership.group.status === GroupStatus.ARCHIVED) {
+      throw new ConflictException({
+        code: 'GROUP_ARCHIVED',
+        message: 'This group is archived and is read-only until it is restored',
+      });
+    }
+
+    return membership.group;
   }
 
   async listMine(userId: string): Promise<GroupSummaryResponseDto[]> {
@@ -101,7 +170,7 @@ export class GroupsService {
     return toGroupResponseDto(group);
   }
 
-  private applyFields(group: Group, input: CreateGroupInput): void {
+  private applyFields(group: Group, input: UpdateGroupInput): void {
     group.name = input.name;
     group.description = input.description;
     group.logoUrl = input.logoUrl;

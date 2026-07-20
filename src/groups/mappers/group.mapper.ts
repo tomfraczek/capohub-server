@@ -8,6 +8,7 @@ import { GroupSummaryResponseDto } from '../dto/group-summary-response.dto';
 export function toGroupResponseDto(group: Group): GroupResponseDto {
   return {
     id: group.id,
+    parentGroupId: group.parentGroup ? group.parentGroup.id : null,
     name: group.name,
     description: group.description,
     logoUrl: group.logoUrl,

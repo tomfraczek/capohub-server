@@ -22,7 +22,10 @@ const DEFAULT_ALLOWED_STATUSES: readonly GroupStatus[] = [GroupStatus.ACTIVE];
 /**
  * Not global - only runs on routes decorated with
  * @UseGuards(GroupPermissionsGuard) alongside @RequireGroupPermission(...)
- * (see GroupsController). Reads the group id from the route's :id param.
+ * (see GroupsController). Reads the group id from the route's :id param,
+ * or :groupId for routes nested under a Group (e.g.
+ * AcademiesController/SectionsController at groups/:groupId/academies) -
+ * the two never collide, since a route only ever has one or the other.
  *
  * Whether the group exists at all and whether the caller can see it are the
  * same question here: a user with no active membership gets 404, exactly
@@ -55,7 +58,7 @@ export class GroupPermissionsGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const groupId: unknown = request.params.id;
+    const groupId: unknown = request.params.groupId ?? request.params.id;
 
     if (typeof groupId !== 'string' || !uuidSchema.safeParse(groupId).success) {
       throw this.groupNotFound();

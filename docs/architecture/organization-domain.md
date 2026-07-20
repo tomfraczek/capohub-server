@@ -336,29 +336,42 @@ for an example hierarchy diagram.
 ## Hierarchy Rules
 
 - **Unlimited depth** - CapoHub never limits hierarchy depth.
-- **No cycles** - hierarchy must always remain a tree; every hierarchy
-  operation must validate that no cycles are introduced.
+- **No cycles** - hierarchy must always remain a tree; `GroupHierarchyService`
+  guards against cyclic data whenever it resolves a Root Group or walks
+  ancestors/descendants.
 - **One parent** - a Group may have only one parent: zero parents, or
   exactly one, never more.
 - **Independent identity** - every Group owns its own identity (members,
   administrators, permissions, academies, sections, announcements,
   settings); hierarchy does not merge Groups together.
+- **`parentGroupId` is immutable** - a Group's parent is set once, at
+  creation, and can never change afterward. There is no operation that
+  attaches, detaches, or moves an existing Group to a different parent -
+  not even within the same Root Group's tree. A Group's position in the
+  hierarchy, and therefore its Root Group, is permanent for its entire
+  lifetime.
+- **Root Group never changes** - every Group belongs to exactly one Root
+  Group for its entire lifetime, fixed at creation, as a direct
+  consequence of `parentGroupId` immutability. A Root Group can never be
+  given a parent, since doing so would change the Root Group of
+  everything beneath it. Changing which organization a member belongs to
+  happens exclusively through Membership - ending the Membership in the
+  old Root Group and creating a new Membership in the new Root Group -
+  never by re-parenting a Group. See
+  [ADR-002](../decisions/ADR-002-unlimited-group-hierarchy.md).
 
 ## Group Hierarchy Service
 
-All hierarchy modifications must be performed through a dedicated domain
-service, `GroupHierarchyService`. Direct manipulation of `parentGroupId`
-is forbidden. The service is responsible for attaching Groups, detaching
-Groups, moving Groups, validating hierarchy, preventing cycles, and
-recalculating inherited values.
+All hierarchy logic is owned by a dedicated domain service,
+`GroupHierarchyService`. Direct manipulation of `parentGroupId` is
+forbidden. The service is responsible for validating a candidate parent
+at creation time (existence, archived status), resolving a Group's Root
+Group, walking ancestors, and walking descendants.
 
-- **Attach Child Group** - the parent and child must both exist, the
-  child cannot already belong to another parent unless explicitly moved,
-  and no cycle may be created.
-- **Detach Group** - removes the parent relationship; the child becomes a
-  new Root Group.
-- **Move Group** - moves an existing subtree; moving a Group
-  automatically moves the entire subtree with it.
+- **Attach Child Group (creation only)** - the parent must exist and must
+  not be archived; the child's `parentGroupId` is set once, at creation
+  time, and never changes again. Since the child does not yet exist when
+  its parent is chosen, no cycle can be introduced.
 
 See [ADR-002](../decisions/ADR-002-unlimited-group-hierarchy.md).
 

@@ -33,9 +33,15 @@ Every level is represented by the same entity.
 
 ## Consequences
 
-- Hierarchy modifications must go through a dedicated domain service
-  (`GroupHierarchyService` - see
-  [organization-entities.md](../architecture/organization-entities.md)) that
-  validates the tree stays acyclic and that every Group has at most one
-  parent.
+- A dedicated domain service (`GroupHierarchyService` - see
+  [organization-entities.md](../architecture/organization-entities.md))
+  validates a Group's parent at creation time (existence, archived status)
+  and resolves Root Group/ancestors/descendants; every Group has at most
+  one parent.
 - No feature may hardcode a fixed number of hierarchy levels.
+- `parentGroupId` is set once, at creation, and is immutable afterward -
+  there is no attach, detach, or move operation. A Group's Root Group is
+  therefore fixed for its entire lifetime, as a direct consequence of
+  this immutability. Organization changes for a member happen exclusively
+  through Membership (ending the old one, creating a new one in the new
+  Root Group), never by re-parenting a Group.

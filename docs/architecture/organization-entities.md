@@ -91,10 +91,11 @@ does not merge Groups together (see
   values used as the top of the inheritance chain.
 - No functional difference exists between Root and Child Groups; the
   difference comes only from their position inside the hierarchy.
-- All hierarchy modifications (attach, detach, move, cycle prevention,
-  recalculating inherited values) must be performed through
-  `GroupHierarchyService`. Direct manipulation of `parentGroupId` is
-  forbidden. See [ADR-002](../decisions/ADR-002-unlimited-group-hierarchy.md).
+- `parentGroupId` is set once, at creation, and is immutable afterward -
+  there is no attach, detach, or move operation. Parent validation at
+  creation time is performed through `GroupHierarchyService`. Direct
+  manipulation of `parentGroupId` is forbidden. See
+  [ADR-002](../decisions/ADR-002-unlimited-group-hierarchy.md).
 - Groups are never physically deleted; they become archived instead. See
   [ADR-007](../decisions/ADR-007-soft-delete.md).
 
@@ -121,15 +122,11 @@ parent Groups using the OWN / INHERITED / EMPTY modes. See
 
 ## Lifecycle
 
-`GroupHierarchyService` supports the following hierarchy operations:
-
-- **Attach Child Group** - the parent and child must both exist, the
-  child cannot already belong to another parent unless explicitly moved,
-  and no cycle may be created.
-- **Detach Group** - removes the parent relationship; the child becomes a
-  new Root Group.
-- **Move Group** - moves an existing subtree from one parent to another;
-  moving a Group automatically moves the entire subtree with it.
+`GroupHierarchyService` validates the parent at creation time - the
+parent must exist and must not be archived. Once created, a Group's
+`parentGroupId` never changes: there is no attach, detach, or move
+operation. A Group's position in the hierarchy, and therefore its Root
+Group, is fixed for its entire lifetime.
 
 ### Archival (soft delete)
 
@@ -150,9 +147,10 @@ reference an archived Group, and nothing breaks.
 
 ## Validation Rules
 
-- `parentGroupId` changes are only valid through `GroupHierarchyService`.
-- Attaching/moving a Group must not introduce a cycle.
+- `parentGroupId` is set only at creation, through `GroupHierarchyService`,
+  and never changes afterward.
 - A Group may have at most one parent at any time.
+- The chosen parent must exist and must not be archived.
 
 ---
 

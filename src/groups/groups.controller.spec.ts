@@ -39,6 +39,7 @@ describe('GroupsController', () => {
   >([
     ['getById', [GroupPermission.GROUP_VIEW], ANY_STATUS],
     ['update', [GroupPermission.GROUP_EDIT], undefined],
+    ['listChildren', [GroupPermission.GROUP_VIEW], ANY_STATUS],
     [
       'archive',
       [GroupPermission.GROUP_ARCHIVE],
@@ -190,6 +191,19 @@ describe('GroupsController', () => {
       const response = await controller.activate('group-1');
 
       expect(activate).toHaveBeenCalledWith('group-1');
+      expect(response).toBe(dto);
+    });
+  });
+
+  describe('listChildren', () => {
+    it('delegates to GroupsService.listChildren', async () => {
+      const dto = [{ id: 'child-1' }] as never;
+      const listChildren = jest.fn().mockResolvedValue(dto);
+      const controller = buildController({ listChildren });
+
+      const response = await controller.listChildren('group-1');
+
+      expect(listChildren).toHaveBeenCalledWith('group-1');
       expect(response).toBe(dto);
     });
   });

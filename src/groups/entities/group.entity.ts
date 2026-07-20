@@ -1,13 +1,26 @@
-import { Entity, Enum, Index, Property } from '@mikro-orm/core';
+import { Entity, Enum, Index, ManyToOne, Property } from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { GroupStatus } from '../enums/group-status.enum';
 import { GroupVisibility } from '../enums/group-visibility.enum';
 
 // Organizational data only - no address/location/academy/training-venue
-// fields. Membership (who belongs, with what role) lives on GroupMembership,
-// not here.
+// fields (those live on Academy/Section, each owned by exactly one Group).
+// Membership (who belongs, with what role) lives on GroupMembership, not
+// here.
 @Entity({ tableName: 'groups' })
 export class Group extends BaseEntity {
+  // Hierarchy is represented exclusively by this self-reference - see
+  // organization-domain.md#hierarchy. `null` means this Group is a Root
+  // Group. Every mutation of this field must go through
+  // GroupHierarchyService (attach at creation, move afterwards) - never set
+  // directly elsewhere, so cycle-freedom and the "Root Group never changes"
+  // invariant (ADR-002) stay centrally enforced. No delete cascade: a Group
+  // is archived, never physically deleted, so a parent row is never removed
+  // out from under its children (see ADR-007).
+  @Index()
+  @ManyToOne(() => Group, { nullable: true, deleteRule: 'no action' })
+  parentGroup: Group | null = null;
+
   @Property({ length: 150 })
   name!: string;
 

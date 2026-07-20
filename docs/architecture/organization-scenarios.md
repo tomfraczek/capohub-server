@@ -33,7 +33,7 @@ last_updated: 2026-07-20
 - [Scenario 11: User Changes Organization](#scenario-11-user-changes-organization)
 - [Scenario 12: Member Returns](#scenario-12-member-returns)
 - [Scenario 13: Archiving a Group](#scenario-13-archiving-a-group)
-- [Scenario 14: Moving a Group](#scenario-14-moving-a-group)
+- [Scenario 14: Group Hierarchy Is Fixed At Creation](#scenario-14-group-hierarchy-is-fixed-at-creation)
 - [Scenario 15: Linking an Instructor](#scenario-15-linking-an-instructor)
 - [Scenario 16: Removing a User](#scenario-16-removing-a-user)
 - [Scenario 17: Parent Group Announcement](#scenario-17-parent-group-announcement)
@@ -362,11 +362,12 @@ No data is deleted.
 
 ---
 
-## Scenario 14: Moving a Group
+## Scenario 14: Group Hierarchy Is Fixed At Creation
 
 ### Goal
 
-Re-parent an existing subtree to a different Group.
+Confirm that a Group's position in the hierarchy can never change once
+created - there is no operation to re-parent an existing Group.
 
 ### Initial State
 
@@ -378,22 +379,25 @@ Capoeira Brasil
 
 ### Action
 
-Administrator moves `Poznań` under `Germany`.
+Administrator attempts to move `Poznań` under `Germany`, or to detach
+`Poznań` so it becomes its own Root Group.
 
 ### Expected Result
 
-Hierarchy becomes:
+The operation is rejected - no such operation exists. `Poznań` remains
+exactly where it was created:
 
 ```text
 Capoeira Brasil
-├── Poland
-└── Germany
+└── Poland
     └── Poznań
 ```
 
-Memberships remain unchanged. Permissions remain unchanged. The
-Graduation System continues to follow the Root Group. If the Root Group
-changes, organization-specific migration rules apply.
+`parentGroupId` is set once, at creation, through `GroupHierarchyService`,
+and is immutable afterward. If an organization needs a different
+structure, it must create new Groups with the desired parents; existing
+Groups are never reparented. See
+[Hierarchy](organization-domain.md#hierarchy-rules).
 
 ---
 

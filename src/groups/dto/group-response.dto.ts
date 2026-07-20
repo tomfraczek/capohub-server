@@ -3,6 +3,7 @@ import { GroupVisibility } from '../enums/group-visibility.enum';
 
 export interface GroupResponseDto {
   id: string;
+  parentGroupId: string | null;
   name: string;
   description: string | null;
   logoUrl: string | null;

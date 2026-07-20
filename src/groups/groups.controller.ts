@@ -121,6 +121,15 @@ export class GroupsController {
     return this.groupsService.activate(id);
   }
 
+  @Get(':id/children')
+  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @AllowGroupStatuses(...ANY_STATUS)
+  listChildren(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<GroupResponseDto[]> {
+    return this.groupsService.listChildren(id);
+  }
+
   @Post(':id/transfer-ownership')
   @RequireGroupPermission(GroupPermission.GROUP_OWNERSHIP_TRANSFER)
   transferOwnership(

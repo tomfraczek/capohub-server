@@ -1,9 +1,14 @@
 import { Module } from '@nestjs/common';
+import { AcademiesController } from './academies.controller';
+import { AcademiesService } from './academies.service';
 import { GroupsController } from './groups.controller';
 import { GroupsService } from './groups.service';
+import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupMembershipsService } from './group-memberships.service';
 import { GroupPermissionsGuard } from './guards/group-permissions.guard';
 import { GroupPermissionService } from './permissions/group-permission.service';
+import { SectionsController } from './sections.controller';
+import { SectionsService } from './sections.service';
 
 // Entities are driven through the plain EntityManager (auto-discovered
 // globally), so no forFeature() is needed. Group-level authorization is a
@@ -11,10 +16,13 @@ import { GroupPermissionService } from './permissions/group-permission.service';
 // wired to auth/permissions/permissions.module.ts - see
 // group-role-permissions.map.ts.
 @Module({
-  controllers: [GroupsController],
+  controllers: [GroupsController, AcademiesController, SectionsController],
   providers: [
     GroupsService,
+    GroupHierarchyService,
     GroupMembershipsService,
+    AcademiesService,
+    SectionsService,
     GroupPermissionService,
     GroupPermissionsGuard,
   ],
