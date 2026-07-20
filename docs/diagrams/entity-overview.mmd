@@ -1,0 +1,28 @@
+%% Entity Overview - referenced from architecture/organization-domain.md
+erDiagram
+
+GROUP ||--o{ GROUP : parent
+
+GROUP ||--o{ ACADEMY : owns
+
+GROUP ||--o{ SECTION : contains
+
+GROUP ||--o{ MEMBERSHIP : has
+
+GROUP ||--o| GRADUATION_SYSTEM : "defines (Root Group only, mandatory)"
+
+SECTION ||--o{ SECTION_MEMBERSHIP : contains
+
+USER ||--o{ MEMBERSHIP : belongs
+
+USER ||--o{ SECTION_MEMBERSHIP : belongs
+
+USER ||--o{ USER_GRADUATION_ENTRY : owns
+
+USER ||--o| USER_CURRENT_GRADUATION : current
+
+GRADUATION_SYSTEM ||--o{ GRADUATION_CATEGORY : contains
+
+GRADUATION_CATEGORY ||--o{ GRADUATION_LEVEL : contains
+
+GRADUATION_LEVEL ||--o{ USER_GRADUATION_ENTRY : assigned

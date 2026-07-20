@@ -1,0 +1,22 @@
+%% Organization Model - referenced from architecture/organization-domain.md
+graph TD
+
+ROOT["Root Group"]
+
+GROUP1["Group"]
+GROUP2["Group"]
+GROUP3["Group"]
+
+SECTION1["Section"]
+SECTION2["Section"]
+
+ACADEMY1["Academy"]
+
+ROOT --> GROUP1
+GROUP1 --> GROUP2
+GROUP2 --> GROUP3
+
+GROUP2 --> SECTION1
+GROUP2 --> SECTION2
+
+GROUP2 --> ACADEMY1

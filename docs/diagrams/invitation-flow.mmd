@@ -1,0 +1,14 @@
+%% Invitation Flow - referenced from architecture/organization-entities.md
+flowchart LR
+
+Admin --> CreateInvitation
+
+CreateInvitation --> Link
+
+CreateInvitation --> QR
+
+CreateInvitation --> Code
+
+User --> AcceptInvitation
+
+AcceptInvitation --> Membership

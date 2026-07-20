@@ -1,0 +1,16 @@
+%% Membership Lifecycle - referenced from architecture/organization-entities.md
+stateDiagram-v2
+
+[*] --> Invited
+
+Invited --> Active
+
+Active --> ReadOnly
+
+ReadOnly --> Active
+
+Active --> Archived
+
+ReadOnly --> Archived
+
+Archived --> [*]
