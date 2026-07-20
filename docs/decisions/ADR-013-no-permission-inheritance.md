@@ -28,6 +28,31 @@ Hierarchy traversal is used only for resource visibility resolution (see
 [ADR-008](ADR-008-visibility-scope.md)); it never creates Memberships,
 never grants Permissions, and never creates Roles.
 
+### Membership is a separate concept from Role/Permission
+
+Membership (see [ADR-004](ADR-004-no-membership-inheritance.md)) and
+Role/Permission answer two different questions, and must not be
+conflated:
+
+- **Membership** - does this User belong to this organization at all?
+  Membership always references the Root Group; it is never created for a
+  Child Group. It carries no authority by itself.
+- **Role/Permission** - what can this User do, and where? A Role/Permission
+  is assigned directly to one specific Group - Root or Child - and grants
+  authority only there. Holding a Role in the Root Group grants no
+  authority over any Child Group, and holding a Role in a Child Group
+  grants no authority over the Root Group or any other Group. In
+  practice, a Root Group administrator's authority covers the Root Group
+  itself and the organization-wide Graduation System (see
+  [ADR-005](ADR-005-root-group-graduation-system.md)) - not the rest of
+  the tree. A Child Group is managed by whoever holds a Role directly in
+  that Child Group.
+- Academy and Section have no Role/Permission or Membership of their own
+  (see [ADR-012](ADR-012-academy-not-organizational-unit.md) and
+  [Section](../architecture/organization-entities.md#section)) - an
+  operation on an Academy or a Section is authorized against the
+  Role/Permission the caller holds in the Group that owns it.
+
 ## Consequences
 
 This avoids accidental privilege escalation as organizations grow deeper

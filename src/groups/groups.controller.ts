@@ -170,6 +170,19 @@ export class GroupsController {
     return this.groupMembershipsService.addMember(id, dto);
   }
 
+  // A membership that has ended remains readable as history (see
+  // organization-entities.md#membership) - not filtered to ANY_STATUS by
+  // accident, this endpoint is meant to serve archived memberships too.
+  @Get(':id/members/:membershipId')
+  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @AllowGroupStatuses(...ANY_STATUS)
+  getMembership(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+  ): Promise<GroupMembershipResponseDto> {
+    return this.groupMembershipsService.getMembership(id, membershipId);
+  }
+
   @Patch(':id/members/:membershipId')
   @RequireGroupPermission(GroupPermission.GROUP_MEMBER_ROLE_CHANGE)
   changeMemberRole(
@@ -189,5 +202,41 @@ export class GroupsController {
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
   ): Promise<void> {
     return this.groupMembershipsService.removeMember(id, membershipId);
+  }
+
+  // Reuses GROUP_MEMBER_ROLE_CHANGE rather than introducing a dedicated
+  // permission - managing a member's Section assignments is the same
+  // administrative tier as changing their role, and Etap 2 deliberately
+  // does not expand the Permission model beyond what's needed (a full
+  // per-capability permission set belongs to a future Permission Domain
+  // phase).
+  @Post(':id/members/:membershipId/sections/:sectionId')
+  @HttpCode(201)
+  @RequireGroupPermission(GroupPermission.GROUP_MEMBER_ROLE_CHANGE)
+  assignSection(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+  ): Promise<void> {
+    return this.groupMembershipsService.assignSection(
+      id,
+      membershipId,
+      sectionId,
+    );
+  }
+
+  @Delete(':id/members/:membershipId/sections/:sectionId')
+  @HttpCode(204)
+  @RequireGroupPermission(GroupPermission.GROUP_MEMBER_ROLE_CHANGE)
+  unassignSection(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+  ): Promise<void> {
+    return this.groupMembershipsService.unassignSection(
+      id,
+      membershipId,
+      sectionId,
+    );
   }
 }

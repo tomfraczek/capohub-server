@@ -60,8 +60,11 @@ describe('GroupsController', () => {
     ['leave', [GroupPermission.GROUP_VIEW], undefined],
     ['listMembers', [GroupPermission.GROUP_VIEW], ANY_STATUS],
     ['addMember', [GroupPermission.GROUP_MEMBER_ADD], undefined],
+    ['getMembership', [GroupPermission.GROUP_VIEW], ANY_STATUS],
     ['changeMemberRole', [GroupPermission.GROUP_MEMBER_ROLE_CHANGE], undefined],
     ['removeMember', [GroupPermission.GROUP_MEMBER_REMOVE], undefined],
+    ['assignSection', [GroupPermission.GROUP_MEMBER_ROLE_CHANGE], undefined],
+    ['unassignSection', [GroupPermission.GROUP_MEMBER_ROLE_CHANGE], undefined],
   ])('%s', (method, expectedPermissions, expectedAllowedStatuses) => {
     it(`requires ${expectedPermissions.join(', ')}`, () => {
       const reflector = new Reflector();
@@ -264,6 +267,22 @@ describe('GroupsController', () => {
     });
   });
 
+  describe('getMembership', () => {
+    it('delegates to GroupMembershipsService.getMembership', async () => {
+      const dto = { id: 'membership-1' } as never;
+      const getMembership = jest.fn().mockResolvedValue(dto);
+      const controller = buildController({}, { getMembership });
+
+      const response = await controller.getMembership(
+        'group-1',
+        'membership-1',
+      );
+
+      expect(getMembership).toHaveBeenCalledWith('group-1', 'membership-1');
+      expect(response).toBe(dto);
+    });
+  });
+
   describe('changeMemberRole', () => {
     it('delegates to GroupMembershipsService.changeRole', async () => {
       const dto = { id: 'membership-1' } as never;
@@ -290,6 +309,36 @@ describe('GroupsController', () => {
       await controller.removeMember('group-1', 'membership-1');
 
       expect(removeMember).toHaveBeenCalledWith('group-1', 'membership-1');
+    });
+  });
+
+  describe('assignSection', () => {
+    it('delegates to GroupMembershipsService.assignSection', async () => {
+      const assignSection = jest.fn().mockResolvedValue(undefined);
+      const controller = buildController({}, { assignSection });
+
+      await controller.assignSection('group-1', 'membership-1', 'section-1');
+
+      expect(assignSection).toHaveBeenCalledWith(
+        'group-1',
+        'membership-1',
+        'section-1',
+      );
+    });
+  });
+
+  describe('unassignSection', () => {
+    it('delegates to GroupMembershipsService.unassignSection', async () => {
+      const unassignSection = jest.fn().mockResolvedValue(undefined);
+      const controller = buildController({}, { unassignSection });
+
+      await controller.unassignSection('group-1', 'membership-1', 'section-1');
+
+      expect(unassignSection).toHaveBeenCalledWith(
+        'group-1',
+        'membership-1',
+        'section-1',
+      );
     });
   });
 });

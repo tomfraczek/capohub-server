@@ -1,9 +1,11 @@
 import { GroupMembership } from '../entities/group-membership.entity';
 import { Group } from '../entities/group.entity';
+import { Section } from '../entities/section.entity';
 import { GroupResponseDto } from '../dto/group-response.dto';
 import { GroupMembershipResponseDto } from '../dto/group-membership-response.dto';
 import { GroupRole } from '../enums/group-role.enum';
 import { GroupSummaryResponseDto } from '../dto/group-summary-response.dto';
+import { MembershipSectionRefDto } from '../dto/membership-section-ref.dto';
 
 export function toGroupResponseDto(group: Group): GroupResponseDto {
   return {
@@ -44,9 +46,11 @@ export function toGroupSummaryResponseDto(
 
 export function toGroupMembershipResponseDto(
   membership: GroupMembership,
+  sections: MembershipSectionRefDto[],
 ): GroupMembershipResponseDto {
   return {
     id: membership.id,
+    rootGroupId: membership.rootGroup.id,
     user: {
       id: membership.user.id,
       displayName: membership.user.displayName,
@@ -55,5 +59,16 @@ export function toGroupMembershipResponseDto(
     status: membership.status,
     joinedAt: membership.joinedAt.toISOString(),
     leftAt: membership.leftAt ? membership.leftAt.toISOString() : null,
+    endReason: membership.endReason,
+    sections,
+  };
+}
+
+export function toMembershipSectionRefDto(
+  section: Section,
+): MembershipSectionRefDto {
+  return {
+    id: section.id,
+    name: section.name,
   };
 }

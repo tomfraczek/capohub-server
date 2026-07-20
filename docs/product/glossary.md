@@ -24,7 +24,7 @@ last_updated: 2026-07-20
 | Historical Import | A dedicated administrative operation used to bring in graduation history that predates an organization's adoption of CapoHub. Exempt from normal graduation-order validation, since earlier promotions may be unknown. Distinct from Administrative Override and from Initial Assignment. |
 | Initial Assignment | The operation that grants a User's first Graduation Level within a Root Group's organization (e.g. after joining, or after a Legacy Graduation transfer). It is not a promotion, is not subject to graduation-order validation, and is distinct from both Administrative Override and Historical Import. It creates the `UserCurrentGraduation` record for that (User, Root Group) pair. |
 | Legacy Graduation | A member's graduation from a previous organization. It remains visible and historical permanently but can never become the current graduation inside another organization. |
-| Membership | Relationship between a User and a Group. |
+| Membership | Relationship between a User and a Root Group - never a Child Group. |
 | Public Code | A stable, immutable public identifier exposed by an object (Group, Academy, User) for use in invitation links and QR codes. It is never a database identifier. |
 | Root Group | A group without a parent. Represents the highest organizational level. |
 | Section | An optional subdivision inside a Group. |

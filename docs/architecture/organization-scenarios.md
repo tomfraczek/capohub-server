@@ -182,6 +182,10 @@ Administrator assigns the user to `Adults` and `Performance Team`.
 ### Expected Result
 
 The User belongs to both Sections. No duplicate Membership is created.
+One active Membership may be assigned to zero or more Sections, provided
+every one of them belongs to the same Root Group as the Membership -
+`Adults` and `Performance Team` must both belong to the organization
+`Poznań` is part of.
 
 ---
 
@@ -328,7 +332,9 @@ Allow a former member to rejoin a Group without losing history.
 
 ### Initial State
 
-History: joined in 2018, Membership archived in 2021.
+History: joined in 2018, Membership archived in 2021. The member had been
+assigned to the `Adults` Section before the Membership was archived; that
+Section assignment was not removed when the Membership ended.
 
 ### Action
 
@@ -337,7 +343,11 @@ Member returns.
 ### Expected Result
 
 A new `ACTIVE` Membership is created. The historical Membership remains
-archived. Nothing is overwritten.
+archived, together with its `Adults` Section assignment - it is not
+carried over to the new Membership, since a Section assignment belongs to
+one specific Membership record. Nothing is overwritten. If the member
+should be in `Adults` again, an administrator assigns the new Membership
+to it explicitly.
 
 ---
 

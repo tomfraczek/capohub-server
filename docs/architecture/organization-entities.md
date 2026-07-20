@@ -160,8 +160,13 @@ reference an archived Group, and nothing breaks.
 
 Academy represents a physical location where trainings take place.
 Academy is **not** an organizational unit - it cannot have members,
-permissions, administrators, or child academies. It is simply a place.
-See [ADR-012](../decisions/ADR-012-academy-not-organizational-unit.md).
+Sections, permissions, administrators, roles, or child academies. It is
+simply a place. Academy exists purely as a reusable **location
+template**: future Training/Event features let an organizer either select
+an existing Academy as the location for a training day or event, or type
+a one-off location by hand instead. No Membership, User, Section, or
+assignment of any kind ever references an Academy directly. See
+[ADR-012](../decisions/ADR-012-academy-not-organizational-unit.md).
 
 Example:
 
@@ -190,12 +195,15 @@ Academy stores:
 - An Academy always belongs to exactly one Group.
 - It cannot belong to multiple Groups.
 - It cannot exist independently.
-- An Academy cannot have members, permissions, administrators, or child
-  academies.
+- An Academy cannot have members, Sections, permissions, administrators,
+  roles, or child academies - it is a location template only, never a
+  target of assignment.
 
 ## Relationships
 
 - Academy belongs to exactly one Group (owner).
+- Academy has no other relationships - no User, Membership, or Section
+  ever references an Academy.
 
 ## Lifecycle
 
@@ -235,13 +243,27 @@ organizational unit.
 - A Section cannot own Academies.
 - A Section cannot own Groups.
 - A Section cannot exist without a Group.
-- Section membership requires an active Group Membership - a user cannot
-  belong to a Section without belonging to its parent Group.
+- Section membership requires an active Membership in the Section's Root
+  Group - a user cannot be assigned to a Section without an active
+  Membership in the organization the Section belongs to (Membership is
+  always Root Group-scoped; see [Membership](#membership)).
 - Membership inside a Section is optional: a user may belong to zero, one,
   or multiple Sections, depending entirely on the organization's
   structure. A single member may belong to multiple Sections
   simultaneously (e.g. both `Adults` and `Performance Team`); CapoHub does
-  not restrict this.
+  not restrict this. Concretely, one active Membership may be assigned to
+  zero or more Sections, provided every one of those Sections belongs to
+  the same Root Group as the Membership itself (see
+  [Membership](#membership)) - a Membership is never assigned to a
+  Section belonging to a different organization.
+- A Section assignment (Section Membership) is not removed when the
+  underlying Membership ends, whether through the member leaving or
+  through removal by the organization. It remains in place as a
+  historical record of which Sections the member previously belonged to,
+  the same way the Membership itself is archived rather than deleted (see
+  [ADR-007](../decisions/ADR-007-soft-delete.md)). A Section assignment
+  confers no active access while its Membership is not `ACTIVE` - it is
+  historical information only, not a live grant.
 
 ### Groups Without Sections
 
@@ -254,8 +276,8 @@ use the platform without unnecessary complexity.
 ## Relationships
 
 - Section belongs to exactly one Group.
-- Section has zero or more Section Memberships, each requiring an
-  underlying active Group Membership for the same user.
+- Section has zero or more Section Memberships, each requiring the same
+  user to hold an active Membership in the Section's Root Group.
 
 ## Lifecycle
 
@@ -263,10 +285,15 @@ Section participates in the same soft-delete policy as Group, Academy,
 Membership, and Invitation. See
 [ADR-007](../decisions/ADR-007-soft-delete.md).
 
+A Section Membership is not removed when the Membership it depends on
+ends - it persists as history alongside the (now archived) Membership,
+rather than being cleaned up. It grants no active access once its
+Membership is no longer `ACTIVE`.
+
 ## Validation Rules
 
 - A Section-membership operation must reject users without an active
-  Membership in the Section's parent Group.
+  Membership in the Section's Root Group.
 
 ---
 
@@ -274,12 +301,23 @@ Membership, and Invitation. See
 
 ## Purpose
 
-Membership represents a User's relationship with a Group. A User does not
-"belong" to an organization directly - instead a User belongs to one or
-more Groups. This design allows complete flexibility and naturally
-supports multi-organization memberships (e.g. a user in `Capoeira Brasil >
-Poznań` and, independently, in `Muzenza > Wrocław`). CapoHub never assumes
-that a User belongs to only one organization.
+Membership represents a User's relationship with an organization - a Root
+Group. A User does not "belong" to an organization directly - instead a
+User belongs to one or more Root Groups. This design allows complete
+flexibility and naturally supports multi-organization memberships (e.g. a
+user with Membership in `Capoeira Brasil` and, independently, in
+`Muzenza`). CapoHub never assumes that a User belongs to only one
+organization. Membership itself always references the Root Group, never
+a Child Group - a member's participation in a specific Section within
+that organization is expressed through a separate Section assignment
+(see [Section](#section)), not through a different Membership.
+
+Membership is a distinct concept from Role/Permission and carries no
+authority by itself: it only answers "does this User belong to this
+organization." A Role/Permission is assigned directly to one specific
+Group - Root or Child - independently of Membership, and never inherits
+through the hierarchy - see
+[ADR-013](../decisions/ADR-013-no-permission-inheritance.md).
 
 ## Responsibilities
 
@@ -300,13 +338,18 @@ including:
 ## Business Rules
 
 - Membership is never inherited through the Group hierarchy - it exists
-  only within the Group it was created for. See
+  only within the Root Group it was created for. See
   [ADR-004](../decisions/ADR-004-no-membership-inheritance.md).
-- A User may have only one **active** Membership per Group at a time.
-  Historical (archived) memberships for the same Group/user pair may
-  exist, allowing a user to leave and later return to the same Group
-  without losing history (e.g. `2018-2020 ACTIVE`, `2020-2022 ARCHIVED`,
-  `2024- ACTIVE`).
+- A User may have only one **active** Membership per Root Group at a
+  time. Historical (archived) memberships for the same Root Group/user
+  pair may exist, allowing a user to leave and later return to the same
+  organization without losing history (e.g. `2018-2020 ACTIVE`,
+  `2020-2022 ARCHIVED`, `2024- ACTIVE`).
+- Membership's Root Group is fixed at creation and never changes - there
+  is no operation that moves a Membership to a different Root Group.
+  Changing organization happens only by ending the Membership in one Root
+  Group and creating a new one in another (see
+  [Scenario 11](organization-scenarios.md#scenario-11-user-changes-organization)).
 - Memberships are never physically deleted; removing a member archives
   the Membership, guaranteeing complete historical integrity. See
   [ADR-007](../decisions/ADR-007-soft-delete.md).
@@ -319,9 +362,10 @@ including:
 
 ## Relationships
 
-- Membership belongs to exactly one User and exactly one Group.
+- Membership belongs to exactly one User and exactly one Root Group.
 - Membership may reference zero or more Section Memberships (see
-  [Section](#section)).
+  [Section](#section)); every referenced Section must belong to the same
+  Root Group as the Membership.
 - Membership may carry one or more Roles and zero or more direct
   Permissions.
 
@@ -334,18 +378,27 @@ Statuses:
 
 - **INVITED** - an invitation has been created; the user has not accepted
   it yet; the Membership is not active.
-- **ACTIVE** - normal state; the user participates fully in the Group.
+- **ACTIVE** - normal state; the user participates fully in the
+  organization.
 - **READ_ONLY** - Membership remains visible and historical data remains
   available, but the user loses operational permissions (e.g. suspended
   member, temporary break, inactive instructor).
 - **ARCHIVED** - historical membership; the user no longer belongs to the
-  Group; nothing is deleted and historical information remains available.
+  organization; nothing is deleted and historical information remains
+  available. Both a self-service leave and an administrator removing a
+  member end in this same status - which of the two happened is recorded
+  separately from status, so history keeps distinguishing them without
+  introducing statuses beyond the four above. Any Section assignments the
+  member held are not removed when the Membership is archived - they
+  remain as history alongside it (see [Section](#section)), and simply
+  stop granting active access once the Membership is no longer `ACTIVE`.
 
 ## Validation Rules
 
-- Only one Membership per (User, Group) pair may be `ACTIVE` at a time.
-- Section Membership requires an existing active Group Membership for the
-  same user and Group.
+- Only one Membership per (User, Root Group) pair may be `ACTIVE` at a
+  time.
+- Section Membership requires an existing active Membership for the same
+  user in the Section's Root Group.
 
 ---
 

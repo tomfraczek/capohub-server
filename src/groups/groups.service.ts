@@ -37,6 +37,15 @@ export class GroupsService {
   // (parentGroupId omitted) and a Child Group (parentGroupId present) -
   // creating a Child Group does not grant the creator any role in the
   // parent, only in the new Group itself.
+  //
+  // This is a Role/Permission assignment scoped directly to the newly
+  // created Group - not an Organization Membership (see ADR-013: a
+  // Role/Permission is assigned per-Group and never inherits through the
+  // hierarchy). It is therefore exempt from the Root-Group-only
+  // validation that GroupMembershipsService.addMember enforces for
+  // joining an organization - `rootGroup` here is a plain FK to "the Group
+  // this row's role applies to", which happens to always be a Root Group
+  // for genuine Organization Memberships, but not for this bootstrap step.
   async create(user: User, input: CreateGroupInput): Promise<GroupResponseDto> {
     const group = await this.em.transactional(async (em) => {
       const parent = input.parentGroupId
@@ -52,7 +61,7 @@ export class GroupsService {
       group.parentGroup = parent;
 
       const membership = new GroupMembership();
-      membership.group = group;
+      membership.rootGroup = group;
       membership.user = user;
       membership.role = GroupRole.OWNER;
       membership.joinedAt = new Date();
@@ -100,25 +109,25 @@ export class GroupsService {
       });
     }
 
-    if (membership.group.status === GroupStatus.ARCHIVED) {
+    if (membership.rootGroup.status === GroupStatus.ARCHIVED) {
       throw new ConflictException({
         code: 'GROUP_ARCHIVED',
         message: 'This group is archived and is read-only until it is restored',
       });
     }
 
-    return membership.group;
+    return membership.rootGroup;
   }
 
   async listMine(userId: string): Promise<GroupSummaryResponseDto[]> {
     const memberships = await this.em.find(
       GroupMembership,
       { user: userId, status: GroupMembershipStatus.ACTIVE },
-      { populate: ['group'], orderBy: { joinedAt: 'desc' } },
+      { populate: ['rootGroup'], orderBy: { joinedAt: 'desc' } },
     );
 
     return memberships.map((membership) =>
-      toGroupSummaryResponseDto(membership.group, membership.role),
+      toGroupSummaryResponseDto(membership.rootGroup, membership.role),
     );
   }
 

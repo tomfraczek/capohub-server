@@ -39,6 +39,12 @@ const DEFAULT_ALLOWED_STATUSES: readonly GroupStatus[] = [GroupStatus.ACTIVE];
  * the handler's @AllowGroupStatuses(...) lists which statuses it may run in
  * (default: ACTIVE only), and any other status rejects the request with 409
  * - so a future write endpoint is blocked by default, not opted in.
+ *
+ * Deliberately checks the Role/Permission held directly in the acted-on
+ * Group (:id/:groupId) - never a Root Group fallback. Role/Permission is a
+ * separate concept from Membership and never inherits through the
+ * hierarchy (see ADR-013); Membership only being Root Group-scoped does not
+ * change that.
  */
 @Injectable()
 export class GroupPermissionsGuard implements CanActivate {
@@ -91,7 +97,7 @@ export class GroupPermissionsGuard implements CanActivate {
         ALLOW_GROUP_STATUSES_KEY,
         [context.getHandler(), context.getClass()],
       ) ?? DEFAULT_ALLOWED_STATUSES;
-    assertGroupStatusAllowed(membership.group, allowedStatuses);
+    assertGroupStatusAllowed(membership.rootGroup, allowedStatuses);
 
     return true;
   }

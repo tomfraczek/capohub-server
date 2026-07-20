@@ -160,7 +160,7 @@ describe('Group Hierarchy / Academies / Sections (e2e)', () => {
     await cleanup.nativeDelete(Academy, { group: { $in: createdGroupIds } });
     await cleanup.nativeDelete(Section, { group: { $in: createdGroupIds } });
     await cleanup.nativeDelete(GroupMembership, {
-      group: { $in: createdGroupIds },
+      rootGroup: { $in: createdGroupIds },
     });
     // Children must be nulled/removed before their parents to satisfy the
     // parent_group_id foreign key (no cascade - see group.entity.ts).

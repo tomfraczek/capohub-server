@@ -53,7 +53,7 @@ function buildMembership(
   const membership = new GroupMembership();
   membership.role = GroupRole.ADMIN;
   membership.status = GroupMembershipStatus.ACTIVE;
-  membership.group = buildGroup({ id: 'parent-1' });
+  membership.rootGroup = buildGroup({ id: 'parent-1' });
   return Object.assign(membership, overrides);
 }
 
@@ -135,7 +135,7 @@ describe('GroupsService', () => {
       expect(persistedGroup.parentGroup).toBeNull();
       expect(persistedMembership.role).toBe(GroupRole.OWNER);
       expect(persistedMembership.user).toBe(user);
-      expect(persistedMembership.group).toBe(persistedGroup);
+      expect(persistedMembership.rootGroup).toBe(persistedGroup);
     });
 
     it('creates a Child Group when the caller has GROUP_EDIT in the parent', async () => {
@@ -152,7 +152,7 @@ describe('GroupsService', () => {
       const persistedGroup = (persist.mock.calls[0][0] as unknown[]).find(
         (entity) => entity instanceof Group,
       ) as Group;
-      expect(persistedGroup.parentGroup).toBe(parentMembership.group);
+      expect(persistedGroup.parentGroup).toBe(parentMembership.rootGroup);
     });
 
     it('rejects creating a Child Group when the caller has no active membership in the parent', async () => {
@@ -186,7 +186,7 @@ describe('GroupsService', () => {
     it('rejects creating a Child Group under an archived parent', async () => {
       const parentMembership = buildMembership({
         role: GroupRole.OWNER,
-        group: buildGroup({ id: 'parent-1', status: GroupStatus.ARCHIVED }),
+        rootGroup: buildGroup({ id: 'parent-1', status: GroupStatus.ARCHIVED }),
       });
       const { em } = buildMockEm({ parentMembership });
       const { service } = buildService(em);
@@ -219,7 +219,7 @@ describe('GroupsService', () => {
     it('maps each active membership to a summary with myRole set', async () => {
       const membership = new GroupMembership();
       membership.role = GroupRole.ADMIN;
-      membership.group = buildGroup({ name: 'Grupo Axé' });
+      membership.rootGroup = buildGroup({ name: 'Grupo Axé' });
       const { em } = buildMockEm({ memberships: [membership] });
       const { service } = buildService(em);
 
@@ -233,7 +233,7 @@ describe('GroupsService', () => {
     it('includes groups with status ARCHIVED - archiving never touches membership', async () => {
       const membership = new GroupMembership();
       membership.role = GroupRole.OWNER;
-      membership.group = buildGroup({
+      membership.rootGroup = buildGroup({
         name: 'Archived Group',
         status: GroupStatus.ARCHIVED,
       });

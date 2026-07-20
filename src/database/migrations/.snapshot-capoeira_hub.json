@@ -497,8 +497,8 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
-        "group_id": {
-          "name": "group_id",
+        "root_group_id": {
+          "name": "root_group_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -565,9 +565,10 @@
           "default": "'ACTIVE'",
           "comment": null,
           "enumItems": [
+            "INVITED",
             "ACTIVE",
-            "LEFT",
-            "REMOVED"
+            "READ_ONLY",
+            "ARCHIVED"
           ],
           "mappedType": "enum"
         },
@@ -602,45 +603,30 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "end_reason": {
+          "name": "end_reason",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "LEFT",
+            "REMOVED"
+          ],
+          "mappedType": "enum"
         }
       },
       "name": "group_memberships",
       "schema": "public",
       "indexes": [
-        {
-          "columnNames": [
-            "group_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "group_memberships_group_id_index",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "group_id",
-            "user_id"
-          ],
-          "composite": true,
-          "constraint": false,
-          "keyName": "group_memberships_group_id_user_id_active_unique",
-          "unique": true,
-          "primary": false,
-          "expression": "CREATE UNIQUE INDEX group_memberships_group_id_user_id_active_unique ON public.group_memberships USING btree (group_id, user_id) WHERE (status = 'ACTIVE'::text)"
-        },
-        {
-          "columnNames": [
-            "group_id",
-            "user_id",
-            "status"
-          ],
-          "composite": true,
-          "constraint": false,
-          "keyName": "group_memberships_group_id_user_id_status_index",
-          "unique": false,
-          "primary": false
-        },
         {
           "columnNames": [
             "id"
@@ -650,6 +636,40 @@
           "keyName": "group_memberships_pkey",
           "unique": true,
           "primary": true
+        },
+        {
+          "columnNames": [
+            "root_group_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "group_memberships_root_group_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "root_group_id",
+            "user_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "group_memberships_root_group_id_user_id_active_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX group_memberships_root_group_id_user_id_active_unique ON public.group_memberships USING btree (root_group_id, user_id) WHERE (status = 'ACTIVE'::text)"
+        },
+        {
+          "columnNames": [
+            "root_group_id",
+            "user_id",
+            "status"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "group_memberships_root_group_id_user_id_status_index",
+          "unique": false,
+          "primary": false
         },
         {
           "columnNames": [
@@ -664,11 +684,11 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "group_memberships_group_id_foreign": {
+        "group_memberships_root_group_id_foreign": {
           "columnNames": [
-            "group_id"
+            "root_group_id"
           ],
-          "constraintName": "group_memberships_group_id_foreign",
+          "constraintName": "group_memberships_root_group_id_foreign",
           "localTableName": "public.group_memberships",
           "referencedTableName": "public.groups",
           "referencedColumnNames": [
@@ -1769,6 +1789,166 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
+        "membership_id": {
+          "name": "membership_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        }
+      },
+      "name": "membership_sections",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "membership_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "membership_sections_membership_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "membership_id",
+            "section_id"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "membership_sections_membership_id_section_id_unique",
+          "unique": true,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "membership_sections_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "section_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "membership_sections_section_id_index",
+          "unique": false,
+          "primary": false
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "membership_sections_membership_id_foreign": {
+          "columnNames": [
+            "membership_id"
+          ],
+          "constraintName": "membership_sections_membership_id_foreign",
+          "localTableName": "public.membership_sections",
+          "referencedTableName": "public.group_memberships",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "membership_sections_section_id_foreign": {
+          "columnNames": [
+            "section_id"
+          ],
+          "constraintName": "membership_sections_section_id_foreign",
+          "localTableName": "public.membership_sections",
+          "referencedTableName": "public.sections",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
         "playlist_id": {
           "name": "playlist_id",
           "type": "uuid",
@@ -2588,7 +2768,7 @@
       "checks": [
         {
           "name": "rhythms_check",
-          "columnName": "tempo_min_bpm",
+          "columnName": "tempo_max_bpm",
           "definition": "CHECK (((tempo_min_bpm IS NULL) OR (tempo_max_bpm IS NULL) OR (tempo_min_bpm <= tempo_max_bpm)))",
           "expression": "(tempo_min_bpm IS NULL) OR (tempo_max_bpm IS NULL) OR (tempo_min_bpm <= tempo_max_bpm)"
         }

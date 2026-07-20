@@ -34,7 +34,7 @@ describe('GroupPermissionsGuard', () => {
   function buildGuard(options: {
     requiredPermissions?: GroupPermission[];
     allowedStatuses?: GroupStatus[];
-    membership?: { role: GroupRole; group: { status: GroupStatus } } | null;
+    membership?: { role: GroupRole; rootGroup: { status: GroupStatus } } | null;
     hasAllPermissions?: jest.Mock;
   }): { guard: GroupPermissionsGuard; getAllAndOverride: jest.Mock } {
     const getAllAndOverride = jest
@@ -65,7 +65,7 @@ describe('GroupPermissionsGuard', () => {
   }
 
   function membershipWithStatus(role: GroupRole, status: GroupStatus) {
-    return { role, group: { status } };
+    return { role, rootGroup: { status } };
   }
 
   it('allows the request when no group permissions metadata is set', async () => {

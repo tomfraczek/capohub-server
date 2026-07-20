@@ -157,7 +157,7 @@ describe('Groups (e2e)', () => {
   afterAll(async () => {
     const cleanup = app.get(EntityManager).fork();
     await cleanup.nativeDelete(GroupMembership, {
-      group: { $in: createdGroupIds },
+      rootGroup: { $in: createdGroupIds },
     });
     await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
     await cleanup.nativeDelete(User, {
@@ -572,14 +572,14 @@ describe('Groups (e2e)', () => {
       const userId = localUserIdByToken.get(SECOND_TOKEN);
 
       const first = new GroupMembership();
-      first.group = em.getReference(Group, created.id);
+      first.rootGroup = em.getReference(Group, created.id);
       first.user = em.getReference(User, userId as string);
       first.role = GroupRole.MEMBER;
       first.joinedAt = new Date();
       await em.persistAndFlush(first);
 
       const second = new GroupMembership();
-      second.group = em.getReference(Group, created.id);
+      second.rootGroup = em.getReference(Group, created.id);
       second.user = em.getReference(User, userId as string);
       second.role = GroupRole.ADMIN;
       second.joinedAt = new Date();

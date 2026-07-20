@@ -171,8 +171,12 @@ see [Group](organization-entities.md#group) in organization-entities.md.
 
 Academy represents a physical location where trainings take place.
 Academy is **not** an organizational unit - it cannot have members,
-permissions, administrators, or child academies; it is simply a place.
-An Academy always belongs to exactly one Group. See
+Sections, permissions, administrators, roles, or child academies; it is
+simply a place. Academy is a reusable **location template**: when creating
+a training day or event, an organizer either picks an existing Academy as
+the location or types a one-off location by hand. No user or Membership
+is ever assigned to an Academy, in any capacity. An Academy always belongs
+to exactly one Group. See
 [ADR-012](../decisions/ADR-012-academy-not-organizational-unit.md).
 
 For full business rules, relationships, lifecycle, and validation rules,
@@ -198,11 +202,17 @@ organization-entities.md.
 
 # Membership
 
-Membership represents a User's relationship with a Group. A User does
-not "belong" to an organization directly - instead a User belongs to one
-or more Groups, which naturally supports multi-organization memberships.
-Membership is the source of truth for organizational participation, and
-is never inherited through the Group hierarchy. See
+Membership represents a User's relationship with an organization - a
+Root Group. A User does not "belong" to an organization directly -
+instead a User belongs to one or more Root Groups, which naturally
+supports multi-organization memberships. Membership always references
+the Root Group itself, never a Child Group, Academy, or Section - while
+active, that same Membership may additionally be assigned to zero or
+more Sections belonging to the same Root Group (see [Section](#section));
+those assignments are never removed when the Membership later ends, but
+they stop granting any active access once it does. Membership is the
+source of truth for organizational participation, and is never inherited
+through the Group hierarchy. See
 [ADR-004](../decisions/ADR-004-no-membership-inheritance.md).
 
 For full business rules, lifecycle (Invited / Active / ReadOnly /
@@ -246,6 +256,19 @@ Permissions never inherit through Group hierarchy. Example: an
 Administrator of `Poland` does **not** automatically become administrator
 of `Poznań`. Every Group manages its own permissions independently, which
 avoids accidental privilege escalation. See
+[ADR-013](../decisions/ADR-013-no-permission-inheritance.md).
+
+Role/Permission is a separate concept from Membership: Membership only
+answers "does this User belong to this organization" and always
+references the Root Group (see [Membership](#membership)), while a
+Role/Permission is assigned directly to one specific Group - Root or
+Child - and grants authority only there. A Root Group administrator's
+authority covers the Root Group itself and the organization-wide
+Graduation System, not the rest of the tree; a Child Group is managed by
+whoever holds a Role directly in that Child Group. Academy and Section
+have no Role/Permission or Membership of their own - operations on them
+are authorized against the Role/Permission the caller holds in the Group
+that owns them. See
 [ADR-013](../decisions/ADR-013-no-permission-inheritance.md).
 
 ---
