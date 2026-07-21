@@ -202,13 +202,21 @@ organization-entities.md.
 
 # Membership
 
-Membership represents a User's relationship with an organization - a
-Root Group. A User does not "belong" to an organization directly -
-instead a User belongs to one or more Root Groups, which naturally
-supports multi-organization memberships. Membership always references
-the Root Group itself, never a Child Group, Academy, or Section - while
-active, that same Membership may additionally be assigned to zero or
-more Sections belonging to the same Root Group (see [Section](#section));
+Membership represents a User's relationship with an organization -
+identified by its Root Group - and answers exactly one question: does
+this User belong to this organization at all? Membership always
+references the Root Group itself, never a Child Group, Academy, or
+Section, but this is purely an identifier of *which* organization - it is
+**not** the same as being a day-to-day participant of the Root Group as a
+Group (see [Group](#group) and [Roles](#roles)). The Root Group has its
+own daily life, exactly like any Child Group, and a User only becomes a
+participant of it - holds the `Member` Role there - by being explicitly
+granted a Role there, never automatically as a consequence of Membership.
+A Membership with zero Role Assignments anywhere, including the Root
+Group, is a normal, valid state.
+
+While active, a Membership may additionally be assigned to zero or more
+Sections belonging to the same Root Group (see [Section](#section));
 those assignments are never removed when the Membership later ends, but
 they stop granting any active access once it does. Membership is the
 source of truth for organizational participation, and is never inherited
@@ -243,16 +251,48 @@ Assignment references one Membership, one Group (Root or Child), and one
 system Role. A Membership may hold **several different Roles for the same
 Group at once** (e.g. `Member` + `Instructor` + `Admin`, all
 simultaneously, for the same Group) - what is not allowed is holding the
-*same* Role twice for the same (Membership, Group) pair. `Member` itself
-is not an inferred default: it is granted as its own Role Assignment
-automatically the moment a User is added to, or joins, a Group. The same
-Membership may also hold Role Assignments in multiple different Groups at
-once, independently (e.g. `Admin` of one Child Group and, separately,
-`Instructor` of another). `Owner` is the one mandatory exception - every
-Group must have exactly one active `Owner` at all times, moved only by an
-atomic transfer. See
+*same* Role twice for the same (Membership, Group) pair.
+
+**`Member` is the base Role of every Group - Root or Child, with no
+special case for either.** Every other Role requires it, and the system
+guarantees this automatically: `Admin` in practice always means `Member` +
+`Admin`; `Instructor` always means `Member` + `Instructor`; `Owner`
+always means `Member` + `Owner`. This is triggered by actually being
+granted a Role for a specific Group: if a Membership's first Role
+Assignment for that Group is some other Role, `Member` is created
+alongside it in the same operation. `Member` cannot be revoked while any
+other Role is still held for that Group.
+
+**Joining the organization (creating a Membership) does not grant
+`Member`, or any Role, for the Root Group - or any Group.** Membership and
+Role Assignment answer different questions (see
+[ADR-004](../decisions/ADR-004-no-membership-inheritance.md)): Membership
+only means "belongs to the organization"; `Member` means "belongs to this
+specific Group." A Membership with zero Role Assignments anywhere is a
+normal, valid state - the User belongs to the organization but has not yet
+been assigned to any Group within it, the Root Group included.
+
+Role management consists of exactly two operations - **grantRole** and
+**revokeRole** - there is no "change a Role": Roles for the same
+(Membership, Group) are independent of one another, so granting `Admin`
+never replaces `Instructor`; both simply coexist unless `Instructor` is
+separately revoked.
+
+The same Membership may also hold Role Assignments in multiple different
+Groups at once, independently (e.g. `Admin` of one Child Group and,
+separately, `Instructor` of another). `Owner` is the one mandatory
+exception - **every Group must always have exactly one active `Owner`**,
+Root or Child alike, moved only by an atomic transfer. Because of this, **a
+Membership cannot be removed - by leaving, by an administrator's
+removal, or by any other path - while it owns any Group in the
+Organization**; ownership must be transferred explicitly first. This is
+checked across the whole Group tree, not just the Root Group: owning a
+single Child Group blocks ending the Membership exactly as owning the
+Root Group itself would. See
 [RoleAssignment](organization-entities.md#roleassignment) for the full
-entity reference.
+entity reference and
+[Scenario 23](organization-scenarios.md#scenario-23-ownership-blocks-leaving)
+for the walkthrough.
 
 ---
 

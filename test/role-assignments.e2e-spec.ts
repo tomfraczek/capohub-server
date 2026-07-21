@@ -710,7 +710,7 @@ describe('Role Assignments (e2e)', () => {
       expect(fetched.role).toBe(GroupRole.INSTRUCTOR);
     });
 
-    it('changes a non-owner Role Assignment', async () => {
+    it('granting an additional Role never "changes" an existing one - both coexist, and there is no PATCH to change one directly', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Change Root' });
       const child = await createGroup(OWNER_TOKEN, {
         name: 'Change Child',
@@ -730,14 +730,37 @@ describe('Role Assignments (e2e)', () => {
           .expect(201),
       );
 
-      const updated = await bodyOf<RoleAssignmentResponseDto>(
+      // There is no PATCH .../role-assignments/:id - Roles are independent
+      // of one another (grantRole/revokeRole only, see ADR-028).
+      await request(app.getHttpServer())
+        .patch(`/api/v1/groups/${child.id}/role-assignments/${created.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ role: GroupRole.ASSISTANT })
+        .expect(404);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${child.id}/role-assignments`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ membershipId: membership.id, role: GroupRole.ASSISTANT })
+        .expect(201);
+
+      const roleAssignments = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
-          .patch(`/api/v1/groups/${child.id}/role-assignments/${created.id}`)
+          .get(`/api/v1/groups/${child.id}/role-assignments`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .send({ role: GroupRole.ASSISTANT })
           .expect(200),
       );
-      expect(updated.role).toBe(GroupRole.ASSISTANT);
+      const rolesForMembership = roleAssignments
+        .filter(
+          (roleAssignment) => roleAssignment.membershipId === membership.id,
+        )
+        .map((roleAssignment) => roleAssignment.role);
+      // INSTRUCTOR is still there, ASSISTANT was added alongside it, and
+      // MEMBER is still there too - granting ASSISTANT never replaced
+      // INSTRUCTOR.
+      expect(rolesForMembership.sort()).toEqual(
+        [GroupRole.MEMBER, GroupRole.INSTRUCTOR, GroupRole.ASSISTANT].sort(),
+      );
     });
 
     it('revokes a non-owner Role Assignment', async () => {
@@ -769,49 +792,6 @@ describe('Role Assignments (e2e)', () => {
         .get(`/api/v1/groups/${child.id}/role-assignments/${created.id}`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(404);
-    });
-
-    it('rejects changing the Group scope or Membership of a Role Assignment via PATCH - 400 VALIDATION_ERROR', async () => {
-      const root = await createGroup(OWNER_TOKEN, { name: 'Immutable Root' });
-      const child = await createGroup(OWNER_TOKEN, {
-        name: 'Immutable Child',
-        parentGroupId: root.id,
-      });
-      const otherChild = await createGroup(OWNER_TOKEN, {
-        name: 'Immutable Other Child',
-        parentGroupId: root.id,
-      });
-      const membership = await addMember(
-        OWNER_TOKEN,
-        root.id,
-        MEMBER_TOKEN,
-        GroupRole.MEMBER,
-      );
-      const created = await bodyOf<RoleAssignmentResponseDto>(
-        request(app.getHttpServer())
-          .post(`/api/v1/groups/${child.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .send({ membershipId: membership.id, role: GroupRole.INSTRUCTOR })
-          .expect(201),
-      );
-
-      const response = await bodyOf<HttpErrorResponse>(
-        request(app.getHttpServer())
-          .patch(`/api/v1/groups/${child.id}/role-assignments/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .send({ role: GroupRole.ADMIN, groupId: otherChild.id })
-          .expect(400),
-      );
-      expect(response.code).toBe('VALIDATION_ERROR');
-
-      const fetched = await bodyOf<RoleAssignmentResponseDto>(
-        request(app.getHttpServer())
-          .get(`/api/v1/groups/${child.id}/role-assignments/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .expect(200),
-      );
-      expect(fetched.groupId).toBe(child.id);
-      expect(fetched.role).toBe(GroupRole.INSTRUCTOR);
     });
 
     it('forbids a Child Group MEMBER (no MEMBERSHIP_ROLE_CHANGE there) from granting Roles in that Child Group', async () => {
@@ -852,6 +832,185 @@ describe('Role Assignments (e2e)', () => {
           .expect(403),
       );
       expect(response.code).toBe('INSUFFICIENT_GROUP_PERMISSIONS');
+    });
+  });
+
+  describe('MEMBER is the base role of every Group', () => {
+    it('automatically grants MEMBER alongside the first Role granted for a Group', async () => {
+      const root = await createGroup(OWNER_TOKEN, { name: 'Base Role Root' });
+      const child = await createGroup(OWNER_TOKEN, {
+        name: 'Base Role Child',
+        parentGroupId: root.id,
+      });
+      const membership = await addMember(
+        OWNER_TOKEN,
+        root.id,
+        MEMBER_TOKEN,
+        GroupRole.MEMBER,
+      );
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${child.id}/role-assignments`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ membershipId: membership.id, role: GroupRole.ADMIN })
+        .expect(201);
+
+      const roleAssignments = await bodyOf<RoleAssignmentResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${child.id}/role-assignments`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      const rolesForMembership = roleAssignments
+        .filter(
+          (roleAssignment) => roleAssignment.membershipId === membership.id,
+        )
+        .map((roleAssignment) => roleAssignment.role);
+      expect(rolesForMembership.sort()).toEqual(
+        [GroupRole.MEMBER, GroupRole.ADMIN].sort(),
+      );
+    });
+
+    it('rejects revoking MEMBER for a Child Group while another Role is still held there - 409 CANNOT_REMOVE_MEMBER_ROLE', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Base Role Guard Root',
+      });
+      const child = await createGroup(OWNER_TOKEN, {
+        name: 'Base Role Guard Child',
+        parentGroupId: root.id,
+      });
+      const membership = await addMember(
+        OWNER_TOKEN,
+        root.id,
+        MEMBER_TOKEN,
+        GroupRole.MEMBER,
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${child.id}/role-assignments`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ membershipId: membership.id, role: GroupRole.ADMIN })
+        .expect(201);
+      const roleAssignments = await bodyOf<RoleAssignmentResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${child.id}/role-assignments`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      const memberRoleAssignment = roleAssignments.find(
+        (roleAssignment) =>
+          roleAssignment.membershipId === membership.id &&
+          roleAssignment.role === GroupRole.MEMBER,
+      );
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .delete(
+            `/api/v1/groups/${child.id}/role-assignments/${memberRoleAssignment?.id}`,
+          )
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(409),
+      );
+      expect(response.code).toBe('CANNOT_REMOVE_MEMBER_ROLE');
+    });
+
+    it('allows revoking MEMBER for a Child Group once every other Role there has been revoked first - this removes the user from the Child Group', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Base Role Leave Root',
+      });
+      const child = await createGroup(OWNER_TOKEN, {
+        name: 'Base Role Leave Child',
+        parentGroupId: root.id,
+      });
+      const membership = await addMember(
+        OWNER_TOKEN,
+        root.id,
+        MEMBER_TOKEN,
+        GroupRole.MEMBER,
+      );
+      const adminAssignment = await bodyOf<RoleAssignmentResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${child.id}/role-assignments`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ membershipId: membership.id, role: GroupRole.ADMIN })
+          .expect(201),
+      );
+      const roleAssignmentsBefore = await bodyOf<RoleAssignmentResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${child.id}/role-assignments`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      const memberRoleAssignment = roleAssignmentsBefore.find(
+        (roleAssignment) =>
+          roleAssignment.membershipId === membership.id &&
+          roleAssignment.role === GroupRole.MEMBER,
+      );
+
+      // Revoke ADMIN first - MEMBER is still protected while it existed.
+      await request(app.getHttpServer())
+        .delete(
+          `/api/v1/groups/${child.id}/role-assignments/${adminAssignment.id}`,
+        )
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+
+      // Now MEMBER is the only Role left for this Child Group - revoking
+      // it is allowed, and removes the user from the Child Group entirely.
+      await request(app.getHttpServer())
+        .delete(
+          `/api/v1/groups/${child.id}/role-assignments/${memberRoleAssignment?.id}`,
+        )
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/groups/${child.id}`)
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .expect(404);
+    });
+
+    it("never allows revoking MEMBER for the membership's own Root Group - 409 CANNOT_REMOVE_ROOT_MEMBER_ROLE (use leave/remove instead)", async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Base Role Root Guard',
+      });
+      const membership = await addMember(
+        OWNER_TOKEN,
+        root.id,
+        MEMBER_TOKEN,
+        GroupRole.MEMBER,
+      );
+      const roleAssignments = await bodyOf<RoleAssignmentResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${root.id}/role-assignments`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      const memberRoleAssignment = roleAssignments.find(
+        (roleAssignment) =>
+          roleAssignment.membershipId === membership.id &&
+          roleAssignment.role === GroupRole.MEMBER,
+      );
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .delete(
+            `/api/v1/groups/${root.id}/role-assignments/${memberRoleAssignment?.id}`,
+          )
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(409),
+      );
+      expect(response.code).toBe('CANNOT_REMOVE_ROOT_MEMBER_ROLE');
+
+      // The membership remains completely unaffected - still active, still
+      // holding MEMBER for its own Root Group.
+      const fetched = await bodyOf<GroupMembershipResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${root.id}/members/${membership.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(fetched.status).toBe('ACTIVE');
+      expect(fetched.rootRoles).toEqual([GroupRole.MEMBER]);
     });
   });
 });

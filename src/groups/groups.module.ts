@@ -34,5 +34,10 @@ import { SectionsService } from './sections.service';
     GroupPermissionsGuard,
     RoleAssignmentsService,
   ],
+  // RoleAssignmentsService is exported for UsersModule - DELETE /users/me
+  // must not hard-delete a User who still owns a Group (see
+  // UserService.assertOwnsNoGroups). One-directional: GroupsModule never
+  // imports UsersModule back.
+  exports: [RoleAssignmentsService],
 })
 export class GroupsModule {}

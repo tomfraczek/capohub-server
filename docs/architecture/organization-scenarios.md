@@ -42,6 +42,7 @@ last_updated: 2026-07-20
 - [Scenario 20: Administrative Override](#scenario-20-administrative-override)
 - [Scenario 21: Assigning a Role](#scenario-21-assigning-a-role)
 - [Scenario 22: Role Assignment Expires With Membership](#scenario-22-role-assignment-expires-with-membership)
+- [Scenario 23: Ownership Blocks Leaving](#scenario-23-ownership-blocks-leaving)
 - [Integration Test Recommendations](#integration-test-recommendations)
 
 ---
@@ -158,8 +159,14 @@ Administrator sends an invitation. The User accepts it.
 
 ### Expected Result
 
-A Membership is created with status `ACTIVE`. The User belongs only to
-that Group.
+A Membership is created with status `ACTIVE`, scoped to the Group's
+organization (its Root Group) - this only means the User belongs to that
+organization. It grants no Role, and therefore no participation, in any
+specific Group by itself - not even the Root Group (see
+[ADR-004](../decisions/ADR-004-no-membership-inheritance.md)). Becoming an
+actual `Member` of a specific Group, including the one the invitation was
+for, requires a separate Role grant (see
+[ADR-028](../decisions/ADR-028-role-assignment-model.md)).
 
 ---
 
@@ -455,6 +462,11 @@ by: Mestre João`.
 The displayed text remains. The optional User reference is removed.
 Historical information remains readable.
 
+This scenario covers only the optional, set-null User reference on
+Graduation History. The deleted User's own Membership(s) and
+RoleAssignment(s) follow a different rule - see
+[Membership: Account Deletion](organization-entities.md#account-deletion).
+
 ---
 
 ## Scenario 17: Parent Group Announcement
@@ -552,7 +564,10 @@ automatically.
 ### Goal
 
 Grant a member authority over a specific Group, independently of
-Membership, using only the fixed system Role enum.
+Membership, using only the fixed system Role enum. Role management
+consists of exactly two operations, `grantRole` and `revokeRole` - there
+is no "change a Role" operation, and `Member` is the base Role every
+other Role requires.
 
 ### Initial State
 
@@ -579,6 +594,11 @@ Jan's Membership belongs to Root Group `Capoeira Brasil` and is `ACTIVE`.
    for Child Group `Leszno` (with `Member` again granted automatically).
 5. Administrator then attempts to grant Jan's Membership a *second*
    `Instructor` RoleAssignment for `Poznań`, where it already holds one.
+6. Administrator attempts to revoke Jan's `Member` RoleAssignment for
+   `Poznań`, where he still also holds `Instructor` and `Admin`.
+7. Administrator revokes `Admin`, then `Instructor`, for `Poznań` - `Member`
+   is now the only RoleAssignment Jan holds there.
+8. Administrator revokes Jan's `Member` RoleAssignment for `Poznań`.
 
 ### Expected Result
 
@@ -588,16 +608,24 @@ Jan ends up holding, at the same time: `Member` in `Capoeira Brasil`;
 throughout; it never stores a Role. Granting `Admin` in step 3 did not
 remove or replace `Member` or `Instructor` in `Poznań` - RoleAssignments
 for the same (Membership, Group) pair coexist as long as their Role
-differs. Holding these Roles in `Poznań` grants no authority in `Leszno`
-or in `Capoeira Brasil`, and vice versa - Roles never inherit through the
-hierarchy, including between sibling Child Groups. Step 5 is rejected:
-holding the exact same Role twice for the same (Membership, Group) pair
-is the only thing disallowed (`UNIQUE (membership, group, role)`). A later
-attempt to grant a RoleAssignment for `Poznań` to a *different* user who
-has no active Membership in `Capoeira Brasil` is rejected. An attempt to
-grant a Role outside the fixed system Role enum (a made-up,
-organization-defined Role name) is also rejected - Roles are never
-configurable.
+differs; there is no "change a Role" operation that could have turned
+`Instructor` into `Admin` instead. Holding these Roles in `Poznań` grants
+no authority in `Leszno` or in `Capoeira Brasil`, and vice versa - Roles
+never inherit through the hierarchy, including between sibling Child
+Groups. Step 5 is rejected: holding the exact same Role twice for the
+same (Membership, Group) pair is the only thing disallowed
+(`UNIQUE (membership, group, role)`). Step 6 is rejected: `Member` is the
+base Role of `Poznań` for Jan and cannot be revoked while he still holds
+`Instructor` or `Admin` there. After step 7 revokes both of those, `Member`
+is the only RoleAssignment left for `Poznań`, so step 8 succeeds - and
+this is precisely how Jan is removed from Child Group `Poznań` entirely
+(a Child Group has no separate "membership" concept of its own). Jan's
+Roles in `Leszno` and his Membership in `Capoeira Brasil` are completely
+unaffected by any of this. A later attempt to grant a RoleAssignment for
+`Poznań` to a *different* user who has no active Membership in
+`Capoeira Brasil` is rejected. An attempt to grant a Role outside the
+fixed system Role enum (a made-up, organization-defined Role name) is
+also rejected - Roles are never configurable.
 
 ---
 
@@ -630,6 +658,54 @@ remains in place after Membership ends (see
 `Capoeira Brasil` with a brand new Membership, an administrator must
 grant fresh RoleAssignments explicitly - none are carried over from the
 archived Membership.
+
+---
+
+## Scenario 23: Ownership Blocks Leaving
+
+### Goal
+
+Confirm that a Membership can never end - via self-service `leave` or an
+administrator's `removeMember` - while it still owns any Group in the
+Organization, Root or Child, and that this is checked across the whole
+Group tree, not just the Root Group (see
+[ADR-028](../decisions/ADR-028-role-assignment-model.md#owner-is-the-one-exception)).
+
+### Initial State
+
+```text
+Capoeira Brasil (Root Group)
+└── Poznań (Child Group)
+```
+
+Ana's Membership belongs to Root Group `Capoeira Brasil` and is `ACTIVE`.
+She created `Poznań` and is its `Owner`; she does not hold `Owner` for
+`Capoeira Brasil` itself (someone else does).
+
+### Action
+
+1. Ana attempts to leave `Capoeira Brasil`.
+2. An administrator attempts to remove Ana's Membership from
+   `Capoeira Brasil`.
+3. Ana performs an ownership transfer of `Poznań` to another active
+   member.
+4. Ana attempts to leave `Capoeira Brasil` again.
+
+### Expected Result
+
+Steps 1 and 2 are both rejected - Ana owns `Poznań`, a Child Group, even
+though she does not own the Root Group. The rejection names every Group
+she currently owns. Step 3 succeeds atomically: `Poznań` never has zero or
+two active Owners at any point (see
+[transferOwnership](../decisions/ADR-028-role-assignment-model.md#owner-is-the-one-exception)).
+Only after step 3 does step 4 succeed, since Ana no longer owns any Group
+in the Organization. If Ana had owned two Child Groups instead of one,
+both transfers would be required before she could leave - the check
+considers every Group she owns, not just the first one found. This
+invariant holds identically for `removeMember`: an administrator can never
+remove a member who still owns a Group, for the same reason a member can
+never leave while owning one - ownership must be transferred explicitly
+first, in both cases.
 
 ---
 

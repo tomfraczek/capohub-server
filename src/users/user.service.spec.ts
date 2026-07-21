@@ -1,10 +1,22 @@
-import { EntityManager, EntityRepository } from '@mikro-orm/core';
+import { ConflictException } from '@nestjs/common';
+import { EntityManager, EntityRepository } from '@mikro-orm/postgresql';
 import type { ClerkClient } from '@clerk/backend';
 import { AuthContext } from '../auth/types/auth-context.type';
 import { GlobalRole } from '../auth/permissions/global-role.enum';
+import { GroupMembership } from '../groups/entities/group-membership.entity';
+import { Group } from '../groups/entities/group.entity';
+import { RoleAssignment } from '../groups/entities/role-assignment.entity';
+import { RoleAssignmentsService } from '../groups/role-assignments.service';
 import { AvatarType } from './enums/avatar-type.enum';
 import { User } from './entities/user.entity';
 import { UserService } from './user.service';
+
+function buildMembership(overrides: Partial<GroupMembership> = {}) {
+  const membership = new GroupMembership();
+  membership.id = 'membership-1';
+  membership.rootGroup = { id: 'root-1' } as never;
+  return Object.assign(membership, overrides);
+}
 
 function buildAuth(userId = 'user_clerk_1'): AuthContext {
   return {
@@ -29,21 +41,35 @@ describe('UserService', () => {
     findOne?: jest.Mock;
     getUser?: jest.Mock;
     deleteUser?: jest.Mock;
+    findMemberships?: jest.Mock;
+    findOwnedActiveGroups?: jest.Mock;
+    nativeDelete?: jest.Mock;
+    findOneOrFailUser?: jest.Mock;
   }): {
     service: UserService;
     em: {
       flush: jest.Mock;
       persistAndFlush: jest.Mock;
-      removeAndFlush: jest.Mock;
+      find: jest.Mock;
+      findOneOrFail: jest.Mock;
+      nativeDelete: jest.Mock;
+      transactional: jest.Mock;
     };
     userRepository: { findOne: jest.Mock };
     clerkClient: { users: { getUser: jest.Mock; deleteUser: jest.Mock } };
+    roleAssignmentsService: { findOwnedActiveGroups: jest.Mock };
   } {
-    const em = {
+    const em: Record<string, jest.Mock> = {
       flush: jest.fn().mockResolvedValue(undefined),
       persistAndFlush: jest.fn().mockResolvedValue(undefined),
-      removeAndFlush: jest.fn().mockResolvedValue(undefined),
+      find: options.findMemberships ?? jest.fn().mockResolvedValue([]),
+      findOneOrFail:
+        options.findOneOrFailUser ?? jest.fn().mockResolvedValue(new User()),
+      nativeDelete: options.nativeDelete ?? jest.fn().mockResolvedValue(0),
     };
+    em.transactional = jest
+      .fn()
+      .mockImplementation((cb: (em: unknown) => unknown) => cb(em));
     const userRepository = {
       findOne: options.findOne ?? jest.fn().mockResolvedValue(null),
     };
@@ -55,14 +81,25 @@ describe('UserService', () => {
           options.deleteUser ?? jest.fn().mockResolvedValue(undefined),
       },
     };
+    const roleAssignmentsService = {
+      findOwnedActiveGroups:
+        options.findOwnedActiveGroups ?? jest.fn().mockResolvedValue([]),
+    };
 
     const service = new UserService(
       em as unknown as EntityManager,
       userRepository as unknown as EntityRepository<User>,
       clerkClient as unknown as ClerkClient,
+      roleAssignmentsService as unknown as RoleAssignmentsService,
     );
 
-    return { service, em, userRepository, clerkClient };
+    return {
+      service,
+      em: em as never,
+      userRepository,
+      clerkClient,
+      roleAssignmentsService,
+    };
   }
 
   describe('findOrCreateFromClerk', () => {
@@ -328,26 +365,290 @@ describe('UserService', () => {
   });
 
   describe('deleteAccount', () => {
-    it('deletes the Clerk account before removing the local user', async () => {
+    function buildUser(): User {
       const user = new User();
+      user.id = 'user-1';
       user.clerkUserId = 'user_clerk_1';
-      const calls: string[] = [];
+      return user;
+    }
 
-      const deleteUser = jest.fn().mockImplementation(() => {
+    // Tracks every nativeDelete/deleteUser call in invocation order, keyed
+    // by what was deleted - used to assert both ordering (local before
+    // Clerk, RoleAssignments before Memberships before the User row) and
+    // that each step actually ran.
+    function buildTrackedEm(deleteUser: jest.Mock) {
+      const calls: string[] = [];
+      const nativeDelete = jest.fn((entity: unknown) => {
+        if (entity === RoleAssignment) calls.push('roleAssignments');
+        else if (entity === GroupMembership) calls.push('memberships');
+        else if (entity === User) calls.push('user');
+        return Promise.resolve(0);
+      });
+      deleteUser.mockImplementation(() => {
         calls.push('clerk');
         return Promise.resolve();
       });
-      const { service, em } = buildService({ deleteUser });
-      em.removeAndFlush.mockImplementation(() => {
-        calls.push('local');
-        return Promise.resolve();
+      return { calls, nativeDelete };
+    }
+
+    it('allows a user with no Membership at all to delete the account', async () => {
+      const deleteUser = jest.fn();
+      const { calls, nativeDelete } = buildTrackedEm(deleteUser);
+      const { service, roleAssignmentsService } = buildService({
+        deleteUser,
+        nativeDelete,
+        findMemberships: jest.fn().mockResolvedValue([]),
       });
 
-      await service.deleteAccount(user);
+      await service.deleteAccount(buildUser());
 
-      expect(deleteUser).toHaveBeenCalledWith('user_clerk_1');
-      expect(em.removeAndFlush).toHaveBeenCalledWith(user);
-      expect(calls).toEqual(['clerk', 'local']);
+      expect(roleAssignmentsService.findOwnedActiveGroups).not.toHaveBeenCalled();
+      // No Memberships - nothing to wipe besides the User row itself.
+      expect(calls).toEqual(['user', 'clerk']);
+    });
+
+    it('allows a user with a Membership but no RoleAssignment to delete the account', async () => {
+      const deleteUser = jest.fn();
+      const { calls, nativeDelete } = buildTrackedEm(deleteUser);
+      const { service } = buildService({
+        deleteUser,
+        nativeDelete,
+        findMemberships: jest.fn().mockResolvedValue([buildMembership()]),
+      });
+
+      await service.deleteAccount(buildUser());
+
+      expect(calls).toEqual(['roleAssignments', 'memberships', 'user', 'clerk']);
+    });
+
+    it('allows a user holding MEMBER to delete the account', async () => {
+      const deleteUser = jest.fn();
+      const { calls, nativeDelete } = buildTrackedEm(deleteUser);
+      const { service } = buildService({
+        deleteUser,
+        nativeDelete,
+        findMemberships: jest.fn().mockResolvedValue([buildMembership()]),
+        // Holding MEMBER (or any non-OWNER Role) never shows up as an
+        // owned Group - only OWNER RoleAssignments do (see
+        // RoleAssignmentsService.findOwnedActiveGroups).
+        findOwnedActiveGroups: jest.fn().mockResolvedValue([]),
+      });
+
+      await service.deleteAccount(buildUser());
+
+      expect(calls).toEqual(['roleAssignments', 'memberships', 'user', 'clerk']);
+    });
+
+    it('allows a user holding MEMBER + INSTRUCTOR + ADMIN for the same Group to delete the account', async () => {
+      const deleteUser = jest.fn();
+      const { calls, nativeDelete } = buildTrackedEm(deleteUser);
+      const { service } = buildService({
+        deleteUser,
+        nativeDelete,
+        findMemberships: jest.fn().mockResolvedValue([buildMembership()]),
+        findOwnedActiveGroups: jest.fn().mockResolvedValue([]),
+      });
+
+      await service.deleteAccount(buildUser());
+
+      expect(calls).toEqual(['roleAssignments', 'memberships', 'user', 'clerk']);
+    });
+
+    it('allows a user belonging to several Organizations to delete the account, checking ownership once per Membership', async () => {
+      const deleteUser = jest.fn();
+      const { calls, nativeDelete } = buildTrackedEm(deleteUser);
+      const memberships = [
+        buildMembership({ id: 'membership-1', rootGroup: { id: 'root-1' } as never }),
+        buildMembership({ id: 'membership-2', rootGroup: { id: 'root-2' } as never }),
+        buildMembership({ id: 'membership-3', rootGroup: { id: 'root-3' } as never }),
+      ];
+      const findOwnedActiveGroups = jest.fn().mockResolvedValue([]);
+      const { service } = buildService({
+        deleteUser,
+        nativeDelete,
+        findMemberships: jest.fn().mockResolvedValue(memberships),
+        findOwnedActiveGroups,
+      });
+
+      await service.deleteAccount(buildUser());
+
+      expect(findOwnedActiveGroups).toHaveBeenCalledTimes(3);
+      expect(findOwnedActiveGroups).toHaveBeenNthCalledWith(
+        1,
+        expect.anything(),
+        'membership-1',
+        'root-1',
+      );
+      expect(findOwnedActiveGroups).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        'membership-2',
+        'root-2',
+      );
+      expect(findOwnedActiveGroups).toHaveBeenNthCalledWith(
+        3,
+        expect.anything(),
+        'membership-3',
+        'root-3',
+      );
+      expect(calls).toEqual(['roleAssignments', 'memberships', 'user', 'clerk']);
+    });
+
+    it('deletes every RoleAssignment belonging to all of the Memberships in one call', async () => {
+      const deleteUser = jest.fn();
+      const nativeDelete = jest.fn().mockResolvedValue(0);
+      const memberships = [
+        buildMembership({ id: 'membership-1' }),
+        buildMembership({ id: 'membership-2' }),
+      ];
+      const { service } = buildService({
+        deleteUser,
+        nativeDelete,
+        findMemberships: jest.fn().mockResolvedValue(memberships),
+      });
+
+      await service.deleteAccount(buildUser());
+
+      expect(nativeDelete).toHaveBeenCalledWith(RoleAssignment, {
+        membership: { $in: ['membership-1', 'membership-2'] },
+      });
+    });
+
+    it('deletes every Membership belonging to the user', async () => {
+      const deleteUser = jest.fn();
+      const nativeDelete = jest.fn().mockResolvedValue(0);
+      const memberships = [
+        buildMembership({ id: 'membership-1' }),
+        buildMembership({ id: 'membership-2' }),
+      ];
+      const { service } = buildService({
+        deleteUser,
+        nativeDelete,
+        findMemberships: jest.fn().mockResolvedValue(memberships),
+      });
+
+      await service.deleteAccount(buildUser());
+
+      expect(nativeDelete).toHaveBeenCalledWith(GroupMembership, {
+        id: { $in: ['membership-1', 'membership-2'] },
+      });
+    });
+
+    it('rejects with CANNOT_DELETE_ACCOUNT_OWNS_GROUPS when the account owns an active Root Group', async () => {
+      const deleteUser = jest.fn();
+      const { calls, nativeDelete } = buildTrackedEm(deleteUser);
+      const ownedRoot = Object.assign(new Group(), { id: 'root-1' });
+      const { service } = buildService({
+        deleteUser,
+        nativeDelete,
+        findMemberships: jest.fn().mockResolvedValue([buildMembership()]),
+        findOwnedActiveGroups: jest.fn().mockResolvedValue([ownedRoot]),
+      });
+
+      const error: unknown = await service
+        .deleteAccount(buildUser())
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).getResponse()).toMatchObject({
+        code: 'CANNOT_DELETE_ACCOUNT_OWNS_GROUPS',
+        ownedGroupIds: ['root-1'],
+      });
+      // Ownership blocks before any deletion or Clerk call is attempted.
+      expect(calls).toEqual([]);
+    });
+
+    it('rejects with CANNOT_DELETE_ACCOUNT_OWNS_GROUPS when the account owns an active Child Group, not the Root Group itself', async () => {
+      const deleteUser = jest.fn();
+      const { calls, nativeDelete } = buildTrackedEm(deleteUser);
+      const ownedChild = Object.assign(new Group(), { id: 'child-1' });
+      const { service } = buildService({
+        deleteUser,
+        nativeDelete,
+        findMemberships: jest.fn().mockResolvedValue([buildMembership()]),
+        findOwnedActiveGroups: jest.fn().mockResolvedValue([ownedChild]),
+      });
+
+      const error: unknown = await service
+        .deleteAccount(buildUser())
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).getResponse()).toMatchObject({
+        code: 'CANNOT_DELETE_ACCOUNT_OWNS_GROUPS',
+        ownedGroupIds: ['child-1'],
+      });
+      expect(calls).toEqual([]);
+    });
+
+    it('rejects and lists every Group when the account owns several Groups at once', async () => {
+      const deleteUser = jest.fn();
+      const { nativeDelete } = buildTrackedEm(deleteUser);
+      const ownedGroups = [
+        Object.assign(new Group(), { id: 'child-1' }),
+        Object.assign(new Group(), { id: 'child-2' }),
+      ];
+      const { service } = buildService({
+        deleteUser,
+        nativeDelete,
+        findMemberships: jest.fn().mockResolvedValue([buildMembership()]),
+        findOwnedActiveGroups: jest.fn().mockResolvedValue(ownedGroups),
+      });
+
+      const error: unknown = await service
+        .deleteAccount(buildUser())
+        .catch((caught: unknown) => caught);
+
+      expect((error as ConflictException).getResponse()).toMatchObject({
+        code: 'CANNOT_DELETE_ACCOUNT_OWNS_GROUPS',
+        ownedGroupIds: ['child-1', 'child-2'],
+      });
+    });
+
+    it('never calls Clerk when the ownership check blocks deletion - the check runs first', async () => {
+      const deleteUser = jest.fn().mockResolvedValue(undefined);
+      const nativeDelete = jest.fn().mockResolvedValue(0);
+      const ownedGroup = Object.assign(new Group(), { id: 'root-1' });
+      const { service } = buildService({
+        deleteUser,
+        nativeDelete,
+        findMemberships: jest.fn().mockResolvedValue([buildMembership()]),
+        findOwnedActiveGroups: jest.fn().mockResolvedValue([ownedGroup]),
+      });
+
+      await service.deleteAccount(buildUser()).catch(() => undefined);
+
+      expect(deleteUser).not.toHaveBeenCalled();
+      expect(nativeDelete).not.toHaveBeenCalledWith(
+        User,
+        expect.anything(),
+      );
+    });
+
+    it('completes without throwing a raw error when nothing is owned - no FK violation surfaces', async () => {
+      const deleteUser = jest.fn().mockResolvedValue(undefined);
+      const nativeDelete = jest.fn().mockResolvedValue(0);
+      const { service } = buildService({
+        deleteUser,
+        nativeDelete,
+        findMemberships: jest.fn().mockResolvedValue([buildMembership()]),
+      });
+
+      await expect(service.deleteAccount(buildUser())).resolves.toBeUndefined();
+    });
+
+    it('runs every local mutation inside a single transaction', async () => {
+      const deleteUser = jest.fn().mockResolvedValue(undefined);
+      const nativeDelete = jest.fn().mockResolvedValue(0);
+      const { service, em } = buildService({
+        deleteUser,
+        nativeDelete,
+        findMemberships: jest.fn().mockResolvedValue([buildMembership()]),
+      });
+
+      await service.deleteAccount(buildUser());
+
+      expect(em.transactional).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -38,7 +38,6 @@ describe('RoleAssignmentsController', () => {
     ['create', [GroupPermission.MEMBERSHIP_ROLE_CHANGE], undefined],
     ['list', [GroupPermission.MEMBERSHIP_VIEW], undefined],
     ['getById', [GroupPermission.MEMBERSHIP_VIEW], undefined],
-    ['changeRole', [GroupPermission.MEMBERSHIP_ROLE_CHANGE], undefined],
     ['revoke', [GroupPermission.MEMBERSHIP_ROLE_CHANGE], undefined],
   ])('%s', (method, expectedPermissions, expectedAllowedStatuses) => {
     it(`requires ${expectedPermissions.join(', ')}`, () => {
@@ -67,15 +66,15 @@ describe('RoleAssignmentsController', () => {
   });
 
   describe('create', () => {
-    it('delegates to RoleAssignmentsService.assignRole', async () => {
+    it('delegates to RoleAssignmentsService.grantRole', async () => {
       const dto = { id: 'role-assignment-1' } as never;
-      const assignRole = jest.fn().mockResolvedValue(dto);
-      const controller = buildController({ assignRole });
+      const grantRole = jest.fn().mockResolvedValue(dto);
+      const controller = buildController({ grantRole });
       const body = { membershipId: 'membership-1', role: 'ADMIN' } as never;
 
       const response = await controller.create('group-1', body);
 
-      expect(assignRole).toHaveBeenCalledWith('group-1', body);
+      expect(grantRole).toHaveBeenCalledWith('group-1', body);
       expect(response).toBe(dto);
     });
   });
@@ -104,28 +103,6 @@ describe('RoleAssignmentsController', () => {
       expect(getRoleAssignment).toHaveBeenCalledWith(
         'group-1',
         'role-assignment-1',
-      );
-      expect(response).toBe(dto);
-    });
-  });
-
-  describe('changeRole', () => {
-    it('delegates to RoleAssignmentsService.changeRole', async () => {
-      const dto = { id: 'role-assignment-1' } as never;
-      const changeRole = jest.fn().mockResolvedValue(dto);
-      const controller = buildController({ changeRole });
-      const body = { role: 'ADMIN' } as never;
-
-      const response = await controller.changeRole(
-        'group-1',
-        'role-assignment-1',
-        body,
-      );
-
-      expect(changeRole).toHaveBeenCalledWith(
-        'group-1',
-        'role-assignment-1',
-        body,
       );
       expect(response).toBe(dto);
     });

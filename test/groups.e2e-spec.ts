@@ -514,7 +514,7 @@ describe('Groups (e2e)', () => {
       expect(response.code).toBe('CANNOT_REMOVE_OWNER');
     });
 
-    it('cannot change the OWNER Role Assignment directly - 409 CANNOT_CHANGE_OWNER_ROLE', async () => {
+    it('cannot revoke the OWNER Role Assignment directly via role-assignments - 409 CANNOT_REMOVE_OWNER, and there is no PATCH to change it instead', async () => {
       const created = await createGroup(OWNER_TOKEN);
       const members = await bodyOf<GroupMembershipResponseDto[]>(
         request(app.getHttpServer())
@@ -535,16 +535,25 @@ describe('Groups (e2e)', () => {
           roleAssignment.role === GroupRole.OWNER,
       );
 
+      // There is no PATCH .../role-assignments/:id at all - grantRole and
+      // revokeRole are the only two mutations (see ADR-028).
+      await request(app.getHttpServer())
+        .patch(
+          `/api/v1/groups/${created.id}/role-assignments/${ownerRoleAssignment?.id}`,
+        )
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ role: 'ADMIN' })
+        .expect(404);
+
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
-          .patch(
+          .delete(
             `/api/v1/groups/${created.id}/role-assignments/${ownerRoleAssignment?.id}`,
           )
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .send({ role: 'ADMIN' })
           .expect(409),
       );
-      expect(response.code).toBe('CANNOT_CHANGE_OWNER_ROLE');
+      expect(response.code).toBe('CANNOT_REMOVE_OWNER');
     });
   });
 
@@ -800,6 +809,189 @@ describe('Groups (e2e)', () => {
           .expect(400),
       );
       expect(response.code).toBe('TARGET_NOT_A_MEMBER');
+    });
+  });
+
+  describe('Child Group ownership (e2e)', () => {
+    it('blocks leaving the Organization while owning a Child Group, and allows it once that Child Group\'s ownership is transferred - the Child Group keeps exactly one OWNER throughout', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Child Ownership Root',
+      });
+      const child = await createGroup(OWNER_TOKEN, {
+        name: 'Child Ownership Child',
+        parentGroupId: root.id,
+      });
+      await addMember(OWNER_TOKEN, root.id, SECOND_TOKEN, GroupRole.MEMBER);
+
+      // OWNER_TOKEN hands off the Root Group itself to SECOND_TOKEN, so
+      // OWNER_TOKEN becomes a plain member of the Organization - but still
+      // owns the Child Group created above.
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/transfer-ownership`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN) })
+        .expect(201);
+
+      // Still blocked: not the Root Group's OWNER anymore, but still the
+      // Child Group's OWNER - this is exactly the gap being fixed here.
+      const blocked = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${root.id}/leave`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(409),
+      );
+      expect(blocked.code).toBe('OWNER_MUST_TRANSFER_OWNERSHIP');
+
+      // Transfer the Child Group's ownership too - directly at the Child
+      // Group's own transfer-ownership endpoint.
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${child.id}/transfer-ownership`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN) })
+        .expect(201);
+
+      // Now leaving succeeds.
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/leave`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+
+      // The Child Group still has exactly one OWNER - SECOND_TOKEN.
+      const roleAssignments = await bodyOf<RoleAssignmentResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${child.id}/role-assignments`)
+          .set('Authorization', `Bearer ${SECOND_TOKEN}`)
+          .expect(200),
+      );
+      const owners = roleAssignments.filter(
+        (roleAssignment) => roleAssignment.role === GroupRole.OWNER,
+      );
+      expect(owners).toHaveLength(1);
+    });
+
+    it('blocks leaving while owning multiple Child Groups - only succeeds once every one of them has been transferred', async () => {
+      const root = await createGroup(OWNER_TOKEN, { name: 'Multi Child Root' });
+      const childA = await createGroup(OWNER_TOKEN, {
+        name: 'Multi Child A',
+        parentGroupId: root.id,
+      });
+      const childB = await createGroup(OWNER_TOKEN, {
+        name: 'Multi Child B',
+        parentGroupId: root.id,
+      });
+      await addMember(OWNER_TOKEN, root.id, SECOND_TOKEN, GroupRole.MEMBER);
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/transfer-ownership`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN) })
+        .expect(201);
+
+      // Owns both Child Groups - blocked.
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/leave`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(409);
+
+      // Transfer only one Child Group - still blocked by the other.
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${childA.id}/transfer-ownership`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN) })
+        .expect(201);
+
+      const stillBlocked = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${root.id}/leave`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(409),
+      );
+      expect(stillBlocked.code).toBe('OWNER_MUST_TRANSFER_OWNERSHIP');
+
+      // Transfer the second Child Group too - leaving now succeeds.
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${childB.id}/transfer-ownership`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN) })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/leave`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+    });
+
+    it('blocks an administrator from removing a member who owns a Child Group, and allows it once ownership is transferred', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Remove Owner Root',
+      });
+      const child = await createGroup(OWNER_TOKEN, {
+        name: 'Remove Owner Child',
+        parentGroupId: root.id,
+      });
+      const thirdMembership = await addMember(
+        OWNER_TOKEN,
+        root.id,
+        THIRD_TOKEN,
+        GroupRole.MEMBER,
+      );
+
+      // Hand the Child Group's ownership to THIRD_TOKEN - OWNER_TOKEN
+      // remains the Root Group's OWNER throughout, exercising removeMember
+      // (an administrative action) rather than leave (self-service).
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${child.id}/transfer-ownership`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ newOwnerUserId: localUserIdByToken.get(THIRD_TOKEN) })
+        .expect(201);
+
+      const blocked = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .delete(`/api/v1/groups/${root.id}/members/${thirdMembership.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(409),
+      );
+      expect(blocked.code).toBe('CANNOT_REMOVE_OWNER');
+
+      // THIRD_TOKEN (the Child Group's current OWNER) transfers it back.
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${child.id}/transfer-ownership`)
+        .set('Authorization', `Bearer ${THIRD_TOKEN}`)
+        .send({ newOwnerUserId: localUserIdByToken.get(OWNER_TOKEN) })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete(`/api/v1/groups/${root.id}/members/${thirdMembership.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+
+      const roleAssignments = await bodyOf<RoleAssignmentResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${child.id}/role-assignments`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      const owners = roleAssignments.filter(
+        (roleAssignment) => roleAssignment.role === GroupRole.OWNER,
+      );
+      expect(owners).toHaveLength(1);
+    });
+
+    it('still allows the Root Group OWNER to leave once they own nothing at all - no regression for the Root-only case', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Root Only Regression',
+      });
+      await addMember(OWNER_TOKEN, root.id, SECOND_TOKEN, GroupRole.MEMBER);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/transfer-ownership`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN) })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/leave`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
     });
   });
 

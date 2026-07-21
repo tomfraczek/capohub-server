@@ -6,15 +6,10 @@ import {
   HttpCode,
   Param,
   ParseUUIDPipe,
-  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import {
-  ChangeRoleAssignmentDto,
-  changeRoleAssignmentSchema,
-} from './dto/change-role-assignment.schema';
 import {
   CreateRoleAssignmentDto,
   createRoleAssignmentSchema,
@@ -28,13 +23,18 @@ import { RoleAssignmentsService } from './role-assignments.service';
 // Manages Role Assignments for a specific Group directly (Root or Child -
 // see ADR-028). This is a distinct concern from GroupsController's
 // members/:membershipId endpoints, which only ever touch the Root Group
-// Role Assignment implicitly created by addMember/changeRole. Granting a
-// Role here for a Child Group requires the target Membership to already be
-// ACTIVE in this Group's own Root Group (see
-// RoleAssignmentsService.assignRole) - reuses the same MEMBERSHIP_*
-// permission tier as root-level member management, since managing who
-// holds which Role in a Group is the same administrative capability
-// regardless of whether that Group is a Root or a Child.
+// Role Assignments implicitly created by addMember. Granting a Role here
+// for a Child Group requires the target Membership to already be ACTIVE
+// in this Group's own Root Group (see RoleAssignmentsService.grantRole) -
+// reuses the same MEMBERSHIP_* permission tier as root-level member
+// management, since managing who holds which Role in a Group is the same
+// administrative capability regardless of whether that Group is a Root or
+// a Child.
+//
+// There is deliberately no PATCH here: Roles are independent of one
+// another (a Membership may hold several for the same Group at once - see
+// ADR-028), so there is no single Role left to "change" - grant (POST) and
+// revoke (DELETE) are the only two mutations.
 @Controller('groups/:groupId/role-assignments')
 @UseGuards(GroupPermissionsGuard)
 export class RoleAssignmentsController {
@@ -50,7 +50,7 @@ export class RoleAssignmentsController {
     @Body(new ZodValidationPipe(createRoleAssignmentSchema))
     dto: CreateRoleAssignmentDto,
   ): Promise<RoleAssignmentResponseDto> {
-    return this.roleAssignmentsService.assignRole(groupId, dto);
+    return this.roleAssignmentsService.grantRole(groupId, dto);
   }
 
   @Get()
@@ -70,21 +70,6 @@ export class RoleAssignmentsController {
     return this.roleAssignmentsService.getRoleAssignment(
       groupId,
       roleAssignmentId,
-    );
-  }
-
-  @Patch(':roleAssignmentId')
-  @RequireGroupPermission(GroupPermission.MEMBERSHIP_ROLE_CHANGE)
-  changeRole(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
-    @Param('roleAssignmentId', ParseUUIDPipe) roleAssignmentId: string,
-    @Body(new ZodValidationPipe(changeRoleAssignmentSchema))
-    dto: ChangeRoleAssignmentDto,
-  ): Promise<RoleAssignmentResponseDto> {
-    return this.roleAssignmentsService.changeRole(
-      groupId,
-      roleAssignmentId,
-      dto,
     );
   }
 

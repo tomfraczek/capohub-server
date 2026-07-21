@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { LockMode } from '@mikro-orm/core';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
 import { User } from '../users/entities/user.entity';
@@ -70,17 +71,21 @@ export class GroupMembershipsService {
 
   // "Technical" add only - no invitation/acceptance flow (spec section
   // "Dodanie członka"). OWNER can never be assigned here - see
-  // assignableGroupRoleSchema. Membership always represents participation
-  // in an organization as a whole - rootGroupId must reference an actual
-  // Root Group (see organization-entities.md#membership), never a Child
-  // Group. Joining always grants MEMBER for the Root Group automatically
-  // (see RoleAssignmentsService.ensureMemberRole) - `input.role`, if it is
-  // anything other than MEMBER, is granted *in addition*, not instead of
-  // it (a Membership may hold several Roles for the same Group at once -
-  // see ADR-028). All of this happens atomically with creating the
-  // Membership itself: a Membership with no Role Assignment for its own
-  // Root Group would have no authority anywhere, including viewing it (see
-  // ADR-013 - no fallback).
+  // assignableGroupRoleSchema. Membership represents only "does this User
+  // belong to this organization" and by itself creates no Role Assignment
+  // - not even MEMBER (see ADR-028/ADR-004: the Root Group is a Group like
+  // any other, and joining the organization is a separate fact from
+  // holding any Role in its Root Group). rootGroupId must reference an
+  // actual Root Group (see organization-entities.md#membership), never a
+  // Child Group.
+  //
+  // `input.role` is optional: if omitted, this call creates only the
+  // Membership - the User belongs to the organization but is not yet
+  // assigned to any Group, a valid and supported state. If provided, this
+  // additionally grants that Role for the Root Group itself, through the
+  // same "first Role in a Group grants MEMBER too" mechanism used
+  // everywhere else (see RoleAssignmentsService.ensureMemberRole) - not a
+  // Root-Group-specific rule.
   async addMember(
     rootGroupId: string,
     input: AddMemberInput,
@@ -124,13 +129,15 @@ export class GroupMembershipsService {
 
       try {
         em.persist(membership);
-        await this.roleAssignmentsService.ensureMemberRole(
-          em,
-          membership,
-          rootGroup,
-        );
-        if (input.role !== GroupRole.MEMBER) {
-          await this.roleAssignmentsService.grantRole(
+        if (input.role !== undefined) {
+          if (input.role !== GroupRole.MEMBER) {
+            await this.roleAssignmentsService.ensureMemberRole(
+              em,
+              membership,
+              rootGroup,
+            );
+          }
+          await this.roleAssignmentsService.insertRoleAssignment(
             em,
             membership,
             rootGroup,
@@ -163,58 +170,61 @@ export class GroupMembershipsService {
   // Assignments (for this Root Group and any Child Group in its tree) are
   // left in place - they simply expire logically the instant this
   // Membership is no longer ACTIVE (see ADR-028).
+  //
+  // Runs inside a transaction with the Membership row locked
+  // (PESSIMISTIC_WRITE) for the same reason leave() does - see
+  // assertOwnsNoActiveGroups.
   async removeMember(rootGroupId: string, membershipId: string): Promise<void> {
-    const membership = await this.loadActiveMembershipByIdOrFail(
-      this.em,
-      rootGroupId,
-      membershipId,
-    );
-    const isOwner = await this.roleAssignmentsService.hasRole(
-      this.em,
-      membership.id,
-      rootGroupId,
-      GroupRole.OWNER,
-    );
-
-    if (isOwner) {
-      throw new ConflictException({
+    return this.em.transactional(async (em) => {
+      const membership = await this.loadActiveMembershipByIdOrFail(
+        em,
+        rootGroupId,
+        membershipId,
+        { lockMode: LockMode.PESSIMISTIC_WRITE },
+      );
+      await this.assertOwnsNoActiveGroups(em, membership, rootGroupId, {
         code: 'CANNOT_REMOVE_OWNER',
-        message: 'The owner cannot be removed - transfer ownership first',
+        message:
+          'This member owns one or more Groups in this Organization - transfer ownership of each before removing them',
       });
-    }
 
-    membership.status = GroupMembershipStatus.ARCHIVED;
-    membership.leftAt = new Date();
-    membership.endReason = MembershipEndReason.REMOVED;
-    await this.em.flush();
+      membership.status = GroupMembershipStatus.ARCHIVED;
+      membership.leftAt = new Date();
+      membership.endReason = MembershipEndReason.REMOVED;
+      await em.flush();
+    });
   }
 
   // Self-service leave - any member (including, per spec, everyone except
-  // the OWNER, who must transfer ownership first) may end their own
-  // Membership without an administrative permission.
+  // an OWNER, who must transfer ownership of every Group they own - Root
+  // or Child - first) may end their own Membership without an
+  // administrative permission.
+  //
+  // Runs inside a transaction with the Membership row locked
+  // (PESSIMISTIC_WRITE) - see assertOwnsNoActiveGroups for why: it
+  // serializes against a concurrent transferOwnership() that might be
+  // about to name this same Membership the new owner of some Group,
+  // which would otherwise leave that Group owned by a Membership this
+  // call just archived.
   async leave(rootGroupId: string, userId: string): Promise<void> {
-    const membership = await loadActiveMembership(this.em, rootGroupId, userId);
-    if (!membership) {
-      throw this.membershipNotFound();
-    }
-    const isOwner = await this.roleAssignmentsService.hasRole(
-      this.em,
-      membership.id,
-      rootGroupId,
-      GroupRole.OWNER,
-    );
-
-    if (isOwner) {
-      throw new ConflictException({
-        code: 'OWNER_MUST_TRANSFER_OWNERSHIP',
-        message: 'Transfer ownership before leaving the group',
+    return this.em.transactional(async (em) => {
+      const membership = await loadActiveMembership(em, rootGroupId, userId, {
+        lockMode: LockMode.PESSIMISTIC_WRITE,
       });
-    }
+      if (!membership) {
+        throw this.membershipNotFound();
+      }
+      await this.assertOwnsNoActiveGroups(em, membership, rootGroupId, {
+        code: 'OWNER_MUST_TRANSFER_OWNERSHIP',
+        message:
+          'Transfer ownership of every Group you own in this Organization before leaving',
+      });
 
-    membership.status = GroupMembershipStatus.ARCHIVED;
-    membership.leftAt = new Date();
-    membership.endReason = MembershipEndReason.LEFT;
-    await this.em.flush();
+      membership.status = GroupMembershipStatus.ARCHIVED;
+      membership.leftAt = new Date();
+      membership.endReason = MembershipEndReason.LEFT;
+      await em.flush();
+    });
   }
 
   // Atomic transfer: the previous owner's OWNER Role Assignment is removed
@@ -224,8 +234,20 @@ export class GroupMembershipsService {
   // database-level backstop for this). The previous owner loses *only*
   // the OWNER Role Assignment - every other Role they hold (MEMBER, ADMIN,
   // ...) is left completely untouched (see ADR-028).
+  //
+  // `groupId` is the Group whose ownership is moving - Root or Child (see
+  // ADR-013/ADR-028: OWNER, like every Role, is scoped per-Group, never
+  // just the Root Group). Membership itself is always Root-Group-scoped
+  // though, so both the previous and new owner's Membership are looked up
+  // against that Group's Root Group, not `groupId` directly - only the
+  // Role Assignment rows (found/inserted/removed below) target the exact
+  // Group.
+  //
+  // Both Membership rows are loaded with PESSIMISTIC_WRITE, serializing
+  // against a concurrent leave()/removeMember() naming either Membership -
+  // see loadActiveMembership and assertOwnsNoActiveGroups.
   async transferOwnership(
-    rootGroupId: string,
+    groupId: string,
     currentOwnerUserId: string,
     input: TransferOwnershipInput,
   ): Promise<TransferOwnershipResponseDto> {
@@ -237,10 +259,19 @@ export class GroupMembershipsService {
     }
 
     return this.em.transactional(async (em) => {
+      const group = await em.findOne(Group, { id: groupId });
+      if (!group) {
+        throw this.groupNotFound();
+      }
+      const rootGroupId = group.parentGroup
+        ? (await this.groupHierarchyService.getRootGroup(group.id, em)).id
+        : group.id;
+
       const previousOwnerMembership = await loadActiveMembership(
         em,
         rootGroupId,
         currentOwnerUserId,
+        { lockMode: LockMode.PESSIMISTIC_WRITE },
       );
       if (!previousOwnerMembership) {
         throw this.membershipNotFound();
@@ -249,7 +280,7 @@ export class GroupMembershipsService {
         await this.roleAssignmentsService.findRoleAssignment(
           em,
           previousOwnerMembership.id,
-          rootGroupId,
+          group.id,
           GroupRole.OWNER,
         );
       if (!previousOwnerAssignment) {
@@ -260,6 +291,7 @@ export class GroupMembershipsService {
         em,
         rootGroupId,
         input.newOwnerUserId,
+        { lockMode: LockMode.PESSIMISTIC_WRITE },
       );
       if (!newOwnerMembership) {
         throw new BadRequestException({
@@ -268,22 +300,22 @@ export class GroupMembershipsService {
             'newOwnerUserId must already be an active member of the group',
         });
       }
-      const rootGroup = newOwnerMembership.rootGroup;
 
       await em.remove(previousOwnerAssignment).flush();
-      // Defensive - every active Membership already holds MEMBER for its
-      // own Root Group (see ensureMemberRole), so this is normally a
-      // no-op; it exists purely so this method never depends on that
-      // invariant silently holding elsewhere.
+      // The new owner may never have held any Role for this Group before
+      // (Membership no longer implies MEMBER there - see ADR-028/ADR-004)
+      // - receiving OWNER is their first Role for this Group, so MEMBER
+      // must be granted alongside it, exactly like any other Group. A
+      // no-op only when they already held some Role here.
       await this.roleAssignmentsService.ensureMemberRole(
         em,
         newOwnerMembership,
-        rootGroup,
+        group,
       );
-      await this.roleAssignmentsService.grantRole(
+      await this.roleAssignmentsService.insertRoleAssignment(
         em,
         newOwnerMembership,
-        rootGroup,
+        group,
         GroupRole.OWNER,
       );
 
@@ -406,6 +438,7 @@ export class GroupMembershipsService {
     em: EntityManager,
     rootGroupId: string,
     membershipId: string,
+    options: { lockMode?: LockMode } = {},
   ): Promise<GroupMembership> {
     const membership = await em.findOne(
       GroupMembership,
@@ -414,12 +447,41 @@ export class GroupMembershipsService {
         rootGroup: rootGroupId,
         status: GroupMembershipStatus.ACTIVE,
       },
-      { populate: ['user'] },
+      { populate: ['user'], ...options },
     );
     if (!membership) {
       throw this.membershipNotFound();
     }
     return membership;
+  }
+
+  // Shared by leave() and removeMember() - the one place that decides
+  // whether a Membership may end. Organization-wide: checks the Root
+  // Group and every Child Group beneath it (see
+  // RoleAssignmentsService.findOwnedActiveGroups), not just the Root
+  // Group the Membership itself is scoped to - a Membership can hold
+  // OWNER for any Child Group without ever holding it for the Root Group
+  // (see ADR-013/ADR-028). Must be called after the Membership row has
+  // been loaded with a PESSIMISTIC_WRITE lock in the same transaction, so
+  // a concurrent transferOwnership() naming this Membership the new owner
+  // of some Group cannot race past this check undetected.
+  private async assertOwnsNoActiveGroups(
+    em: EntityManager,
+    membership: GroupMembership,
+    rootGroupId: string,
+    error: { code: string; message: string },
+  ): Promise<void> {
+    const ownedGroups = await this.roleAssignmentsService.findOwnedActiveGroups(
+      em,
+      membership.id,
+      rootGroupId,
+    );
+    if (ownedGroups.length > 0) {
+      throw new ConflictException({
+        ...error,
+        ownedGroupIds: ownedGroups.map((group) => group.id),
+      });
+    }
   }
 
   // Unlike loadActiveMembershipByIdOrFail, does not filter by status - a

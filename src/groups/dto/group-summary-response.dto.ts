@@ -6,9 +6,11 @@ import { GroupVisibility } from '../enums/group-visibility.enum';
 // Assignment the caller holds for that Group itself (not a group-wide
 // property, and not stored on Membership - see ADR-028). A Membership may
 // hold several Roles for the same Group at once (e.g. MEMBER + INSTRUCTOR
-// + ADMIN together), so this is always an array, never a single Role -
-// empty only in the unexpected case where no Role Assignment exists for an
-// active Membership.
+// + ADMIN together), so this is always an array, never a single Role.
+// Empty is a normal, expected state: belonging to the organization
+// (Membership) never implies any Role in this Root Group by itself (see
+// ADR-028/ADR-004) - it lists organizations the caller belongs to, not
+// only ones they hold a Role in.
 export interface GroupSummaryResponseDto {
   id: string;
   name: string;

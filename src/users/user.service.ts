@@ -1,9 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@mikro-orm/nestjs';
-import { EntityManager, EntityRepository } from '@mikro-orm/core';
+import { EntityManager, EntityRepository, LockMode } from '@mikro-orm/postgresql';
 import type { ClerkClient } from '@clerk/backend';
 import { CLERK_CLIENT } from '../auth/clerk/clerk-client.provider';
 import { AuthContext } from '../auth/types/auth-context.type';
+import { GroupMembership } from '../groups/entities/group-membership.entity';
+import { RoleAssignment } from '../groups/entities/role-assignment.entity';
+import { RoleAssignmentsService } from '../groups/role-assignments.service';
 import { ClerkProfile } from './clerk-profile.type';
 import { AvatarType } from './enums/avatar-type.enum';
 import { User, Theme } from './entities/user.entity';
@@ -23,6 +26,7 @@ export class UserService {
     private readonly userRepository: EntityRepository<User>,
     @Inject(CLERK_CLIENT)
     private readonly clerkClient: ClerkClient,
+    private readonly roleAssignmentsService: RoleAssignmentsService,
   ) {}
 
   /**
@@ -54,12 +58,107 @@ export class UserService {
   }
 
   /**
-   * DELETE /users/me: deletes the Clerk account first (source of truth for
-   * the account's existence), then all local data owned by the user.
+   * DELETE /users/me. Ordering is deliberate: the entire local deletion
+   * (ownership check + wiping every RoleAssignment/Membership/the User row
+   * itself) runs first, as one Postgres transaction, and Clerk is only
+   * called once that transaction has committed.
+   *
+   * This project has no outbox/saga mechanism for external side effects
+   * alongside a DB transaction, so a Clerk failure *after* the local
+   * transaction commits cannot be rolled back or retried automatically -
+   * see deleteLocalAccountData for why this ordering (rather than
+   * Clerk-first) is the safer of the two available options, and the
+   * residual gap it leaves.
    */
   async deleteAccount(user: User): Promise<void> {
+    await this.deleteLocalAccountData(user);
     await this.clerkClient.users.deleteUser(user.clerkUserId);
-    await this.deleteUserData(user);
+  }
+
+  /**
+   * Wipes every local trace of this User in a single transaction:
+   *
+   * 1. Re-checks the Group-ownership invariant (every Group must always
+   *    have exactly one OWNER - see ADR-028) against every Membership this
+   *    User ever held, active or archived - not just ACTIVE ones, since an
+   *    OWNER RoleAssignment row can in principle outlive its Membership's
+   *    ACTIVE status and must still block deletion.
+   * 2. If the check passes, deletes every RoleAssignment belonging to any
+   *    of those Memberships, then the Memberships themselves, then the
+   *    User row.
+   *
+   * RoleAssignments are deleted explicitly, never left to an FK cascade -
+   * RoleAssignment.membership has no delete rule at all (see the
+   * RoleAssignment entity), so relying on GroupMembership.user's cascade to
+   * reach it would surface as a raw Postgres FK violation (500) instead of
+   * either succeeding cleanly or failing with a domain error. Memberships
+   * are hard-deleted, not archived: GroupMembership.user is a required,
+   * cascade-delete relation (unlike the optional, set-null User references
+   * on Song/SongMedia - see Scenario 16), so a Membership cannot survive
+   * without its User, only disappear alongside it.
+   *
+   * Every Membership row is locked PESSIMISTIC_WRITE before the ownership
+   * re-check, so a concurrent transferOwnership naming one of them the new
+   * owner of some Group is serialized against this transaction - whichever
+   * commits first is the state the other observes. The User row itself is
+   * also locked PESSIMISTIC_WRITE first, which additionally blocks a
+   * concurrent addMember from inserting a *new* Membership for this User
+   * mid-deletion (Postgres takes an implicit FOR KEY SHARE lock on the
+   * referenced `users` row for every FK-checked insert into
+   * group_memberships, which conflicts with FOR UPDATE here).
+   *
+   * This does not close every conceivable race: a grantRole call granting
+   * some non-OWNER Role (MEMBER/ADMIN/INSTRUCTOR/ASSISTANT) to one of
+   * these Memberships in the exact same instant this transaction is
+   * deleting it is not itself locked against here, since grantRole does
+   * not take a lock on the Membership row. In that narrow window, the
+   * grantRole request can surface its own raw FK error rather than a clean
+   * response - a pre-existing gap in grantRole, not something this method
+   * can fix without changing that code path, and not a violation of the
+   * OWNER invariant (grantRole can never grant OWNER - see
+   * RoleAssignmentsService.grantRole), so no Group is ever left ownerless
+   * because of it.
+   */
+  private async deleteLocalAccountData(user: User): Promise<void> {
+    await this.em.transactional(async (em) => {
+      await em.findOneOrFail(
+        User,
+        { id: user.id },
+        { lockMode: LockMode.PESSIMISTIC_WRITE },
+      );
+
+      const memberships = await em.find(
+        GroupMembership,
+        { user: user.id },
+        { lockMode: LockMode.PESSIMISTIC_WRITE },
+      );
+
+      for (const membership of memberships) {
+        const ownedGroups = await this.roleAssignmentsService.findOwnedActiveGroups(
+          em,
+          membership.id,
+          membership.rootGroup.id,
+        );
+        if (ownedGroups.length > 0) {
+          throw new ConflictException({
+            code: 'CANNOT_DELETE_ACCOUNT_OWNS_GROUPS',
+            message:
+              'This account owns one or more Groups - transfer ownership of each before deleting the account',
+            ownedGroupIds: ownedGroups.map((group) => group.id),
+          });
+        }
+      }
+
+      if (memberships.length > 0) {
+        const membershipIds = memberships.map((membership) => membership.id);
+        await em.nativeDelete(RoleAssignment, {
+          membership: { $in: membershipIds },
+        });
+        await em.nativeDelete(GroupMembership, { id: { $in: membershipIds } });
+      }
+
+      await em.nativeDelete(User, { id: user.id });
+    });
   }
 
   async updateProfile(
@@ -101,13 +200,6 @@ export class UserService {
     user.presetAvatarId = null;
     await this.em.flush();
     return user;
-  }
-
-  // Deletes everything this user owns. Only the User row exists today;
-  // future modules (playlists, notes, learning progress, favorites, ...)
-  // should extend this method with their own cascade-delete calls.
-  private async deleteUserData(user: User): Promise<void> {
-    await this.em.removeAndFlush(user);
   }
 
   private buildUser(clerkUserId: string, profile: ClerkProfile): User {

@@ -17,6 +17,7 @@ import { HttpErrorResponse } from '../src/common/types/http-error-response.type'
 import { User } from '../src/users/entities/user.entity';
 import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
+import { GroupSummaryResponseDto } from '../src/groups/dto/group-summary-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
@@ -244,6 +245,43 @@ describe('Organization Membership (e2e)', () => {
       expect(membership.rootGroupId).toBe(root.id);
       expect(membership.status).toBe('ACTIVE');
       expect(membership.sections).toEqual([]);
+    });
+
+    it('creates only the Membership when role is omitted - belongs to the organization but not yet assigned to any Group', async () => {
+      const root = await createRootGroup(OWNER_TOKEN, {
+        name: 'Join Org Without Role',
+      });
+
+      const membership = await bodyOf<GroupMembershipResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${root.id}/members`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ userId: localUserIdByToken.get(MEMBER_TOKEN) })
+          .expect(201),
+      );
+
+      expect(membership.rootGroupId).toBe(root.id);
+      expect(membership.status).toBe('ACTIVE');
+      expect(membership.rootRoles).toEqual([]);
+
+      // No Role Assignment for the Root Group - not even MEMBER - so
+      // accessing it directly is a 404, the same non-enumeration behavior
+      // as any other Group with no Role Assignment held there.
+      await request(app.getHttpServer())
+        .get(`/api/v1/groups/${root.id}`)
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .expect(404);
+
+      // But the organization still shows up in "my groups" - Membership
+      // alone is enough for that, regardless of holding any Role there.
+      const mine = await bodyOf<GroupSummaryResponseDto[]>(
+        request(app.getHttpServer())
+          .get('/api/v1/groups')
+          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+          .expect(200),
+      );
+      const mineEntry = mine.find((item) => item.id === root.id);
+      expect(mineEntry?.myRoles).toEqual([]);
     });
 
     it('rejects a second active membership for the same user in the same Root Group', async () => {

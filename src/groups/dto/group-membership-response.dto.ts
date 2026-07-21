@@ -12,9 +12,11 @@ export interface GroupMembershipResponseDto {
   // Role Assignment currently held for the Root Group itself, resolved via
   // a separate lookup. A Membership may hold several Roles for the same
   // Group at once (e.g. MEMBER + INSTRUCTOR + ADMIN together), so this is
-  // always an array, never a single Role - empty only if no Role
-  // Assignment exists, which should not normally happen for an ACTIVE
-  // Membership (see RoleAssignmentsService.ensureMemberRole).
+  // always an array, never a single Role. Empty is a normal, expected
+  // state: Membership represents only "belongs to the organization" and
+  // never implies any Role in the Root Group by itself (see ADR-028/
+  // ADR-004) - a member who has not yet been assigned any Role there has
+  // an empty array here.
   rootRoles: GroupRole[];
   status: GroupMembershipStatus;
   joinedAt: string;

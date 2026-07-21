@@ -43,7 +43,10 @@ questions, and must not be conflated - Membership never stores a Role:
 
 - **Membership** - does this User belong to this organization at all?
   Membership always references the Root Group; it is never created for a
-  Child Group. It carries no authority by itself.
+  Child Group. It carries no authority by itself, and creates no Role
+  Assignment by itself - not even `Member` for the Root Group, which is a
+  Group like any other (see
+  [ADR-004](ADR-004-no-membership-inheritance.md)).
 - **Role Assignment** - what can this User do, and where? A Role
   Assignment is granted directly for one specific Group - Root or Child -
   and grants authority only there. Holding a Role in the Root Group grants
@@ -52,11 +55,14 @@ questions, and must not be conflated - Membership never stores a Role:
   other Group. A Membership may hold **several different** Role
   Assignments for the very same Group at once (e.g. `Member` +
   `Instructor` + `Admin` together) - only holding the exact same Role
-  twice for the same Group is disallowed. The same Membership may also
-  hold Role Assignments for multiple *different* Groups within its Root
-  Group's tree at once, independently of each other. In practice, a Root
-  Group administrator's authority covers the Root Group itself and the
-  organization-wide Graduation System (see
+  twice for the same Group is disallowed. `Member` is the base Role every
+  other Role requires - the system guarantees this automatically on grant
+  and protects it on revoke (see
+  [ADR-028](ADR-028-role-assignment-model.md)). The same Membership may
+  also hold Role Assignments for multiple *different* Groups within its
+  Root Group's tree at once, independently of each other. In practice, a
+  Root Group administrator's authority covers the Root Group itself and
+  the organization-wide Graduation System (see
   [ADR-005](ADR-005-root-group-graduation-system.md)) - not the rest of
   the tree. A Child Group is managed by whoever holds a Role directly in
   that Child Group.

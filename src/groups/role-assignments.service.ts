@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
-import { ChangeRoleAssignmentInput } from './dto/change-role-assignment.schema';
 import { CreateRoleAssignmentInput } from './dto/create-role-assignment.schema';
 import { RoleAssignmentResponseDto } from './dto/role-assignment-response.dto';
 import { Group } from './entities/group.entity';
@@ -16,6 +15,7 @@ import {
 } from './entities/role-assignment.entity';
 import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
+import { GroupStatus } from './enums/group-status.enum';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { toRoleAssignmentResponseDto } from './mappers/group.mapper';
 
@@ -28,14 +28,17 @@ export interface ResolvedGroupAuthorization {
   roleAssignments: RoleAssignment[];
 }
 
-// The single place that creates, changes, and revokes Role Assignments,
-// and resolves "what authority does this user have, directly, for this
-// exact Group" (see ADR-028, ADR-013: Role Assignment is a separate
-// concept from Membership, scoped per-Group, never inherited through the
-// hierarchy). GroupPermissionsGuard is the primary caller of
-// resolveAuthorization(); GroupsService and GroupMembershipsService call
-// the mutation methods for the Root Group bootstrap/member-management
-// flows they already own.
+// The single place that grants and revokes Role Assignments, and resolves
+// "what authority does this user have, directly, for this exact Group"
+// (see ADR-028, ADR-013: Role Assignment is a separate concept from
+// Membership, scoped per-Group, never inherited through the hierarchy).
+// There is deliberately no "change a Role" operation: Roles are
+// independent of one another (a Membership may hold several for the same
+// Group at once), so there is no single Role left to "change" - granting
+// and revoking are the only two mutations (see ADR-028).
+// GroupPermissionsGuard is the primary caller of resolveAuthorization();
+// GroupsService and GroupMembershipsService call the mutation methods for
+// the Root Group bootstrap/member-management flows they already own.
 @Injectable()
 export class RoleAssignmentsService {
   constructor(
@@ -99,12 +102,12 @@ export class RoleAssignmentsService {
 
   /**
    * Ensures `membership` holds a MEMBER Role Assignment for `group`,
-   * creating one if it doesn't already exist - the automatic consequence
-   * of being added to, or joining, a Group (Root or Child): MEMBER answers
-   * "does this user belong to this specific Group", separate from
-   * Membership itself (which only answers "does this user belong to the
-   * organization"). Idempotent - safe to call even if the Role Assignment
-   * already exists. Must run inside the caller's transaction.
+   * creating one if it doesn't already exist. MEMBER is the **base Role**
+   * of every Group: it answers "does this user belong to this specific
+   * Group" (separate from Membership itself, which only answers "does
+   * this user belong to the organization"), and every other Role requires
+   * it - see ADR-028. Idempotent - safe to call even if the Role
+   * Assignment already exists. Must run inside the caller's transaction.
    */
   async ensureMemberRole(
     em: EntityManager,
@@ -119,7 +122,7 @@ export class RoleAssignmentsService {
     if (existing) {
       return;
     }
-    await this.grantRole(em, membership, group, GroupRole.MEMBER);
+    await this.insertRoleAssignment(em, membership, group, GroupRole.MEMBER);
   }
 
   /**
@@ -127,11 +130,11 @@ export class RoleAssignmentsService {
    * behind every Role grant (initial OWNER at Group creation, automatic
    * MEMBER on join, and additional Roles granted on top of either). Does
    * not check for an existing (membership, group, role) row - callers that
-   * need that check (e.g. assignRole(), which is reachable directly from
+   * need that check (e.g. grantRole(), which is reachable directly from
    * the API) must do so themselves first. Must run inside the caller's
    * transaction.
    */
-  async grantRole(
+  async insertRoleAssignment(
     em: EntityManager,
     membership: GroupMembership,
     group: Group,
@@ -152,10 +155,11 @@ export class RoleAssignmentsService {
    * RoleAssignmentsController). OWNER is deliberately unassignable here -
    * see assignable-group-role.schema.ts; it can only be granted through
    * transferOwnership. If this is the Membership's first Role Assignment
-   * for this Group, MEMBER is granted alongside the requested Role (unless
-   * the requested Role is itself MEMBER) - see ensureMemberRole().
+   * for this Group, MEMBER - the base Role every other Role requires - is
+   * granted alongside the requested Role (unless the requested Role is
+   * itself MEMBER) - see ensureMemberRole().
    */
-  async assignRole(
+  async grantRole(
     groupId: string,
     input: CreateRoleAssignmentInput,
   ): Promise<RoleAssignmentResponseDto> {
@@ -210,7 +214,12 @@ export class RoleAssignmentsService {
 
       let assignment: RoleAssignment;
       try {
-        assignment = await this.grantRole(em, membership, group, input.role);
+        assignment = await this.insertRoleAssignment(
+          em,
+          membership,
+          group,
+          input.role,
+        );
       } catch (error) {
         // Race backstop - see the equivalent comment in
         // GroupMembershipsService.addMember().
@@ -253,59 +262,27 @@ export class RoleAssignmentsService {
     return toRoleAssignmentResponseDto(assignment);
   }
 
-  async changeRole(
-    groupId: string,
-    roleAssignmentId: string,
-    input: ChangeRoleAssignmentInput,
-  ): Promise<RoleAssignmentResponseDto> {
-    return this.em.transactional(async (em) => {
-      const assignment = await this.loadByIdOrFail(
-        em,
-        groupId,
-        roleAssignmentId,
-      );
-
-      // OWNER can only change through the ownership-transfer flow, which
-      // simultaneously assigns a new OWNER - never leaving the Group
-      // without exactly one (mirrors GroupMembershipsService.leave/
-      // removeMember's OWNER checks).
-      if (assignment.role === GroupRole.OWNER) {
-        throw new ConflictException({
-          code: 'CANNOT_CHANGE_OWNER_ROLE',
-          message: 'The owner role cannot be changed directly',
-        });
-      }
-
-      if (input.role !== assignment.role) {
-        const existing = await em.findOne(RoleAssignment, {
-          membership: assignment.membership.id,
-          group: groupId,
-          role: input.role,
-        });
-        if (existing) {
-          throw new ConflictException({
-            code: 'ROLE_ASSIGNMENT_ALREADY_EXISTS',
-            message: 'This membership already holds this role in this group',
-          });
-        }
-      }
-
-      assignment.role = input.role;
-      try {
-        await em.flush();
-      } catch (error) {
-        if (isUniqueViolationOn(error, ROLE_ASSIGNMENTS_UNIQUE_INDEX)) {
-          throw new ConflictException({
-            code: 'ROLE_ASSIGNMENT_ALREADY_EXISTS',
-            message: 'This membership already holds this role in this group',
-          });
-        }
-        throw error;
-      }
-      return toRoleAssignmentResponseDto(assignment);
-    });
-  }
-
+  /**
+   * Revokes a single Role Assignment. Two Roles are protected against
+   * direct revocation here, each for a different reason:
+   *
+   * - OWNER can only move via an atomic ownership transfer (see
+   *   GroupMembershipsService.transferOwnership) - never revoked directly,
+   *   since a Group must never be left without one.
+   * - MEMBER is the base Role of the Group (see ADR-028): while the
+   *   Membership holds any *other* Role for this same Group, MEMBER cannot
+   *   be revoked - every other Role requires it. Once no other Role
+   *   remains, MEMBER may be revoked, which is how a user is removed from
+   *   a Child Group (Child Groups have no separate "membership" concept of
+   *   their own - see organization-entities.md#roleassignment). For the
+   *   Membership's own Root Group specifically, MEMBER is never revocable
+   *   through this endpoint at all: leaving or being removed from the
+   *   organization already has dedicated flows
+   *   (GroupMembershipsService.leave/removeMember) that properly archive
+   *   the Membership itself - revoking the Root Group's MEMBER Role
+   *   Assignment here instead would leave an ACTIVE Membership with no
+   *   Role at all in its own Root Group, a state with no defined meaning.
+   */
   async revokeRole(groupId: string, roleAssignmentId: string): Promise<void> {
     const assignment = await this.loadByIdOrFail(
       this.em,
@@ -318,6 +295,29 @@ export class RoleAssignmentsService {
         code: 'CANNOT_REMOVE_OWNER',
         message: 'The owner role cannot be revoked directly',
       });
+    }
+
+    if (assignment.role === GroupRole.MEMBER) {
+      if (assignment.membership.rootGroup.id === groupId) {
+        throw new ConflictException({
+          code: 'CANNOT_REMOVE_ROOT_MEMBER_ROLE',
+          message:
+            'MEMBER for the Root Group cannot be revoked directly - use leave or remove the member instead',
+        });
+      }
+
+      const otherRoles = await this.em.find(RoleAssignment, {
+        membership: assignment.membership.id,
+        group: groupId,
+        role: { $ne: GroupRole.MEMBER },
+      });
+      if (otherRoles.length > 0) {
+        throw new ConflictException({
+          code: 'CANNOT_REMOVE_MEMBER_ROLE',
+          message:
+            'MEMBER is the base role for this group - revoke every other role held here first',
+        });
+      }
     }
 
     await this.em.remove(assignment).flush();
@@ -343,6 +343,49 @@ export class RoleAssignmentsService {
       role,
     });
     return assignment !== null;
+  }
+
+  /**
+   * Every active Group (the Root Group itself, or any Child Group at any
+   * depth under it) where this Membership currently holds OWNER - the
+   * single query behind the "a Membership can never disappear while it
+   * still owns a Group" invariant (see
+   * GroupMembershipsService.assertOwnsNoActiveGroups, used by leave() and
+   * removeMember()). Deliberately organization-wide, not Root-Group-only:
+   * OWNER is scoped per-Group (ADR-013/ADR-028), so a Membership can hold
+   * it for any Child Group in the tree, not just the Root Group itself.
+   *
+   * Archived Groups are excluded - an archived Group can never accept
+   * writes again short of unarchiving it first (ADR-007), so its OWNER
+   * Role Assignment does not block ending this Membership. READ_ONLY
+   * Groups still count: they are informationally active and can return to
+   * ACTIVE at any time (see group-write-policy.ts), so they must not be
+   * left ownerless either.
+   */
+  async findOwnedActiveGroups(
+    em: EntityManager,
+    membershipId: string,
+    rootGroupId: string,
+  ): Promise<Group[]> {
+    const descendants = await this.groupHierarchyService.getDescendants(
+      rootGroupId,
+      em,
+    );
+    const groupIds = [rootGroupId, ...descendants.map((group) => group.id)];
+
+    const assignments = await em.find(
+      RoleAssignment,
+      {
+        membership: membershipId,
+        role: GroupRole.OWNER,
+        group: { $in: groupIds },
+      },
+      { populate: ['group'] },
+    );
+
+    return assignments
+      .map((assignment) => assignment.group)
+      .filter((group) => group.status !== GroupStatus.ARCHIVED);
   }
 
   /**
@@ -447,7 +490,7 @@ export class RoleAssignmentsService {
     const assignment = await em.findOne(
       RoleAssignment,
       { id: roleAssignmentId, group: groupId },
-      { populate: ['membership', 'membership.user'] },
+      { populate: ['membership', 'membership.user', 'membership.rootGroup'] },
     );
     if (!assignment) {
       throw new NotFoundException({

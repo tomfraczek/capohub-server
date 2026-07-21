@@ -85,7 +85,7 @@ export class GroupsService {
         ownerMembership,
         group,
       );
-      await this.roleAssignmentsService.grantRole(
+      await this.roleAssignmentsService.insertRoleAssignment(
         em,
         ownerMembership,
         group,

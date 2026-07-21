@@ -302,23 +302,34 @@ Membership is no longer `ACTIVE`.
 
 ## Purpose
 
-Membership represents a User's relationship with an organization - a Root
-Group. A User does not "belong" to an organization directly - instead a
-User belongs to one or more Root Groups. This design allows complete
-flexibility and naturally supports multi-organization memberships (e.g. a
-user with Membership in `Capoeira Brasil` and, independently, in
-`Muzenza`). CapoHub never assumes that a User belongs to only one
-organization. Membership itself always references the Root Group, never
-a Child Group - a member's participation in a specific Section within
-that organization is expressed through a separate Section assignment
-(see [Section](#section)), not through a different Membership.
+Membership represents a User's relationship with an organization -
+identified by its Root Group. A User does not "belong" to an organization
+directly - instead a User belongs to one or more Root Groups. This design
+allows complete flexibility and naturally supports multi-organization
+memberships (e.g. a user with Membership in `Capoeira Brasil` and,
+independently, in `Muzenza`). CapoHub never assumes that a User belongs to
+only one organization. Membership itself always references the Root
+Group, never a Child Group - a member's participation in a specific
+Section within that organization is expressed through a separate Section
+assignment (see [Section](#section)), not through a different Membership.
 
 Membership is a distinct concept from Role Assignment and carries no
 authority by itself: it only answers "does this User belong to this
-organization." Membership never stores a Role. A Role is granted through
-a Role Assignment instead - a record entirely independent of Membership,
-targeting one specific Group (Root or Child), never inheriting through
-the hierarchy - see [RoleAssignment](#roleassignment) and
+organization." Membership never stores a Role, and - unlike earlier
+revisions of this model - never implies one either, not even for the Root
+Group itself. **The Root Group is a Group like any other**: it has its own
+daily life (trainings, events, announcements, members, instructors,
+administrators), and a User only becomes a day-to-day participant of it -
+holds the `Member` Role there - by being explicitly granted a Role there,
+the same way as for any Child Group. Creating a Membership never creates
+any Role Assignment. A User with an `ACTIVE` Membership and zero Role
+Assignments anywhere - belonging to the organization but not yet assigned
+to any Group within it - is a normal, valid, and fully supported state.
+See [ADR-004](../decisions/ADR-004-no-membership-inheritance.md). A Role
+is granted through a Role Assignment instead - a record entirely
+independent of Membership, targeting one specific Group (Root or Child),
+never inheriting through the hierarchy - see
+[RoleAssignment](#roleassignment) and
 [ADR-028](../decisions/ADR-028-role-assignment-model.md).
 
 ## Responsibilities
@@ -352,13 +363,25 @@ Membership - see [RoleAssignment](#roleassignment).
   Changing organization happens only by ending the Membership in one Root
   Group and creating a new one in another (see
   [Scenario 11](organization-scenarios.md#scenario-11-user-changes-organization)).
-- Memberships are never physically deleted; removing a member archives
-  the Membership, guaranteeing complete historical integrity. See
-  [ADR-007](../decisions/ADR-007-soft-delete.md).
+- Memberships are never physically deleted by leave or removeMember;
+  ending a member's participation in one Organization archives the
+  Membership, guaranteeing complete historical integrity. See
+  [ADR-007](../decisions/ADR-007-soft-delete.md). **This does not apply
+  when the User's own account is deleted** (`DELETE /users/me`) - see
+  "Account Deletion" below, a different, User-initiated lifecycle event
+  entirely distinct from leaving or being removed from one Organization.
 - Membership never stores a Role or a Permission. Which Role(s) a User
   holds, in which Group, is determined exclusively by Role Assignment
   records - see [RoleAssignment](#roleassignment) and
   [ADR-028](../decisions/ADR-028-role-assignment-model.md).
+- **A Membership cannot be removed while it owns any Group within the
+  Organization** - not by self-service leave, not by an administrator's
+  removeMember, and not by any other path. This is checked across every
+  Group the Membership's Root Group tree contains, Root or Child, at any
+  depth - a Membership that owns only a Child Group is blocked exactly
+  like one that owns the Root Group itself. Ownership must be transferred
+  explicitly (see [RoleAssignment](#roleassignment)) before the Membership
+  can end. See [Scenario 23](organization-scenarios.md#scenario-23-ownership-blocks-leaving).
 
 ## Relationships
 
@@ -397,6 +420,32 @@ Statuses:
   logically at the same moment, for the same reason - see
   [RoleAssignment](#roleassignment).
 
+### Account Deletion
+
+`DELETE /users/me` is a different, User-initiated event from leave or
+removeMember: it ends the User's account entirely, not just their
+participation in one Organization, so it is not represented by `ARCHIVED`
+and does not go through the same status transition.
+
+- **Deleting a non-owner account removes all of its RoleAssignments and
+  Memberships.** Every Membership the User held, in every Organization,
+  and every RoleAssignment tied to any of them, is hard-deleted together
+  with the User row itself - not archived. This is unlike leave/
+  removeMember specifically because the User the Membership belongs to no
+  longer exists at all; there is no one left for a historical, archived
+  Membership to refer to.
+- **An account that owns any active Group cannot be deleted until all
+  ownerships are transferred.** This is the exact same invariant leave and
+  removeMember enforce (see Business Rules above and
+  [ADR-028](../decisions/ADR-028-role-assignment-model.md)), checked
+  across every Group - Root or Child, in every Organization the account
+  belongs to - before any deletion happens.
+- **Account deletion must not leave orphaned Memberships, RoleAssignments,
+  or ownerless Groups.** All of it - the ownership check and every
+  RoleAssignment/Membership/User deletion - happens inside one transaction:
+  either the whole account and everything it held disappears together, or
+  none of it does.
+
 ## Validation Rules
 
 - Only one Membership per (User, Root Group) pair may be `ACTIVE` at a
@@ -427,14 +476,17 @@ Permission enum is a CapoHub code change plus a migration, never a
 configuration action available at runtime. See
 [ADR-028](../decisions/ADR-028-role-assignment-model.md).
 
-Example: Jan's Membership belongs to Root Group `Capoeira Brasil`, where he
-holds a `Member` RoleAssignment. In Child Group `Poznań`, Jan
-simultaneously holds **three** RoleAssignments at once: `Member`,
-`Instructor`, and `Admin` - all coexisting for the very same Group. In
-Child Group `Leszno`, Jan holds only `Member` and `Instructor`. None of
-these Roles are stored on, or inherited through, the Membership itself,
-and none inherit between Groups: `Poznań`'s Roles say nothing about
-`Leszno`, and vice versa.
+Example: Jan's Membership belongs to Root Group `Capoeira Brasil`, but he
+has not been granted any Role there - he belongs to the organization
+without being a day-to-day participant of `Capoeira Brasil` itself (see
+[Membership](#membership) and [ADR-004](../decisions/ADR-004-no-membership-inheritance.md):
+Membership never implies a Role, not even for the Root Group). In Child
+Group `Poznań`, Jan simultaneously holds **three** RoleAssignments at
+once: `Member`, `Instructor`, and `Admin` - all coexisting for the very
+same Group. In Child Group `Leszno`, Jan holds only `Member` and
+`Instructor`. None of these Roles are stored on, or inherited through, the
+Membership itself, and none inherit between Groups: `Poznań`'s Roles say
+nothing about `Leszno` or `Capoeira Brasil`, and vice versa.
 
 ## Responsibilities
 
@@ -461,12 +513,28 @@ RoleAssignment stores:
   Granting a new Role never removes or replaces an existing one for that
   Group; revoking a Role removes only that one RoleAssignment and leaves
   every other Role the Membership holds for that Group untouched.
-- **`Member` is its own RoleAssignment, not an inferred default.**
-  Membership answers "does this User belong to the organization"; the
-  `Member` RoleAssignment for a specific Group answers "does this User
-  belong to *this* Group." Being added to, or joining, a Group (Root or
-  Child) automatically grants a `Member` RoleAssignment for that Group at
-  the same time, atomically with the event that adds the User to it.
+- **`Member` is the base Role of every Group - Root or Child, with no
+  special case for either.** Membership answers "does this User belong to
+  the organization"; the `Member` RoleAssignment for a specific Group
+  answers "does this User belong to *this* Group" - it is its own
+  RoleAssignment, not an inferred default, but every other Role requires
+  it, and the system guarantees this automatically. In practice, `Admin`
+  always means `Member` + `Admin`; `Instructor` always means `Member` +
+  `Instructor`; `Owner` always means `Member` + `Owner` - there is no
+  valid state holding any non-`Member` Role for a Group without also
+  holding `Member` there. This is triggered by actually being granted a
+  Role for a specific Group: if a Membership's *first* RoleAssignment for
+  a Group is some other Role, `Member` is created automatically alongside
+  it, in the same operation. Symmetrically, `Member` cannot be revoked
+  while the Membership still holds any other Role for that Group - every
+  other Role must be revoked first.
+- **Creating a Membership (joining the organization) never grants
+  `Member`, or any Role, for any Group - the Root Group included.** See
+  [Membership](#membership) and
+  [ADR-004](../decisions/ADR-004-no-membership-inheritance.md). The rule
+  above triggers only on an actual Role grant for a specific Group, never
+  merely as a side effect of Membership creation. A Membership with zero
+  RoleAssignments anywhere is a normal, valid state.
 - The same Membership may also hold RoleAssignments for **multiple
   different** Groups at once, each independently. See the Jan example
   above.
@@ -491,16 +559,26 @@ RoleAssignment stores:
   **union** of every RoleAssignment held directly for that Group - never
   from a Role held in a different Group, and never just the first one
   found.
-- **`Owner` is a mandatory exception**: every Group must have exactly one
-  active `Owner` RoleAssignment at all times, enforced at the database
-  level independent of which Membership holds it. `Owner` is granted
-  automatically to a Group's creator; it cannot be granted through the
-  general grant-a-Role flow, cannot be revoked directly, and moves between
-  Memberships only through an atomic ownership transfer (remove the
-  previous owner's `Owner` RoleAssignment and create the new owner's, in
-  one transaction - never a window with zero or two Owners). A transfer
-  changes only the `Owner` RoleAssignment; every other Role the previous
-  owner holds for that Group is untouched.
+- **`Owner` is a mandatory exception: every Group must always have exactly
+  one active `Owner` RoleAssignment**, independent of which Membership
+  holds it - Root and Child Groups alike, with no special case for either.
+  The database only enforces the *at most one* half of this (a partial
+  unique index on `(group)` where `role = 'Owner'`) - a unique index cannot
+  require a row to exist, so it cannot express "at least one" by itself.
+  The *at least one* half is guaranteed entirely at the application layer,
+  by three things working together: `Owner` cannot be granted through the
+  general grant-a-Role flow or revoked directly; it is granted
+  automatically to a Group's creator; and **a Membership cannot be removed
+  while it still owns any Group** (see [Membership](#membership)) - so an
+  `Owner` RoleAssignment can only ever disappear as part of an atomic
+  transfer that creates its replacement in the same transaction, never on
+  its own. `Owner` moves between Memberships only through that atomic
+  ownership transfer (remove the previous owner's `Owner` RoleAssignment
+  and create the new owner's, in one transaction - never a window with
+  zero or two Owners); ownership must be transferred explicitly before the
+  owner can leave or be removed from the Organization. A transfer changes
+  only the `Owner` RoleAssignment; every other Role the previous owner
+  holds for that Group is untouched.
 
 ## Relationships
 
@@ -512,26 +590,42 @@ RoleAssignment stores:
   status governs whether the RoleAssignment currently grants any
   authority.
 - A Group may have zero or more RoleAssignments, across any number of
-  Memberships, and must have exactly one whose Role is `Owner`.
+  Memberships, and must have exactly one whose Role is `Owner`. Whenever a
+  Group has any RoleAssignment for a given Membership at all, one of them
+  is always `Member` - `Member` is the base Role every other Role
+  requires.
 
 ## Lifecycle
 
+There is no "change a Role" operation - RoleAssignment management
+consists of exactly two mutations, **grantRole** and **revokeRole**. A
+Role granted for a Group never replaces another Role already held there;
+it always coexists alongside it (what might look like "changing"
+`Instructor` to `Admin` is really `grantRole(Admin)`, optionally followed
+by `revokeRole(Instructor)` - or simply leaving both in place, since
+holding several Roles for the same Group is a normal state).
+
 An administrator grants a RoleAssignment for a Membership and a Group,
-provided that Membership is already active in that Group's Root Group;
-this always coexists with, and never replaces, any other RoleAssignment
-that Membership already holds for that same Group. Being added to a Group
-automatically grants a `Member` RoleAssignment for it at the same time.
-An administrator may revoke a single RoleAssignment directly (e.g.
-removing just the `Instructor` Role while `Member` and `Admin` remain)
-without touching Membership, or the Membership's other RoleAssignments,
-at all. Independently, every RoleAssignment tied to a Membership expires
-logically - without a separate revocation step - the moment that
-Membership is no longer `ACTIVE`; whether it currently grants authority is
-resolved dynamically by checking Membership status, the same way a
-Section assignment remains in place but stops granting active access once
-its Membership ends (see [Section](#section)). `Owner` follows a different
-lifecycle: granted only at Group creation, moved only by an atomic
-transfer, never revoked directly.
+provided that Membership is already active in that Group's Root Group.
+Granting any Role other than `Member` as the Membership's first
+RoleAssignment for that Group automatically grants `Member` alongside it,
+in the same operation - this is the only way `Member` is ever created
+automatically; creating the Membership itself never creates it (see
+Business Rules above). An administrator may revoke a single RoleAssignment
+directly (e.g. removing just the `Instructor` Role while `Member` and
+`Admin` remain) without touching Membership, or the Membership's other
+RoleAssignments, at all - except `Member` itself, which cannot be revoked
+while the Membership still holds any other Role for that Group; once
+`Member` is the only Role left there, revoking it is what removes the User
+from that Group (a Child Group has no separate "membership" concept of
+its own - see Business Rules above). Independently, every RoleAssignment
+tied to a Membership expires logically - without a separate revocation
+step - the moment that Membership is no longer `ACTIVE`; whether it
+currently grants authority is resolved dynamically by checking Membership
+status, the same way a Section assignment remains in place but stops
+granting active access once its Membership ends (see [Section](#section)).
+`Owner` follows a different lifecycle: granted only at Group creation,
+moved only by an atomic transfer, never revoked directly.
 
 ## Validation Rules
 
@@ -548,7 +642,13 @@ transfer, never revoked directly.
 - A RoleAssignment must never be evaluated as granting authority while its
   underlying Membership is not `ACTIVE`.
 - At most one active `Owner` RoleAssignment may exist per Group, enforced
-  at the database level.
+  at the database level. Every Group must also have **at least** one - not
+  enforced by the database, but guaranteed by the application layer never
+  allowing the last `Owner` RoleAssignment for a Group to be removed
+  without its replacement in the same transaction (see Business Rules
+  above).
+- `Member` cannot be revoked for a Group while the same Membership still
+  holds any other Role there.
 
 ---
 
