@@ -240,13 +240,17 @@ never a configuration action available at runtime. See
 A Role is granted through a **Role Assignment** - a record entirely
 independent of Membership; Membership never stores a Role. Every Role
 Assignment references one Membership, one Group (Root or Child), and one
-system Role. A Membership may have at most one active Role Assignment per
-Group - a higher Role always carries a broader Permission set than a
-lower one within the same Group, so there is never a need to hold more
-than one Role there at once - but the same Membership may hold Role
-Assignments in multiple different Groups simultaneously, one Role each
-(e.g. `Admin` of one Child Group and, separately, `Instructor` of
-another). See
+system Role. A Membership may hold **several different Roles for the same
+Group at once** (e.g. `Member` + `Instructor` + `Admin`, all
+simultaneously, for the same Group) - what is not allowed is holding the
+*same* Role twice for the same (Membership, Group) pair. `Member` itself
+is not an inferred default: it is granted as its own Role Assignment
+automatically the moment a User is added to, or joins, a Group. The same
+Membership may also hold Role Assignments in multiple different Groups at
+once, independently (e.g. `Admin` of one Child Group and, separately,
+`Instructor` of another). `Owner` is the one mandatory exception - every
+Group must have exactly one active `Owner` at all times, moved only by an
+atomic transfer. See
 [RoleAssignment](organization-entities.md#roleassignment) for the full
 entity reference.
 
@@ -261,10 +265,10 @@ Announcements. Permissions are always explicit, and are a fixed,
 system-wide enum - see [Roles](#roles) and
 [ADR-028](../decisions/ADR-028-role-assignment-model.md). There is no
 mechanism to assign a Permission directly, independently of a Role - a
-caller's Permissions for a Group are entirely determined by the single
-Role Assignment they hold for that Group. Permissions are always
+caller's Permissions for a Group are the **union** of every Role
+Assignment they hold for that Group, not just one. Permissions are always
 evaluated at runtime - no permission snapshots should exist, which
-guarantees immediate effect after Role changes.
+guarantees immediate effect after a Role is granted or revoked.
 
 ## Business Rules
 
@@ -290,14 +294,15 @@ Role Assignment the caller holds for the Group that owns them. See
 [ADR-013](../decisions/ADR-013-no-permission-inheritance.md) and
 [ADR-028](../decisions/ADR-028-role-assignment-model.md).
 
-A Membership may have at most one **active** Role Assignment per Group -
-never several Roles at once in the same Group, since a higher Role always
-carries a broader Permission set than a lower one there. The same
-Membership may still hold Role Assignments in several different Groups
-simultaneously, one Role per Group. A guard authorizing an action on a
-Group resolves Permissions from that single Role Assignment held directly
-for the acted-on Group - never from a Role held in a different Group, and
-never by combining Roles.
+A Membership may hold **several active** Role Assignments for the same
+Group at once (e.g. `Member` + `Instructor` + `Admin` together) - only
+holding the exact same Role twice for the same Group is disallowed. The
+same Membership may still hold Role Assignments in several different
+Groups simultaneously, entirely independent of each other. A guard
+authorizing an action on a Group resolves Permissions from the **union**
+of every Role Assignment held directly for the acted-on Group - never
+from a Role held in a different Group, and never from just one of
+several held Roles.
 
 ---
 

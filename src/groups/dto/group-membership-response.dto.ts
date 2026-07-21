@@ -8,7 +8,14 @@ export interface GroupMembershipResponseDto {
   id: string;
   rootGroupId: string;
   user: GroupUserRefDto;
-  role: GroupRole;
+  // Membership never stores a Role (see ADR-028) - this reflects every
+  // Role Assignment currently held for the Root Group itself, resolved via
+  // a separate lookup. A Membership may hold several Roles for the same
+  // Group at once (e.g. MEMBER + INSTRUCTOR + ADMIN together), so this is
+  // always an array, never a single Role - empty only if no Role
+  // Assignment exists, which should not normally happen for an ACTIVE
+  // Membership (see RoleAssignmentsService.ensureMemberRole).
+  rootRoles: GroupRole[];
   status: GroupMembershipStatus;
   joinedAt: string;
   leftAt: string | null;

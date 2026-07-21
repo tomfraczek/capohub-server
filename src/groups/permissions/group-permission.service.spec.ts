@@ -1,3 +1,4 @@
+import { GroupMembershipStatus } from '../enums/group-membership-status.enum';
 import { GroupRole } from '../enums/group-role.enum';
 import { GroupPermission } from './group-permission.enum';
 import { GroupPermissionService } from './group-permission.service';
@@ -52,24 +53,33 @@ describe('GroupPermissionService', () => {
       ).toBe(false);
     });
 
-    it('grants ADMIN the member-management permissions', () => {
+    it('grants ADMIN the membership-, academy- and section-management permissions', () => {
+      expect(
+        service.hasPermission(GroupRole.ADMIN, GroupPermission.MEMBERSHIP_ADD),
+      ).toBe(true);
       expect(
         service.hasPermission(
           GroupRole.ADMIN,
-          GroupPermission.GROUP_MEMBER_ADD,
+          GroupPermission.MEMBERSHIP_ROLE_CHANGE,
         ),
       ).toBe(true);
       expect(
         service.hasPermission(
           GroupRole.ADMIN,
-          GroupPermission.GROUP_MEMBER_ROLE_CHANGE,
+          GroupPermission.MEMBERSHIP_REMOVE,
         ),
       ).toBe(true);
       expect(
         service.hasPermission(
           GroupRole.ADMIN,
-          GroupPermission.GROUP_MEMBER_REMOVE,
+          GroupPermission.MEMBERSHIP_SECTION_ASSIGN,
         ),
+      ).toBe(true);
+      expect(
+        service.hasPermission(GroupRole.ADMIN, GroupPermission.ACADEMY_CREATE),
+      ).toBe(true);
+      expect(
+        service.hasPermission(GroupRole.ADMIN, GroupPermission.SECTION_CREATE),
       ).toBe(true);
     });
 
@@ -112,6 +122,87 @@ describe('GroupPermissionService', () => {
       expect(
         [...service.getPermissionsForRole(GroupRole.OWNER)].sort(),
       ).toEqual([...Object.values(GroupPermission)].sort());
+    });
+  });
+
+  describe('hasAllPermissionsForRoles', () => {
+    it('grants the full union of every held Role permission set when the membership is ACTIVE', () => {
+      expect(
+        service.hasAllPermissionsForRoles(
+          [GroupRole.ADMIN],
+          [GroupPermission.GROUP_EDIT, GroupPermission.MEMBERSHIP_ADD],
+          GroupMembershipStatus.ACTIVE,
+        ),
+      ).toBe(true);
+    });
+
+    it('unions permissions across several simultaneously held Roles (e.g. MEMBER + ADMIN)', () => {
+      // ADMIN alone already implies MEMBER's tier in this map, but the
+      // union must hold even if a Role's permissions did not overlap.
+      expect(
+        service.hasAllPermissionsForRoles(
+          [GroupRole.MEMBER, GroupRole.ADMIN],
+          [GroupPermission.GROUP_VIEW, GroupPermission.GROUP_EDIT],
+          GroupMembershipStatus.ACTIVE,
+        ),
+      ).toBe(true);
+      expect(
+        service.hasAllPermissionsForRoles(
+          [GroupRole.MEMBER],
+          [GroupPermission.GROUP_EDIT],
+          GroupMembershipStatus.ACTIVE,
+        ),
+      ).toBe(false);
+    });
+
+    it('restricts to the view-only subset when the membership is READ_ONLY', () => {
+      expect(
+        service.hasAllPermissionsForRoles(
+          [GroupRole.OWNER],
+          [GroupPermission.GROUP_VIEW],
+          GroupMembershipStatus.READ_ONLY,
+        ),
+      ).toBe(true);
+      expect(
+        service.hasAllPermissionsForRoles(
+          [GroupRole.OWNER],
+          [GroupPermission.GROUP_EDIT],
+          GroupMembershipStatus.READ_ONLY,
+        ),
+      ).toBe(false);
+    });
+
+    it('grants nothing when the membership is INVITED', () => {
+      expect(
+        service.hasAllPermissionsForRoles(
+          [GroupRole.OWNER],
+          [GroupPermission.GROUP_VIEW],
+          GroupMembershipStatus.INVITED,
+        ),
+      ).toBe(false);
+    });
+
+    it('grants nothing when the membership is ARCHIVED - a Role Assignment has no effective access once its Membership has ended', () => {
+      expect(
+        service.hasAllPermissionsForRoles(
+          [GroupRole.OWNER],
+          [GroupPermission.GROUP_VIEW],
+          GroupMembershipStatus.ARCHIVED,
+        ),
+      ).toBe(false);
+    });
+
+    it('returns true for an empty roles list only if no permissions are required', () => {
+      expect(
+        service.hasAllPermissionsForRoles([], [], GroupMembershipStatus.ACTIVE),
+      ).toBe(true);
+      expect(
+        service.hasAllPermissionsForRoles(
+          [],
+          [GroupPermission.GROUP_VIEW],
+          GroupMembershipStatus.ACTIVE,
+        ),
+      ).toBe(false);
     });
   });
 });

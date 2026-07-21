@@ -59,12 +59,11 @@ describe('GroupsController', () => {
     ],
     ['leave', [GroupPermission.GROUP_VIEW], undefined],
     ['listMembers', [GroupPermission.GROUP_VIEW], ANY_STATUS],
-    ['addMember', [GroupPermission.GROUP_MEMBER_ADD], undefined],
+    ['addMember', [GroupPermission.MEMBERSHIP_ADD], undefined],
     ['getMembership', [GroupPermission.GROUP_VIEW], ANY_STATUS],
-    ['changeMemberRole', [GroupPermission.GROUP_MEMBER_ROLE_CHANGE], undefined],
-    ['removeMember', [GroupPermission.GROUP_MEMBER_REMOVE], undefined],
-    ['assignSection', [GroupPermission.GROUP_MEMBER_ROLE_CHANGE], undefined],
-    ['unassignSection', [GroupPermission.GROUP_MEMBER_ROLE_CHANGE], undefined],
+    ['removeMember', [GroupPermission.MEMBERSHIP_REMOVE], undefined],
+    ['assignSection', [GroupPermission.MEMBERSHIP_SECTION_ASSIGN], undefined],
+    ['unassignSection', [GroupPermission.MEMBERSHIP_SECTION_ASSIGN], undefined],
   ])('%s', (method, expectedPermissions, expectedAllowedStatuses) => {
     it(`requires ${expectedPermissions.join(', ')}`, () => {
       const reflector = new Reflector();
@@ -279,24 +278,6 @@ describe('GroupsController', () => {
       );
 
       expect(getMembership).toHaveBeenCalledWith('group-1', 'membership-1');
-      expect(response).toBe(dto);
-    });
-  });
-
-  describe('changeMemberRole', () => {
-    it('delegates to GroupMembershipsService.changeRole', async () => {
-      const dto = { id: 'membership-1' } as never;
-      const changeRole = jest.fn().mockResolvedValue(dto);
-      const controller = buildController({}, { changeRole });
-      const body = { role: 'ADMIN' } as never;
-
-      const response = await controller.changeMemberRole(
-        'group-1',
-        'membership-1',
-        body,
-      );
-
-      expect(changeRole).toHaveBeenCalledWith('group-1', 'membership-1', body);
       expect(response).toBe(dto);
     });
   });

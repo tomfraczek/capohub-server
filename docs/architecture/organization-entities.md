@@ -427,12 +427,14 @@ Permission enum is a CapoHub code change plus a migration, never a
 configuration action available at runtime. See
 [ADR-028](../decisions/ADR-028-role-assignment-model.md).
 
-Example: Jan's Membership belongs to Root Group `Capoeira Brasil`. Jan
-simultaneously holds a `Member` RoleAssignment for `Capoeira Brasil`
-itself, an `Admin` RoleAssignment for Child Group `Poznań`, and an
-`Instructor` RoleAssignment for Child Group `Leszno` - one Role per Group,
-different Roles across Groups, none of them stored on, or inherited
-through, the Membership itself.
+Example: Jan's Membership belongs to Root Group `Capoeira Brasil`, where he
+holds a `Member` RoleAssignment. In Child Group `Poznań`, Jan
+simultaneously holds **three** RoleAssignments at once: `Member`,
+`Instructor`, and `Admin` - all coexisting for the very same Group. In
+Child Group `Leszno`, Jan holds only `Member` and `Instructor`. None of
+these Roles are stored on, or inherited through, the Membership itself,
+and none inherit between Groups: `Poznań`'s Roles say nothing about
+`Leszno`, and vice versa.
 
 ## Responsibilities
 
@@ -451,61 +453,85 @@ RoleAssignment stores:
 - A RoleAssignment requires its Membership to be active in the same Root
   Group as the target Group - a Role can never be granted against a
   Membership that is not currently active in that organization.
-- **At most one active RoleAssignment per (Membership, Group) pair.** A
-  Membership never holds more than one simultaneous Role in the same
-  Group, because a higher Role always carries a broader Permission set
-  than a lower one there - there is no scenario where holding two Roles in
-  the same Group at once would grant anything a single, higher Role does
-  not already grant. Changing a member's Role in a Group replaces the
-  existing RoleAssignment for that (Membership, Group) pair rather than
-  adding a second one alongside it.
-- The same Membership may hold RoleAssignments for **multiple different**
-  Groups at once, each independently - one Role per Group. See the Jan
-  example above.
+- **Multiple RoleAssignments per (Membership, Group) pair are allowed** -
+  a Membership may hold several *different* Roles for the same Group at
+  once (see the Jan example above). What is forbidden is holding the
+  **same** Role twice for the same (Membership, Group) pair - uniqueness
+  is on `(membership, group, role)`, not on `(membership, group)`.
+  Granting a new Role never removes or replaces an existing one for that
+  Group; revoking a Role removes only that one RoleAssignment and leaves
+  every other Role the Membership holds for that Group untouched.
+- **`Member` is its own RoleAssignment, not an inferred default.**
+  Membership answers "does this User belong to the organization"; the
+  `Member` RoleAssignment for a specific Group answers "does this User
+  belong to *this* Group." Being added to, or joining, a Group (Root or
+  Child) automatically grants a `Member` RoleAssignment for that Group at
+  the same time, atomically with the event that adds the User to it.
+- The same Membership may also hold RoleAssignments for **multiple
+  different** Groups at once, each independently. See the Jan example
+  above.
 - Roles never inherit through the Group hierarchy - a RoleAssignment for
-  a parent Group grants no authority in a Child Group, and vice versa. See
+  a parent Group grants no authority in a Child Group, a RoleAssignment in
+  a Child Group grants no authority in its parent, and a RoleAssignment in
+  one Child Group grants no authority in a sibling Child Group. See
   [ADR-013](../decisions/ADR-013-no-permission-inheritance.md).
 - A RoleAssignment expires logically the instant the Membership it
   depends on is no longer `ACTIVE` - it stops granting any authority
   immediately, without requiring a separate revocation step. See
   [ADR-028](../decisions/ADR-028-role-assignment-model.md).
 - Ending a Membership does not require deciding what happens to a `role`
-  field, and revoking a single RoleAssignment does not affect Membership -
-  the two lifecycles are independent (see Lifecycle below).
+  field, and revoking a single RoleAssignment does not affect
+  Membership, or any of that Membership's other RoleAssignments - the
+  lifecycles are all independent (see Lifecycle below).
 - Academy and Section never have RoleAssignments of their own - an
   operation on an Academy or a Section is authorized against the
-  RoleAssignment the caller's Membership holds for the Group that owns
+  RoleAssignments the caller's Membership holds for the Group that owns
   it. See [ADR-012](../decisions/ADR-012-academy-not-organizational-unit.md).
 - A guard authorizing an action on a Group resolves Permissions from the
-  single RoleAssignment held directly for that Group - never from a Role
-  held in a different Group, and never by combining Roles.
+  **union** of every RoleAssignment held directly for that Group - never
+  from a Role held in a different Group, and never just the first one
+  found.
+- **`Owner` is a mandatory exception**: every Group must have exactly one
+  active `Owner` RoleAssignment at all times, enforced at the database
+  level independent of which Membership holds it. `Owner` is granted
+  automatically to a Group's creator; it cannot be granted through the
+  general grant-a-Role flow, cannot be revoked directly, and moves between
+  Memberships only through an atomic ownership transfer (remove the
+  previous owner's `Owner` RoleAssignment and create the new owner's, in
+  one transaction - never a window with zero or two Owners). A transfer
+  changes only the `Owner` RoleAssignment; every other Role the previous
+  owner holds for that Group is untouched.
 
 ## Relationships
 
 - RoleAssignment belongs to exactly one Membership and exactly one Group
   (Root or Child).
-- A (Membership, Group) pair has at most one active RoleAssignment.
+- A (Membership, Group) pair may have several active RoleAssignments at
+  once, one per distinct Role - never two for the same Role.
 - RoleAssignment's authority depends on its Membership's status; that
   status governs whether the RoleAssignment currently grants any
   authority.
 - A Group may have zero or more RoleAssignments, across any number of
-  Memberships.
+  Memberships, and must have exactly one whose Role is `Owner`.
 
 ## Lifecycle
 
-An administrator creates a RoleAssignment for a Membership and a Group,
-provided that Membership is already active in that Group's Root Group.
-Changing a member's Role in a Group replaces the existing RoleAssignment
-for that (Membership, Group) pair - since at most one may be active there
-at a time - rather than creating a second, competing one. An administrator
-may revoke or replace a single RoleAssignment directly (e.g. demoting an
-Admin to a plain Member) without touching Membership at all.
-Independently, every RoleAssignment tied to a Membership expires logically
-- without a separate revocation step - the moment that Membership is no
-longer `ACTIVE`; whether it currently grants authority is resolved
-dynamically by checking Membership status, the same way a Section
-assignment remains in place but stops granting active access once its
-Membership ends (see [Section](#section)).
+An administrator grants a RoleAssignment for a Membership and a Group,
+provided that Membership is already active in that Group's Root Group;
+this always coexists with, and never replaces, any other RoleAssignment
+that Membership already holds for that same Group. Being added to a Group
+automatically grants a `Member` RoleAssignment for it at the same time.
+An administrator may revoke a single RoleAssignment directly (e.g.
+removing just the `Instructor` Role while `Member` and `Admin` remain)
+without touching Membership, or the Membership's other RoleAssignments,
+at all. Independently, every RoleAssignment tied to a Membership expires
+logically - without a separate revocation step - the moment that
+Membership is no longer `ACTIVE`; whether it currently grants authority is
+resolved dynamically by checking Membership status, the same way a
+Section assignment remains in place but stops granting active access once
+its Membership ends (see [Section](#section)). `Owner` follows a different
+lifecycle: granted only at Group creation, moved only by an atomic
+transfer, never revoked directly.
 
 ## Validation Rules
 
@@ -515,11 +541,14 @@ Membership ends (see [Section](#section)).
   in the Group's Root Group.
 - A RoleAssignment's Role must be one of the fixed system Role values -
   custom or organization-defined values are rejected.
-- At most one active RoleAssignment may exist per (Membership, Group)
-  pair; creating a second must either be rejected or replace the
-  existing one, never coexist alongside it.
+- A (Membership, Group, Role) combination must be unique - granting the
+  exact same Role twice for the same Membership and Group is rejected;
+  granting a *different* Role for the same Membership and Group is not a
+  duplicate and must succeed.
 - A RoleAssignment must never be evaluated as granting authority while its
   underlying Membership is not `ACTIVE`.
+- At most one active `Owner` RoleAssignment may exist per Group, enforced
+  at the database level.
 
 ---
 

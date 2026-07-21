@@ -1,11 +1,13 @@
 import { GroupMembership } from '../entities/group-membership.entity';
 import { Group } from '../entities/group.entity';
+import { RoleAssignment } from '../entities/role-assignment.entity';
 import { Section } from '../entities/section.entity';
 import { GroupResponseDto } from '../dto/group-response.dto';
 import { GroupMembershipResponseDto } from '../dto/group-membership-response.dto';
 import { GroupRole } from '../enums/group-role.enum';
 import { GroupSummaryResponseDto } from '../dto/group-summary-response.dto';
 import { MembershipSectionRefDto } from '../dto/membership-section-ref.dto';
+import { RoleAssignmentResponseDto } from '../dto/role-assignment-response.dto';
 
 export function toGroupResponseDto(group: Group): GroupResponseDto {
   return {
@@ -32,7 +34,7 @@ export function toGroupResponseDto(group: Group): GroupResponseDto {
 
 export function toGroupSummaryResponseDto(
   group: Group,
-  myRole: GroupRole,
+  myRoles: GroupRole[],
 ): GroupSummaryResponseDto {
   return {
     id: group.id,
@@ -40,12 +42,13 @@ export function toGroupSummaryResponseDto(
     logoUrl: group.logoUrl,
     visibility: group.visibility,
     status: group.status,
-    myRole,
+    myRoles,
   };
 }
 
 export function toGroupMembershipResponseDto(
   membership: GroupMembership,
+  rootRoles: GroupRole[],
   sections: MembershipSectionRefDto[],
 ): GroupMembershipResponseDto {
   return {
@@ -55,7 +58,7 @@ export function toGroupMembershipResponseDto(
       id: membership.user.id,
       displayName: membership.user.displayName,
     },
-    role: membership.role,
+    rootRoles,
     status: membership.status,
     joinedAt: membership.joinedAt.toISOString(),
     leftAt: membership.leftAt ? membership.leftAt.toISOString() : null,
@@ -70,5 +73,21 @@ export function toMembershipSectionRefDto(
   return {
     id: section.id,
     name: section.name,
+  };
+}
+
+export function toRoleAssignmentResponseDto(
+  roleAssignment: RoleAssignment,
+): RoleAssignmentResponseDto {
+  return {
+    id: roleAssignment.id,
+    groupId: roleAssignment.group.id,
+    membershipId: roleAssignment.membership.id,
+    user: {
+      id: roleAssignment.membership.user.id,
+      displayName: roleAssignment.membership.user.displayName,
+    },
+    role: roleAssignment.role,
+    grantedAt: roleAssignment.grantedAt.toISOString(),
   };
 }

@@ -61,22 +61,37 @@ Role and Permission enum** - not organization-configurable.
 - Every Role Assignment requires its Membership to be active in the same
   Root Group as the target Group. A Role can never be assigned to a User
   who has no active Membership in that organization.
-- **One Role per (Membership, Group)** - a Membership may have at most one
-  **active** Role Assignment for any single Group. Because a higher Role
-  always carries a broader Permission set than a lower one within the same
-  Group (see above), there is never a need for a Membership to hold more
-  than one simultaneous Role there; changing a member's Role in a Group
-  replaces the existing Role Assignment rather than adding another one
-  alongside it.
-- The same Membership may hold Role Assignments in **multiple different**
-  Groups at once, each independently. Example: Jan's Membership belongs to
-  Root Group `Capoeira Brasil`; Jan simultaneously holds a `Member` Role
-  Assignment for `Capoeira Brasil` itself, an `Admin` Role Assignment for
-  Child Group `Poznań`, and an `Instructor` Role Assignment for Child Group
-  `Leszno`. One Role per Group, different Roles across Groups.
+- **Multiple Roles per (Membership, Group) are allowed.** A Membership may
+  hold several *different* Roles for the same Group at the same time (e.g.
+  `Member` + `Instructor` + `Admin`, all simultaneously, for the same
+  Group). What is not allowed is holding the **same** Role twice for the
+  same (Membership, Group) pair - the uniqueness constraint is
+  `UNIQUE (membership, group, role)`, not `UNIQUE (membership, group)`.
+  Granting a new Role never removes or replaces an existing one; revoking
+  a Role only removes that one Role Assignment row and leaves every other
+  Role the Membership holds for that Group untouched.
+- **MEMBER is not a default inferred from Membership - it is its own Role
+  Assignment.** Membership answers "does this User belong to the
+  organization"; the `Member` Role Assignment for a specific Group answers
+  "does this User belong to *this* Group". Being added to, or joining, a
+  Group (Root or Child) automatically grants a `Member` Role Assignment
+  for that Group at the same time - not as a side effect inferred later,
+  but as a real row created atomically alongside the event that adds the
+  User to that Group.
+- The same Membership may also hold Role Assignments in **multiple
+  different** Groups at once, each independently. Example: Jan's
+  Membership belongs to Root Group `Capoeira Brasil`, where he holds a
+  `Member` Role Assignment. In Child Group `Poznań`, Jan simultaneously
+  holds three Role Assignments: `Member`, `Instructor`, and `Admin` - all
+  three coexist for the same Group. In a different Child Group, `Leszno`,
+  Jan holds only `Member` and `Instructor`. Roles never inherit between
+  these Groups (see below); each Group's set of Roles for Jan is entirely
+  its own.
 - Roles are never inherited through the Group hierarchy (unchanged from
   [ADR-013](ADR-013-no-permission-inheritance.md)): a Role Assignment in a
-  parent Group grants no authority in a Child Group, and vice versa.
+  parent Group grants no authority in a Child Group, and vice versa, and a
+  Role Assignment in one Child Group grants no authority in a sibling
+  Child Group.
 - A Role Assignment expires **logically** the moment the Membership it
   depends on is no longer `ACTIVE` - it stops granting any authority
   immediately, without requiring an explicit revocation step. It is not
@@ -87,13 +102,37 @@ Role and Permission enum** - not organization-configurable.
   [Section](../architecture/organization-entities.md#section)).
 - Membership and Role Assignment remain independently revocable: ending a
   Membership logically expires every Role Assignment tied to it, but an
-  administrator may also revoke or replace a single Role Assignment on its
-  own (e.g. demoting an Admin to a plain Member) without affecting
-  Membership at all.
-- A guard authorizing an action on a Group resolves the Permission set
-  from the single Role Assignment held directly for that Group by the
-  caller's Membership - never from a Role held in a different Group, and
-  never by combining multiple Roles.
+  administrator may also revoke a single Role Assignment on its own
+  (e.g. removing just the `Instructor` Role while `Member` and `Admin`
+  remain) without affecting Membership, or any of the Membership's other
+  Role Assignments, at all.
+- A guard authorizing an action on a Group resolves the **union** of every
+  active Role Assignment the caller's Membership holds directly for that
+  exact Group - never from a Role held in a different Group, and never
+  just the first or "highest" one found. If the union of Permissions
+  across all held Roles satisfies what the action requires, it is
+  authorized.
+
+### OWNER is the one exception
+
+- Every Group (Root or Child) must have **exactly one active `Owner`** at
+  all times. This is enforced at the database level, independent of which
+  Membership holds it: at most one active `Owner` Role Assignment may
+  exist per Group.
+- `Owner` is granted automatically to whoever creates a Group, at Group
+  creation time.
+- `Owner` cannot be granted through the general grant-a-Role flow, cannot
+  be revoked directly, and a Membership cannot voluntarily give it up - a
+  Group can never be left ownerless.
+- The only way `Owner` moves from one Membership to another is an
+  **atomic ownership transfer**: within a single transaction, the previous
+  owner's `Owner` Role Assignment is removed and the new owner's `Owner`
+  Role Assignment is created - there is never an intermediate state with
+  zero or two active Owners for the same Group.
+- A transfer changes *only* the `Owner` Role Assignment. Every other Role
+  the previous owner holds for that Group (e.g. `Member`, `Admin`) is left
+  completely untouched - there is no "new Role" chosen for the previous
+  owner, because Owner was never their only Role to begin with.
 
 See [RoleAssignment](../architecture/organization-entities.md#roleassignment)
 for the full entity reference.
@@ -102,17 +141,23 @@ for the full entity reference.
 
 - Membership becomes a pure participation record: User, Root Group,
   status, join/leave dates - nothing about authority.
-- A User can simultaneously hold different Roles in different Groups
-  within the same organization (e.g. `Admin` of one Child Group and
-  `Instructor` of another), but never more than one Role in any single
-  Group.
-- Authorization checks resolve a caller's Role for a specific Group by
-  querying the single Role Assignment for that (Membership, Group) pair,
-  never by reading a `role` field off Membership and never by combining
-  several Roles.
-- Revoking a Role no longer requires touching Membership, and ending a
-  Membership no longer requires deciding what to do with a `role` field -
-  every Role Assignment tied to it simply stops granting authority.
+- A User can simultaneously hold several different Roles for the very
+  same Group (e.g. `Member` + `Instructor` + `Admin` all at once), in
+  addition to holding independent Roles in other Groups.
+- Authorization checks resolve a caller's authority for a specific Group
+  by querying **every** Role Assignment for that (Membership, Group) pair
+  and taking the union of their Permissions - never by reading a `role`
+  field off Membership and never by picking just one Role Assignment.
+- Granting an additional Role never disturbs existing ones; revoking a
+  Role only removes that one Role Assignment. Ending a Membership no
+  longer requires deciding what to do with a `role` field - every Role
+  Assignment tied to it simply stops granting authority, all of them, at
+  once.
+- `Owner` is the sole exception to "Roles are just Roles": it is mandatory
+  (every Group has exactly one, enforced at the database level),
+  automatically granted at creation, and can only move via an atomic
+  transfer - never granted, revoked, or left absent through the general
+  Role management flow.
 - Because Roles and Permissions are a fixed system enum, there is no
   Custom Roles feature, no Role/Permission editor, and no per-organization
   Permission configuration to build, test, or secure. Any future addition

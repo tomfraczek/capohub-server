@@ -3,23 +3,32 @@ import { GroupPermission } from './group-permission.enum';
 
 // Built hierarchically, same convention as ROLE_PERMISSIONS
 // (auth/permissions/role-permissions.map.ts) - each tier spreads the one
-// below it and adds only what's new.
+// below it and adds only what's new. This map answers "can this Role, in
+// this Group, take this kind of action" - nothing more; it never expresses
+// target-specific rules (an ADMIN may change another member's Role in
+// general, but not the OWNER's; nobody may grant OWNER through the
+// role-change endpoint; the OWNER cannot leave without transferring first).
+// Those invariants depend on which member is being acted on, not just the
+// actor's Role, so they're enforced in GroupMembershipsService/
+// RoleAssignmentsService instead.
 //
-// This map only decides "can this role, in general, take this kind of
-// action" - it deliberately cannot express target-specific rules (an ADMIN
-// may change roles in general, but not the OWNER's; nobody may grant OWNER
-// through the role-change endpoint; the OWNER cannot leave without
-// transferring first). Those invariants depend on which member is being
-// acted on, not just the actor's role, so they're enforced in
-// GroupMembershipsService instead - see its enforceRoleChangeIsAllowed and
-// assertCanLeave.
+// This is the single, deterministic source of truth for Role -> Permission.
+// GroupPermissionsGuard (and anything else checking authorization) must go
+// through GroupPermissionService, never compare Role names directly -
+// ownership-transfer is the one documented exception, since "is this
+// membership currently the OWNER" is an identity check, not a capability
+// check.
 
 const MEMBER_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.GROUP_VIEW,
+  GroupPermission.MEMBERSHIP_VIEW,
+  GroupPermission.ACADEMY_VIEW,
+  GroupPermission.SECTION_VIEW,
 ];
 
 // INSTRUCTOR and ASSISTANT have no extra permissions yet - they carry no
-// functional weight until sections/training modules land in a later stage.
+// functional weight until training/attendance modules land in a later
+// stage.
 const ASSISTANT_PERMISSIONS: readonly GroupPermission[] = [
   ...MEMBER_PERMISSIONS,
 ];
@@ -31,9 +40,16 @@ const INSTRUCTOR_PERMISSIONS: readonly GroupPermission[] = [
 const ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   ...MEMBER_PERMISSIONS,
   GroupPermission.GROUP_EDIT,
-  GroupPermission.GROUP_MEMBER_ADD,
-  GroupPermission.GROUP_MEMBER_ROLE_CHANGE,
-  GroupPermission.GROUP_MEMBER_REMOVE,
+  GroupPermission.MEMBERSHIP_ADD,
+  GroupPermission.MEMBERSHIP_ROLE_CHANGE,
+  GroupPermission.MEMBERSHIP_REMOVE,
+  GroupPermission.MEMBERSHIP_SECTION_ASSIGN,
+  GroupPermission.ACADEMY_CREATE,
+  GroupPermission.ACADEMY_EDIT,
+  GroupPermission.ACADEMY_ARCHIVE,
+  GroupPermission.SECTION_CREATE,
+  GroupPermission.SECTION_EDIT,
+  GroupPermission.SECTION_ARCHIVE,
 ];
 
 // Every lifecycle-status permission (ARCHIVE, UNARCHIVE, SET_READ_ONLY,
@@ -58,3 +74,19 @@ export const GROUP_ROLE_PERMISSIONS: Readonly<
   [GroupRole.ADMIN]: ADMIN_PERMISSIONS,
   [GroupRole.OWNER]: OWNER_PERMISSIONS,
 };
+
+// Subset of GroupPermission that remains available while a Membership is
+// READ_ONLY (see organization-entities.md#membership: "remains visible...
+// but the user loses operational permissions"). Every other permission
+// requires the Membership to be ACTIVE. Kept as an explicit allow-list,
+// not a naming-convention check (e.g. "ends with _VIEW"), so adding a new
+// permission can never accidentally become READ_ONLY-safe by naming
+// coincidence.
+export const READ_ONLY_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> = new Set(
+  [
+    GroupPermission.GROUP_VIEW,
+    GroupPermission.MEMBERSHIP_VIEW,
+    GroupPermission.ACADEMY_VIEW,
+    GroupPermission.SECTION_VIEW,
+  ],
+);

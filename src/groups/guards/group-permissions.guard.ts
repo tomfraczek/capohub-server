@@ -6,7 +6,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { EntityManager } from '@mikro-orm/postgresql';
 import { uuidSchema } from '../../songs/dto/song-validation.helpers';
 import { AuthenticatedRequest } from '../../auth/types/authenticated-request.type';
 import { ALLOW_GROUP_STATUSES_KEY } from '../decorators/allow-group-statuses.decorator';
@@ -15,7 +14,7 @@ import { assertGroupStatusAllowed } from '../group-write-policy';
 import { GroupStatus } from '../enums/group-status.enum';
 import { GroupPermission } from '../permissions/group-permission.enum';
 import { GroupPermissionService } from '../permissions/group-permission.service';
-import { loadActiveMembership } from '../group-membership.query';
+import { RoleAssignmentsService } from '../role-assignments.service';
 
 const DEFAULT_ALLOWED_STATUSES: readonly GroupStatus[] = [GroupStatus.ACTIVE];
 
@@ -28,11 +27,12 @@ const DEFAULT_ALLOWED_STATUSES: readonly GroupStatus[] = [GroupStatus.ACTIVE];
  * the two never collide, since a route only ever has one or the other.
  *
  * Whether the group exists at all and whether the caller can see it are the
- * same question here: a user with no active membership gets 404, exactly
- * like PlaylistsService.getById returns 404 for another user's playlist
- * (see playlists.service.ts) - never a 403 that would confirm the group's
- * existence to a non-member. A 403 is reserved for an active member whose
- * role lacks the specific permission required for the action.
+ * same question here: a user with no usable authorization for it gets 404,
+ * exactly like PlaylistsService.getById returns 404 for another user's
+ * playlist (see playlists.service.ts) - never a 403 that would confirm the
+ * group's existence to a non-member. A 403 is reserved for someone with a
+ * Role Assignment for this exact Group whose Role lacks the specific
+ * permission required for the action.
  *
  * After the permission check passes, this is also the single place that
  * enforces the group's lifecycle-status policy (see group-write-policy.ts):
@@ -40,18 +40,30 @@ const DEFAULT_ALLOWED_STATUSES: readonly GroupStatus[] = [GroupStatus.ACTIVE];
  * (default: ACTIVE only), and any other status rejects the request with 409
  * - so a future write endpoint is blocked by default, not opted in.
  *
- * Deliberately checks the Role/Permission held directly in the acted-on
- * Group (:id/:groupId) - never a Root Group fallback. Role/Permission is a
- * separate concept from Membership and never inherits through the
- * hierarchy (see ADR-013); Membership only being Root Group-scoped does not
- * change that.
+ * Delegates authorization resolution entirely to
+ * RoleAssignmentsService.resolveAuthorization(), which:
+ * 1. resolves the acted-on Group's Root Group,
+ * 2. finds the caller's Membership there (must be ACTIVE or READ_ONLY),
+ * 3. finds *every* Role Assignment the caller holds for the exact acted-on
+ *    Group - never a Root Group fallback, never inherited from a parent, a
+ *    Child, or a sibling Group (see ADR-013, ADR-028).
+ *
+ * A Membership may hold several Role Assignments for the same Group at
+ * once (e.g. MEMBER + INSTRUCTOR + ADMIN together) - the permission check
+ * is the *union* of every held Role's permissions, never just one (see
+ * GroupPermissionService.hasAllPermissionsForRoles).
+ *
+ * A Membership that is READ_ONLY only grants the View-tier subset of that
+ * union (see READ_ONLY_SAFE_PERMISSIONS) - "remains visible... but the
+ * user loses operational permissions" (see
+ * organization-entities.md#membership).
  */
 @Injectable()
 export class GroupPermissionsGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly groupPermissionService: GroupPermissionService,
-    private readonly em: EntityManager,
+    private readonly roleAssignmentsService: RoleAssignmentsService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -70,20 +82,24 @@ export class GroupPermissionsGuard implements CanActivate {
       throw this.groupNotFound();
     }
 
-    const membership = await loadActiveMembership(
-      this.em,
-      groupId,
-      request.localUser.id,
-    );
+    const authorization =
+      await this.roleAssignmentsService.resolveAuthorization(
+        groupId,
+        request.localUser.id,
+      );
 
-    if (!membership) {
+    if (!authorization) {
       throw this.groupNotFound();
     }
 
+    const { group, membership, roleAssignments } = authorization;
+    const roles = roleAssignments.map((roleAssignment) => roleAssignment.role);
+
     if (
-      !this.groupPermissionService.hasAllPermissions(
-        membership.role,
+      !this.groupPermissionService.hasAllPermissionsForRoles(
+        roles,
         requiredPermissions,
+        membership.status,
       )
     ) {
       throw new ForbiddenException({
@@ -97,7 +113,7 @@ export class GroupPermissionsGuard implements CanActivate {
         ALLOW_GROUP_STATUSES_KEY,
         [context.getHandler(), context.getClass()],
       ) ?? DEFAULT_ALLOWED_STATUSES;
-    assertGroupStatusAllowed(membership.rootGroup, allowedStatuses);
+    assertGroupStatusAllowed(group, allowedStatuses);
 
     return true;
   }

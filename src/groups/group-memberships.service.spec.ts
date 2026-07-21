@@ -6,12 +6,11 @@ import {
 import { UniqueConstraintViolationException } from '@mikro-orm/core';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
-import {
-  GROUP_MEMBERSHIPS_ACTIVE_UNIQUE_INDEX,
-  GroupMembership,
-} from './entities/group-membership.entity';
+import { GROUP_MEMBERSHIPS_ACTIVE_UNIQUE_INDEX } from './entities/group-membership.entity';
+import { GroupMembership } from './entities/group-membership.entity';
 import { Group } from './entities/group.entity';
 import { MembershipSection } from './entities/membership-section.entity';
+import { RoleAssignment } from './entities/role-assignment.entity';
 import { Section } from './entities/section.entity';
 import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
@@ -20,6 +19,7 @@ import { MembershipEndReason } from './enums/membership-end-reason.enum';
 import { SectionStatus } from './enums/section-status.enum';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupMembershipsService } from './group-memberships.service';
+import { RoleAssignmentsService } from './role-assignments.service';
 
 function buildGroup(overrides: Partial<Group> = {}): Group {
   const group = new Group();
@@ -35,11 +35,22 @@ function buildMembership(
 ): GroupMembership {
   const membership = new GroupMembership();
   membership.id = 'membership-1';
-  membership.role = GroupRole.MEMBER;
   membership.status = GroupMembershipStatus.ACTIVE;
   membership.rootGroup = buildGroup();
   membership.user = { id: 'user-1', displayName: 'Member' } as never;
   return Object.assign(membership, overrides);
+}
+
+function buildRoleAssignment(
+  overrides: Partial<RoleAssignment> = {},
+): RoleAssignment {
+  const assignment = new RoleAssignment();
+  assignment.id = 'role-assignment-1';
+  assignment.role = GroupRole.MEMBER;
+  assignment.membership = buildMembership();
+  assignment.group = buildGroup();
+  assignment.grantedAt = new Date('2026-01-01T00:00:00.000Z');
+  return Object.assign(assignment, overrides);
 }
 
 function buildSection(overrides: Partial<Section> = {}): Section {
@@ -60,13 +71,19 @@ interface MockRouting {
   // findOne results, keyed by entity constructor - each is consumed as a
   // FIFO queue so a test can express "first call returns X, second
   // returns Y" for repeated lookups of the same entity type (e.g.
-  // transferOwnership loading two different memberships).
+  // transferOwnership loading two different memberships/role assignments).
   groupResults?: (Group | null)[];
   userResults?: (User | null)[];
   membershipResults?: (GroupMembership | null)[];
   sectionResults?: (Section | null)[];
   membershipSectionResults?: (MembershipSection | null)[];
-  sectionRefs?: { id: string; name: string }[];
+  roleAssignmentResults?: (RoleAssignment | null)[];
+  // find (bulk) results, keyed by entity constructor. Not a FIFO queue -
+  // every call to find() for the same entity gets the same static array,
+  // which is enough for these tests since none of them depend on two
+  // *different* bulk-find results for the same entity within one test.
+  membershipSectionFindResults?: MembershipSection[];
+  roleAssignmentFindResults?: RoleAssignment[];
   flushError?: Error;
 }
 
@@ -76,6 +93,7 @@ function buildMockEm(routing: MockRouting = {}) {
   const membershipQueue = [...(routing.membershipResults ?? [])];
   const sectionQueue = [...(routing.sectionResults ?? [])];
   const membershipSectionQueue = [...(routing.membershipSectionResults ?? [])];
+  const roleAssignmentQueue = [...(routing.roleAssignmentResults ?? [])];
 
   const findOneCalls: FindOneCall[] = [];
 
@@ -104,12 +122,23 @@ function buildMockEm(routing: MockRouting = {}) {
     if (entity === MembershipSection) {
       return Promise.resolve(membershipSectionQueue.shift() ?? null);
     }
+    if (entity === RoleAssignment) {
+      return Promise.resolve(roleAssignmentQueue.shift() ?? null);
+    }
     throw new Error(
       `Unexpected findOne entity in test mock: ${String(entity)}`,
     );
   });
 
-  const find = jest.fn(() => Promise.resolve(routing.sectionRefs ?? []));
+  const find = jest.fn((entity: unknown) => {
+    if (entity === MembershipSection) {
+      return Promise.resolve(routing.membershipSectionFindResults ?? []);
+    }
+    if (entity === RoleAssignment) {
+      return Promise.resolve(routing.roleAssignmentFindResults ?? []);
+    }
+    throw new Error(`Unexpected find entity in test mock: ${String(entity)}`);
+  });
 
   const getReference = jest
     .fn()
@@ -146,31 +175,80 @@ function buildService(
   const groupHierarchyService = {
     getRootGroup: getRootGroupImpl ?? (() => Promise.resolve(buildGroup())),
   } as unknown as GroupHierarchyService;
+  const roleAssignmentsService = new RoleAssignmentsService(
+    em,
+    groupHierarchyService,
+  );
 
-  return new GroupMembershipsService(em, groupHierarchyService);
+  return new GroupMembershipsService(
+    em,
+    groupHierarchyService,
+    roleAssignmentsService,
+  );
 }
 
 describe('GroupMembershipsService', () => {
   describe('addMember', () => {
-    it('creates a new active membership for an existing user in a Root Group', async () => {
+    it('creates a new active membership and automatically grants MEMBER for the Root Group', async () => {
       const user = new User();
       user.id = 'user-2';
       const { em, persist } = buildMockEm({
         groupResults: [buildGroup()],
         userResults: [user],
         membershipResults: [null],
+        // ensureMemberRole's existence check - no MEMBER row yet.
+        roleAssignmentResults: [null],
+        roleAssignmentFindResults: [
+          buildRoleAssignment({ role: GroupRole.MEMBER }),
+        ],
       });
       const service = buildService(em);
 
-      await service.addMember('root-1', {
+      const result = await service.addMember('root-1', {
         userId: 'user-2',
         role: GroupRole.MEMBER,
       });
 
-      const persisted = persist.mock.calls[0][0] as GroupMembership;
-      expect(persisted.role).toBe(GroupRole.MEMBER);
-      expect(persisted.user).toBe(user);
-      expect(persisted.rootGroup.id).toBe('root-1');
+      const persistedMembership = persist.mock.calls[0][0] as GroupMembership;
+      expect(persistedMembership.user).toBe(user);
+      expect(persistedMembership.rootGroup.id).toBe('root-1');
+
+      const persistedMemberRole = persist.mock.calls[1][0] as RoleAssignment;
+      expect(persistedMemberRole.role).toBe(GroupRole.MEMBER);
+      expect(persistedMemberRole.membership).toBe(persistedMembership);
+      expect(persistedMemberRole.group).toBe(persistedMembership.rootGroup);
+      // Requesting MEMBER explicitly does not create a second row on top
+      // of the automatic grant.
+      expect(persist).toHaveBeenCalledTimes(2);
+      expect(result.rootRoles).toEqual([GroupRole.MEMBER]);
+    });
+
+    it('grants the requested Role in addition to the automatic MEMBER grant when they differ', async () => {
+      const user = new User();
+      user.id = 'user-2';
+      const { em, persist } = buildMockEm({
+        groupResults: [buildGroup()],
+        userResults: [user],
+        membershipResults: [null],
+        roleAssignmentResults: [null],
+        roleAssignmentFindResults: [
+          buildRoleAssignment({ role: GroupRole.MEMBER }),
+          buildRoleAssignment({ role: GroupRole.ADMIN }),
+        ],
+      });
+      const service = buildService(em);
+
+      const result = await service.addMember('root-1', {
+        userId: 'user-2',
+        role: GroupRole.ADMIN,
+      });
+
+      expect(persist).toHaveBeenCalledTimes(3);
+      const persistedMemberRole = persist.mock.calls[1][0] as RoleAssignment;
+      const persistedAdminRole = persist.mock.calls[2][0] as RoleAssignment;
+      expect(persistedMemberRole.role).toBe(GroupRole.MEMBER);
+      expect(persistedAdminRole.role).toBe(GroupRole.ADMIN);
+      expect(result.rootRoles).toEqual([GroupRole.MEMBER, GroupRole.ADMIN]);
     });
 
     it('rejects with MEMBERSHIP_ROOT_GROUP_MISMATCH when the target group is a Child Group', async () => {
@@ -250,6 +328,7 @@ describe('GroupMembershipsService', () => {
         // simply never looked up here (loadActiveMembership is always
         // scoped to the target rootGroupId).
         membershipResults: [null],
+        roleAssignmentResults: [null],
       });
       const service = buildService(em);
 
@@ -269,6 +348,7 @@ describe('GroupMembershipsService', () => {
         groupResults: [buildGroup()],
         userResults: [user],
         membershipResults: [null],
+        roleAssignmentResults: [null],
         flushError: new UniqueConstraintViolationException(
           new Error(
             `duplicate key value violates unique constraint "${GROUP_MEMBERSHIPS_ACTIVE_UNIQUE_INDEX}"`,
@@ -295,13 +375,33 @@ describe('GroupMembershipsService', () => {
         endReason: MembershipEndReason.LEFT,
         leftAt: new Date('2026-01-01T00:00:00.000Z'),
       });
-      const { em } = buildMockEm({ membershipResults: [membership] });
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+        roleAssignmentFindResults: [
+          buildRoleAssignment({ role: GroupRole.MEMBER }),
+          buildRoleAssignment({ role: GroupRole.ADMIN }),
+        ],
+      });
       const service = buildService(em);
 
       const result = await service.getMembership('root-1', 'membership-1');
 
       expect(result.status).toBe(GroupMembershipStatus.ARCHIVED);
       expect(result.endReason).toBe(MembershipEndReason.LEFT);
+      expect(result.rootRoles).toEqual([GroupRole.MEMBER, GroupRole.ADMIN]);
+    });
+
+    it('returns an empty rootRoles array when no Role Assignment is found for this Group', async () => {
+      const membership = buildMembership();
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+        roleAssignmentFindResults: [],
+      });
+      const service = buildService(em);
+
+      const result = await service.getMembership('root-1', 'membership-1');
+
+      expect(result.rootRoles).toEqual([]);
     });
 
     it('throws MEMBERSHIP_NOT_FOUND when the membership does not exist', async () => {
@@ -319,48 +419,14 @@ describe('GroupMembershipsService', () => {
     });
   });
 
-  describe('changeRole', () => {
-    it('updates the role of a non-owner membership', async () => {
-      const membership = buildMembership({ role: GroupRole.MEMBER });
-      const { em } = buildMockEm({ membershipResults: [membership] });
-      const service = buildService(em);
-
-      await service.changeRole('root-1', 'membership-1', {
-        role: GroupRole.ADMIN,
-      });
-
-      expect(membership.role).toBe(GroupRole.ADMIN);
-    });
-
-    it('rejects with CANNOT_CHANGE_OWNER_ROLE when the target is the owner', async () => {
-      const membership = buildMembership({ role: GroupRole.OWNER });
-      const { em } = buildMockEm({ membershipResults: [membership] });
-      const service = buildService(em);
-
-      const error: unknown = await service
-        .changeRole('root-1', 'membership-1', { role: GroupRole.ADMIN })
-        .catch((caught: unknown) => caught);
-
-      expect(error).toBeInstanceOf(ConflictException);
-      expect((error as ConflictException).getResponse()).toMatchObject({
-        code: 'CANNOT_CHANGE_OWNER_ROLE',
-      });
-    });
-
-    it('throws NotFoundException when the membership does not exist', async () => {
-      const { em } = buildMockEm({ membershipResults: [null] });
-      const service = buildService(em);
-
-      await expect(
-        service.changeRole('root-1', 'missing', { role: GroupRole.ADMIN }),
-      ).rejects.toBeInstanceOf(NotFoundException);
-    });
-  });
-
   describe('removeMember', () => {
-    it('archives the membership with endReason REMOVED, preserving history', async () => {
-      const membership = buildMembership({ role: GroupRole.ADMIN });
-      const { em } = buildMockEm({ membershipResults: [membership] });
+    it('archives the membership with endReason REMOVED, preserving history and every Role Assignment', async () => {
+      const membership = buildMembership();
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+        // hasRole(OWNER) check - not the owner.
+        roleAssignmentResults: [null],
+      });
       const service = buildService(em);
 
       await service.removeMember('root-1', 'membership-1');
@@ -368,12 +434,14 @@ describe('GroupMembershipsService', () => {
       expect(membership.status).toBe(GroupMembershipStatus.ARCHIVED);
       expect(membership.endReason).toBe(MembershipEndReason.REMOVED);
       expect(membership.leftAt).not.toBeNull();
-      expect(membership.role).toBe(GroupRole.ADMIN);
     });
 
-    it('rejects with CANNOT_REMOVE_OWNER when the target is the owner', async () => {
-      const membership = buildMembership({ role: GroupRole.OWNER });
-      const { em } = buildMockEm({ membershipResults: [membership] });
+    it('rejects with CANNOT_REMOVE_OWNER when the target holds an OWNER Role Assignment (even alongside other Roles)', async () => {
+      const membership = buildMembership();
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+        roleAssignmentResults: [buildRoleAssignment({ role: GroupRole.OWNER })],
+      });
       const service = buildService(em);
 
       const error: unknown = await service
@@ -389,8 +457,11 @@ describe('GroupMembershipsService', () => {
 
   describe('leave', () => {
     it('archives the membership with endReason LEFT for a non-owner', async () => {
-      const membership = buildMembership({ role: GroupRole.MEMBER });
-      const { em } = buildMockEm({ membershipResults: [membership] });
+      const membership = buildMembership();
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+        roleAssignmentResults: [null],
+      });
       const service = buildService(em);
 
       await service.leave('root-1', 'user-1');
@@ -400,9 +471,12 @@ describe('GroupMembershipsService', () => {
       expect(membership.leftAt).not.toBeNull();
     });
 
-    it('rejects with OWNER_MUST_TRANSFER_OWNERSHIP when the caller is the owner', async () => {
-      const membership = buildMembership({ role: GroupRole.OWNER });
-      const { em } = buildMockEm({ membershipResults: [membership] });
+    it('rejects with OWNER_MUST_TRANSFER_OWNERSHIP when the caller holds an OWNER Role Assignment', async () => {
+      const membership = buildMembership();
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+        roleAssignmentResults: [buildRoleAssignment({ role: GroupRole.OWNER })],
+      });
       const service = buildService(em);
 
       const error: unknown = await service
@@ -424,7 +498,6 @@ describe('GroupMembershipsService', () => {
       const error: unknown = await service
         .transferOwnership('root-1', 'user-1', {
           newOwnerUserId: 'user-1',
-          previousOwnerRole: GroupRole.ADMIN,
         })
         .catch((caught: unknown) => caught);
 
@@ -435,16 +508,20 @@ describe('GroupMembershipsService', () => {
     });
 
     it('rejects with TARGET_NOT_A_MEMBER when the new owner has no active membership', async () => {
-      const previousOwner = buildMembership({ role: GroupRole.OWNER });
+      const previousOwner = buildMembership({ id: 'membership-owner' });
+      const previousOwnerAssignment = buildRoleAssignment({
+        membership: previousOwner,
+        role: GroupRole.OWNER,
+      });
       const { em } = buildMockEm({
         membershipResults: [previousOwner, null],
+        roleAssignmentResults: [previousOwnerAssignment],
       });
       const service = buildService(em);
 
       const error: unknown = await service
         .transferOwnership('root-1', 'user-1', {
           newOwnerUserId: 'user-2',
-          previousOwnerRole: GroupRole.ADMIN,
         })
         .catch((caught: unknown) => caught);
 
@@ -454,27 +531,87 @@ describe('GroupMembershipsService', () => {
       });
     });
 
-    it('sets the previous owner to previousOwnerRole and the target to OWNER', async () => {
-      const previousOwner = buildMembership({
-        id: 'membership-owner',
+    it('rejects with MEMBERSHIP_NOT_FOUND when the caller does not hold an OWNER Role Assignment', async () => {
+      const previousOwner = buildMembership({ id: 'membership-owner' });
+      const { em } = buildMockEm({
+        membershipResults: [previousOwner],
+        // findRoleAssignment(OWNER) - not found.
+        roleAssignmentResults: [null],
+      });
+      const service = buildService(em);
+
+      const error: unknown = await service
+        .transferOwnership('root-1', 'user-1', {
+          newOwnerUserId: 'user-2',
+        })
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(NotFoundException);
+      expect((error as NotFoundException).getResponse()).toMatchObject({
+        code: 'MEMBERSHIP_NOT_FOUND',
+      });
+    });
+
+    it('atomically removes the OWNER Role Assignment from the previous owner and grants it to the target, leaving every other Role untouched', async () => {
+      const previousOwner = buildMembership({ id: 'membership-owner' });
+      const newOwner = buildMembership({ id: 'membership-target' });
+      const previousOwnerAssignment = buildRoleAssignment({
+        membership: previousOwner,
         role: GroupRole.OWNER,
       });
-      const newOwner = buildMembership({
-        id: 'membership-target',
+      // The new owner already holds MEMBER for this Root Group (granted
+      // automatically when they joined) - ensureMemberRole finds it and
+      // does not create a duplicate.
+      const newOwnerMemberAssignment = buildRoleAssignment({
+        membership: newOwner,
         role: GroupRole.MEMBER,
       });
-      const { em } = buildMockEm({
+      const { em, persist, remove } = buildMockEm({
         membershipResults: [previousOwner, newOwner],
+        roleAssignmentResults: [
+          previousOwnerAssignment,
+          newOwnerMemberAssignment,
+        ],
       });
       const service = buildService(em);
 
       await service.transferOwnership('root-1', 'user-1', {
         newOwnerUserId: 'user-2',
-        previousOwnerRole: GroupRole.ADMIN,
       });
 
-      expect(previousOwner.role).toBe(GroupRole.ADMIN);
-      expect(newOwner.role).toBe(GroupRole.OWNER);
+      expect(remove).toHaveBeenCalledWith(previousOwnerAssignment);
+      // ensureMemberRole found an existing MEMBER row, so the only new
+      // persist is the new owner's OWNER Role Assignment.
+      expect(persist).toHaveBeenCalledTimes(1);
+      const grantedOwnerRole = persist.mock.calls[0][0] as RoleAssignment;
+      expect(grantedOwnerRole.role).toBe(GroupRole.OWNER);
+      expect(grantedOwnerRole.membership).toBe(newOwner);
+    });
+
+    it("also grants MEMBER to the target when they somehow don't already hold it for this Root Group", async () => {
+      const previousOwner = buildMembership({ id: 'membership-owner' });
+      const newOwner = buildMembership({ id: 'membership-target' });
+      const previousOwnerAssignment = buildRoleAssignment({
+        membership: previousOwner,
+        role: GroupRole.OWNER,
+      });
+      const { em, persist } = buildMockEm({
+        membershipResults: [previousOwner, newOwner],
+        // OWNER check finds a row; ensureMemberRole's MEMBER check finds
+        // nothing, so it must create one.
+        roleAssignmentResults: [previousOwnerAssignment, null],
+      });
+      const service = buildService(em);
+
+      await service.transferOwnership('root-1', 'user-1', {
+        newOwnerUserId: 'user-2',
+      });
+
+      expect(persist).toHaveBeenCalledTimes(2);
+      const grantedMemberRole = persist.mock.calls[0][0] as RoleAssignment;
+      const grantedOwnerRole = persist.mock.calls[1][0] as RoleAssignment;
+      expect(grantedMemberRole.role).toBe(GroupRole.MEMBER);
+      expect(grantedOwnerRole.role).toBe(GroupRole.OWNER);
     });
   });
 

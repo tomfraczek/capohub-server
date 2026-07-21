@@ -35,11 +35,11 @@ describe('AcademiesController', () => {
   describe.each<
     [keyof AcademiesController, GroupPermission[], GroupStatus[] | undefined]
   >([
-    ['create', [GroupPermission.GROUP_EDIT], undefined],
-    ['list', [GroupPermission.GROUP_VIEW], ANY_STATUS],
-    ['getById', [GroupPermission.GROUP_VIEW], ANY_STATUS],
-    ['update', [GroupPermission.GROUP_EDIT], undefined],
-    ['archive', [GroupPermission.GROUP_EDIT], undefined],
+    ['create', [GroupPermission.ACADEMY_CREATE], undefined],
+    ['list', [GroupPermission.ACADEMY_VIEW], ANY_STATUS],
+    ['getById', [GroupPermission.ACADEMY_VIEW], ANY_STATUS],
+    ['update', [GroupPermission.ACADEMY_EDIT], undefined],
+    ['archive', [GroupPermission.ACADEMY_ARCHIVE], undefined],
   ])('%s', (method, expectedPermissions, expectedAllowedStatuses) => {
     it(`requires ${expectedPermissions.join(', ')}`, () => {
       const reflector = new Reflector();

@@ -26,23 +26,36 @@ export class GroupHierarchyService {
    * Walks `parentGroup` up to the top. Returns the Group itself if it is
    * already a Root Group. `visited` guards against corrupt/cyclic data
    * that could only exist if something bypassed this service.
+   *
+   * Accepts an optional `em` so callers running inside their own
+   * `em.transactional(...)` callback can pass that forked EntityManager
+   * through, instead of this falling back to `this.em` - reaching for a
+   * second EntityManager from inside someone else's transaction risks the
+   * same connection-pool deadlock class described on
+   * GroupHierarchyService.moveGroup's (removed) history.
    */
-  async getRootGroup(groupId: string): Promise<Group> {
-    return this.resolveRootGroup(this.em, groupId);
+  async getRootGroup(
+    groupId: string,
+    em: EntityManager = this.em,
+  ): Promise<Group> {
+    return this.resolveRootGroup(em, groupId);
   }
 
   /**
    * Ancestors ordered from the Root Group down to the immediate parent
    * (root-first). Empty array for a Root Group.
    */
-  async getAncestors(groupId: string): Promise<Group[]> {
-    const group = await this.loadOrFail(this.em, groupId);
+  async getAncestors(
+    groupId: string,
+    em: EntityManager = this.em,
+  ): Promise<Group[]> {
+    const group = await this.loadOrFail(em, groupId);
     const ancestors: Group[] = [];
     const visited = new Set<string>([group.id]);
 
     let parentRef = group.parentGroup;
     while (parentRef) {
-      const parent = await this.loadOrFail(this.em, parentRef.id);
+      const parent = await this.loadOrFail(em, parentRef.id);
       if (visited.has(parent.id)) {
         throw this.cycleDetected();
       }
@@ -61,14 +74,17 @@ export class GroupHierarchyService {
    * method's contract (see organization-domain.md#performance: correctness
    * first, optimize later).
    */
-  async getDescendants(groupId: string): Promise<Group[]> {
-    await this.loadOrFail(this.em, groupId);
+  async getDescendants(
+    groupId: string,
+    em: EntityManager = this.em,
+  ): Promise<Group[]> {
+    await this.loadOrFail(em, groupId);
 
     const descendants: Group[] = [];
     let frontier = [groupId];
 
     while (frontier.length > 0) {
-      const children = await this.em.find(Group, {
+      const children = await em.find(Group, {
         parentGroup: { $in: frontier },
       });
       descendants.push(...children);
@@ -84,8 +100,11 @@ export class GroupHierarchyService {
    * caller have permission to attach something under this parent) is the
    * caller's responsibility.
    */
-  async assertParentIsUsable(parentGroupId: string): Promise<Group> {
-    return this.resolveUsableParent(this.em, parentGroupId);
+  async assertParentIsUsable(
+    parentGroupId: string,
+    em: EntityManager = this.em,
+  ): Promise<Group> {
+    return this.resolveUsableParent(em, parentGroupId);
   }
 
   private async resolveRootGroup(

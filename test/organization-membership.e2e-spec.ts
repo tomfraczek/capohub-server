@@ -21,6 +21,7 @@ import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { MembershipSection } from '../src/groups/entities/membership-section.entity';
+import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
 
@@ -151,6 +152,9 @@ describe('Organization Membership (e2e)', () => {
       },
     });
     await cleanup.nativeDelete(Section, { group: { $in: createdGroupIds } });
+    await cleanup.nativeDelete(RoleAssignment, {
+      group: { $in: createdGroupIds },
+    });
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
     });
@@ -302,7 +306,7 @@ describe('Organization Membership (e2e)', () => {
   });
 
   describe('rootGroupId is immutable', () => {
-    it('rejects a PATCH attempt to change the role and smuggle in rootGroupId with 400', async () => {
+    it('has no endpoint that accepts rootGroupId at all - PATCH .../members/:membershipId no longer exists (404)', async () => {
       const root = await createRootGroup(OWNER_TOKEN, {
         name: 'Immutable Membership Root',
       });
@@ -316,15 +320,16 @@ describe('Organization Membership (e2e)', () => {
         GroupRole.MEMBER,
       );
 
-      const response = await request(app.getHttpServer())
+      // A Membership may hold several Roles for the same Group at once
+      // (see ADR-028), so there is no longer a single "the role" to PATCH
+      // on a member - role management always goes through
+      // RoleAssignmentsController instead, which has no field for
+      // rootGroupId/groupId either (see its own .strict() schemas).
+      await request(app.getHttpServer())
         .patch(`/api/v1/groups/${root.id}/members/${membership.id}`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .send({ role: GroupRole.ADMIN, rootGroupId: otherRoot.id })
-        .expect(400);
-
-      expect((response.body as HttpErrorResponse).code).toBe(
-        'VALIDATION_ERROR',
-      );
+        .expect(404);
 
       const fetched = await bodyOf<GroupMembershipResponseDto>(
         request(app.getHttpServer())
@@ -332,7 +337,7 @@ describe('Organization Membership (e2e)', () => {
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(200),
       );
-      expect(fetched.role).toBe(GroupRole.MEMBER);
+      expect(fetched.rootRoles).toEqual([GroupRole.MEMBER]);
       expect(fetched.rootGroupId).toBe(root.id);
     });
   });

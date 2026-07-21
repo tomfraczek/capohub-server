@@ -44,7 +44,7 @@ export class AcademiesController {
 
   @Post()
   @HttpCode(201)
-  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupPermission(GroupPermission.ACADEMY_CREATE)
   create(
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Body(new ZodValidationPipe(createAcademySchema)) dto: CreateAcademyDto,
@@ -53,7 +53,7 @@ export class AcademiesController {
   }
 
   @Get()
-  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupPermission(GroupPermission.ACADEMY_VIEW)
   @AllowGroupStatuses(...ANY_STATUS)
   list(
     @Param('groupId', ParseUUIDPipe) groupId: string,
@@ -62,7 +62,7 @@ export class AcademiesController {
   }
 
   @Get(':academyId')
-  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupPermission(GroupPermission.ACADEMY_VIEW)
   @AllowGroupStatuses(...ANY_STATUS)
   getById(
     @Param('groupId', ParseUUIDPipe) groupId: string,
@@ -72,7 +72,7 @@ export class AcademiesController {
   }
 
   @Patch(':academyId')
-  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupPermission(GroupPermission.ACADEMY_EDIT)
   update(
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Param('academyId', ParseUUIDPipe) academyId: string,
@@ -82,7 +82,7 @@ export class AcademiesController {
   }
 
   @Post(':academyId/archive')
-  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupPermission(GroupPermission.ACADEMY_ARCHIVE)
   archive(
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Param('academyId', ParseUUIDPipe) academyId: string,

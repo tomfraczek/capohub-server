@@ -7,6 +7,8 @@ import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupMembershipsService } from './group-memberships.service';
 import { GroupPermissionsGuard } from './guards/group-permissions.guard';
 import { GroupPermissionService } from './permissions/group-permission.service';
+import { RoleAssignmentsController } from './role-assignments.controller';
+import { RoleAssignmentsService } from './role-assignments.service';
 import { SectionsController } from './sections.controller';
 import { SectionsService } from './sections.service';
 
@@ -16,7 +18,12 @@ import { SectionsService } from './sections.service';
 // wired to auth/permissions/permissions.module.ts - see
 // group-role-permissions.map.ts.
 @Module({
-  controllers: [GroupsController, AcademiesController, SectionsController],
+  controllers: [
+    GroupsController,
+    AcademiesController,
+    SectionsController,
+    RoleAssignmentsController,
+  ],
   providers: [
     GroupsService,
     GroupHierarchyService,
@@ -25,6 +32,7 @@ import { SectionsService } from './sections.service';
     SectionsService,
     GroupPermissionService,
     GroupPermissionsGuard,
+    RoleAssignmentsService,
   ],
 })
 export class GroupsModule {}

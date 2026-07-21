@@ -8,7 +8,6 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
 import { User } from '../users/entities/user.entity';
 import { AddMemberInput } from './dto/add-member.schema';
-import { ChangeMemberRoleInput } from './dto/change-member-role.schema';
 import { GroupMembershipResponseDto } from './dto/group-membership-response.dto';
 import { TransferOwnershipInput } from './dto/transfer-ownership.schema';
 import { TransferOwnershipResponseDto } from './dto/transfer-ownership-response.dto';
@@ -29,6 +28,7 @@ import {
   toGroupMembershipResponseDto,
   toMembershipSectionRefDto,
 } from './mappers/group.mapper';
+import { RoleAssignmentsService } from './role-assignments.service';
 
 const MEMBERSHIP_SECTIONS_UNIQUE_INDEX =
   'membership_sections_membership_id_section_id_unique';
@@ -38,6 +38,7 @@ export class GroupMembershipsService {
   constructor(
     private readonly em: EntityManager,
     private readonly groupHierarchyService: GroupHierarchyService,
+    private readonly roleAssignmentsService: RoleAssignmentsService,
   ) {}
 
   async listMembers(
@@ -49,7 +50,7 @@ export class GroupMembershipsService {
       { populate: ['user'], orderBy: { joinedAt: 'asc' } },
     );
 
-    return this.toResponseDtos(memberships);
+    return this.toResponseDtos(rootGroupId, memberships);
   }
 
   // A membership that has ended remains available by id as history (see
@@ -64,7 +65,7 @@ export class GroupMembershipsService {
       rootGroupId,
       membershipId,
     );
-    return this.toResponseDto(membership);
+    return this.toResponseDto(rootGroupId, membership);
   }
 
   // "Technical" add only - no invitation/acceptance flow (spec section
@@ -72,7 +73,14 @@ export class GroupMembershipsService {
   // assignableGroupRoleSchema. Membership always represents participation
   // in an organization as a whole - rootGroupId must reference an actual
   // Root Group (see organization-entities.md#membership), never a Child
-  // Group.
+  // Group. Joining always grants MEMBER for the Root Group automatically
+  // (see RoleAssignmentsService.ensureMemberRole) - `input.role`, if it is
+  // anything other than MEMBER, is granted *in addition*, not instead of
+  // it (a Membership may hold several Roles for the same Group at once -
+  // see ADR-028). All of this happens atomically with creating the
+  // Membership itself: a Membership with no Role Assignment for its own
+  // Root Group would have no authority anywhere, including viewing it (see
+  // ADR-013 - no fallback).
   async addMember(
     rootGroupId: string,
     input: AddMemberInput,
@@ -112,11 +120,23 @@ export class GroupMembershipsService {
       const membership = new GroupMembership();
       membership.rootGroup = rootGroup;
       membership.user = user;
-      membership.role = input.role;
       membership.joinedAt = new Date();
 
       try {
-        await em.persist(membership).flush();
+        em.persist(membership);
+        await this.roleAssignmentsService.ensureMemberRole(
+          em,
+          membership,
+          rootGroup,
+        );
+        if (input.role !== GroupRole.MEMBER) {
+          await this.roleAssignmentsService.grantRole(
+            em,
+            membership,
+            rootGroup,
+            input.role,
+          );
+        }
       } catch (error) {
         // Race: two concurrent adds for the same user both passed the
         // loadActiveMembership check above before either flushed. The
@@ -132,50 +152,31 @@ export class GroupMembershipsService {
         throw error;
       }
 
-      return this.toResponseDto(membership);
+      return this.toResponseDto(rootGroupId, membership, em);
     });
-  }
-
-  async changeRole(
-    rootGroupId: string,
-    membershipId: string,
-    input: ChangeMemberRoleInput,
-  ): Promise<GroupMembershipResponseDto> {
-    const membership = await this.loadActiveMembershipByIdOrFail(
-      this.em,
-      rootGroupId,
-      membershipId,
-    );
-
-    // The owner's role can only change through transferOwnership, which
-    // simultaneously assigns a new owner - never leaving the group without
-    // exactly one (spec: admin cannot change the owner, cannot grant
-    // ownership).
-    if (membership.role === GroupRole.OWNER) {
-      throw new ConflictException({
-        code: 'CANNOT_CHANGE_OWNER_ROLE',
-        message:
-          'Use the ownership transfer endpoint to change the role of the owner',
-      });
-    }
-
-    membership.role = input.role;
-    await this.em.flush();
-    return this.toResponseDto(membership);
   }
 
   // Ends the Membership because the organization removed the member -
   // never a hard delete (ADR-007). Distinguished from a self-service
   // leave() only by `endReason`, since the documented status set has no
-  // separate REMOVED state (see GroupMembershipStatus).
+  // separate REMOVED state (see GroupMembershipStatus). The member's Role
+  // Assignments (for this Root Group and any Child Group in its tree) are
+  // left in place - they simply expire logically the instant this
+  // Membership is no longer ACTIVE (see ADR-028).
   async removeMember(rootGroupId: string, membershipId: string): Promise<void> {
     const membership = await this.loadActiveMembershipByIdOrFail(
       this.em,
       rootGroupId,
       membershipId,
     );
+    const isOwner = await this.roleAssignmentsService.hasRole(
+      this.em,
+      membership.id,
+      rootGroupId,
+      GroupRole.OWNER,
+    );
 
-    if (membership.role === GroupRole.OWNER) {
+    if (isOwner) {
       throw new ConflictException({
         code: 'CANNOT_REMOVE_OWNER',
         message: 'The owner cannot be removed - transfer ownership first',
@@ -196,8 +197,14 @@ export class GroupMembershipsService {
     if (!membership) {
       throw this.membershipNotFound();
     }
+    const isOwner = await this.roleAssignmentsService.hasRole(
+      this.em,
+      membership.id,
+      rootGroupId,
+      GroupRole.OWNER,
+    );
 
-    if (membership.role === GroupRole.OWNER) {
+    if (isOwner) {
       throw new ConflictException({
         code: 'OWNER_MUST_TRANSFER_OWNERSHIP',
         message: 'Transfer ownership before leaving the group',
@@ -210,6 +217,13 @@ export class GroupMembershipsService {
     await this.em.flush();
   }
 
+  // Atomic transfer: the previous owner's OWNER Role Assignment is removed
+  // and the new owner's is created in the same transaction, so no other
+  // request ever observes a Group with zero or two active OWNERs (the
+  // ROLE_ASSIGNMENTS_OWNER_UNIQUE_INDEX partial unique index is the
+  // database-level backstop for this). The previous owner loses *only*
+  // the OWNER Role Assignment - every other Role they hold (MEMBER, ADMIN,
+  // ...) is left completely untouched (see ADR-028).
   async transferOwnership(
     rootGroupId: string,
     currentOwnerUserId: string,
@@ -223,35 +237,63 @@ export class GroupMembershipsService {
     }
 
     return this.em.transactional(async (em) => {
-      const previousOwner = await loadActiveMembership(
+      const previousOwnerMembership = await loadActiveMembership(
         em,
         rootGroupId,
         currentOwnerUserId,
       );
-      if (!previousOwner || previousOwner.role !== GroupRole.OWNER) {
+      if (!previousOwnerMembership) {
+        throw this.membershipNotFound();
+      }
+      const previousOwnerAssignment =
+        await this.roleAssignmentsService.findRoleAssignment(
+          em,
+          previousOwnerMembership.id,
+          rootGroupId,
+          GroupRole.OWNER,
+        );
+      if (!previousOwnerAssignment) {
         throw this.membershipNotFound();
       }
 
-      const newOwner = await loadActiveMembership(
+      const newOwnerMembership = await loadActiveMembership(
         em,
         rootGroupId,
         input.newOwnerUserId,
       );
-      if (!newOwner) {
+      if (!newOwnerMembership) {
         throw new BadRequestException({
           code: 'TARGET_NOT_A_MEMBER',
           message:
             'newOwnerUserId must already be an active member of the group',
         });
       }
+      const rootGroup = newOwnerMembership.rootGroup;
 
-      previousOwner.role = input.previousOwnerRole;
-      newOwner.role = GroupRole.OWNER;
-      await em.flush();
+      await em.remove(previousOwnerAssignment).flush();
+      // Defensive - every active Membership already holds MEMBER for its
+      // own Root Group (see ensureMemberRole), so this is normally a
+      // no-op; it exists purely so this method never depends on that
+      // invariant silently holding elsewhere.
+      await this.roleAssignmentsService.ensureMemberRole(
+        em,
+        newOwnerMembership,
+        rootGroup,
+      );
+      await this.roleAssignmentsService.grantRole(
+        em,
+        newOwnerMembership,
+        rootGroup,
+        GroupRole.OWNER,
+      );
 
       return {
-        previousOwner: await this.toResponseDto(previousOwner),
-        newOwner: await this.toResponseDto(newOwner),
+        previousOwner: await this.toResponseDto(
+          rootGroupId,
+          previousOwnerMembership,
+          em,
+        ),
+        newOwner: await this.toResponseDto(rootGroupId, newOwnerMembership, em),
       };
     });
   }
@@ -290,6 +332,7 @@ export class GroupMembershipsService {
 
       const sectionRoot = await this.groupHierarchyService.getRootGroup(
         section.group.id,
+        em,
       );
       if (sectionRoot.id !== rootGroupId) {
         throw new BadRequestException({
@@ -400,37 +443,57 @@ export class GroupMembershipsService {
   }
 
   private async toResponseDto(
+    rootGroupId: string,
     membership: GroupMembership,
+    em: EntityManager = this.em,
   ): Promise<GroupMembershipResponseDto> {
-    const sections = await this.loadSectionRefs([membership.id]);
+    const [sections, rootRoleAssignments] = await Promise.all([
+      this.loadSectionRefs(em, [membership.id]),
+      this.roleAssignmentsService.getRoleAssignmentsForMembership(
+        em,
+        membership.id,
+        rootGroupId,
+      ),
+    ]);
     return toGroupMembershipResponseDto(
       membership,
+      rootRoleAssignments.map((roleAssignment) => roleAssignment.role),
       sections.get(membership.id) ?? [],
     );
   }
 
   private async toResponseDtos(
+    rootGroupId: string,
     memberships: GroupMembership[],
   ): Promise<GroupMembershipResponseDto[]> {
-    const sectionsByMembership = await this.loadSectionRefs(
-      memberships.map((membership) => membership.id),
-    );
+    const [sectionsByMembership, rootRoles] = await Promise.all([
+      this.loadSectionRefs(
+        this.em,
+        memberships.map((membership) => membership.id),
+      ),
+      this.roleAssignmentsService.getRoleAssignmentsForGroup(
+        memberships.map((membership) => membership.id),
+        rootGroupId,
+      ),
+    ]);
     return memberships.map((membership) =>
       toGroupMembershipResponseDto(
         membership,
+        rootRoles.get(membership.id) ?? [],
         sectionsByMembership.get(membership.id) ?? [],
       ),
     );
   }
 
   private async loadSectionRefs(
+    em: EntityManager,
     membershipIds: string[],
   ): Promise<Map<string, ReturnType<typeof toMembershipSectionRefDto>[]>> {
     if (membershipIds.length === 0) {
       return new Map();
     }
 
-    const assignments = await this.em.find(
+    const assignments = await em.find(
       MembershipSection,
       { membership: { $in: membershipIds } },
       { populate: ['section'] },

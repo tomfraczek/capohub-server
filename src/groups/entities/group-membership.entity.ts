@@ -9,7 +9,6 @@ import {
 import { BaseEntity } from '../../database/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { GroupMembershipStatus } from '../enums/group-membership-status.enum';
-import { GroupRole } from '../enums/group-role.enum';
 import { MembershipEndReason } from '../enums/membership-end-reason.enum';
 import { Group } from './group.entity';
 
@@ -37,6 +36,11 @@ export const GROUP_MEMBERSHIPS_ACTIVE_UNIQUE_INDEX =
 // organization-entities.md#membership). Like `parentGroupId` on Group,
 // `rootGroup` is immutable after creation - there is no operation that
 // moves a Membership to a different Root Group.
+//
+// Deliberately has no `role` field - Membership never stores a Role (see
+// ADR-028). Which Role(s) a user holds, and in which specific Group, is
+// answered entirely by RoleAssignment records that reference this
+// Membership - see role-assignment.entity.ts.
 @Entity({ tableName: 'group_memberships' })
 @Index({ properties: ['rootGroup', 'user', 'status'] })
 @Unique({
@@ -53,9 +57,6 @@ export class GroupMembership extends BaseEntity {
   @Index()
   @ManyToOne(() => User, { deleteRule: 'cascade' })
   user!: User;
-
-  @Enum({ items: () => Object.values(GroupRole) })
-  role!: GroupRole;
 
   @Enum({ items: () => Object.values(GroupMembershipStatus) })
   status: GroupMembershipStatus = GroupMembershipStatus.ACTIVE;

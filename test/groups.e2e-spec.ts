@@ -18,9 +18,11 @@ import { User } from '../src/users/entities/user.entity';
 import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { GroupSummaryResponseDto } from '../src/groups/dto/group-summary-response.dto';
+import { RoleAssignmentResponseDto } from '../src/groups/dto/role-assignment-response.dto';
 import { TransferOwnershipResponseDto } from '../src/groups/dto/transfer-ownership-response.dto';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
+import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
 
 const OWNER_TOKEN = 'valid-groups-owner-token';
@@ -156,6 +158,9 @@ describe('Groups (e2e)', () => {
 
   afterAll(async () => {
     const cleanup = app.get(EntityManager).fork();
+    await cleanup.nativeDelete(RoleAssignment, {
+      group: { $in: createdGroupIds },
+    });
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
     });
@@ -256,7 +261,12 @@ describe('Groups (e2e)', () => {
       );
 
       expect(members).toHaveLength(1);
-      expect(members[0].role).toBe(GroupRole.OWNER);
+      // The creator automatically holds MEMBER (granted the instant they
+      // are added to any Group) alongside OWNER - not OWNER alone (see
+      // ADR-028: a Membership may hold several Roles for the same Group).
+      expect(members[0].rootRoles).toEqual(
+        expect.arrayContaining([GroupRole.MEMBER, GroupRole.OWNER]),
+      );
       expect(members[0].user.id).toBe(localUserIdByToken.get(OWNER_TOKEN));
     });
 
@@ -280,8 +290,8 @@ describe('Groups (e2e)', () => {
       );
 
       expect(list.map((item) => item.id)).toContain(created.id);
-      expect(list.find((item) => item.id === created.id)?.myRole).toBe(
-        GroupRole.OWNER,
+      expect(list.find((item) => item.id === created.id)?.myRoles).toEqual(
+        expect.arrayContaining([GroupRole.MEMBER, GroupRole.OWNER]),
       );
     });
   });
@@ -383,7 +393,11 @@ describe('Groups (e2e)', () => {
         GroupRole.INSTRUCTOR,
       );
 
-      expect(membership.role).toBe(GroupRole.INSTRUCTOR);
+      // Joining always grants MEMBER automatically, alongside the
+      // requested Role (see ADR-028) - not instead of it.
+      expect(membership.rootRoles).toEqual(
+        expect.arrayContaining([GroupRole.MEMBER, GroupRole.INSTRUCTOR]),
+      );
       expect(membership.user.id).toBe(localUserIdByToken.get(SECOND_TOKEN));
     });
 
@@ -415,7 +429,7 @@ describe('Groups (e2e)', () => {
         .expect(403);
     });
 
-    it('changes the role of a non-owner member', async () => {
+    it('grants an additional Role to a non-owner member via role-assignments, alongside the automatic MEMBER Role', async () => {
       const created = await createGroup(OWNER_TOKEN);
       const membership = await addMember(
         OWNER_TOKEN,
@@ -424,15 +438,38 @@ describe('Groups (e2e)', () => {
         GroupRole.MEMBER,
       );
 
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${created.id}/role-assignments`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ membershipId: membership.id, role: 'ADMIN' })
+        .expect(201);
+
       const updated = await bodyOf<GroupMembershipResponseDto>(
         request(app.getHttpServer())
-          .patch(`/api/v1/groups/${created.id}/members/${membership.id}`)
+          .get(`/api/v1/groups/${created.id}/members/${membership.id}`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .send({ role: 'ADMIN' })
           .expect(200),
       );
 
-      expect(updated.role).toBe('ADMIN');
+      expect(updated.rootRoles).toEqual(
+        expect.arrayContaining([GroupRole.MEMBER, 'ADMIN']),
+      );
+    });
+
+    it('no longer exposes PATCH .../members/:membershipId to change a role - 404', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+      const membership = await addMember(
+        OWNER_TOKEN,
+        created.id,
+        SECOND_TOKEN,
+        GroupRole.MEMBER,
+      );
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/groups/${created.id}/members/${membership.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ role: 'ADMIN' })
+        .expect(404);
     });
 
     it('removes a non-owner member', async () => {
@@ -477,7 +514,7 @@ describe('Groups (e2e)', () => {
       expect(response.code).toBe('CANNOT_REMOVE_OWNER');
     });
 
-    it('cannot change the owner role directly - 409 CANNOT_CHANGE_OWNER_ROLE', async () => {
+    it('cannot change the OWNER Role Assignment directly - 409 CANNOT_CHANGE_OWNER_ROLE', async () => {
       const created = await createGroup(OWNER_TOKEN);
       const members = await bodyOf<GroupMembershipResponseDto[]>(
         request(app.getHttpServer())
@@ -486,10 +523,23 @@ describe('Groups (e2e)', () => {
           .expect(200),
       );
       const ownerMembership = members[0];
+      const roleAssignments = await bodyOf<RoleAssignmentResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${created.id}/role-assignments`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      const ownerRoleAssignment = roleAssignments.find(
+        (roleAssignment) =>
+          roleAssignment.membershipId === ownerMembership.id &&
+          roleAssignment.role === GroupRole.OWNER,
+      );
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
-          .patch(`/api/v1/groups/${created.id}/members/${ownerMembership.id}`)
+          .patch(
+            `/api/v1/groups/${created.id}/role-assignments/${ownerRoleAssignment?.id}`,
+          )
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .send({ role: 'ADMIN' })
           .expect(409),
@@ -521,7 +571,9 @@ describe('Groups (e2e)', () => {
       );
 
       expect(second.id).not.toBe(first.id);
-      expect(second.role).toBe(GroupRole.ADMIN);
+      expect(second.rootRoles).toEqual(
+        expect.arrayContaining([GroupRole.MEMBER, GroupRole.ADMIN]),
+      );
     });
 
     it('allows re-adding a user after they were removed (historical membership preserved)', async () => {
@@ -546,7 +598,9 @@ describe('Groups (e2e)', () => {
       );
 
       expect(second.id).not.toBe(first.id);
-      expect(second.role).toBe(GroupRole.INSTRUCTOR);
+      expect(second.rootRoles).toEqual(
+        expect.arrayContaining([GroupRole.MEMBER, GroupRole.INSTRUCTOR]),
+      );
     });
 
     it('rejects a duplicate active membership via the API with 409 ALREADY_A_MEMBER', async () => {
@@ -574,14 +628,12 @@ describe('Groups (e2e)', () => {
       const first = new GroupMembership();
       first.rootGroup = em.getReference(Group, created.id);
       first.user = em.getReference(User, userId as string);
-      first.role = GroupRole.MEMBER;
       first.joinedAt = new Date();
       await em.persistAndFlush(first);
 
       const second = new GroupMembership();
       second.rootGroup = em.getReference(Group, created.id);
       second.user = em.getReference(User, userId as string);
-      second.role = GroupRole.ADMIN;
       second.joinedAt = new Date();
 
       const error: unknown = await em
@@ -623,8 +675,16 @@ describe('Groups (e2e)', () => {
   });
 
   describe('transferOwnership', () => {
-    it('transfers ownership to an existing member and reassigns the previous owner role', async () => {
+    it('transfers ownership atomically: the previous owner loses only OWNER, every other Role is untouched', async () => {
       const created = await createGroup(OWNER_TOKEN);
+      const previousOwnerMembership = (
+        await bodyOf<GroupMembershipResponseDto[]>(
+          request(app.getHttpServer())
+            .get(`/api/v1/groups/${created.id}/members`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(200),
+        )
+      )[0];
       await addMember(OWNER_TOKEN, created.id, SECOND_TOKEN, GroupRole.MEMBER);
 
       const result = await bodyOf<TransferOwnershipResponseDto>(
@@ -633,15 +693,22 @@ describe('Groups (e2e)', () => {
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .send({
             newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN),
-            previousOwnerRole: 'ADMIN',
           })
           .expect(201),
       );
 
-      expect(result.newOwner.role).toBe(GroupRole.OWNER);
-      expect(result.previousOwner.role).toBe(GroupRole.ADMIN);
+      // The new owner keeps the MEMBER Role granted automatically when
+      // they joined, plus the new OWNER Role - not OWNER alone.
+      expect(result.newOwner.rootRoles).toEqual(
+        expect.arrayContaining([GroupRole.MEMBER, GroupRole.OWNER]),
+      );
+      // The previous owner loses *only* OWNER - MEMBER (their only other
+      // Role here) is completely untouched.
+      expect(result.previousOwner.rootRoles).toEqual([GroupRole.MEMBER]);
+      expect(result.previousOwner.id).toBe(previousOwnerMembership.id);
 
-      // The old owner (now ADMIN) still cannot archive; only the new owner can.
+      // The old owner (now plain MEMBER) can no longer archive; only the
+      // new owner can.
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${created.id}/archive`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
@@ -656,6 +723,56 @@ describe('Groups (e2e)', () => {
       expect(archived.status).toBe('ARCHIVED');
     });
 
+    it('preserves the previous owner’s other Roles (e.g. ADMIN) across the transfer - not just MEMBER', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+      const previousOwnerMembership = (
+        await bodyOf<GroupMembershipResponseDto[]>(
+          request(app.getHttpServer())
+            .get(`/api/v1/groups/${created.id}/members`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(200),
+        )
+      )[0];
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${created.id}/role-assignments`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ membershipId: previousOwnerMembership.id, role: 'ADMIN' })
+        .expect(201);
+      await addMember(OWNER_TOKEN, created.id, SECOND_TOKEN, GroupRole.MEMBER);
+
+      const result = await bodyOf<TransferOwnershipResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${created.id}/transfer-ownership`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN) })
+          .expect(201),
+      );
+
+      expect(result.previousOwner.rootRoles).toEqual(
+        expect.arrayContaining([GroupRole.MEMBER, GroupRole.ADMIN]),
+      );
+      expect(result.previousOwner.rootRoles).not.toEqual(
+        expect.arrayContaining([GroupRole.OWNER]),
+      );
+    });
+
+    it('rejects a smuggled previousOwnerRole field with 400 VALIDATION_ERROR - the previous owner keeps their existing Roles, none are chosen for them', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+      await addMember(OWNER_TOKEN, created.id, SECOND_TOKEN, GroupRole.MEMBER);
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${created.id}/transfer-ownership`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({
+            newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN),
+            previousOwnerRole: 'ADMIN',
+          })
+          .expect(400),
+      );
+      expect(response.code).toBe('VALIDATION_ERROR');
+    });
+
     it('rejects transfer attempted by a non-owner admin with 403', async () => {
       const created = await createGroup(OWNER_TOKEN);
       await addMember(OWNER_TOKEN, created.id, SECOND_TOKEN, GroupRole.ADMIN);
@@ -666,7 +783,6 @@ describe('Groups (e2e)', () => {
         .set('Authorization', `Bearer ${SECOND_TOKEN}`)
         .send({
           newOwnerUserId: localUserIdByToken.get(THIRD_TOKEN),
-          previousOwnerRole: 'ADMIN',
         })
         .expect(403);
     });
@@ -680,7 +796,6 @@ describe('Groups (e2e)', () => {
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .send({
             newOwnerUserId: localUserIdByToken.get(OUTSIDER_TOKEN),
-            previousOwnerRole: 'ADMIN',
           })
           .expect(400),
       );
@@ -762,7 +877,7 @@ describe('Groups (e2e)', () => {
       expect(response.code).toBe('GROUP_ARCHIVED');
     });
 
-    it('blocks PATCH .../members/:membershipId (role change) with 409 GROUP_ARCHIVED', async () => {
+    it('blocks POST .../role-assignments (grant a Role) with 409 GROUP_ARCHIVED', async () => {
       const created = await createGroup(OWNER_TOKEN);
       const membership = await addMember(
         OWNER_TOKEN,
@@ -774,9 +889,9 @@ describe('Groups (e2e)', () => {
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
-          .patch(`/api/v1/groups/${created.id}/members/${membership.id}`)
+          .post(`/api/v1/groups/${created.id}/role-assignments`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .send({ role: 'ADMIN' })
+          .send({ membershipId: membership.id, role: 'ADMIN' })
           .expect(409),
       );
       expect(response.code).toBe('GROUP_ARCHIVED');
@@ -826,7 +941,6 @@ describe('Groups (e2e)', () => {
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .send({
             newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN),
-            previousOwnerRole: 'ADMIN',
           })
           .expect(409),
       );
@@ -934,7 +1048,7 @@ describe('Groups (e2e)', () => {
       // same roles, same statuses as before the archive/unarchive cycle.
       expect(members).toHaveLength(2);
       const secondMembership = members.find((m) => m.id === membership.id);
-      expect(secondMembership?.role).toBe(GroupRole.MEMBER);
+      expect(secondMembership?.rootRoles).toEqual([GroupRole.MEMBER]);
       expect(secondMembership?.status).toBe('ACTIVE');
     });
   });
@@ -1139,14 +1253,13 @@ describe('Groups (e2e)', () => {
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .send({
             newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN),
-            previousOwnerRole: 'ADMIN',
           })
           .expect(409),
       );
       expect(response.code).toBe('GROUP_READ_ONLY');
     });
 
-    it('blocks PATCH .../members/:membershipId (role change) with 409 GROUP_READ_ONLY', async () => {
+    it('blocks POST .../role-assignments (grant a Role) with 409 GROUP_READ_ONLY', async () => {
       const created = await createGroup(OWNER_TOKEN);
       const membership = await addMember(
         OWNER_TOKEN,
@@ -1158,9 +1271,9 @@ describe('Groups (e2e)', () => {
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
-          .patch(`/api/v1/groups/${created.id}/members/${membership.id}`)
+          .post(`/api/v1/groups/${created.id}/role-assignments`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .send({ role: 'ADMIN' })
+          .send({ membershipId: membership.id, role: 'ADMIN' })
           .expect(409),
       );
       expect(response.code).toBe('GROUP_READ_ONLY');
@@ -1206,7 +1319,7 @@ describe('Groups (e2e)', () => {
 
       expect(members).toHaveLength(2);
       const secondMembership = members.find((m) => m.id === membership.id);
-      expect(secondMembership?.role).toBe(GroupRole.MEMBER);
+      expect(secondMembership?.rootRoles).toEqual([GroupRole.MEMBER]);
       expect(secondMembership?.status).toBe('ACTIVE');
     });
   });

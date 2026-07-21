@@ -14,10 +14,6 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { User } from '../users/entities/user.entity';
 import { AddMemberDto, addMemberSchema } from './dto/add-member.schema';
-import {
-  ChangeMemberRoleDto,
-  changeMemberRoleSchema,
-} from './dto/change-member-role.schema';
 import { CreateGroupDto, createGroupSchema } from './dto/create-group.schema';
 import { GroupMembershipResponseDto } from './dto/group-membership-response.dto';
 import { GroupResponseDto } from './dto/group-response.dto';
@@ -162,7 +158,7 @@ export class GroupsController {
 
   @Post(':id/members')
   @HttpCode(201)
-  @RequireGroupPermission(GroupPermission.GROUP_MEMBER_ADD)
+  @RequireGroupPermission(GroupPermission.MEMBERSHIP_ADD)
   addMember(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(addMemberSchema)) dto: AddMemberDto,
@@ -183,20 +179,15 @@ export class GroupsController {
     return this.groupMembershipsService.getMembership(id, membershipId);
   }
 
-  @Patch(':id/members/:membershipId')
-  @RequireGroupPermission(GroupPermission.GROUP_MEMBER_ROLE_CHANGE)
-  changeMemberRole(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Param('membershipId', ParseUUIDPipe) membershipId: string,
-    @Body(new ZodValidationPipe(changeMemberRoleSchema))
-    dto: ChangeMemberRoleDto,
-  ): Promise<GroupMembershipResponseDto> {
-    return this.groupMembershipsService.changeRole(id, membershipId, dto);
-  }
-
+  // There is no PATCH .../members/:membershipId to "change the member's
+  // role": a Membership may hold several Roles for the same Group at once
+  // (see ADR-028), so there is no longer a single Role to target by this
+  // route. Granting, changing, or revoking a specific Role - for the Root
+  // Group or any Child Group - always goes through
+  // RoleAssignmentsController (/groups/:groupId/role-assignments/...).
   @Delete(':id/members/:membershipId')
   @HttpCode(204)
-  @RequireGroupPermission(GroupPermission.GROUP_MEMBER_REMOVE)
+  @RequireGroupPermission(GroupPermission.MEMBERSHIP_REMOVE)
   removeMember(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
@@ -204,15 +195,9 @@ export class GroupsController {
     return this.groupMembershipsService.removeMember(id, membershipId);
   }
 
-  // Reuses GROUP_MEMBER_ROLE_CHANGE rather than introducing a dedicated
-  // permission - managing a member's Section assignments is the same
-  // administrative tier as changing their role, and Etap 2 deliberately
-  // does not expand the Permission model beyond what's needed (a full
-  // per-capability permission set belongs to a future Permission Domain
-  // phase).
   @Post(':id/members/:membershipId/sections/:sectionId')
   @HttpCode(201)
-  @RequireGroupPermission(GroupPermission.GROUP_MEMBER_ROLE_CHANGE)
+  @RequireGroupPermission(GroupPermission.MEMBERSHIP_SECTION_ASSIGN)
   assignSection(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
@@ -227,7 +212,7 @@ export class GroupsController {
 
   @Delete(':id/members/:membershipId/sections/:sectionId')
   @HttpCode(204)
-  @RequireGroupPermission(GroupPermission.GROUP_MEMBER_ROLE_CHANGE)
+  @RequireGroupPermission(GroupPermission.MEMBERSHIP_SECTION_ASSIGN)
   unassignSection(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,

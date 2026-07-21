@@ -35,11 +35,11 @@ describe('SectionsController', () => {
   describe.each<
     [keyof SectionsController, GroupPermission[], GroupStatus[] | undefined]
   >([
-    ['create', [GroupPermission.GROUP_EDIT], undefined],
-    ['list', [GroupPermission.GROUP_VIEW], ANY_STATUS],
-    ['getById', [GroupPermission.GROUP_VIEW], ANY_STATUS],
-    ['update', [GroupPermission.GROUP_EDIT], undefined],
-    ['archive', [GroupPermission.GROUP_EDIT], undefined],
+    ['create', [GroupPermission.SECTION_CREATE], undefined],
+    ['list', [GroupPermission.SECTION_VIEW], ANY_STATUS],
+    ['getById', [GroupPermission.SECTION_VIEW], ANY_STATUS],
+    ['update', [GroupPermission.SECTION_EDIT], undefined],
+    ['archive', [GroupPermission.SECTION_ARCHIVE], undefined],
   ])('%s', (method, expectedPermissions, expectedAllowedStatuses) => {
     it(`requires ${expectedPermissions.join(', ')}`, () => {
       const reflector = new Reflector();

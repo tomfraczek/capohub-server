@@ -15,58 +15,83 @@ import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
 import { GroupMembership } from './entities/group-membership.entity';
 import { Group } from './entities/group.entity';
-import { loadActiveMembership } from './group-membership.query';
 import {
   toGroupResponseDto,
   toGroupSummaryResponseDto,
 } from './mappers/group.mapper';
 import { GroupPermission } from './permissions/group-permission.enum';
 import { GroupPermissionService } from './permissions/group-permission.service';
+import { RoleAssignmentsService } from './role-assignments.service';
 
 @Injectable()
 export class GroupsService {
   constructor(
     private readonly em: EntityManager,
     private readonly groupPermissionService: GroupPermissionService,
+    private readonly roleAssignmentsService: RoleAssignmentsService,
   ) {}
 
   // The creator automatically becomes OWNER (spec: "Po utworzeniu grupy
-  // użytkownik automatycznie staje się OWNER") - group + its first
-  // membership are created atomically, there is no window where a group
-  // exists without an owner. This holds for both a Root Group
-  // (parentGroupId omitted) and a Child Group (parentGroupId present) -
-  // creating a Child Group does not grant the creator any role in the
-  // parent, only in the new Group itself.
+  // użytkownik automatycznie staje się OWNER") - Group and its creator's
+  // Role Assignments for it are created atomically, so there is no window
+  // where a Group exists without an owner. Every Group (Root or Child)
+  // always gets exactly one OWNER this way - enforced not just by this
+  // code path but by ROLE_ASSIGNMENTS_OWNER_UNIQUE_INDEX (a DB-level
+  // partial unique index on (group) where role = OWNER - see ADR-028).
+  // Being added to a Group also always grants MEMBER for it (see
+  // RoleAssignmentsService.ensureMemberRole), so the creator ends up
+  // holding both MEMBER and OWNER for their new Group - not just OWNER
+  // alone (a Membership may hold several Roles for the same Group at
+  // once).
   //
-  // This is a Role/Permission assignment scoped directly to the newly
-  // created Group - not an Organization Membership (see ADR-013: a
-  // Role/Permission is assigned per-Group and never inherits through the
-  // hierarchy). It is therefore exempt from the Root-Group-only
-  // validation that GroupMembershipsService.addMember enforces for
-  // joining an organization - `rootGroup` here is a plain FK to "the Group
-  // this row's role applies to", which happens to always be a Root Group
-  // for genuine Organization Memberships, but not for this bootstrap step.
+  // - Root Group (parentGroupId omitted): a brand new Membership is
+  //   created for the caller in the new Group, plus MEMBER and OWNER Role
+  //   Assignments for that same Group, tied to that Membership.
+  // - Child Group (parentGroupId present): the caller must already hold an
+  //   active Membership in the parent's Root Group, with GROUP_EDIT there
+  //   directly (see loadUsableParentForCreation) - no second Membership is
+  //   created; the new MEMBER and OWNER Role Assignments for the Child
+  //   Group are tied to that *existing* Membership (see
+  //   organization-entities.md#roleassignment: a Membership may hold Role
+  //   Assignments in multiple different Groups).
   async create(user: User, input: CreateGroupInput): Promise<GroupResponseDto> {
     const group = await this.em.transactional(async (em) => {
-      const parent = input.parentGroupId
-        ? await this.loadUsableParentForCreation(
-            em,
-            input.parentGroupId,
-            user.id,
-          )
-        : null;
-
       const group = new Group();
       this.applyFields(group, input);
-      group.parentGroup = parent;
 
-      const membership = new GroupMembership();
-      membership.rootGroup = group;
-      membership.user = user;
-      membership.role = GroupRole.OWNER;
-      membership.joinedAt = new Date();
+      let ownerMembership: GroupMembership;
 
-      await em.persist([group, membership]).flush();
+      if (input.parentGroupId) {
+        const parent = await this.loadUsableParentForCreation(
+          em,
+          input.parentGroupId,
+          user.id,
+        );
+        group.parentGroup = parent.group;
+        ownerMembership = parent.membership;
+        em.persist(group);
+      } else {
+        group.parentGroup = null;
+
+        ownerMembership = new GroupMembership();
+        ownerMembership.rootGroup = group;
+        ownerMembership.user = user;
+        ownerMembership.joinedAt = new Date();
+        em.persist([group, ownerMembership]);
+      }
+
+      await this.roleAssignmentsService.ensureMemberRole(
+        em,
+        ownerMembership,
+        group,
+      );
+      await this.roleAssignmentsService.grantRole(
+        em,
+        ownerMembership,
+        group,
+        GroupRole.OWNER,
+      );
+
       return group;
     });
 
@@ -78,29 +103,39 @@ export class GroupsService {
     return children.map(toGroupResponseDto);
   }
 
-  // Creating a Child Group requires an active membership with GROUP_EDIT in
-  // the *parent* - without this, any authenticated user could attach a
-  // group under someone else's organization. Mirrors
-  // GroupPermissionsGuard's non-enumeration rule: a caller with no active
-  // membership in the parent gets the same "not found" response as a truly
-  // missing parent, never a 403 that would confirm the parent exists.
+  // Creating a Child Group requires an active Membership in the parent's
+  // Root Group *and* a Role Assignment for the parent Group itself
+  // granting GROUP_EDIT - without this, any authenticated user could
+  // attach a group under someone else's organization. Mirrors
+  // GroupPermissionsGuard's non-enumeration rule: a caller with no usable
+  // authorization for the parent gets the same "not found" response as a
+  // truly missing parent, never a 403 that would confirm the parent
+  // exists.
   private async loadUsableParentForCreation(
     em: EntityManager,
     parentGroupId: string,
     userId: string,
-  ): Promise<Group> {
-    const membership = await loadActiveMembership(em, parentGroupId, userId);
-    if (!membership) {
+  ): Promise<{ group: Group; membership: GroupMembership }> {
+    const authorization =
+      await this.roleAssignmentsService.resolveAuthorization(
+        parentGroupId,
+        userId,
+        em,
+      );
+    if (!authorization) {
       throw new NotFoundException({
         code: 'GROUP_PARENT_NOT_FOUND',
         message: 'The parent group does not exist',
       });
     }
+    const { group: parent, membership, roleAssignments } = authorization;
+    const roles = roleAssignments.map((roleAssignment) => roleAssignment.role);
 
     if (
-      !this.groupPermissionService.hasPermission(
-        membership.role,
-        GroupPermission.GROUP_EDIT,
+      !this.groupPermissionService.hasAllPermissionsForRoles(
+        roles,
+        [GroupPermission.GROUP_EDIT],
+        membership.status,
       )
     ) {
       throw new ForbiddenException({
@@ -109,14 +144,14 @@ export class GroupsService {
       });
     }
 
-    if (membership.rootGroup.status === GroupStatus.ARCHIVED) {
+    if (parent.status === GroupStatus.ARCHIVED) {
       throw new ConflictException({
         code: 'GROUP_ARCHIVED',
         message: 'This group is archived and is read-only until it is restored',
       });
     }
 
-    return membership.rootGroup;
+    return { group: parent, membership };
   }
 
   async listMine(userId: string): Promise<GroupSummaryResponseDto[]> {
@@ -126,8 +161,19 @@ export class GroupsService {
       { populate: ['rootGroup'], orderBy: { joinedAt: 'desc' } },
     );
 
+    const rootRoles =
+      await this.roleAssignmentsService.getRoleAssignmentsForMemberships(
+        memberships.map((membership) => ({
+          membershipId: membership.id,
+          groupId: membership.rootGroup.id,
+        })),
+      );
+
     return memberships.map((membership) =>
-      toGroupSummaryResponseDto(membership.rootGroup, membership.role),
+      toGroupSummaryResponseDto(
+        membership.rootGroup,
+        rootRoles.get(membership.id) ?? [],
+      ),
     );
   }
 
@@ -150,9 +196,8 @@ export class GroupsService {
   // one is already decided before this ever runs - GroupPermissionsGuard
   // checks it via each endpoint's @AllowGroupStatuses(...)
   // (groups.controller.ts), so there is nothing left to validate here beyond
-  // applying the new status. Memberships are never touched by any of these
-  // four transitions (spec: archiving/restoring must not create, remove, or
-  // re-role any GroupMembership).
+  // applying the new status. Memberships and Role Assignments are never
+  // touched by any of these four transitions.
   async archive(groupId: string): Promise<GroupResponseDto> {
     return this.transitionStatus(groupId, GroupStatus.ARCHIVED);
   }

@@ -568,29 +568,36 @@ Jan's Membership belongs to Root Group `Capoeira Brasil` and is `ACTIVE`.
 
 1. Administrator grants Jan's Membership a `Member` RoleAssignment for
    `Capoeira Brasil` itself.
-2. Administrator grants Jan's Membership an `Admin` RoleAssignment for
-   Child Group `Poznań`.
-3. Administrator grants Jan's Membership an `Instructor` RoleAssignment
-   for Child Group `Leszno`.
-4. Administrator then attempts to also grant Jan's Membership an
-   `Instructor` RoleAssignment for `Poznań`, where it already holds
-   `Admin`.
+2. Administrator grants Jan's Membership an `Instructor` RoleAssignment
+   for Child Group `Poznań` - since this is Jan's first RoleAssignment for
+   `Poznań`, a `Member` RoleAssignment for `Poznań` is granted
+   automatically alongside it.
+3. Administrator grants Jan's Membership an additional `Admin`
+   RoleAssignment for the *same* Child Group `Poznań`, on top of the
+   `Member` and `Instructor` he already holds there.
+4. Administrator grants Jan's Membership an `Instructor` RoleAssignment
+   for Child Group `Leszno` (with `Member` again granted automatically).
+5. Administrator then attempts to grant Jan's Membership a *second*
+   `Instructor` RoleAssignment for `Poznań`, where it already holds one.
 
 ### Expected Result
 
-Three independent RoleAssignments exist for Jan's Membership - one per
-Group (`Member` in `Capoeira Brasil`, `Admin` in `Poznań`, `Instructor` in
-`Leszno`). Jan's Membership is untouched throughout; it never stores a
-Role. Holding `Admin` in `Poznań` grants no authority in `Leszno` or in
-`Capoeira Brasil`, and vice versa - Roles never inherit through the
-hierarchy. Step 4 is rejected (or replaces the existing `Admin`
-RoleAssignment, never adds alongside it): a Membership may have at most
-one active RoleAssignment per Group, since a higher Role already carries
-every Permission a lower one would add. A later attempt to grant a
-RoleAssignment for `Poznań` to a *different* user who has no active
-Membership in `Capoeira Brasil` is rejected. An attempt to grant a Role
-outside the fixed system Role enum (a made-up, organization-defined Role
-name) is also rejected - Roles are never configurable.
+Jan ends up holding, at the same time: `Member` in `Capoeira Brasil`;
+`Member`, `Instructor`, and `Admin` **all three at once** in `Poznań`; and
+`Member` and `Instructor` in `Leszno`. Jan's Membership is untouched
+throughout; it never stores a Role. Granting `Admin` in step 3 did not
+remove or replace `Member` or `Instructor` in `Poznań` - RoleAssignments
+for the same (Membership, Group) pair coexist as long as their Role
+differs. Holding these Roles in `Poznań` grants no authority in `Leszno`
+or in `Capoeira Brasil`, and vice versa - Roles never inherit through the
+hierarchy, including between sibling Child Groups. Step 5 is rejected:
+holding the exact same Role twice for the same (Membership, Group) pair
+is the only thing disallowed (`UNIQUE (membership, group, role)`). A later
+attempt to grant a RoleAssignment for `Poznań` to a *different* user who
+has no active Membership in `Capoeira Brasil` is rejected. An attempt to
+grant a Role outside the fixed system Role enum (a made-up,
+organization-defined Role name) is also rejected - Roles are never
+configurable.
 
 ---
 

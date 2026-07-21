@@ -42,7 +42,7 @@ export class SectionsController {
 
   @Post()
   @HttpCode(201)
-  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupPermission(GroupPermission.SECTION_CREATE)
   create(
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Body(new ZodValidationPipe(createSectionSchema)) dto: CreateSectionDto,
@@ -51,7 +51,7 @@ export class SectionsController {
   }
 
   @Get()
-  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupPermission(GroupPermission.SECTION_VIEW)
   @AllowGroupStatuses(...ANY_STATUS)
   list(
     @Param('groupId', ParseUUIDPipe) groupId: string,
@@ -60,7 +60,7 @@ export class SectionsController {
   }
 
   @Get(':sectionId')
-  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupPermission(GroupPermission.SECTION_VIEW)
   @AllowGroupStatuses(...ANY_STATUS)
   getById(
     @Param('groupId', ParseUUIDPipe) groupId: string,
@@ -70,7 +70,7 @@ export class SectionsController {
   }
 
   @Patch(':sectionId')
-  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupPermission(GroupPermission.SECTION_EDIT)
   update(
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Param('sectionId', ParseUUIDPipe) sectionId: string,
@@ -80,7 +80,7 @@ export class SectionsController {
   }
 
   @Post(':sectionId/archive')
-  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupPermission(GroupPermission.SECTION_ARCHIVE)
   archive(
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Param('sectionId', ParseUUIDPipe) sectionId: string,

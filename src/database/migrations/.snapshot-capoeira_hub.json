@@ -529,28 +529,6 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
-        "role": {
-          "name": "role",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [
-            "OWNER",
-            "ADMIN",
-            "INSTRUCTOR",
-            "ASSISTANT",
-            "MEMBER"
-          ],
-          "mappedType": "enum"
-        },
         "status": {
           "name": "status",
           "type": "text",
@@ -2768,12 +2746,222 @@
       "checks": [
         {
           "name": "rhythms_check",
-          "columnName": "tempo_max_bpm",
+          "columnName": "tempo_min_bpm",
           "definition": "CHECK (((tempo_min_bpm IS NULL) OR (tempo_max_bpm IS NULL) OR (tempo_min_bpm <= tempo_max_bpm)))",
           "expression": "(tempo_min_bpm IS NULL) OR (tempo_max_bpm IS NULL) OR (tempo_min_bpm <= tempo_max_bpm)"
         }
       ],
       "foreignKeys": {},
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "membership_id": {
+          "name": "membership_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "group_id": {
+          "name": "group_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "OWNER",
+            "ADMIN",
+            "INSTRUCTOR",
+            "ASSISTANT",
+            "MEMBER"
+          ],
+          "mappedType": "enum"
+        },
+        "granted_at": {
+          "name": "granted_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "role_assignments",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "group_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "role_assignments_group_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "group_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "role_assignments_group_id_owner_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX role_assignments_group_id_owner_unique ON public.role_assignments USING btree (group_id) WHERE (role = 'OWNER'::text)"
+        },
+        {
+          "columnNames": [
+            "membership_id",
+            "group_id",
+            "role"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "role_assignments_membership_id_group_id_role_unique",
+          "unique": true,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "membership_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "role_assignments_membership_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "role_assignments_pkey",
+          "unique": true,
+          "primary": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "role_assignments_group_id_foreign": {
+          "columnNames": [
+            "group_id"
+          ],
+          "constraintName": "role_assignments_group_id_foreign",
+          "localTableName": "public.role_assignments",
+          "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "role_assignments_membership_id_foreign": {
+          "columnNames": [
+            "membership_id"
+          ],
+          "constraintName": "role_assignments_membership_id_foreign",
+          "localTableName": "public.role_assignments",
+          "referencedTableName": "public.group_memberships",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },

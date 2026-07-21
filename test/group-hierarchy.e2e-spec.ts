@@ -21,6 +21,7 @@ import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { Academy } from '../src/groups/entities/academy.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
+import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
 
@@ -159,6 +160,9 @@ describe('Group Hierarchy / Academies / Sections (e2e)', () => {
     const cleanup = app.get(EntityManager).fork();
     await cleanup.nativeDelete(Academy, { group: { $in: createdGroupIds } });
     await cleanup.nativeDelete(Section, { group: { $in: createdGroupIds } });
+    await cleanup.nativeDelete(RoleAssignment, {
+      group: { $in: createdGroupIds },
+    });
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
     });
