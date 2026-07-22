@@ -20,6 +20,13 @@ last_updated: 2026-07-20
 > per-entity rules, [organization-scenarios.md](organization-scenarios.md)
 > for business scenarios, or [decisions/](../decisions/) for individual
 > Architecture Decision Records.
+>
+> This document intentionally excludes UI, navigation, and presentation
+> concerns. The **Community module** — the screens, navigation, and UX
+> built on top of this domain model (Community Home, My Communities,
+> Discover, Community Details, Invitations) — is described in
+> [PAD-001-community.md](PAD-001-community.md), which links back here for
+> every business rule instead of restating it.
 
 ---
 

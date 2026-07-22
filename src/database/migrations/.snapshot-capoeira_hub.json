@@ -902,25 +902,6 @@
           "enumItems": [],
           "mappedType": "string"
         },
-        "visibility": {
-          "name": "visibility",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": "'PUBLIC'",
-          "comment": null,
-          "enumItems": [
-            "PUBLIC",
-            "PRIVATE"
-          ],
-          "mappedType": "enum"
-        },
         "status": {
           "name": "status",
           "type": "text",
@@ -988,6 +969,70 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "public_code": {
+          "name": "public_code",
+          "type": "varchar(15)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": 15,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "is_public": {
+          "name": "is_public",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "is_hidden": {
+          "name": "is_hidden",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "member_invites_allowed": {
+          "name": "member_invites_allowed",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
         }
       },
       "name": "groups",
@@ -1012,6 +1057,16 @@
           "keyName": "groups_pkey",
           "unique": true,
           "primary": true
+        },
+        {
+          "columnNames": [
+            "public_code"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "groups_public_code_unique",
+          "unique": true,
+          "primary": false
         },
         {
           "columnNames": [
@@ -1714,6 +1769,360 @@
       ],
       "checks": [],
       "foreignKeys": {},
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "INVITATION",
+            "JOIN_REQUEST"
+          ],
+          "mappedType": "enum"
+        },
+        "target_type": {
+          "name": "target_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "ORGANIZATION",
+            "GROUP"
+          ],
+          "mappedType": "enum"
+        },
+        "target_group_id": {
+          "name": "target_group_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "initiated_by_id": {
+          "name": "initiated_by_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "invited_user_id": {
+          "name": "invited_user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "invited_email": {
+          "name": "invited_email",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'PENDING'",
+          "comment": null,
+          "enumItems": [
+            "PENDING",
+            "ACCEPTED",
+            "REJECTED",
+            "CANCELLED"
+          ],
+          "mappedType": "enum"
+        },
+        "processed_at": {
+          "name": "processed_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "processed_by_id": {
+          "name": "processed_by_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        }
+      },
+      "name": "membership_requests",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "initiated_by_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "membership_requests_initiated_by_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "invited_email"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "membership_requests_invited_email_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "invited_user_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "membership_requests_invited_user_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "target_group_id",
+            "invited_email"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "membership_requests_pending_email_invitation_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX membership_requests_pending_email_invitation_unique ON public.membership_requests USING btree (target_group_id, invited_email) WHERE ((status = 'PENDING'::text) AND (type = 'INVITATION'::text) AND (invited_email IS NOT NULL))"
+        },
+        {
+          "columnNames": [
+            "target_group_id",
+            "initiated_by_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "membership_requests_pending_join_request_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX membership_requests_pending_join_request_unique ON public.membership_requests USING btree (target_group_id, initiated_by_id) WHERE ((status = 'PENDING'::text) AND (type = 'JOIN_REQUEST'::text))"
+        },
+        {
+          "columnNames": [
+            "target_group_id",
+            "invited_user_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "membership_requests_pending_user_invitation_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX membership_requests_pending_user_invitation_unique ON public.membership_requests USING btree (target_group_id, invited_user_id) WHERE ((status = 'PENDING'::text) AND (type = 'INVITATION'::text) AND (invited_user_id IS NOT NULL))"
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "membership_requests_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "target_group_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "membership_requests_target_group_id_index",
+          "unique": false,
+          "primary": false
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "membership_requests_initiated_by_id_foreign": {
+          "columnNames": [
+            "initiated_by_id"
+          ],
+          "constraintName": "membership_requests_initiated_by_id_foreign",
+          "localTableName": "public.membership_requests",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "membership_requests_invited_user_id_foreign": {
+          "columnNames": [
+            "invited_user_id"
+          ],
+          "constraintName": "membership_requests_invited_user_id_foreign",
+          "localTableName": "public.membership_requests",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "membership_requests_processed_by_id_foreign": {
+          "columnNames": [
+            "processed_by_id"
+          ],
+          "constraintName": "membership_requests_processed_by_id_foreign",
+          "localTableName": "public.membership_requests",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "membership_requests_target_group_id_foreign": {
+          "columnNames": [
+            "target_group_id"
+          ],
+          "constraintName": "membership_requests_target_group_id_foreign",
+          "localTableName": "public.membership_requests",
+          "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -5694,6 +6103,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "string"
+        },
+        "public_code": {
+          "name": "public_code",
+          "type": "varchar(15)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": 15,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "users",
@@ -5728,6 +6153,16 @@
           "keyName": "users_pkey",
           "unique": true,
           "primary": true
+        },
+        {
+          "columnNames": [
+            "public_code"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "users_public_code_unique",
+          "unique": true,
+          "primary": false
         }
       ],
       "checks": [],

@@ -609,6 +609,31 @@ export class MembershipRequestsService {
     return requests.map(toMembershipRequestResponseDto);
   }
 
+  /**
+   * Batch version of listJoinRequestsForGroup - all PENDING join requests
+   * across several target groups in one query, avoiding N+1 when a caller
+   * (e.g. Community Home) already knows which groups it has review
+   * permission for. Returns every matching request; capping/pagination is
+   * the caller's responsibility.
+   */
+  async listJoinRequestsForGroups(
+    targetGroupIds: string[],
+  ): Promise<MembershipRequestResponseDto[]> {
+    if (targetGroupIds.length === 0) {
+      return [];
+    }
+    const requests = await this.em.find(
+      MembershipRequest,
+      {
+        targetGroup: { $in: targetGroupIds },
+        type: MembershipRequestType.JOIN_REQUEST,
+        status: MembershipRequestStatus.PENDING,
+      },
+      { populate: ['initiatedBy', 'processedBy', 'targetGroup'] },
+    );
+    return requests.map(toMembershipRequestResponseDto);
+  }
+
   // ─── Private helpers ──────────────────────────────────────────────────────
 
   /**

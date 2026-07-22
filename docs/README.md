@@ -2,7 +2,10 @@
 
 This directory contains CapoHub's architectural and product documentation
 for the Organization Domain, reorganized following Domain Driven Design
-practices so it stays maintainable over many years of project growth.
+practices so it stays maintainable over many years of project growth. It
+also includes PAD-001, which describes the **Community module** — the UI,
+navigation, and screens built on top of the Organization Domain — and
+consistently links back here rather than duplicating the business model.
 
 ---
 
@@ -15,7 +18,8 @@ docs/
 ├── architecture/
 │   ├── organization-domain.md         # main architecture document
 │   ├── organization-entities.md       # detailed per-entity reference
-│   └── organization-scenarios.md      # business scenarios + integration test recommendations
+│   ├── organization-scenarios.md      # business scenarios + integration test recommendations
+│   └── PAD-001-community.md           # Community module: UI, navigation, screens (built on this domain model)
 ├── decisions/
 │   └── ADR-001 .. ADR-028             # one Architecture Decision Record per file
 ├── diagrams/
@@ -34,6 +38,7 @@ docs/
 | [architecture/organization-domain.md](architecture/organization-domain.md) | The main architecture document: purpose, design principles, philosophy, organization model, Group/Academy/Section/Membership/Roles/Permissions/Invitations overview, Visibility Scope, Hierarchy, Inheritance, cross-domain principles, aggregate overview, and dependency rules. Start here. |
 | [architecture/organization-entities.md](architecture/organization-entities.md) | Deep-dive reference for every entity (Group, Academy, Section, Membership, RoleAssignment, Invitation, GraduationSystem, GraduationCategory, GraduationLevel, UserGraduationEntry, UserCurrentGraduation): purpose, responsibilities, business rules, relationships, lifecycle, and validation rules. |
 | [architecture/organization-scenarios.md](architecture/organization-scenarios.md) | Every business scenario supported by the Organization Domain, normalized to Goal / Initial State / Action / Expected Result, plus integration test recommendations. |
+| [architecture/PAD-001-community.md](architecture/PAD-001-community.md) | The **Community module**: purpose, UX, screens, navigation, and how it exposes other modules. Does not redefine the business model above — it links to it. Start here instead of the documents above if you only need Community's UI/navigation behavior. |
 | [decisions/](decisions/) | One Architecture Decision Record (ADR-001 through ADR-028) per significant decision, each with Status / Context / Decision / Consequences. |
 | [diagrams/](diagrams/) | Mermaid source files (`.mmd`) for every diagram referenced by the documents above. |
 | [product/vision.md](product/vision.md) | CapoHub-wide product philosophy and design principles that apply beyond the Organization Domain (Business First, No Hidden Logic). |
@@ -50,6 +55,7 @@ docs/
 4. [architecture/organization-scenarios.md](architecture/organization-scenarios.md) - concrete behavior and test scenarios.
 5. [decisions/](decisions/) - consult individual ADRs when you need the reasoning behind a specific rule.
 6. [product/glossary.md](product/glossary.md) - reference, as needed, for any unfamiliar term.
+7. [architecture/PAD-001-community.md](architecture/PAD-001-community.md) - only if you're working on the Community module's UI/navigation, once the business model above is familiar.
 
 ---
 

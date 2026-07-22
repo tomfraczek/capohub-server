@@ -74,6 +74,26 @@ returns only songs tagged with both `a` and `b`, not either).
 }
 ```
 
+## Dashboard section shape
+
+Endpoints that aggregate several bounded sub-lists for a single dashboard
+view (e.g. `GET /community/home`) do not use the page/limit list response
+shape above for each section - there is no page to navigate to, only a
+capped preview with a link to the full, dedicated screen. Each section
+instead uses:
+
+```json
+{
+  "items": [],
+  "total": 0,
+  "hasMore": false
+}
+```
+
+`total` and `hasMore` always describe the full matching set, not just
+`items`, so summary counters built from `total` stay consistent with what
+the section actually reports.
+
 ## Errors
 
 ```json

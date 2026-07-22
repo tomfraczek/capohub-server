@@ -482,6 +482,42 @@ export class RoleAssignmentsService {
     return result;
   }
 
+  /**
+   * Every (Group, Role[]) pair any of the given Memberships holds a Role
+   * Assignment for - Root Group or any Child Group, at any depth - batched
+   * across all Memberships in a single query. Unlike
+   * getRoleAssignmentsForMemberships(), this does not require the caller to
+   * already know which Groups to ask about; it discovers every Group each
+   * Membership actually participates in. Used by Community Home to build
+   * the "My Communities" list, which must include Child Groups the caller
+   * holds a Role in, not just the Organizations they have a Membership in
+   * (see organization-entities.md#roleassignment: Role Assignment is
+   * independent of Membership and can target any Group).
+   */
+  async getGroupParticipationForMemberships(
+    membershipIds: string[],
+  ): Promise<{ membershipId: string; groupId: string; roles: GroupRole[] }[]> {
+    if (membershipIds.length === 0) {
+      return [];
+    }
+    const assignments = await this.em.find(RoleAssignment, {
+      membership: { $in: membershipIds },
+    });
+    const byKey = new Map<
+      string,
+      { membershipId: string; groupId: string; roles: GroupRole[] }
+    >();
+    for (const assignment of assignments) {
+      const membershipId = assignment.membership.id;
+      const groupId = assignment.group.id;
+      const key = `${membershipId}:${groupId}`;
+      const entry = byKey.get(key) ?? { membershipId, groupId, roles: [] };
+      entry.roles.push(assignment.role);
+      byKey.set(key, entry);
+    }
+    return [...byKey.values()];
+  }
+
   private async loadByIdOrFail(
     em: EntityManager,
     groupId: string,

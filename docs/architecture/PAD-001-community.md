@@ -4,11 +4,37 @@
 
 **Moduł:** Community
 
-**Status:** Draft v1.0
+**Status:** Draft v1.1 (reconciled with Organization Domain documentation)
 
 **Autor:** OpenAI + Project Owner
 
-**Ostatnia aktualizacja:** 2026-07
+**Ostatnia aktualizacja:** 2026-07-22
+
+---
+
+## Relationship to Organization Domain Documentation
+
+This document describes the **Community module**: its purpose, UX,
+screens, navigation, and the way it exposes other modules — not the
+underlying business/domain model.
+
+The business/domain model — Group, Membership, Role, RoleAssignment,
+Hierarchy, Ownership, Permissions, Graduation, Academy, Section,
+Invitation — is owned exclusively by the **Organization Domain**
+documentation set:
+
+- [organization-domain.md](organization-domain.md) — main architecture document
+- [organization-entities.md](organization-entities.md) — per-entity reference
+- [organization-scenarios.md](organization-scenarios.md) — business scenarios
+- [decisions/](../decisions/) — ADR-001 through ADR-028
+- [product/glossary.md](../product/glossary.md) — canonical terminology
+- [product/vision.md](../product/vision.md) — cross-domain philosophy
+
+Wherever this document previously restated a business rule already defined
+there, it now links to it instead. If this document and the Organization
+Domain documentation ever appear to disagree, the Organization Domain
+documentation is authoritative for the domain model, and this document
+should be corrected to match it (see `docs/README.md`'s Provenance Note).
 
 ---
 
@@ -71,79 +97,30 @@ Community only exposes entry points and high-level summaries.
 
 # 2. Domain Model
 
-Community is built around one core entity:
+Community is a UI concept layered on top of a single backend entity:
+`Group`. It does not introduce, redefine, or duplicate any part of the
+domain model — see
+[organization-domain.md](organization-domain.md#organization-model) and
+[organization-entities.md](organization-entities.md#group) for the full
+Group/Organization/Hierarchy model, and
+[product/glossary.md](../product/glossary.md) for exact terminology
+(`Group`, `Root Group`, `Child Group`, `Organization`). In particular, the
+"Groups inherit selected information from their parent" mechanism (logo,
+cover image, description, history) is the Organization Domain's dynamic
+Inheritance mechanism — see
+[organization-domain.md#inheritance](organization-domain.md#inheritance)
+and [ADR-006](../decisions/ADR-006-dynamic-inheritance.md).
 
-```
-Group
-```
-
-There is no separate Organization entity.
-
-Organizations are represented by root groups.
-
----
-
-## 2.1 Organization
-
-An organization is defined by:
-
-```ts
-parentGroup == null;
-```
-
-Every root group is an organization.
-
-Every organization is a root group.
-
-These two concepts are equivalent throughout the system.
-
-There is no scenario where:
-
-- a root group is not an organization
-- an organization is not a root group
-
-This is one of the fundamental architectural decisions of the project.
-
----
-
-## 2.2 Group
-
-A group always belongs to exactly one organization.
-
-```text
-Organization
-
-└── Group
-```
-
-Groups inherit selected information from their parent organization.
-
-Examples:
-
-- graduation system
-- organization identity
-- instructors hierarchy
-- branding
-
-Groups maintain their own local data such as:
-
-- members
-- trainings
-- local news
-- local events
-
----
-
-## 2.3 Community
+## 2.1 Community
 
 Within the application, the term **Community** refers collectively to:
 
-- organizations
-- groups
+- organizations (Root Groups)
+- groups (Child Groups)
 
-It is a UI concept.
-
-There is no Community entity in the backend.
+It is a UI concept only. There is no `Community` entity in the backend —
+every screen described in this document is backed by the `Group` entity
+defined in the Organization Domain documentation.
 
 ---
 
@@ -256,97 +233,74 @@ Different behavior should be achieved through permissions and configuration inst
 
 # 4. Community Hierarchy
 
-The hierarchy of communities is intentionally simple.
+The backend hierarchy has **no depth limit** — see
+[Hierarchy](organization-domain.md#hierarchy) and
+[ADR-002](../decisions/ADR-002-unlimited-group-hierarchy.md). An earlier
+draft of this document assumed a fixed two-level depth (Organization →
+Group); that assumption was incorrect and has been removed here — it
+contradicted the already-implemented and tested Organization Domain model,
+which explicitly supports arbitrarily deep structures, e.g.:
 
 ```
-Organization
+World
 
-├── Group
-├── Group
-├── Group
-└── Group
+└── Continent
+
+    └── Country
+
+        └── Region
+
+            └── City
+
+                └── School
 ```
 
-Nested groups are not supported.
-
-Maximum depth:
-
-```
-2
-```
-
-There is no hierarchy like:
-
-```
-Organization
-
-└── Group
-
-    └── Subgroup
-
-        └── Subgroup
-```
-
-Supporting deeper structures would unnecessarily complicate:
-
-- permissions
-- navigation
-- memberships
-- inheritance
-
-and does not reflect the real structure of most capoeira organizations.
+Community's navigation nonetheless stays shallow by design (see
+[§16 Navigation Philosophy](#16-navigation-philosophy)): every level of the
+hierarchy is presented through the same `Community Details` screen (see
+[§3.3 Shared Screens](#33-shared-screens)), so the UI never needs
+special-case logic for a particular depth. In practice most real
+organizations only use two levels — Organization and its Groups — but this
+is a fact about how organizations tend to configure themselves, not a
+constraint enforced by the backend or required by the frontend.
 
 ---
 
 # 5. Membership Model
 
-A user may belong to:
-
-- zero organizations
-- one organization
-- multiple organizations
-
-Within every organization the user may belong to:
-
-- zero groups
-- one group
-- multiple groups
-
-There are no global membership restrictions.
-
-Example:
-
-```
-User
-
-├── Cordão de Ouro
-│
-│   ├── Poznań
-│   └── Warszawa
-│
-└── Abadá
-
-    └── Berlin
-```
-
-The same user may have different permissions in every membership.
+Membership rules (how many organizations/groups a user may belong to,
+lifecycle, multi-organization support) are defined in
+[organization-domain.md](organization-domain.md#membership) and
+[organization-entities.md](organization-entities.md#membership). Community
+only needs the practical consequence for its screens: a user's "My
+Communities" list (see [§11 My Communities](#11-my-communities)) can show
+any number of organizations, and within each, any number of groups, each
+with independent permissions.
 
 ---
 
 # 6. Roles
 
-Roles are assigned per membership.
+Roles are assigned per membership, per Group — never globally. The full
+rules (fixed system Role enum, a membership may hold several Roles for the
+same Group at once, no inheritance across the hierarchy) are defined in
+[organization-domain.md](organization-domain.md#roles) and
+[organization-entities.md](organization-entities.md#roleassignment); the
+canonical Role values are listed in
+[product/glossary.md](../product/glossary.md).
 
-They are **not global**.
+Example, using the current system roles (`Owner`, `Admin`, `Instructor`,
+`Assistant`, `Member`):
 
-Example:
+| Community      | Role(s)              |
+| -------------- | --------------------- |
+| Organization A | Member                |
+| Group Poznań   | Member + Instructor   |
+| Group Warszawa | Member + Admin        |
+| Organization B | Member                |
 
-| Community      | Role       |
-| -------------- | ---------- |
-| Organization A | Member     |
-| Group Poznań   | Instructor |
-| Group Warszawa | Admin      |
-| Organization B | Viewer     |
+A user's role in a given community is therefore a **list**, not a single
+value — see [§19.1 Community DTO](#191-community-dto).
 
 The backend already supports this model.
 
@@ -354,9 +308,17 @@ The backend already supports this model.
 
 # 7. Community Ownership
 
-Every community has one or more administrators.
+Every community (Organization or Group) has exactly one mandatory `Owner`,
+plus zero or more `Admin`s. The full ownership rules — why exactly one
+Owner is required, how ownership transfer works, and why a membership can
+never end while it still owns any Group — are defined in
+[organization-domain.md](organization-domain.md#roles) and
+[organization-entities.md](organization-entities.md#roleassignment); see
+also the **Owner (Role)** entry in
+[product/glossary.md](../product/glossary.md).
 
-Administrators are responsible for:
+From the Community module's perspective, Owners and Admins are
+responsible for:
 
 - editing community information
 - approving members
@@ -364,9 +326,8 @@ Administrators are responsible for:
 - managing local settings
 - delegating permissions
 
-Ownership is always explicit.
-
-There is no concept of an "implicit owner".
+Ownership is always explicit — there is no concept of an "implicit
+owner".
 
 ---
 
@@ -404,11 +365,16 @@ Status:
 
 ## AD-004
 
-Community hierarchy is limited to two levels.
+~~Community hierarchy is limited to two levels.~~
+
+**Superseded.** This contradicted
+[ADR-002](../decisions/ADR-002-unlimited-group-hierarchy.md) (Accepted),
+which is already implemented and tested. Hierarchy depth is unlimited —
+see [§4 Community Hierarchy](#4-community-hierarchy).
 
 Status:
 
-**Accepted**
+**Superseded by ADR-002**
 
 # 9. Navigation Architecture
 
@@ -778,20 +744,33 @@ Read-only inherited data.
 
 Editing is available only on the organization level.
 
+The Graduation model itself (`GraduationSystem`, `GraduationCategory`,
+`GraduationLevel`, `UserGraduationEntry`, `UserCurrentGraduation`) is owned
+by the Organization Domain — see
+[organization-entities.md](organization-entities.md#graduationsystem) and
+[ADR-005](../decisions/ADR-005-root-group-graduation-system.md). As of
+this writing the Graduation aggregate has not been implemented yet (see
+the Implementation Checklist in
+[organization-domain.md](organization-domain.md#implementation-checklist));
+this section only describes how Community should present it once it
+exists.
+
 ---
 
 ## Instructors
 
-Displays instructors belonging to the community.
-
-Should support:
+Displays members holding the `Instructor` Role for this community (see
+[Roles](organization-domain.md#roles) for the underlying Role model).
+This list should support:
 
 - hierarchy
 - profile picture
 - biography
 - contact links
 
-The hierarchy belongs to the organization.
+Profile picture, biography, and contact links are presentation data
+attached to a user profile — they are not part of the Organization
+Domain's Role/RoleAssignment model itself.
 
 ---
 
@@ -897,14 +876,27 @@ Optional:
 
 ## Visibility
 
-Possible values:
+The backend models discoverability and join access as two independent
+toggles on `Group` (see
+[organization-entities.md](organization-entities.md#discovery-and-join-settings)
+for the authoritative field reference), not a single `Public`/`Private`
+choice:
 
-- Public
-- Private
+- **Public join (`isPublic`)** — when on, `Join` is immediate; when off,
+  joining creates a request that an Admin/Owner must approve ("Request
+  Access").
+- **Listed in Discover (`isHidden`, shown inverted)** — when the community
+  is hidden, it is excluded from [Discover](#12-discover) search results,
+  but remains joinable by anyone with its link, public code, or QR code.
+
+The Create/Edit Community screen should present these as two switches,
+not a single `Public`/`Private` radio choice, since all four combinations
+are valid and already supported by the backend (e.g. "joinable only by
+invite, but still searchable" or "open to join, but not listed").
 
 Future:
 
-- Invite Only
+- Invite Only (would replace or augment `isPublic`; not yet designed)
 
 ---
 
@@ -982,135 +974,44 @@ Whenever navigation becomes too deep, responsibility should move to another modu
 
 # 17. Permission Model
 
-## 17.1 Overview
+Permissions are never global — they are resolved per membership, per
+community, exactly as defined in
+[organization-domain.md](organization-domain.md#permissions) and
+[organization-entities.md](organization-entities.md#roleassignment) (`User
+→ Membership → RoleAssignment(s) for this Group → union of Permissions`).
+There is no concept of a global administrator for Community actions. A
+user may hold different Roles — and therefore different Permissions — in
+every community they belong to, at the same time (e.g. Admin in one,
+Instructor in another, plain Member in a third).
 
-Permissions are not determined by the user's global role.
-
-Permissions are evaluated **per membership**.
-
-Every action within Community must validate the user's permissions against the currently opened community.
-
-There is no concept of a global administrator.
-
----
-
-## 17.2 Permission Resolution
-
-Permissions should always be resolved using:
-
-```
-User
-
-↓
-
-Membership
-
-↓
-
-Role
-
-↓
-
-Permissions
-```
-
-Never:
-
-```
-User
-
-↓
-
-Global Role
-
-↓
-
-Permissions
-```
-
----
-
-## 17.3 Community Context
-
-Every permission evaluation is executed in the context of exactly one community.
-
-Example:
-
-```
-Community #12
-
-↓
-
-Current Membership
-
-↓
-
-Current Role
-
-↓
-
-Allowed Actions
-```
-
-A user may therefore be:
-
-- Administrator in one community
-- Instructor in another
-- Regular member in another
-
-at exactly the same time.
-
----
+Community's job is only to open every screen already scoped to the
+correct community, and to rely on the resolution above for whichever
+community is currently open. It does not re-implement, cache, or
+duplicate permission resolution itself.
 
 ## 17.4 Permission Categories
 
-Community should not expose hundreds of individual permissions.
+Community itself exposes only the permission categories already backed by
+the `Group` entity today:
 
-Instead permissions should be grouped.
+**Community Management** — Edit community, Archive/Unarchive community,
+Set/lift Read-Only, Transfer ownership.
 
-Example:
+**Members** — Invite members, Add/Remove members, Change roles
+(grant/revoke Role Assignments), Assign/unassign Sections.
 
-Community Management
+Categories such as **Content**, **Trainings**, **Events**, **Payments**,
+and **Settings** belong to their own future modules, not to Community
+(see [§1.3 Non-goals](#13-non-goals) and the Organization Domain's
+[Dependency Rules](organization-domain.md#dependency-rules), which keep
+the domain model independent of those modules). When those modules are
+built, each will define and enforce its own permission set, evaluated
+against the same per-membership Role a user holds for the relevant Group —
+Community only provides the navigation entry point (see
+[§3.1 Community is a Hub](#31-community-is-a-hub)), never the permission
+logic for what it links to.
 
-- Edit community
-- Delete community
-- Archive community
-
-Members
-
-- Invite members
-- Remove members
-- Change roles
-
-Content
-
-- Publish news
-- Edit news
-- Delete news
-
-Trainings
-
-- Create training
-- Edit training
-
-Events
-
-- Create event
-- Manage registrations
-
-Payments
-
-- View payments
-- Manage payments
-
-Settings
-
-- Update settings
-- Manage invitations
-
-The backend remains the single source of truth.
-
-Frontend only adapts UI.
+The backend remains the single source of truth. Frontend only adapts UI.
 
 ---
 
@@ -1232,35 +1133,25 @@ The frontend renders data only.
 
 ## 19.1 Community DTO
 
-Example:
+The authoritative field list is whatever the backend's `GroupResponseDto`
+/ `GroupSummaryResponseDto` actually returns (see
+[organization-entities.md](organization-entities.md#group) for the
+business fields, and the backend source for the exact response shape) —
+this document does not redefine it. A few points are worth calling out
+because they differ from earlier drafts of this section:
 
-```ts
-interface CommunityDto {
-  id: string;
+- Visibility is two independent flags (`isPublic`, `isHidden`), not a
+  single `visibility` enum — see [§14 Visibility](#visibility).
+- A user's role in a community is a **list**, not a single value — a
+  membership may hold several Roles for the same Group at once (see
+  [§6 Roles](#6-roles)). Model it as `roles: Role[]`, never `role: Role`.
+- `memberCount` and `location` are not yet fields on `Group` — see the
+  Organization Domain's Implementation Checklist and Future Extensions for
+  their status. Community screens that need them should treat them as
+  optional/absent until they exist, rather than assuming presence.
 
-  name: string;
-
-  description: string;
-
-  logoUrl?: string;
-
-  coverUrl?: string;
-
-  parentGroupId?: string;
-
-  location?: CommunityLocationDto;
-
-  visibility: 'PUBLIC' | 'PRIVATE';
-
-  memberCount: number;
-
-  role: MembershipRole;
-}
-```
-
-The exact DTO depends on backend evolution.
-
-Frontend should avoid assumptions.
+Frontend should avoid assumptions beyond what the backend actually
+returns.
 
 ---
 
@@ -1837,13 +1728,19 @@ Future discussion.
 
 # 33. Architectural Constraints
 
-The following constraints should always remain true.
+The following constraints should always remain true for the **Community
+module**. Constraints about the underlying domain model itself (hierarchy
+depth, ownership, permission resolution) live in
+[organization-domain.md's Hierarchy Rules](organization-domain.md#hierarchy-rules)
+and are not repeated here.
 
 ✓ Organization is a Root Group.
 
-✓ Groups belong to exactly one Organization.
+✓ Groups belong to exactly one Organization (their Root Group).
 
-✓ Maximum hierarchy depth is two.
+✓ Hierarchy depth is unlimited (owned by Organization Domain — see
+[ADR-002](../decisions/ADR-002-unlimited-group-hierarchy.md)); Community
+never hardcodes a depth assumption.
 
 ✓ Community is a navigation hub.
 
@@ -1863,35 +1760,67 @@ Any future proposal violating these constraints should be considered an architec
 
 # 34. Related Documents
 
-Future documentation planned for CapoHub.
-
 Architecture
 
-- PAD-001 Community
-- PAD-002 Events
-- PAD-003 Profile
-- PAD-004 Home
-- PAD-005 Music
+- PAD-001 Community (this document)
+- [organization-domain.md](organization-domain.md) — Organization Domain business model (authoritative for Group, Membership, Role, Hierarchy, Permissions, Graduation)
+- [organization-entities.md](organization-entities.md) — per-entity reference
+- [organization-scenarios.md](organization-scenarios.md) — business scenarios
+- PAD-002 Events (future)
+- PAD-003 Profile (future)
+- PAD-004 Home (future)
+- PAD-005 Music (future)
 
 Technical
 
-- API Specification
-- Frontend Architecture
-- Backend Architecture
-- Design System
-- Permission Matrix
+- API Specification (future)
+- Frontend Architecture (future)
+- Backend Architecture (future)
+- Design System (future)
+- Permission Matrix (future)
 
 Decision Records
 
-- ADR-001 Organization = Root Group
-- ADR-002 Community is a Hub
-- ADR-003 Graduation belongs to Organization
-- ADR-004 Membership-based Permissions
-- ADR-005 Shared Community Details
+See [docs/decisions/](../decisions/) for the full list (ADR-001 through
+ADR-028). Most relevant to Community: ADR-001 (No Organization Entity),
+ADR-002 (Unlimited Group Hierarchy), ADR-004 (No Membership Inheritance),
+ADR-013 (No Permission Inheritance), ADR-028 (Role Assignment Model). The
+`AD-00X` entries in [§8 Architectural Decisions](#8-architectural-decisions)
+above are this document's own, Community-specific decisions — a separate
+numbering space from the project-wide ADRs in `docs/decisions/`.
+
+Product
+
+- [product/vision.md](../product/vision.md) — cross-domain philosophy
+- [product/glossary.md](../product/glossary.md) — canonical terminology
 
 ---
 
 # 35. Changelog
+
+## v1.1
+
+Reconciled with the Organization Domain documentation set
+(`organization-domain.md`, `organization-entities.md`,
+`organization-scenarios.md`, ADR-001 through ADR-028), following a backend
+compliance audit. Key changes:
+
+- Removed the incorrect "maximum hierarchy depth of two" claim (§4, §8
+  AD-004, §33) — the backend hierarchy is unlimited (ADR-002), already
+  implemented and tested.
+- Removed duplicated domain-model content (Organization, Group,
+  Membership, Roles, Ownership, Permission resolution) in favor of links
+  to the Organization Domain documentation, which now owns that content.
+- Corrected the Visibility model (§14, §19.1) from a single `PUBLIC`/
+  `PRIVATE` enum to the actual two-flag model (`isPublic`, `isHidden`).
+- Corrected the Community DTO sketch (§19.1) and Roles example (§6) to
+  reflect that a membership can hold multiple Roles per community
+  (`roles: Role[]`), not a single `role`.
+- Narrowed Permission Categories (§17.4) to what Community actually owns
+  today (Community Management, Members), removing Trainings/Events/
+  Payments categories that belong to future, independent modules.
+- Fixed §34 Related Documents, which previously listed a fictional set of
+  ADR titles inconsistent with the real `docs/decisions/` ADRs.
 
 ## v1.0
 
@@ -1941,6 +1870,13 @@ CommunityDetails --> Settings
 
 # Appendix B — Domain Model
 
+This diagram is illustrative only; the authoritative model (including
+`RoleAssignment`, why `Membership` never stores a `role`, and why a
+`RoleAssignment` may repeat per Group) is defined in
+[organization-entities.md](organization-entities.md) — see
+[entity-overview.mmd](../diagrams/entity-overview.mmd) for the full
+entity-relationship diagram.
+
 ```mermaid
 classDiagram
 
@@ -1951,13 +1887,19 @@ class Group {
 }
 
 class Membership {
+    status
+}
+
+class RoleAssignment {
     role
 }
 
 class User
 
 User --> Membership
-Membership --> Group
+Membership --> Group : rootGroup
+Membership --> RoleAssignment
+RoleAssignment --> Group
 ```
 
 ---

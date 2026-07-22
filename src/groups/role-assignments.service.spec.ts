@@ -835,4 +835,59 @@ describe('RoleAssignmentsService', () => {
       expect(result.has('membership-1')).toBe(false);
     });
   });
+
+  describe('getGroupParticipationForMemberships', () => {
+    it('discovers every Group a Membership holds a Role in, including Child Groups never asked about explicitly', async () => {
+      const membershipOne = buildMembership({ id: 'membership-1' });
+      const rootMember = buildRoleAssignment({
+        membership: membershipOne,
+        group: buildGroup({ id: 'root-1' }),
+        role: GroupRole.MEMBER,
+      });
+      const childMember = buildRoleAssignment({
+        membership: membershipOne,
+        group: buildGroup({ id: 'child-1' }),
+        role: GroupRole.MEMBER,
+      });
+      const childInstructor = buildRoleAssignment({
+        membership: membershipOne,
+        group: buildGroup({ id: 'child-1' }),
+        role: GroupRole.INSTRUCTOR,
+      });
+      const { em } = buildMockEm({
+        roleAssignmentFindResults: [rootMember, childMember, childInstructor],
+      });
+      const service = buildService(em);
+
+      const result = await service.getGroupParticipationForMemberships([
+        'membership-1',
+      ]);
+
+      expect(result).toEqual(
+        expect.arrayContaining([
+          {
+            membershipId: 'membership-1',
+            groupId: 'root-1',
+            roles: [GroupRole.MEMBER],
+          },
+          {
+            membershipId: 'membership-1',
+            groupId: 'child-1',
+            roles: [GroupRole.MEMBER, GroupRole.INSTRUCTOR],
+          },
+        ]),
+      );
+      expect(result).toHaveLength(2);
+    });
+
+    it('returns an empty array without querying when given no membership ids', async () => {
+      const { em, find } = buildMockEm({ roleAssignmentFindResults: [] });
+      const service = buildService(em);
+
+      const result = await service.getGroupParticipationForMemberships([]);
+
+      expect(result).toEqual([]);
+      expect(find).not.toHaveBeenCalled();
+    });
+  });
 });

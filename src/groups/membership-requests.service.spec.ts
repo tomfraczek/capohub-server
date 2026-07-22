@@ -91,6 +91,8 @@ interface MockRouting {
   membershipResults?: (GroupMembership | null)[];
   membershipRequestResults?: (MembershipRequest | null)[];
   roleAssignmentResults?: (RoleAssignment | null)[];
+  // Bulk find() results for MembershipRequest - static, not a FIFO queue.
+  membershipRequestFindResults?: MembershipRequest[];
   flushError?: Error;
 }
 
@@ -119,7 +121,12 @@ function buildMockEm(routing: MockRouting = {}) {
     },
   );
 
-  const find = jest.fn(() => Promise.resolve([]));
+  const find = jest.fn((entity: unknown) => {
+    if (entity === MembershipRequest) {
+      return Promise.resolve(routing.membershipRequestFindResults ?? []);
+    }
+    return Promise.resolve([]);
+  });
 
   const raw = {
     findOne,
@@ -133,7 +140,7 @@ function buildMockEm(routing: MockRouting = {}) {
       ),
   };
 
-  return { em: raw as unknown as EntityManager, persist, findOne, flush };
+  return { em: raw as unknown as EntityManager, persist, findOne, find, flush };
 }
 
 // ─── Service factory ─────────────────────────────────────────────────────────
@@ -559,6 +566,43 @@ describe('MembershipRequestsService', () => {
       await expect(
         service.withdrawMyJoinRequest('group-1', buildUser()),
       ).rejects.toMatchObject({ response: { code: 'JOIN_REQUEST_NOT_FOUND' } });
+    });
+  });
+
+  describe('listJoinRequestsForGroups()', () => {
+    it('returns PENDING join requests across every given target group in one query', async () => {
+      const requestForGroupOne = buildInvitation({
+        id: 'req-1',
+        type: MembershipRequestType.JOIN_REQUEST,
+        targetGroup: buildGroup({ id: 'group-1' }),
+      });
+      const requestForGroupTwo = buildInvitation({
+        id: 'req-2',
+        type: MembershipRequestType.JOIN_REQUEST,
+        targetGroup: buildGroup({ id: 'group-2' }),
+      });
+      const { em, find } = buildMockEm({
+        membershipRequestFindResults: [requestForGroupOne, requestForGroupTwo],
+      });
+      const { service } = buildService(em);
+
+      const result = await service.listJoinRequestsForGroups([
+        'group-1',
+        'group-2',
+      ]);
+
+      expect(result.map((request) => request.id)).toEqual(['req-1', 'req-2']);
+      expect(find).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns an empty array without querying when given no group ids', async () => {
+      const { em, find } = buildMockEm();
+      const { service } = buildService(em);
+
+      const result = await service.listJoinRequestsForGroups([]);
+
+      expect(result).toEqual([]);
+      expect(find).not.toHaveBeenCalled();
     });
   });
 });
