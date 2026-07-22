@@ -8,7 +8,6 @@ import { RoleAssignment } from './entities/role-assignment.entity';
 import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
-import { GroupVisibility } from './enums/group-visibility.enum';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupsService } from './groups.service';
 import { GroupPermissionService } from './permissions/group-permission.service';
@@ -29,7 +28,9 @@ function buildCreateInput(
     facebookUrl: null,
     instagramUrl: null,
     youtubeUrl: null,
-    visibility: GroupVisibility.PUBLIC,
+    isPublic: true,
+    isHidden: false,
+    memberInvitesAllowed: false,
     timezone: 'Europe/Warsaw',
     currencyCode: 'PLN',
     ...overrides,
@@ -92,7 +93,16 @@ function buildMockEm(routing: MockRouting = {}) {
     .fn<{ flush: jest.Mock }, [object]>()
     .mockReturnValue({ flush });
 
-  const findOne = jest.fn((entity: unknown) => {
+  const findOne = jest.fn((entity: unknown, filter?: unknown) => {
+    // publicCode uniqueness check from generateUniquePublicCode() - always
+    // return null to indicate no collision regardless of entity type.
+    if (
+      filter !== null &&
+      typeof filter === 'object' &&
+      'publicCode' in (filter as Record<string, unknown>)
+    ) {
+      return Promise.resolve(null);
+    }
     if (entity === Group) {
       return Promise.resolve(groupQueue.shift() ?? null);
     }
@@ -101,6 +111,11 @@ function buildMockEm(routing: MockRouting = {}) {
     }
     if (entity === RoleAssignment) {
       return Promise.resolve(roleAssignmentQueue.shift() ?? null);
+    }
+    // User lookups come from generateUniquePublicCode() - return null
+    // to indicate "no existing user has this publicCode".
+    if (entity === User) {
+      return Promise.resolve(null);
     }
     throw new Error(
       `Unexpected findOne entity in test mock: ${String(entity)}`,

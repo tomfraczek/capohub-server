@@ -1,7 +1,13 @@
-import { Entity, Enum, Index, ManyToOne, Property } from '@mikro-orm/core';
+import {
+  Entity,
+  Enum,
+  Index,
+  ManyToOne,
+  Property,
+  Unique,
+} from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { GroupStatus } from '../enums/group-status.enum';
-import { GroupVisibility } from '../enums/group-visibility.enum';
 
 // Organizational data only - no address/location/academy/training-venue
 // fields (those live on Academy/Section, each owned by exactly one Group).
@@ -51,8 +57,30 @@ export class Group extends BaseEntity {
   @Property({ nullable: true, length: 2048 })
   youtubeUrl: string | null = null;
 
-  @Enum({ items: () => Object.values(GroupVisibility) })
-  visibility: GroupVisibility = GroupVisibility.PUBLIC;
+  // Whether users can join this Group/Organization without admin approval.
+  // true  → auto-join (Membership or MEMBER Role created immediately on "join").
+  // false → "join" creates a JOIN_REQUEST that must be approved.
+  // Defaults to true (open/public) to match the historical visibility=PUBLIC default.
+  @Property()
+  isPublic: boolean = true;
+
+  // Whether this Group/Organization is discoverable via the regular search
+  // and listings.  Hidden resources are still reachable via direct link,
+  // publicCode, or QR code.
+  @Property()
+  isHidden: boolean = false;
+
+  // Whether ordinary MEMBERs of this Group may create Invitations on behalf
+  // of the Group.  When false, only ADMIN and OWNER may invite.
+  @Property()
+  memberInvitesAllowed: boolean = false;
+
+  // Globally-unique, immutable, human-readable code for locating this Group
+  // without knowing its UUID.  Generated once at creation and never changed.
+  // Not a secret - do NOT use it as an authorization token.
+  @Unique()
+  @Property({ nullable: true, length: 15 })
+  publicCode: string | null = null;
 
   @Index()
   @Enum({ items: () => Object.values(GroupStatus) })

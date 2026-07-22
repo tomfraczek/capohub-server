@@ -24,6 +24,12 @@ const MEMBER_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.MEMBERSHIP_VIEW,
   GroupPermission.ACADEMY_VIEW,
   GroupPermission.SECTION_VIEW,
+  // GROUP_INVITE is intentionally included here even though service-layer
+  // logic additionally gates it on Group.memberInvitesAllowed.  This allows
+  // the GroupPermissionsGuard to let MEMBER requests through to the service;
+  // the service then rejects them when the setting is off.  ADMIN and OWNER
+  // always pass regardless of the setting.
+  GroupPermission.GROUP_INVITE,
 ];
 
 // INSTRUCTOR and ASSISTANT have no extra permissions yet - they carry no
@@ -40,10 +46,14 @@ const INSTRUCTOR_PERMISSIONS: readonly GroupPermission[] = [
 const ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   ...MEMBER_PERMISSIONS,
   GroupPermission.GROUP_EDIT,
+  GroupPermission.GROUP_SETTINGS_MANAGE,
   GroupPermission.MEMBERSHIP_ADD,
   GroupPermission.MEMBERSHIP_ROLE_CHANGE,
   GroupPermission.MEMBERSHIP_REMOVE,
   GroupPermission.MEMBERSHIP_SECTION_ASSIGN,
+  GroupPermission.MEMBERSHIP_INVITE,
+  GroupPermission.MEMBERSHIP_REQUEST_REVIEW,
+  GroupPermission.GROUP_JOIN_REQUEST_REVIEW,
   GroupPermission.ACADEMY_CREATE,
   GroupPermission.ACADEMY_EDIT,
   GroupPermission.ACADEMY_ARCHIVE,

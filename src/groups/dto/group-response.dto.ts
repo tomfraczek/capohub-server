@@ -1,5 +1,4 @@
 import { GroupStatus } from '../enums/group-status.enum';
-import { GroupVisibility } from '../enums/group-visibility.enum';
 
 export interface GroupResponseDto {
   id: string;
@@ -14,7 +13,10 @@ export interface GroupResponseDto {
   facebookUrl: string | null;
   instagramUrl: string | null;
   youtubeUrl: string | null;
-  visibility: GroupVisibility;
+  isPublic: boolean;
+  isHidden: boolean;
+  memberInvitesAllowed: boolean;
+  publicCode: string | null;
   status: GroupStatus;
   timezone: string;
   currencyCode: string;

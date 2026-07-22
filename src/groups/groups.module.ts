@@ -7,6 +7,9 @@ import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupMembershipsService } from './group-memberships.service';
 import { GroupPermissionsGuard } from './guards/group-permissions.guard';
 import { GroupPermissionService } from './permissions/group-permission.service';
+import { InvitationsController } from './invitations.controller';
+import { MembershipRequestsController } from './membership-requests.controller';
+import { MembershipRequestsService } from './membership-requests.service';
 import { RoleAssignmentsController } from './role-assignments.controller';
 import { RoleAssignmentsService } from './role-assignments.service';
 import { SectionsController } from './sections.controller';
@@ -23,6 +26,8 @@ import { SectionsService } from './sections.service';
     AcademiesController,
     SectionsController,
     RoleAssignmentsController,
+    MembershipRequestsController,
+    InvitationsController,
   ],
   providers: [
     GroupsService,
@@ -33,6 +38,7 @@ import { SectionsService } from './sections.service';
     GroupPermissionService,
     GroupPermissionsGuard,
     RoleAssignmentsService,
+    MembershipRequestsService,
   ],
   // RoleAssignmentsService is exported for UsersModule - DELETE /users/me
   // must not hard-delete a User who still owns a Group (see

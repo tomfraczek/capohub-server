@@ -60,4 +60,11 @@ export class User extends BaseEntity {
   // not of last activity, so it is never touched on later requests.
   @Property({ type: 'timestamptz', nullable: true })
   lastLoginAt: Date | null = null;
+
+  // Globally-unique, immutable, human-readable code for locating this User
+  // without knowing their UUID.  Generated once at account creation, never
+  // changed and never used as an authorization token.
+  @Unique()
+  @Property({ nullable: true, length: 15 })
+  publicCode: string | null = null;
 }

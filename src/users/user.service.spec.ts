@@ -45,12 +45,14 @@ describe('UserService', () => {
     findOwnedActiveGroups?: jest.Mock;
     nativeDelete?: jest.Mock;
     findOneOrFailUser?: jest.Mock;
+    emFindOne?: jest.Mock;
   }): {
     service: UserService;
     em: {
       flush: jest.Mock;
       persistAndFlush: jest.Mock;
       find: jest.Mock;
+      findOne: jest.Mock;
       findOneOrFail: jest.Mock;
       nativeDelete: jest.Mock;
       transactional: jest.Mock;
@@ -63,6 +65,7 @@ describe('UserService', () => {
       flush: jest.fn().mockResolvedValue(undefined),
       persistAndFlush: jest.fn().mockResolvedValue(undefined),
       find: options.findMemberships ?? jest.fn().mockResolvedValue([]),
+      findOne: options.emFindOne ?? jest.fn().mockResolvedValue(null),
       findOneOrFail:
         options.findOneOrFailUser ?? jest.fn().mockResolvedValue(new User()),
       nativeDelete: options.nativeDelete ?? jest.fn().mockResolvedValue(0),
@@ -402,7 +405,9 @@ describe('UserService', () => {
 
       await service.deleteAccount(buildUser());
 
-      expect(roleAssignmentsService.findOwnedActiveGroups).not.toHaveBeenCalled();
+      expect(
+        roleAssignmentsService.findOwnedActiveGroups,
+      ).not.toHaveBeenCalled();
       // No Memberships - nothing to wipe besides the User row itself.
       expect(calls).toEqual(['user', 'clerk']);
     });
@@ -418,7 +423,12 @@ describe('UserService', () => {
 
       await service.deleteAccount(buildUser());
 
-      expect(calls).toEqual(['roleAssignments', 'memberships', 'user', 'clerk']);
+      expect(calls).toEqual([
+        'roleAssignments',
+        'memberships',
+        'user',
+        'clerk',
+      ]);
     });
 
     it('allows a user holding MEMBER to delete the account', async () => {
@@ -436,7 +446,12 @@ describe('UserService', () => {
 
       await service.deleteAccount(buildUser());
 
-      expect(calls).toEqual(['roleAssignments', 'memberships', 'user', 'clerk']);
+      expect(calls).toEqual([
+        'roleAssignments',
+        'memberships',
+        'user',
+        'clerk',
+      ]);
     });
 
     it('allows a user holding MEMBER + INSTRUCTOR + ADMIN for the same Group to delete the account', async () => {
@@ -451,16 +466,30 @@ describe('UserService', () => {
 
       await service.deleteAccount(buildUser());
 
-      expect(calls).toEqual(['roleAssignments', 'memberships', 'user', 'clerk']);
+      expect(calls).toEqual([
+        'roleAssignments',
+        'memberships',
+        'user',
+        'clerk',
+      ]);
     });
 
     it('allows a user belonging to several Organizations to delete the account, checking ownership once per Membership', async () => {
       const deleteUser = jest.fn();
       const { calls, nativeDelete } = buildTrackedEm(deleteUser);
       const memberships = [
-        buildMembership({ id: 'membership-1', rootGroup: { id: 'root-1' } as never }),
-        buildMembership({ id: 'membership-2', rootGroup: { id: 'root-2' } as never }),
-        buildMembership({ id: 'membership-3', rootGroup: { id: 'root-3' } as never }),
+        buildMembership({
+          id: 'membership-1',
+          rootGroup: { id: 'root-1' } as never,
+        }),
+        buildMembership({
+          id: 'membership-2',
+          rootGroup: { id: 'root-2' } as never,
+        }),
+        buildMembership({
+          id: 'membership-3',
+          rootGroup: { id: 'root-3' } as never,
+        }),
       ];
       const findOwnedActiveGroups = jest.fn().mockResolvedValue([]);
       const { service } = buildService({
@@ -491,7 +520,12 @@ describe('UserService', () => {
         'membership-3',
         'root-3',
       );
-      expect(calls).toEqual(['roleAssignments', 'memberships', 'user', 'clerk']);
+      expect(calls).toEqual([
+        'roleAssignments',
+        'memberships',
+        'user',
+        'clerk',
+      ]);
     });
 
     it('deletes every RoleAssignment belonging to all of the Memberships in one call', async () => {
@@ -619,10 +653,7 @@ describe('UserService', () => {
       await service.deleteAccount(buildUser()).catch(() => undefined);
 
       expect(deleteUser).not.toHaveBeenCalled();
-      expect(nativeDelete).not.toHaveBeenCalledWith(
-        User,
-        expect.anything(),
-      );
+      expect(nativeDelete).not.toHaveBeenCalledWith(User, expect.anything());
     });
 
     it('completes without throwing a raw error when nothing is owned - no FK violation surfaces', async () => {

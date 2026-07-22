@@ -185,7 +185,9 @@ describe('Groups (e2e)', () => {
       facebookUrl: null,
       instagramUrl: null,
       youtubeUrl: null,
-      visibility: 'PUBLIC',
+      isPublic: true,
+      isHidden: false,
+      memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
       ...overrides,
@@ -813,7 +815,7 @@ describe('Groups (e2e)', () => {
   });
 
   describe('Child Group ownership (e2e)', () => {
-    it('blocks leaving the Organization while owning a Child Group, and allows it once that Child Group\'s ownership is transferred - the Child Group keeps exactly one OWNER throughout', async () => {
+    it("blocks leaving the Organization while owning a Child Group, and allows it once that Child Group's ownership is transferred - the Child Group keeps exactly one OWNER throughout", async () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Child Ownership Root',
       });

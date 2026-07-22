@@ -1,9 +1,14 @@
 import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@mikro-orm/nestjs';
-import { EntityManager, EntityRepository, LockMode } from '@mikro-orm/postgresql';
+import {
+  EntityManager,
+  EntityRepository,
+  LockMode,
+} from '@mikro-orm/postgresql';
 import type { ClerkClient } from '@clerk/backend';
 import { CLERK_CLIENT } from '../auth/clerk/clerk-client.provider';
 import { AuthContext } from '../auth/types/auth-context.type';
+import { generateUniquePublicCode } from '../common/utils/public-code';
 import { GroupMembership } from '../groups/entities/group-membership.entity';
 import { RoleAssignment } from '../groups/entities/role-assignment.entity';
 import { RoleAssignmentsService } from '../groups/role-assignments.service';
@@ -53,6 +58,7 @@ export class UserService {
 
     const created = this.buildUser(auth.userId, profile);
     created.lastLoginAt = new Date();
+    created.publicCode = await generateUniquePublicCode(this.em);
     await this.em.persistAndFlush(created);
     return created;
   }
@@ -134,11 +140,12 @@ export class UserService {
       );
 
       for (const membership of memberships) {
-        const ownedGroups = await this.roleAssignmentsService.findOwnedActiveGroups(
-          em,
-          membership.id,
-          membership.rootGroup.id,
-        );
+        const ownedGroups =
+          await this.roleAssignmentsService.findOwnedActiveGroups(
+            em,
+            membership.id,
+            membership.rootGroup.id,
+          );
         if (ownedGroups.length > 0) {
           throw new ConflictException({
             code: 'CANNOT_DELETE_ACCOUNT_OWNS_GROUPS',

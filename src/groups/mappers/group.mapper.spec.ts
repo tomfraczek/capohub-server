@@ -4,7 +4,6 @@ import { RoleAssignment } from '../entities/role-assignment.entity';
 import { GroupMembershipStatus } from '../enums/group-membership-status.enum';
 import { GroupRole } from '../enums/group-role.enum';
 import { GroupStatus } from '../enums/group-status.enum';
-import { GroupVisibility } from '../enums/group-visibility.enum';
 import { MembershipEndReason } from '../enums/membership-end-reason.enum';
 import {
   toGroupMembershipResponseDto,
@@ -17,7 +16,10 @@ function buildGroup(overrides: Partial<Group> = {}): Group {
   const group = new Group();
   group.id = 'group-1';
   group.name = 'Capoeira Angola SP';
-  group.visibility = GroupVisibility.PUBLIC;
+  group.isPublic = true;
+  group.isHidden = false;
+  group.memberInvitesAllowed = false;
+  group.publicCode = 'ABCD-1234';
   group.status = GroupStatus.ACTIVE;
   group.timezone = 'Europe/Warsaw';
   group.currencyCode = 'PLN';
@@ -35,7 +37,9 @@ describe('group.mapper', () => {
         id: 'group-1',
         name: 'Capoeira Angola SP',
         logoUrl: 'https://example.com/logo.png',
-        visibility: GroupVisibility.PUBLIC,
+        isPublic: true,
+        isHidden: false,
+        publicCode: 'ABCD-1234',
         status: GroupStatus.ACTIVE,
         timezone: 'Europe/Warsaw',
         currencyCode: 'PLN',
@@ -58,7 +62,9 @@ describe('group.mapper', () => {
         id: 'group-1',
         name: 'Capoeira Angola SP',
         logoUrl: null,
-        visibility: GroupVisibility.PUBLIC,
+        isPublic: true,
+        isHidden: false,
+        publicCode: 'ABCD-1234',
         status: GroupStatus.ACTIVE,
         myRoles: [GroupRole.MEMBER, GroupRole.ADMIN],
       });

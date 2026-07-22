@@ -26,6 +26,10 @@ export enum GroupPermission {
   GROUP_SET_READ_ONLY = 'GROUP_SET_READ_ONLY',
   GROUP_ACTIVATE = 'GROUP_ACTIVATE',
   GROUP_OWNERSHIP_TRANSFER = 'GROUP_OWNERSHIP_TRANSFER',
+  // Group-level discovery/join settings (isPublic, isHidden, memberInvitesAllowed).
+  // Separate from GROUP_EDIT so ownership-sensitive settings can be guarded
+  // more tightly without touching the main edit permission.
+  GROUP_SETTINGS_MANAGE = 'GROUP_SETTINGS_MANAGE',
 
   // Membership (always Root Group-scoped - see organization-entities.md#membership)
   MEMBERSHIP_VIEW = 'MEMBERSHIP_VIEW',
@@ -33,6 +37,21 @@ export enum GroupPermission {
   MEMBERSHIP_ROLE_CHANGE = 'MEMBERSHIP_ROLE_CHANGE',
   MEMBERSHIP_REMOVE = 'MEMBERSHIP_REMOVE',
   MEMBERSHIP_SECTION_ASSIGN = 'MEMBERSHIP_SECTION_ASSIGN',
+  // Organization-level invitation and join-request management.
+  // These are checked on the Root Group and act on Membership (not on a
+  // specific Group's MEMBER role).  OWNER Organization does NOT receive
+  // these in any Child Group - authorization is always per-group and
+  // never inherited (see ADR-013, ADR-024).
+  MEMBERSHIP_INVITE = 'MEMBERSHIP_INVITE',
+  MEMBERSHIP_REQUEST_REVIEW = 'MEMBERSHIP_REQUEST_REVIEW',
+
+  // Group-level invitation and join-request management.
+  // Checked on the exact Group being invited into / whose join requests
+  // are being reviewed.  MEMBER can only invite when
+  // Group.memberInvitesAllowed is true (enforced at the service layer, not
+  // by the guard - see MembershipRequestsService).
+  GROUP_INVITE = 'GROUP_INVITE',
+  GROUP_JOIN_REQUEST_REVIEW = 'GROUP_JOIN_REQUEST_REVIEW',
 
   // Academy
   ACADEMY_VIEW = 'ACADEMY_VIEW',

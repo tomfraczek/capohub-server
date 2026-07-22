@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
+import { generateUniquePublicCode } from '../common/utils/public-code';
 import { User } from '../users/entities/user.entity';
 import { CreateGroupInput } from './dto/create-group.schema';
 import { GroupResponseDto } from './dto/group-response.dto';
@@ -57,6 +58,7 @@ export class GroupsService {
   async create(user: User, input: CreateGroupInput): Promise<GroupResponseDto> {
     const group = await this.em.transactional(async (em) => {
       const group = new Group();
+      group.publicCode = await generateUniquePublicCode(em);
       this.applyFields(group, input);
 
       let ownerMembership: GroupMembership;
@@ -235,7 +237,9 @@ export class GroupsService {
     group.facebookUrl = input.facebookUrl;
     group.instagramUrl = input.instagramUrl;
     group.youtubeUrl = input.youtubeUrl;
-    group.visibility = input.visibility;
+    group.isPublic = input.isPublic;
+    group.isHidden = input.isHidden;
+    group.memberInvitesAllowed = input.memberInvitesAllowed;
     group.timezone = input.timezone;
     group.currencyCode = input.currencyCode;
   }

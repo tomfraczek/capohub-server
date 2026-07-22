@@ -2,8 +2,8 @@
 title: Organization Entities
 description: Detailed entity reference for the Organization Domain - purpose, responsibilities, business rules, relationships, lifecycle, and validation rules for every entity.
 status: Draft
-version: 1.0.0
-last_updated: 2026-07-20
+version: 1.1.0
+last_updated: 2026-07-22
 ---
 
 # Organization Entities
@@ -23,7 +23,7 @@ last_updated: 2026-07-20
 - [Section](#section)
 - [Membership](#membership)
 - [RoleAssignment](#roleassignment)
-- [Invitation](#invitation)
+- [MembershipRequest](#membershiprequest)
 - [GraduationSystem](#graduationsystem)
 - [GraduationCategory](#graduationcategory)
 - [GraduationLevel](#graduationlevel)
@@ -99,6 +99,33 @@ does not merge Groups together (see
   [ADR-002](../decisions/ADR-002-unlimited-group-hierarchy.md).
 - Groups are never physically deleted; they become archived instead. See
   [ADR-007](../decisions/ADR-007-soft-delete.md).
+
+### Discovery and join settings
+
+Every Group (including Root Groups representing Organizations) carries three
+boolean flags that control discoverability and join access:
+
+| Field                  | Default | Meaning                                                                                                                                                                                                           |
+| ---------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isPublic`             | `true`  | `POST /groups/:id/join` produces an immediate Membership/Role — no approval needed. When `false`, a `JOIN_REQUEST` is created and must be approved by an ADMIN or OWNER.                                          |
+| `isHidden`             | `false` | `true` excludes the Group from `GET /discovery/groups` search results. **Being hidden does not prevent joining** — a user who has the direct link, publicCode, or QR code can still call `POST /groups/:id/join`. |
+| `memberInvitesAllowed` | `false` | When `true`, plain MEMBERs may create Invitations for this Group. When `false`, only ADMIN and OWNER may invite.                                                                                                  |
+
+### publicCode
+
+Every Group (and every User) is assigned a globally-unique, human-readable
+`publicCode` on creation. The code is in `XXXX-XXXX` format using a
+Crockford Base32 charset (no I, L, O, U). It is immutable after creation
+(see ADR-022).
+
+Because there is no separate Organization entity (ADR-001), a Root Group's
+`publicCode` is also the Organization's public code. Clients that want to
+share a QR code or link for an Organization use the Root Group's
+`publicCode` — this is the intended design.
+
+`publicCode` is not a security token. Resolving a code via
+`GET /discovery/resolve/:code` always returns the resource regardless of
+`isHidden`. The code is a convenience shorthand, not access control.
 
 ### Some properties inherit from parent Groups
 
@@ -506,7 +533,7 @@ RoleAssignment stores:
   Group as the target Group - a Role can never be granted against a
   Membership that is not currently active in that organization.
 - **Multiple RoleAssignments per (Membership, Group) pair are allowed** -
-  a Membership may hold several *different* Roles for the same Group at
+  a Membership may hold several _different_ Roles for the same Group at
   once (see the Jan example above). What is forbidden is holding the
   **same** Role twice for the same (Membership, Group) pair - uniqueness
   is on `(membership, group, role)`, not on `(membership, group)`.
@@ -516,14 +543,14 @@ RoleAssignment stores:
 - **`Member` is the base Role of every Group - Root or Child, with no
   special case for either.** Membership answers "does this User belong to
   the organization"; the `Member` RoleAssignment for a specific Group
-  answers "does this User belong to *this* Group" - it is its own
+  answers "does this User belong to _this_ Group" - it is its own
   RoleAssignment, not an inferred default, but every other Role requires
   it, and the system guarantees this automatically. In practice, `Admin`
   always means `Member` + `Admin`; `Instructor` always means `Member` +
   `Instructor`; `Owner` always means `Member` + `Owner` - there is no
   valid state holding any non-`Member` Role for a Group without also
   holding `Member` there. This is triggered by actually being granted a
-  Role for a specific Group: if a Membership's *first* RoleAssignment for
+  Role for a specific Group: if a Membership's _first_ RoleAssignment for
   a Group is some other Role, `Member` is created automatically alongside
   it, in the same operation. Symmetrically, `Member` cannot be revoked
   while the Membership still holds any other Role for that Group - every
@@ -562,10 +589,10 @@ RoleAssignment stores:
 - **`Owner` is a mandatory exception: every Group must always have exactly
   one active `Owner` RoleAssignment**, independent of which Membership
   holds it - Root and Child Groups alike, with no special case for either.
-  The database only enforces the *at most one* half of this (a partial
+  The database only enforces the _at most one_ half of this (a partial
   unique index on `(group)` where `role = 'Owner'`) - a unique index cannot
   require a row to exist, so it cannot express "at least one" by itself.
-  The *at least one* half is guaranteed entirely at the application layer,
+  The _at least one_ half is guaranteed entirely at the application layer,
   by three things working together: `Owner` cannot be granted through the
   general grant-a-Role flow or revoked directly; it is granted
   automatically to a Group's creator; and **a Membership cannot be removed
@@ -637,7 +664,7 @@ moved only by an atomic transfer, never revoked directly.
   custom or organization-defined values are rejected.
 - A (Membership, Group, Role) combination must be unique - granting the
   exact same Role twice for the same Membership and Group is rejected;
-  granting a *different* Role for the same Membership and Group is not a
+  granting a _different_ Role for the same Membership and Group is not a
   duplicate and must succeed.
 - A RoleAssignment must never be evaluated as granting authority while its
   underlying Membership is not `ACTIVE`.
@@ -700,11 +727,79 @@ it, producing a Membership).
 
 ### Public Codes
 
-Every important object (Group, Academy, User, and by extension
-Invitation-related links) may expose a public identifier intended for QR
-codes and invitation links. Public codes are never database identifiers
-and are immutable once generated. See
-[ADR-023](../decisions/ADR-023-stable-public-codes.md).
+Every important object (Group, User) exposes a `publicCode` for QR codes
+and sharing links. Public codes are globally unique across Groups and Users,
+immutable after creation, and in `XXXX-XXXX` format (Crockford Base32).
+See [ADR-023](../decisions/ADR-023-stable-public-codes.md).
+
+Because Organization = Root Group (ADR-001), the Root Group's `publicCode`
+is the Organization's public code. No separate entity exists for Organization
+and none will be added.
+
+---
+
+# MembershipRequest
+
+## Purpose
+
+`MembershipRequest` is the single entity that models both directions of the
+membership process:
+
+- **INVITATION** — a current member invites an outsider.
+- **JOIN_REQUEST** — an outsider requests to join.
+
+One row covers both flows. The `type` field distinguishes them.
+
+## targetGroup and targetType — dual role
+
+`targetGroup` always references a `Group` entity. Its meaning depends on
+`targetType`:
+
+| `targetType`   | `targetGroup`                                                                                                                                          | Effect on acceptance                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `ORGANIZATION` | **Must be a Root Group** — i.e. the Group that represents the Organization (parentGroup === null). There is no separate Organization entity (ADR-001). | Creates/reactivates a `GroupMembership` only. No `RoleAssignment` is created anywhere (ADR-004).                   |
+| `GROUP`        | Any Group (Root or Child).                                                                                                                             | Ensures `GroupMembership` in the Root Group **and** grants a `MEMBER` `RoleAssignment` in the exact `targetGroup`. |
+
+This design is intentional. A single FK to a Group covers both
+Organization-level and Group-level membership, keeping the schema simple
+and consistent with ADR-001.
+
+## Lifecycle
+
+```
+PENDING → ACCEPTED
+        → REJECTED
+        → CANCELLED
+```
+
+Terminal states are immutable. Resend = new PENDING row + old row → CANCELLED,
+in one transaction.
+
+## Uniqueness guarantees
+
+Three partial unique indexes at the DB level prevent concurrent duplicates:
+
+1. `(targetGroup, invitedUser)` WHERE `type = 'INVITATION'` AND `status = 'PENDING'`
+2. `(targetGroup, invitedEmail)` WHERE `type = 'INVITATION'` AND `status = 'PENDING'`
+3. `(targetGroup, initiatedBy)` WHERE `type = 'JOIN_REQUEST'` AND `status = 'PENDING'`
+
+## Authorization for cancelling an Invitation
+
+Only three principals may cancel a PENDING Invitation:
+
+1. The original inviter (`initiatedBy`).
+2. ADMIN of the target Group.
+3. OWNER of the target Group.
+
+A plain MEMBER cannot cancel an invitation sent by a different user, even
+when `memberInvitesAllowed = true`.
+
+## isHidden does not block JOIN_REQUEST
+
+`isHidden = true` means the Group is excluded from search results
+(`GET /discovery/groups`). It does **not** prevent joining. A user who
+finds the Group via publicCode, QR code, or direct link may still call
+`POST /groups/:id/join` — the result depends only on `isPublic`.
 
 ---
 

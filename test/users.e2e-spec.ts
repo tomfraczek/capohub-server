@@ -183,7 +183,9 @@ describe('Users (e2e)', () => {
       facebookUrl: null,
       instagramUrl: null,
       youtubeUrl: null,
-      visibility: 'PUBLIC',
+      isPublic: true,
+      isHidden: false,
+      memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
       ...overrides,
@@ -248,7 +250,12 @@ describe('Users (e2e)', () => {
         REGULAR_TOKEN,
         GroupRole.MEMBER,
       );
-      await grantRole(ADMIN_TOKEN, child.id, membership.id, GroupRole.INSTRUCTOR);
+      await grantRole(
+        ADMIN_TOKEN,
+        child.id,
+        membership.id,
+        GroupRole.INSTRUCTOR,
+      );
       await grantRole(ADMIN_TOKEN, child.id, membership.id, GroupRole.ADMIN);
 
       const regularUserId = localUserIdByToken.get(REGULAR_TOKEN) as string;

@@ -1,6 +1,5 @@
 import { GroupRole } from '../enums/group-role.enum';
 import { GroupStatus } from '../enums/group-status.enum';
-import { GroupVisibility } from '../enums/group-visibility.enum';
 
 // Row shape for GET /groups ("my groups") - myRoles are every Role
 // Assignment the caller holds for that Group itself (not a group-wide
@@ -15,7 +14,9 @@ export interface GroupSummaryResponseDto {
   id: string;
   name: string;
   logoUrl: string | null;
-  visibility: GroupVisibility;
+  isPublic: boolean;
+  isHidden: boolean;
+  publicCode: string | null;
   status: GroupStatus;
   myRoles: GroupRole[];
 }
