@@ -4,6 +4,7 @@ import {
 } from '@mikro-orm/core';
 import { Test, TestingModule } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
+import { generatePublicCode } from '../src/common/utils/public-code';
 import { ConfigModule } from '../src/config/config.module';
 import { DatabaseModule } from '../src/database/database.module';
 import { SongAlternativeTitle } from '../src/songs/entities/song-alternative-title.entity';
@@ -95,6 +96,7 @@ describe('Songbook model (integration)', () => {
     user.clerkUserId = `user_test_model_${suffix}`;
     user.email = `model-test-${suffix}@example.com`;
     user.displayName = 'Model Test User';
+    user.publicCode = generatePublicCode();
     userIds.push(user.id);
     return user;
   }
