@@ -26,10 +26,25 @@ export enum GroupPermission {
   GROUP_SET_READ_ONLY = 'GROUP_SET_READ_ONLY',
   GROUP_ACTIVATE = 'GROUP_ACTIVATE',
   GROUP_OWNERSHIP_TRANSFER = 'GROUP_OWNERSHIP_TRANSFER',
+  // Permanent, irreversible removal (see ADR-029) - deliberately its own
+  // permission, not reused from GROUP_ARCHIVE, since Delete is a strictly
+  // more severe, non-undoable action than Archive.
+  GROUP_DELETE = 'GROUP_DELETE',
   // Group-level discovery/join settings (isPublic, isHidden, memberInvitesAllowed).
   // Separate from GROUP_EDIT so ownership-sensitive settings can be guarded
   // more tightly without touching the main edit permission.
   GROUP_SETTINGS_MANAGE = 'GROUP_SETTINGS_MANAGE',
+  // Read access to this Group's Audit Log (see AuditLogEntry). Separate
+  // from GROUP_VIEW so audit history - which can reveal moderation actions
+  // like bans/suspensions - is not automatically visible to every viewer.
+  AUDIT_LOG_VIEW = 'AUDIT_LOG_VIEW',
+  //
+  // Note: Community Notification settings (see
+  // CommunityNotificationSettings) deliberately have NO corresponding
+  // GroupPermission/guard - see CommunityNotificationSettingsService's own
+  // comment for why: every Membership manages its own row, including the
+  // valid zero-Role-Assignment case that GroupPermissionsGuard cannot
+  // authorize at all.
 
   // Membership (always Root Group-scoped - see organization-entities.md#membership)
   MEMBERSHIP_VIEW = 'MEMBERSHIP_VIEW',
@@ -37,6 +52,17 @@ export enum GroupPermission {
   MEMBERSHIP_ROLE_CHANGE = 'MEMBERSHIP_ROLE_CHANGE',
   MEMBERSHIP_REMOVE = 'MEMBERSHIP_REMOVE',
   MEMBERSHIP_SECTION_ASSIGN = 'MEMBERSHIP_SECTION_ASSIGN',
+  // Ends the Membership (like MEMBERSHIP_REMOVE) and additionally blocks the
+  // user from rejoining or being re-invited until unbanned - see GroupBan.
+  MEMBERSHIP_BAN = 'MEMBERSHIP_BAN',
+  MEMBERSHIP_UNBAN = 'MEMBERSHIP_UNBAN',
+  // Sets/lifts a Membership's READ_ONLY status for a bounded (or
+  // indefinite) time window - see MembershipSuspension. Deliberately
+  // distinct from MEMBERSHIP_ROLE_CHANGE/MEMBERSHIP_REMOVE: suspension
+  // touches Membership.status, never a Role Assignment, and does not end
+  // the Membership the way Ban/Remove do.
+  MEMBERSHIP_SUSPEND = 'MEMBERSHIP_SUSPEND',
+  MEMBERSHIP_UNSUSPEND = 'MEMBERSHIP_UNSUSPEND',
   // Organization-level invitation and join-request management.
   // These are checked on the Root Group and act on Membership (not on a
   // specific Group's MEMBER role).  OWNER Organization does NOT receive

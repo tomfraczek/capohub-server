@@ -9,7 +9,9 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { User } from '../users/entities/user.entity';
 import {
   CreateRoleAssignmentDto,
   createRoleAssignmentSchema,
@@ -49,8 +51,9 @@ export class RoleAssignmentsController {
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Body(new ZodValidationPipe(createRoleAssignmentSchema))
     dto: CreateRoleAssignmentDto,
+    @CurrentUser() user: User,
   ): Promise<RoleAssignmentResponseDto> {
-    return this.roleAssignmentsService.grantRole(groupId, dto);
+    return this.roleAssignmentsService.grantRole(groupId, dto, user);
   }
 
   @Get()
@@ -79,7 +82,12 @@ export class RoleAssignmentsController {
   revoke(
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Param('roleAssignmentId', ParseUUIDPipe) roleAssignmentId: string,
+    @CurrentUser() user: User,
   ): Promise<void> {
-    return this.roleAssignmentsService.revokeRole(groupId, roleAssignmentId);
+    return this.roleAssignmentsService.revokeRole(
+      groupId,
+      roleAssignmentId,
+      user,
+    );
   }
 }

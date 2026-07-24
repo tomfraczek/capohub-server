@@ -18,6 +18,7 @@ import { User } from '../src/users/entities/user.entity';
 import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { RoleAssignmentResponseDto } from '../src/groups/dto/role-assignment-response.dto';
+import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
@@ -161,6 +162,9 @@ describe('Users (e2e)', () => {
     });
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
+    });
+    await cleanup.nativeDelete(AuditLogEntry, {
+      community: { $in: createdGroupIds },
     });
     await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
     await cleanup.nativeDelete(User, {

@@ -19,6 +19,7 @@ import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-r
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { GroupSummaryResponseDto } from '../src/groups/dto/group-summary-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
+import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { MembershipSection } from '../src/groups/entities/membership-section.entity';
@@ -158,6 +159,9 @@ describe('Organization Membership (e2e)', () => {
     });
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
+    });
+    await cleanup.nativeDelete(AuditLogEntry, {
+      community: { $in: createdGroupIds },
     });
     await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
     await cleanup.nativeDelete(User, {

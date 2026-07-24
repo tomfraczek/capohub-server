@@ -405,4 +405,135 @@ describe('CommunityHomeService', () => {
       });
     });
   });
+
+  describe('getHome() - expanded capability flags', () => {
+    it('grants the ADMIN-tier capability lists (view/manage members, invite, manage invitations/roles) only where the union of Roles includes them', async () => {
+      const root = buildGroup({ id: 'root-1' });
+      const membership = buildMembership({ id: 'm-1', rootGroup: root });
+      const { em } = buildMockEm([membership], { groupFindResults: [root] });
+      const { service } = buildService(em, {
+        participation: [
+          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.ADMIN] },
+        ],
+      });
+
+      const result = await service.getHome(buildUser());
+
+      expect(result.capabilities.canViewMembersInCommunityIds).toEqual([
+        'root-1',
+      ]);
+      expect(result.capabilities.canManageMembersInCommunityIds).toEqual([
+        'root-1',
+      ]);
+      expect(result.capabilities.canManageInvitationsInCommunityIds).toEqual([
+        'root-1',
+      ]);
+      expect(result.capabilities.canManageRolesInCommunityIds).toEqual([
+        'root-1',
+      ]);
+      expect(result.capabilities.canBanMembersInCommunityIds).toEqual([
+        'root-1',
+      ]);
+      expect(result.capabilities.canSuspendMembersInCommunityIds).toEqual([
+        'root-1',
+      ]);
+      // OWNER-only actions remain empty for a plain ADMIN.
+      expect(result.capabilities.canTransferOwnershipInCommunityIds).toEqual(
+        [],
+      );
+      expect(result.capabilities.canArchiveCommunityIds).toEqual([]);
+      expect(result.capabilities.canDeleteCommunityIds).toEqual([]);
+    });
+
+    it('grants OWNER-only capabilities (transfer ownership, archive, delete) only for an OWNER', async () => {
+      const root = buildGroup({ id: 'root-1' });
+      const membership = buildMembership({ id: 'm-1', rootGroup: root });
+      const { em } = buildMockEm([membership], { groupFindResults: [root] });
+      const { service } = buildService(em, {
+        participation: [
+          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.OWNER] },
+        ],
+      });
+
+      const result = await service.getHome(buildUser());
+
+      expect(result.capabilities.canTransferOwnershipInCommunityIds).toEqual([
+        'root-1',
+      ]);
+      expect(result.capabilities.canArchiveCommunityIds).toEqual(['root-1']);
+      expect(result.capabilities.canDeleteCommunityIds).toEqual(['root-1']);
+    });
+
+    it('grants canViewMembersInCommunityIds and canViewAuditLogInCommunityIds for a READ_ONLY (suspended) Membership - both are READ_ONLY-safe - but not the operational lists', async () => {
+      const root = buildGroup({ id: 'root-1' });
+      const membership = buildMembership({
+        id: 'm-1',
+        rootGroup: root,
+        status: GroupMembershipStatus.READ_ONLY,
+      });
+      const { em } = buildMockEm([membership], { groupFindResults: [root] });
+      const { service } = buildService(em, {
+        participation: [
+          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.OWNER] },
+        ],
+      });
+
+      const result = await service.getHome(buildUser());
+
+      // The suspended member's community remains visible on the dashboard.
+      expect(result.myCommunities).toHaveLength(1);
+      expect(result.capabilities.canViewMembersInCommunityIds).toEqual([
+        'root-1',
+      ]);
+      expect(result.capabilities.canViewAuditLogInCommunityIds).toEqual([
+        'root-1',
+      ]);
+      // Every operational (non READ_ONLY-safe) capability is withheld, even
+      // for an OWNER, while suspended.
+      expect(result.capabilities.canManageMembersInCommunityIds).toEqual([]);
+      expect(result.capabilities.canArchiveCommunityIds).toEqual([]);
+      expect(result.capabilities.canBanMembersInCommunityIds).toEqual([]);
+      expect(result.capabilities.canSuspendMembersInCommunityIds).toEqual([]);
+      expect(result.capabilities.canManageNotificationsInCommunityIds).toEqual(
+        [],
+      );
+    });
+
+    it('grants canManageNotificationsInCommunityIds for every ACTIVE Membership regardless of Role (including zero Roles)', async () => {
+      const root = buildGroup({ id: 'root-1' });
+      const membership = buildMembership({ id: 'm-1', rootGroup: root });
+      const { em } = buildMockEm([membership], { groupFindResults: [root] });
+      const { service } = buildService(em, { participation: [] });
+
+      const result = await service.getHome(buildUser());
+
+      expect(result.capabilities.canManageNotificationsInCommunityIds).toEqual([
+        'root-1',
+      ]);
+    });
+
+    it('grants canRestoreCommunityIds and canDeleteCommunityIds for an ARCHIVED community the caller owns - even though it is excluded from myCommunities', async () => {
+      const root = buildGroup({
+        id: 'root-1',
+        status: GroupStatus.ARCHIVED,
+      });
+      const membership = buildMembership({ id: 'm-1', rootGroup: root });
+      // Unlike the myCommunities-only tests above, the wider capability
+      // query now fetches ARCHIVED groups too (only DELETED is excluded).
+      const { em } = buildMockEm([membership], { groupFindResults: [root] });
+      const { service } = buildService(em, {
+        participation: [
+          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.OWNER] },
+        ],
+      });
+
+      const result = await service.getHome(buildUser());
+
+      expect(result.myCommunities).toEqual([]);
+      expect(result.capabilities.canRestoreCommunityIds).toEqual(['root-1']);
+      expect(result.capabilities.canDeleteCommunityIds).toEqual(['root-1']);
+      // Archive itself only applies from ACTIVE/READ_ONLY, never ARCHIVED.
+      expect(result.capabilities.canArchiveCommunityIds).toEqual([]);
+    });
+  });
 });

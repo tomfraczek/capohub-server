@@ -29,6 +29,7 @@ import { CLERK_CLIENT } from '../src/auth/clerk/clerk-client.provider';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { MembershipRequest } from '../src/groups/entities/membership-request.entity';
@@ -175,6 +176,9 @@ describe('MembershipRequests + Discovery (e2e)', () => {
       });
       await cleanup.nativeDelete(GroupMembership, {
         rootGroup: { $in: createdGroupIds },
+      });
+      await cleanup.nativeDelete(AuditLogEntry, {
+        community: { $in: createdGroupIds },
       });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
     }

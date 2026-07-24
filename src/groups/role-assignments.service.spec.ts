@@ -3,6 +3,7 @@ import { UniqueConstraintViolationException } from '@mikro-orm/core';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { GroupMembership } from './entities/group-membership.entity';
 import { Group } from './entities/group.entity';
+import { MembershipSuspension } from './entities/membership-suspension.entity';
 import {
   ROLE_ASSIGNMENTS_UNIQUE_INDEX,
   RoleAssignment,
@@ -10,8 +11,11 @@ import {
 import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
+import { AuditLogService } from './audit-log.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { RoleAssignmentsService } from './role-assignments.service';
+
+const ACTOR = { id: 'actor-1', displayName: 'Actor' } as never;
 
 function buildGroup(overrides: Partial<Group> = {}): Group {
   const group = new Group();
@@ -50,6 +54,7 @@ interface MockRouting {
   membershipResults?: (GroupMembership | null)[];
   // findOne results, FIFO.
   roleAssignmentResults?: (RoleAssignment | null)[];
+  membershipSuspensionResults?: (MembershipSuspension | null)[];
   // find (bulk) results - static, not a FIFO queue (no test here needs two
   // different bulk-find results for RoleAssignment within one test).
   roleAssignmentFindResults?: RoleAssignment[];
@@ -60,6 +65,9 @@ function buildMockEm(routing: MockRouting = {}) {
   const groupQueue = [...(routing.groupResults ?? [])];
   const membershipQueue = [...(routing.membershipResults ?? [])];
   const roleAssignmentQueue = [...(routing.roleAssignmentResults ?? [])];
+  const membershipSuspensionQueue = [
+    ...(routing.membershipSuspensionResults ?? []),
+  ];
 
   const flush = routing.flushError
     ? jest.fn().mockRejectedValue(routing.flushError)
@@ -78,6 +86,9 @@ function buildMockEm(routing: MockRouting = {}) {
     }
     if (entity === RoleAssignment) {
       return Promise.resolve(roleAssignmentQueue.shift() ?? null);
+    }
+    if (entity === MembershipSuspension) {
+      return Promise.resolve(membershipSuspensionQueue.shift() ?? null);
     }
     throw new Error(
       `Unexpected findOne entity in test mock: ${String(entity)}`,
@@ -122,8 +133,11 @@ function buildService(
     getRootGroup: getRootGroupImpl ?? (() => Promise.resolve(buildGroup())),
     getDescendants: getDescendantsImpl ?? (() => Promise.resolve([])),
   } as unknown as GroupHierarchyService;
+  const auditLogService = {
+    record: jest.fn().mockResolvedValue(undefined),
+  } as unknown as AuditLogService;
 
-  return new RoleAssignmentsService(em, groupHierarchyService);
+  return new RoleAssignmentsService(em, groupHierarchyService, auditLogService);
 }
 
 describe('RoleAssignmentsService', () => {
@@ -233,6 +247,116 @@ describe('RoleAssignmentsService', () => {
 
       expect(await service.resolveAuthorization('root-1', 'user-1')).toBeNull();
     });
+
+    it('lazily reconciles an expired suspension back to ACTIVE before resolving Role Assignments', async () => {
+      const rootGroup = buildGroup();
+      const membership = buildMembership({
+        status: GroupMembershipStatus.READ_ONLY,
+      });
+      const suspension = new MembershipSuspension();
+      suspension.membership = membership;
+      suspension.until = new Date('2020-01-01T00:00:00.000Z');
+      const roleAssignment = buildRoleAssignment({
+        membership,
+        group: rootGroup,
+      });
+      const { em } = buildMockEm({
+        groupResults: [rootGroup],
+        membershipResults: [membership],
+        membershipSuspensionResults: [suspension],
+        roleAssignmentFindResults: [roleAssignment],
+      });
+      const service = buildService(em);
+
+      const result = await service.resolveAuthorization('root-1', 'user-1');
+
+      expect(membership.status).toBe(GroupMembershipStatus.ACTIVE);
+      expect(suspension.liftedAt).not.toBeNull();
+      expect(result?.membership.status).toBe(GroupMembershipStatus.ACTIVE);
+    });
+
+    it('leaves an indefinite suspension (until=null) untouched', async () => {
+      const rootGroup = buildGroup();
+      const membership = buildMembership({
+        status: GroupMembershipStatus.READ_ONLY,
+      });
+      const suspension = new MembershipSuspension();
+      suspension.membership = membership;
+      suspension.until = null;
+      const { em } = buildMockEm({
+        groupResults: [rootGroup],
+        membershipResults: [membership],
+        membershipSuspensionResults: [suspension],
+        roleAssignmentFindResults: [],
+      });
+      const service = buildService(em);
+
+      await service.resolveAuthorization('root-1', 'user-1');
+
+      expect(membership.status).toBe(GroupMembershipStatus.READ_ONLY);
+      expect(suspension.liftedAt).toBeNull();
+    });
+
+    it('leaves a suspension that has not yet reached its until date untouched', async () => {
+      const rootGroup = buildGroup();
+      const membership = buildMembership({
+        status: GroupMembershipStatus.READ_ONLY,
+      });
+      const suspension = new MembershipSuspension();
+      suspension.membership = membership;
+      suspension.until = new Date(Date.now() + 60 * 60 * 1000);
+      const { em } = buildMockEm({
+        groupResults: [rootGroup],
+        membershipResults: [membership],
+        membershipSuspensionResults: [suspension],
+        roleAssignmentFindResults: [],
+      });
+      const service = buildService(em);
+
+      await service.resolveAuthorization('root-1', 'user-1');
+
+      expect(membership.status).toBe(GroupMembershipStatus.READ_ONLY);
+      expect(suspension.liftedAt).toBeNull();
+    });
+
+    it('is a no-op when the membership is READ_ONLY but has no active suspension record', async () => {
+      const rootGroup = buildGroup();
+      const membership = buildMembership({
+        status: GroupMembershipStatus.READ_ONLY,
+      });
+      const { em } = buildMockEm({
+        groupResults: [rootGroup],
+        membershipResults: [membership],
+        membershipSuspensionResults: [null],
+        roleAssignmentFindResults: [],
+      });
+      const service = buildService(em);
+
+      await service.resolveAuthorization('root-1', 'user-1');
+
+      expect(membership.status).toBe(GroupMembershipStatus.READ_ONLY);
+    });
+
+    it('never looks up a suspension for an ACTIVE membership', async () => {
+      const rootGroup = buildGroup();
+      const membership = buildMembership({
+        status: GroupMembershipStatus.ACTIVE,
+      });
+      const { em, findOne } = buildMockEm({
+        groupResults: [rootGroup],
+        membershipResults: [membership],
+        roleAssignmentFindResults: [],
+      });
+      const service = buildService(em);
+
+      await service.resolveAuthorization('root-1', 'user-1');
+
+      expect(findOne).not.toHaveBeenCalledWith(
+        MembershipSuspension,
+        expect.anything(),
+        expect.anything(),
+      );
+    });
   });
 
   describe('ensureMemberRole', () => {
@@ -291,10 +415,14 @@ describe('RoleAssignmentsService', () => {
       const service = buildService(em);
 
       const error: unknown = await service
-        .grantRole('missing', {
-          membershipId: 'membership-1',
-          role: GroupRole.ADMIN,
-        })
+        .grantRole(
+          'missing',
+          {
+            membershipId: 'membership-1',
+            role: GroupRole.ADMIN,
+          },
+          ACTOR,
+        )
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(NotFoundException);
@@ -311,10 +439,14 @@ describe('RoleAssignmentsService', () => {
       const service = buildService(em);
 
       const error: unknown = await service
-        .grantRole('child-1', {
-          membershipId: 'missing',
-          role: GroupRole.ADMIN,
-        })
+        .grantRole(
+          'child-1',
+          {
+            membershipId: 'missing',
+            role: GroupRole.ADMIN,
+          },
+          ACTOR,
+        )
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(NotFoundException);
@@ -339,10 +471,14 @@ describe('RoleAssignmentsService', () => {
       const service = buildService(em, getRootGroup);
 
       const error: unknown = await service
-        .grantRole('child-1', {
-          membershipId: 'membership-1',
-          role: GroupRole.ADMIN,
-        })
+        .grantRole(
+          'child-1',
+          {
+            membershipId: 'membership-1',
+            role: GroupRole.ADMIN,
+          },
+          ACTOR,
+        )
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
@@ -367,10 +503,14 @@ describe('RoleAssignmentsService', () => {
       const service = buildService(em, getRootGroup);
 
       const error: unknown = await service
-        .grantRole('child-1', {
-          membershipId: 'membership-1',
-          role: GroupRole.ADMIN,
-        })
+        .grantRole(
+          'child-1',
+          {
+            membershipId: 'membership-1',
+            role: GroupRole.ADMIN,
+          },
+          ACTOR,
+        )
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
@@ -393,10 +533,14 @@ describe('RoleAssignmentsService', () => {
       const service = buildService(em, getRootGroup);
 
       const error: unknown = await service
-        .grantRole('child-1', {
-          membershipId: 'membership-1',
-          role: GroupRole.ADMIN,
-        })
+        .grantRole(
+          'child-1',
+          {
+            membershipId: 'membership-1',
+            role: GroupRole.ADMIN,
+          },
+          ACTOR,
+        )
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
@@ -421,10 +565,14 @@ describe('RoleAssignmentsService', () => {
       });
       const service = buildService(em, getRootGroup);
 
-      const result = await service.grantRole('child-1', {
-        membershipId: 'membership-1',
-        role: GroupRole.ADMIN,
-      });
+      const result = await service.grantRole(
+        'child-1',
+        {
+          membershipId: 'membership-1',
+          role: GroupRole.ADMIN,
+        },
+        ACTOR,
+      );
 
       expect(result.role).toBe(GroupRole.ADMIN);
       // ADMIN !== MEMBER, so ensureMemberRole runs first (its own findOne
@@ -447,10 +595,14 @@ describe('RoleAssignmentsService', () => {
       });
       const service = buildService(em);
 
-      await service.grantRole('root-1', {
-        membershipId: 'membership-1',
-        role: GroupRole.MEMBER,
-      });
+      await service.grantRole(
+        'root-1',
+        {
+          membershipId: 'membership-1',
+          role: GroupRole.MEMBER,
+        },
+        ACTOR,
+      );
 
       expect(persist).toHaveBeenCalledTimes(1);
     });
@@ -471,10 +623,14 @@ describe('RoleAssignmentsService', () => {
       const service = buildService(em);
 
       const error: unknown = await service
-        .grantRole('root-1', {
-          membershipId: 'membership-1',
-          role: GroupRole.MEMBER,
-        })
+        .grantRole(
+          'root-1',
+          {
+            membershipId: 'membership-1',
+            role: GroupRole.MEMBER,
+          },
+          ACTOR,
+        )
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
@@ -508,7 +664,7 @@ describe('RoleAssignmentsService', () => {
       });
       const service = buildService(em);
 
-      await service.revokeRole('root-1', 'role-assignment-1');
+      await service.revokeRole('root-1', 'role-assignment-1', ACTOR);
 
       expect(remove).toHaveBeenCalledWith(assignment);
     });
@@ -519,7 +675,7 @@ describe('RoleAssignmentsService', () => {
       const service = buildService(em);
 
       const error: unknown = await service
-        .revokeRole('root-1', 'role-assignment-1')
+        .revokeRole('root-1', 'role-assignment-1', ACTOR)
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
@@ -536,7 +692,7 @@ describe('RoleAssignmentsService', () => {
       const service = buildService(em);
 
       const error: unknown = await service
-        .revokeRole('root-1', 'role-assignment-1')
+        .revokeRole('root-1', 'role-assignment-1', ACTOR)
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
@@ -563,7 +719,7 @@ describe('RoleAssignmentsService', () => {
       const service = buildService(em);
 
       const error: unknown = await service
-        .revokeRole('child-1', 'role-assignment-1')
+        .revokeRole('child-1', 'role-assignment-1', ACTOR)
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
@@ -587,7 +743,7 @@ describe('RoleAssignmentsService', () => {
       });
       const service = buildService(em);
 
-      await service.revokeRole('child-1', 'role-assignment-1');
+      await service.revokeRole('child-1', 'role-assignment-1', ACTOR);
 
       expect(remove).toHaveBeenCalledWith(assignment);
     });
@@ -656,7 +812,10 @@ describe('RoleAssignmentsService', () => {
       });
       const { em } = buildMockEm({
         roleAssignmentFindResults: [
-          buildRoleAssignment({ role: GroupRole.OWNER, group: grandchildGroup }),
+          buildRoleAssignment({
+            role: GroupRole.OWNER,
+            group: grandchildGroup,
+          }),
         ],
       });
       const service = buildService(em, undefined, () =>

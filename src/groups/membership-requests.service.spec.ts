@@ -19,6 +19,7 @@ import {
 } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
+import { GroupBan } from './entities/group-ban.entity';
 import { Group } from './entities/group.entity';
 import { GroupMembership } from './entities/group-membership.entity';
 import { MembershipRequest } from './entities/membership-request.entity';
@@ -29,6 +30,7 @@ import { GroupStatus } from './enums/group-status.enum';
 import { MembershipRequestStatus } from './enums/membership-request-status.enum';
 import { MembershipRequestTarget } from './enums/membership-request-target.enum';
 import { MembershipRequestType } from './enums/membership-request-type.enum';
+import { AuditLogService } from './audit-log.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { MembershipRequestsService } from './membership-requests.service';
 import { RoleAssignmentsService } from './role-assignments.service';
@@ -155,13 +157,23 @@ function buildService(em: EntityManager) {
     resolveAuthorization: jest.fn().mockResolvedValue(null),
   } as unknown as RoleAssignmentsService;
 
+  const auditLogService = {
+    record: jest.fn().mockResolvedValue(undefined),
+  } as unknown as AuditLogService;
+
   const service = new MembershipRequestsService(
     em,
     groupHierarchyService,
     roleAssignmentsService,
+    auditLogService,
   );
 
-  return { service, groupHierarchyService, roleAssignmentsService };
+  return {
+    service,
+    groupHierarchyService,
+    roleAssignmentsService,
+    auditLogService,
+  };
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -246,7 +258,7 @@ describe('MembershipRequestsService', () => {
     it('rejects with NOT_A_ROOT_GROUP when targetType=ORGANIZATION targets a Child Group', async () => {
       const childGroup = buildGroup({
         id: 'child-1',
-        parentGroup: buildGroup({ id: 'root-1' }) as never,
+        parentGroup: buildGroup({ id: 'root-1' }),
         isPublic: true,
       });
       const { em } = buildMockEm({ groupResults: [childGroup] });
@@ -493,6 +505,7 @@ describe('MembershipRequestsService', () => {
         if (entity === GroupMembership) return Promise.resolve(null);
         if (entity === MembershipRequest) return Promise.resolve(null);
         if (entity === RoleAssignment) return Promise.resolve(null);
+        if (entity === GroupBan) return Promise.resolve(null);
         // User lookup for invitedUserId
         return Promise.resolve(invitee);
       });

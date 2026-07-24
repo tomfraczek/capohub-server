@@ -76,15 +76,63 @@ export interface CommunityHomeSummaryDto {
 
 // Contextual capability data. `canCreateOrganization` is a real global
 // boolean (creating a Root Group requires no permission - see
-// GroupsService.create). The other two are NOT global booleans - which
-// action is available always depends on which community the user has
-// GROUP_EDIT / GROUP_JOIN_REQUEST_REVIEW for, so the frontend receives the
-// exact set of community ids rather than a lie-by-omission boolean (see
-// PAD-001 §17.4 "Permission Transparency").
+// GroupsService.create). Every other field is a list of community ids, NOT
+// a global boolean - which action is available always depends on which
+// specific community (Root or Child Group) the user holds the underlying
+// permission for, so the frontend always receives the exact set of ids
+// rather than a lie-by-omission boolean (see PAD-001 §17.4 "Permission
+// Transparency"). The frontend must never compute any of these from
+// `myRoles`/`myCommunities` - always read them from here.
 export interface CommunityHomeCapabilitiesDto {
   canCreateOrganization: boolean;
   canCreateGroupInCommunityIds: string[];
   canReviewJoinRequestsInCommunityIds: string[];
+  // Read access to a community's member list (GET .../members) - works in
+  // any Group status.
+  canViewMembersInCommunityIds: string[];
+  // Add/remove a member (MEMBERSHIP_ADD/MEMBERSHIP_REMOVE tier) - requires
+  // the Group to be ACTIVE.
+  canManageMembersInCommunityIds: string[];
+  // Send a new Invitation for this community - requires ACTIVE, and, for a
+  // caller whose only roles are MEMBER/ASSISTANT/INSTRUCTOR,
+  // Group.memberInvitesAllowed === true (ADMIN/OWNER bypass that setting -
+  // see docs "Role → Permission reference" footnote).
+  canInviteMembersInCommunityIds: string[];
+  // Cancel/resend an existing Invitation on another member's behalf
+  // (MEMBERSHIP_INVITE tier) - requires ACTIVE.
+  canManageInvitationsInCommunityIds: string[];
+  // Grant/revoke a Role Assignment (MEMBERSHIP_ROLE_CHANGE) - requires
+  // ACTIVE.
+  canManageRolesInCommunityIds: string[];
+  // Transfer ownership (GROUP_OWNERSHIP_TRANSFER, OWNER-only) - requires
+  // ACTIVE.
+  canTransferOwnershipInCommunityIds: string[];
+  // Archive (GROUP_ARCHIVE, OWNER-only) - valid from ACTIVE or READ_ONLY.
+  canArchiveCommunityIds: string[];
+  // Unarchive/"Restore" (GROUP_UNARCHIVE, OWNER-only) - valid only from
+  // ARCHIVED. Unlike every other list here, communities that qualify are
+  // NOT necessarily present in `myCommunities` (ARCHIVED communities are
+  // excluded from it - see myCommunities below) - resolve the community's
+  // own name/logo via GET /groups/:id if you need to display it.
+  canRestoreCommunityIds: string[];
+  // Permanently delete (GROUP_DELETE, OWNER-only, see ADR-029) - valid from
+  // ACTIVE, READ_ONLY, or ARCHIVED. Same "may not be in myCommunities" note
+  // as canRestoreCommunityIds applies to any ARCHIVED community here.
+  canDeleteCommunityIds: string[];
+  // Read this community's Audit Log (AUDIT_LOG_VIEW) - works in any Group
+  // status, including DELETED (historical data remains visible - ADR-007).
+  canViewAuditLogInCommunityIds: string[];
+  // Manage the caller's own Community Notification settings - available to
+  // every community with an ACTIVE Membership, independent of Role (see
+  // CommunityNotificationSettingsService) - deliberately not a
+  // Role/Permission-gated capability like every other one here.
+  canManageNotificationsInCommunityIds: string[];
+  // Ban/unban a member (MEMBERSHIP_BAN/MEMBERSHIP_UNBAN tier) - requires
+  // ACTIVE.
+  canBanMembersInCommunityIds: string[];
+  // Suspend/unsuspend a member (MEMBERSHIP_SUSPEND/MEMBERSHIP_UNSUSPEND
+  // tier) - requires ACTIVE.
+  canSuspendMembersInCommunityIds: string[];
   // True iff canCreateGroupInCommunityIds is non-empty - i.e. the user
   // holds GROUP_EDIT (Admin/Owner) in at least one community, root or
   // child. A convenience aggregate, not an independent business rule.

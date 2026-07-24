@@ -47,6 +47,7 @@ const ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   ...MEMBER_PERMISSIONS,
   GroupPermission.GROUP_EDIT,
   GroupPermission.GROUP_SETTINGS_MANAGE,
+  GroupPermission.AUDIT_LOG_VIEW,
   GroupPermission.MEMBERSHIP_ADD,
   GroupPermission.MEMBERSHIP_ROLE_CHANGE,
   GroupPermission.MEMBERSHIP_REMOVE,
@@ -54,6 +55,14 @@ const ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.MEMBERSHIP_INVITE,
   GroupPermission.MEMBERSHIP_REQUEST_REVIEW,
   GroupPermission.GROUP_JOIN_REQUEST_REVIEW,
+  // Ban/Unban and Suspend/Unsuspend sit at the same trust tier as
+  // MEMBERSHIP_REMOVE/MEMBERSHIP_ROLE_CHANGE - an ADMIN already has full
+  // member-management authority; these are additional member-management
+  // actions, not a stronger trust tier.
+  GroupPermission.MEMBERSHIP_BAN,
+  GroupPermission.MEMBERSHIP_UNBAN,
+  GroupPermission.MEMBERSHIP_SUSPEND,
+  GroupPermission.MEMBERSHIP_UNSUSPEND,
   GroupPermission.ACADEMY_CREATE,
   GroupPermission.ACADEMY_EDIT,
   GroupPermission.ACADEMY_ARCHIVE,
@@ -63,15 +72,18 @@ const ADMIN_PERMISSIONS: readonly GroupPermission[] = [
 ];
 
 // Every lifecycle-status permission (ARCHIVE, UNARCHIVE, SET_READ_ONLY,
-// ACTIVATE) plus OWNERSHIP_TRANSFER is deliberately withheld from ADMIN and
-// reserved for OWNER (spec: admin cannot change the group's lifecycle status
-// or transfer/grant ownership, cannot remove/replace the owner).
+// ACTIVATE, DELETE) plus OWNERSHIP_TRANSFER is deliberately withheld from
+// ADMIN and reserved for OWNER (spec: admin cannot change the group's
+// lifecycle status or transfer/grant ownership, cannot remove/replace the
+// owner). DELETE is grouped with these since it is a Group-lifecycle
+// action, and the most severe/irreversible one - see ADR-029.
 const OWNER_PERMISSIONS: readonly GroupPermission[] = [
   ...ADMIN_PERMISSIONS,
   GroupPermission.GROUP_ARCHIVE,
   GroupPermission.GROUP_UNARCHIVE,
   GroupPermission.GROUP_SET_READ_ONLY,
   GroupPermission.GROUP_ACTIVATE,
+  GroupPermission.GROUP_DELETE,
   GroupPermission.GROUP_OWNERSHIP_TRANSFER,
 ];
 
@@ -98,5 +110,9 @@ export const READ_ONLY_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> = new Set(
     GroupPermission.MEMBERSHIP_VIEW,
     GroupPermission.ACADEMY_VIEW,
     GroupPermission.SECTION_VIEW,
+    // Reading history poses no operational risk and matches "remains
+    // visible" for READ_ONLY (see organization-entities.md#membership) -
+    // deliberately added here explicitly, not because of its "_VIEW" name.
+    GroupPermission.AUDIT_LOG_VIEW,
   ],
 );

@@ -5,10 +5,15 @@ import {
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
+import { User } from '../users/entities/user.entity';
+import { AuditLogService } from './audit-log.service';
 import { CreateRoleAssignmentInput } from './dto/create-role-assignment.schema';
 import { RoleAssignmentResponseDto } from './dto/role-assignment-response.dto';
+import { AuditAction } from './enums/audit-action.enum';
+import { AuditTargetType } from './enums/audit-target-type.enum';
 import { Group } from './entities/group.entity';
 import { GroupMembership } from './entities/group-membership.entity';
+import { MembershipSuspension } from './entities/membership-suspension.entity';
 import {
   ROLE_ASSIGNMENTS_UNIQUE_INDEX,
   RoleAssignment,
@@ -44,6 +49,7 @@ export class RoleAssignmentsService {
   constructor(
     private readonly em: EntityManager,
     private readonly groupHierarchyService: GroupHierarchyService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   /**
@@ -89,6 +95,8 @@ export class RoleAssignmentsService {
       return null;
     }
 
+    await this.reconcileExpiredSuspension(em, membership);
+
     const roleAssignments = await em.find(RoleAssignment, {
       membership: membership.id,
       group: groupId,
@@ -98,6 +106,43 @@ export class RoleAssignmentsService {
     }
 
     return { group, membership, roleAssignments };
+  }
+
+  /**
+   * Lazily expires a time-bound suspension (see MembershipSuspension) -
+   * this codebase has no scheduler/cron infrastructure, so instead of a
+   * background job flipping `status` back to ACTIVE at `until`, the next
+   * time this Membership's authorization is resolved (i.e. on the very
+   * next request that touches this Group, by anyone), an `until` in the
+   * past is detected and both the Membership and the suspension record are
+   * reconciled back to ACTIVE/lifted right here, before the permission
+   * check that called this method runs. Deliberately not audit-logged as
+   * an UNSUSPEND action - no actor performed it, it is a passive
+   * consequence of time passing (see AuditLogEntry.actor).
+   *
+   * A no-op whenever the Membership isn't READ_ONLY, has no active
+   * suspension record, or that suspension is indefinite (`until === null`)
+   * or not yet due.
+   */
+  private async reconcileExpiredSuspension(
+    em: EntityManager,
+    membership: GroupMembership,
+  ): Promise<void> {
+    if (membership.status !== GroupMembershipStatus.READ_ONLY) {
+      return;
+    }
+
+    const suspension = await em.findOne(MembershipSuspension, {
+      membership: membership.id,
+      liftedAt: null,
+    });
+    if (!suspension?.until || suspension.until.getTime() > Date.now()) {
+      return;
+    }
+
+    membership.status = GroupMembershipStatus.ACTIVE;
+    suspension.liftedAt = new Date();
+    await em.flush();
   }
 
   /**
@@ -162,6 +207,7 @@ export class RoleAssignmentsService {
   async grantRole(
     groupId: string,
     input: CreateRoleAssignmentInput,
+    actor: User,
   ): Promise<RoleAssignmentResponseDto> {
     return this.em.transactional(async (em) => {
       const group = await em.findOne(Group, { id: groupId });
@@ -232,6 +278,20 @@ export class RoleAssignmentsService {
         throw error;
       }
 
+      // membership.rootGroup is already the correct Root Group regardless
+      // of whether `groupId` (the Role's own target) is a Root or Child
+      // Group - Membership is always Root-Group-scoped (ADR-004), so no
+      // extra hierarchy lookup is needed here.
+      this.auditLogService.record(em, {
+        community: membership.rootGroup,
+        action: AuditAction.ADD_ROLE,
+        actor,
+        targetType: AuditTargetType.USER,
+        targetId: membership.user.id,
+        metadata: { groupId, role: input.role },
+      });
+      await em.flush();
+
       return toRoleAssignmentResponseDto(assignment);
     });
   }
@@ -283,44 +343,62 @@ export class RoleAssignmentsService {
    *   Assignment here instead would leave an ACTIVE Membership with no
    *   Role at all in its own Root Group, a state with no defined meaning.
    */
-  async revokeRole(groupId: string, roleAssignmentId: string): Promise<void> {
-    const assignment = await this.loadByIdOrFail(
-      this.em,
-      groupId,
-      roleAssignmentId,
-    );
+  async revokeRole(
+    groupId: string,
+    roleAssignmentId: string,
+    actor: User,
+  ): Promise<void> {
+    return this.em.transactional(async (em) => {
+      const assignment = await this.loadByIdOrFail(
+        em,
+        groupId,
+        roleAssignmentId,
+      );
 
-    if (assignment.role === GroupRole.OWNER) {
-      throw new ConflictException({
-        code: 'CANNOT_REMOVE_OWNER',
-        message: 'The owner role cannot be revoked directly',
-      });
-    }
-
-    if (assignment.role === GroupRole.MEMBER) {
-      if (assignment.membership.rootGroup.id === groupId) {
+      if (assignment.role === GroupRole.OWNER) {
         throw new ConflictException({
-          code: 'CANNOT_REMOVE_ROOT_MEMBER_ROLE',
-          message:
-            'MEMBER for the Root Group cannot be revoked directly - use leave or remove the member instead',
+          code: 'CANNOT_REMOVE_OWNER',
+          message: 'The owner role cannot be revoked directly',
         });
       }
 
-      const otherRoles = await this.em.find(RoleAssignment, {
-        membership: assignment.membership.id,
-        group: groupId,
-        role: { $ne: GroupRole.MEMBER },
-      });
-      if (otherRoles.length > 0) {
-        throw new ConflictException({
-          code: 'CANNOT_REMOVE_MEMBER_ROLE',
-          message:
-            'MEMBER is the base role for this group - revoke every other role held here first',
-        });
-      }
-    }
+      if (assignment.role === GroupRole.MEMBER) {
+        if (assignment.membership.rootGroup.id === groupId) {
+          throw new ConflictException({
+            code: 'CANNOT_REMOVE_ROOT_MEMBER_ROLE',
+            message:
+              'MEMBER for the Root Group cannot be revoked directly - use leave or remove the member instead',
+          });
+        }
 
-    await this.em.remove(assignment).flush();
+        const otherRoles = await em.find(RoleAssignment, {
+          membership: assignment.membership.id,
+          group: groupId,
+          role: { $ne: GroupRole.MEMBER },
+        });
+        if (otherRoles.length > 0) {
+          throw new ConflictException({
+            code: 'CANNOT_REMOVE_MEMBER_ROLE',
+            message:
+              'MEMBER is the base role for this group - revoke every other role held here first',
+          });
+        }
+      }
+
+      const targetUserId = assignment.membership.user.id;
+      const role = assignment.role;
+      await em.remove(assignment).flush();
+
+      this.auditLogService.record(em, {
+        community: assignment.membership.rootGroup,
+        action: AuditAction.REMOVE_ROLE,
+        actor,
+        targetType: AuditTargetType.USER,
+        targetId: targetUserId,
+        metadata: { groupId, role },
+      });
+      await em.flush();
+    });
   }
 
   /**

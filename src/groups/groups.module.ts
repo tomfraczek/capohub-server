@@ -1,8 +1,12 @@
 import { Module } from '@nestjs/common';
 import { AcademiesController } from './academies.controller';
 import { AcademiesService } from './academies.service';
+import { AuditLogController } from './audit-log.controller';
+import { AuditLogService } from './audit-log.service';
 import { CommunityHomeController } from './community-home.controller';
 import { CommunityHomeService } from './community-home.service';
+import { CommunityNotificationSettingsController } from './community-notification-settings.controller';
+import { CommunityNotificationSettingsService } from './community-notification-settings.service';
 import { GroupsController } from './groups.controller';
 import { GroupsService } from './groups.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
@@ -31,6 +35,8 @@ import { SectionsService } from './sections.service';
     MembershipRequestsController,
     InvitationsController,
     CommunityHomeController,
+    AuditLogController,
+    CommunityNotificationSettingsController,
   ],
   providers: [
     GroupsService,
@@ -43,6 +49,8 @@ import { SectionsService } from './sections.service';
     RoleAssignmentsService,
     MembershipRequestsService,
     CommunityHomeService,
+    AuditLogService,
+    CommunityNotificationSettingsService,
   ],
   // RoleAssignmentsService is exported for UsersModule - DELETE /users/me
   // must not hard-delete a User who still owns a Group (see

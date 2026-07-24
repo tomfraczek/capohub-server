@@ -8,6 +8,7 @@ import { RoleAssignment } from './entities/role-assignment.entity';
 import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
+import { AuditLogService } from './audit-log.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupsService } from './groups.service';
 import { GroupPermissionService } from './permissions/group-permission.service';
@@ -155,9 +156,13 @@ function buildService(em: EntityManager) {
   const groupHierarchyService = {
     getRootGroup: () => Promise.resolve(buildGroup()),
   } as unknown as GroupHierarchyService;
+  const auditLogService = {
+    record: jest.fn().mockResolvedValue(undefined),
+  } as unknown as AuditLogService;
   const roleAssignmentsService = new RoleAssignmentsService(
     em,
     groupHierarchyService,
+    auditLogService,
   );
 
   return {
@@ -165,7 +170,10 @@ function buildService(em: EntityManager) {
       em,
       groupPermissionService,
       roleAssignmentsService,
+      groupHierarchyService,
+      auditLogService,
     ),
+    auditLogService,
   };
 }
 
@@ -401,6 +409,27 @@ describe('GroupsService', () => {
         }),
       ]);
     });
+
+    it('queries both ACTIVE and READ_ONLY memberships - a suspended Membership must not silently vanish from this list', async () => {
+      const { em, find } = buildMockEm({ memberships: [] });
+      const { service } = buildService(em);
+
+      await service.listMine('user-1');
+
+      expect(find).toHaveBeenCalledWith(
+        GroupMembership,
+        expect.objectContaining({
+          user: 'user-1',
+          status: {
+            $in: [
+              GroupMembershipStatus.ACTIVE,
+              GroupMembershipStatus.READ_ONLY,
+            ],
+          },
+        }),
+        expect.anything(),
+      );
+    });
   });
 
   describe('getById', () => {
@@ -420,7 +449,11 @@ describe('GroupsService', () => {
       const { em } = buildMockEm({ groupResults: [existing] });
       const { service } = buildService(em);
 
-      await service.update('group-1', buildCreateInput({ name: 'New Name' }));
+      await service.update(
+        'group-1',
+        buildCreateInput({ name: 'New Name' }),
+        buildUser(),
+      );
 
       expect(existing.name).toBe('New Name');
     });
@@ -436,7 +469,7 @@ describe('GroupsService', () => {
       const { em } = buildMockEm({ groupResults: [existing] });
       const { service } = buildService(em);
 
-      await service.archive('group-1');
+      await service.archive('group-1', buildUser());
 
       expect(existing.status).toBe(GroupStatus.ARCHIVED);
     });
@@ -445,9 +478,9 @@ describe('GroupsService', () => {
       const { em } = buildMockEm({ groupResults: [null] });
       const { service } = buildService(em);
 
-      await expect(service.archive('missing-id')).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.archive('missing-id', buildUser()),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
@@ -457,7 +490,7 @@ describe('GroupsService', () => {
       const { em } = buildMockEm({ groupResults: [existing] });
       const { service } = buildService(em);
 
-      await service.unarchive('group-1');
+      await service.unarchive('group-1', buildUser());
 
       expect(existing.status).toBe(GroupStatus.ACTIVE);
     });
@@ -469,7 +502,7 @@ describe('GroupsService', () => {
       const { em } = buildMockEm({ groupResults: [existing] });
       const { service } = buildService(em);
 
-      await service.setReadOnly('group-1');
+      await service.setReadOnly('group-1', buildUser());
 
       expect(existing.status).toBe(GroupStatus.READ_ONLY);
     });
@@ -481,9 +514,57 @@ describe('GroupsService', () => {
       const { em } = buildMockEm({ groupResults: [existing] });
       const { service } = buildService(em);
 
-      await service.activate('group-1');
+      await service.activate('group-1', buildUser());
 
       expect(existing.status).toBe(GroupStatus.ACTIVE);
+    });
+  });
+
+  describe('delete', () => {
+    it('sets status to DELETED', async () => {
+      const existing = buildGroup({ status: GroupStatus.ACTIVE });
+      const { em } = buildMockEm({ groupResults: [existing], children: [] });
+      const { service } = buildService(em);
+
+      await service.delete('group-1', buildUser());
+
+      expect(existing.status).toBe(GroupStatus.DELETED);
+    });
+
+    it('rejects when a child group is not already ARCHIVED or DELETED', async () => {
+      const existing = buildGroup({ status: GroupStatus.ACTIVE });
+      const activeChild = buildGroup({
+        id: 'child-1',
+        status: GroupStatus.ACTIVE,
+      });
+      const { em } = buildMockEm({
+        groupResults: [existing],
+        children: [activeChild],
+      });
+      const { service } = buildService(em);
+
+      await expect(
+        service.delete('group-1', buildUser()),
+      ).rejects.toMatchObject({
+        response: { code: 'GROUP_HAS_ACTIVE_CHILDREN' },
+      });
+    });
+
+    it('allows deletion when every child is already ARCHIVED', async () => {
+      const existing = buildGroup({ status: GroupStatus.ACTIVE });
+      const archivedChild = buildGroup({
+        id: 'child-1',
+        status: GroupStatus.ARCHIVED,
+      });
+      const { em } = buildMockEm({
+        groupResults: [existing],
+        children: [archivedChild],
+      });
+      const { service } = buildService(em);
+
+      await service.delete('group-1', buildUser());
+
+      expect(existing.status).toBe(GroupStatus.DELETED);
     });
   });
 });

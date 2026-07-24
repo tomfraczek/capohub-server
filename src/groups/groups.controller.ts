@@ -14,10 +14,15 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { User } from '../users/entities/user.entity';
 import { AddMemberDto, addMemberSchema } from './dto/add-member.schema';
+import { BanMemberDto, banMemberSchema } from './dto/ban-member.schema';
 import { CreateGroupDto, createGroupSchema } from './dto/create-group.schema';
 import { GroupMembershipResponseDto } from './dto/group-membership-response.dto';
 import { GroupResponseDto } from './dto/group-response.dto';
 import { GroupSummaryResponseDto } from './dto/group-summary-response.dto';
+import {
+  SuspendMemberDto,
+  suspendMemberSchema,
+} from './dto/suspend-member.schema';
 import { TransferOwnershipResponseDto } from './dto/transfer-ownership-response.dto';
 import {
   TransferOwnershipDto,
@@ -36,6 +41,7 @@ const ANY_STATUS = [
   GroupStatus.ACTIVE,
   GroupStatus.READ_ONLY,
   GroupStatus.ARCHIVED,
+  GroupStatus.DELETED,
 ] as const;
 
 // GroupPermissionsGuard is applied once at the class level; it only takes
@@ -77,8 +83,9 @@ export class GroupsController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(updateGroupSchema)) dto: UpdateGroupDto,
+    @CurrentUser() user: User,
   ): Promise<GroupResponseDto> {
-    return this.groupsService.update(id, dto);
+    return this.groupsService.update(id, dto, user);
   }
 
   // Valid from both ACTIVE and READ_ONLY (spec transition table); already
@@ -86,8 +93,11 @@ export class GroupsController {
   @Post(':id/archive')
   @RequireGroupPermission(GroupPermission.GROUP_ARCHIVE)
   @AllowGroupStatuses(GroupStatus.ACTIVE, GroupStatus.READ_ONLY)
-  archive(@Param('id', ParseUUIDPipe) id: string): Promise<GroupResponseDto> {
-    return this.groupsService.archive(id);
+  archive(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<GroupResponseDto> {
+    return this.groupsService.archive(id, user);
   }
 
   // Only valid from ARCHIVED - ARCHIVED -> READ_ONLY is not a supported
@@ -95,8 +105,11 @@ export class GroupsController {
   @Post(':id/unarchive')
   @RequireGroupPermission(GroupPermission.GROUP_UNARCHIVE)
   @AllowGroupStatuses(GroupStatus.ARCHIVED)
-  unarchive(@Param('id', ParseUUIDPipe) id: string): Promise<GroupResponseDto> {
-    return this.groupsService.unarchive(id);
+  unarchive(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<GroupResponseDto> {
+    return this.groupsService.unarchive(id, user);
   }
 
   // Only valid from ACTIVE.
@@ -105,16 +118,38 @@ export class GroupsController {
   @AllowGroupStatuses(GroupStatus.ACTIVE)
   setReadOnly(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
   ): Promise<GroupResponseDto> {
-    return this.groupsService.setReadOnly(id);
+    return this.groupsService.setReadOnly(id, user);
   }
 
   // Only valid from READ_ONLY - ARCHIVED must go through /unarchive instead.
   @Post(':id/activate')
   @RequireGroupPermission(GroupPermission.GROUP_ACTIVATE)
   @AllowGroupStatuses(GroupStatus.READ_ONLY)
-  activate(@Param('id', ParseUUIDPipe) id: string): Promise<GroupResponseDto> {
-    return this.groupsService.activate(id);
+  activate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<GroupResponseDto> {
+    return this.groupsService.activate(id, user);
+  }
+
+  // Permanent, irreversible deletion (see ADR-029) - distinct from Archive,
+  // which remains fully reversible. Valid from ACTIVE, READ_ONLY, or
+  // ARCHIVED; already-DELETED is blocked by the guard with 409
+  // GROUP_DELETED, same mechanism as every other terminal-status guard.
+  @Post(':id/delete')
+  @RequireGroupPermission(GroupPermission.GROUP_DELETE)
+  @AllowGroupStatuses(
+    GroupStatus.ACTIVE,
+    GroupStatus.READ_ONLY,
+    GroupStatus.ARCHIVED,
+  )
+  delete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<GroupResponseDto> {
+    return this.groupsService.delete(id, user);
   }
 
   @Get(':id/children')
@@ -134,7 +169,12 @@ export class GroupsController {
     @Body(new ZodValidationPipe(transferOwnershipSchema))
     dto: TransferOwnershipDto,
   ): Promise<TransferOwnershipResponseDto> {
-    return this.groupMembershipsService.transferOwnership(id, user.id, dto);
+    return this.groupMembershipsService.transferOwnership(
+      id,
+      user.id,
+      dto,
+      user,
+    );
   }
 
   @Post(':id/leave')
@@ -144,7 +184,7 @@ export class GroupsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
   ): Promise<void> {
-    return this.groupMembershipsService.leave(id, user.id);
+    return this.groupMembershipsService.leave(id, user);
   }
 
   @Get(':id/members')
@@ -191,8 +231,75 @@ export class GroupsController {
   removeMember(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @CurrentUser() user: User,
   ): Promise<void> {
-    return this.groupMembershipsService.removeMember(id, membershipId);
+    return this.groupMembershipsService.removeMember(id, membershipId, user);
+  }
+
+  // Ends the Membership (like removeMember) and additionally blocks the
+  // user from rejoining/being re-invited until unbanned - see GroupBan.
+  @Post(':id/members/:membershipId/ban')
+  @HttpCode(204)
+  @RequireGroupPermission(GroupPermission.MEMBERSHIP_BAN)
+  banMember(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @Body(new ZodValidationPipe(banMemberSchema)) dto: BanMemberDto,
+    @CurrentUser() user: User,
+  ): Promise<void> {
+    return this.groupMembershipsService.banMember(
+      id,
+      membershipId,
+      user,
+      dto.reason ?? null,
+    );
+  }
+
+  // Lifts the ban - does not restore the Membership itself, see
+  // GroupMembershipsService.unbanMember. Same default (ACTIVE-only) status
+  // gate as every other member-management action - unarchive the Group
+  // first if it isn't ACTIVE.
+  @Post(':id/members/:membershipId/unban')
+  @HttpCode(204)
+  @RequireGroupPermission(GroupPermission.MEMBERSHIP_UNBAN)
+  unbanMember(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @CurrentUser() user: User,
+  ): Promise<void> {
+    return this.groupMembershipsService.unbanMember(id, membershipId, user);
+  }
+
+  // Sets Membership.status to READ_ONLY for a bounded (or indefinite) time
+  // window - see MembershipSuspension and GroupMembershipsService.
+  @Post(':id/members/:membershipId/suspend')
+  @RequireGroupPermission(GroupPermission.MEMBERSHIP_SUSPEND)
+  suspendMember(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @Body(new ZodValidationPipe(suspendMemberSchema)) dto: SuspendMemberDto,
+    @CurrentUser() user: User,
+  ): Promise<GroupMembershipResponseDto> {
+    return this.groupMembershipsService.suspendMember(
+      id,
+      membershipId,
+      user,
+      dto.until ? new Date(dto.until) : null,
+      dto.reason ?? null,
+    );
+  }
+
+  // Only valid while the Membership is currently suspended (READ_ONLY) -
+  // enforced in the service, not by @AllowGroupStatuses (that decorator
+  // gates the *Group's* status, not the Membership's).
+  @Post(':id/members/:membershipId/unsuspend')
+  @RequireGroupPermission(GroupPermission.MEMBERSHIP_UNSUSPEND)
+  unsuspendMember(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @CurrentUser() user: User,
+  ): Promise<GroupMembershipResponseDto> {
+    return this.groupMembershipsService.unsuspendMember(id, membershipId, user);
   }
 
   @Post(':id/members/:membershipId/sections/:sectionId')

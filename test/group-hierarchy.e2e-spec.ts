@@ -19,6 +19,7 @@ import { AcademyResponseDto } from '../src/groups/dto/academy-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { Academy } from '../src/groups/entities/academy.entity';
+import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
@@ -173,6 +174,9 @@ describe('Group Hierarchy / Academies / Sections (e2e)', () => {
       { id: { $in: createdGroupIds } },
       { parentGroup: null },
     );
+    await cleanup.nativeDelete(AuditLogEntry, {
+      community: { $in: createdGroupIds },
+    });
     await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
     await cleanup.nativeDelete(User, {
       clerkUserId: { $in: TEST_CLERK_USER_IDS },

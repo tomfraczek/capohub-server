@@ -19,6 +19,7 @@ import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-r
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { RoleAssignmentResponseDto } from '../src/groups/dto/role-assignment-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
+import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
@@ -158,6 +159,9 @@ describe('Role Assignments (e2e)', () => {
       { id: { $in: createdGroupIds } },
       { parentGroup: null },
     );
+    await cleanup.nativeDelete(AuditLogEntry, {
+      community: { $in: createdGroupIds },
+    });
     await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
     await cleanup.nativeDelete(User, {
       clerkUserId: { $in: TEST_CLERK_USER_IDS },

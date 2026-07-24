@@ -30,6 +30,7 @@ describe('AcademiesController', () => {
     GroupStatus.ACTIVE,
     GroupStatus.READ_ONLY,
     GroupStatus.ARCHIVED,
+    GroupStatus.DELETED,
   ];
 
   describe.each<

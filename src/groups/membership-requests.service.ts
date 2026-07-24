@@ -9,8 +9,12 @@ import { LockMode } from '@mikro-orm/core';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
 import { User } from '../users/entities/user.entity';
+import { AuditLogService } from './audit-log.service';
 import { CreateInvitationInput } from './dto/create-invitation.schema';
 import { MembershipRequestResponseDto } from './dto/membership-request-response.dto';
+import { AuditAction } from './enums/audit-action.enum';
+import { AuditTargetType } from './enums/audit-target-type.enum';
+import { GroupBan } from './entities/group-ban.entity';
 import { Group } from './entities/group.entity';
 import { GroupMembership } from './entities/group-membership.entity';
 import {
@@ -51,6 +55,7 @@ export class MembershipRequestsService {
     private readonly em: EntityManager,
     private readonly groupHierarchyService: GroupHierarchyService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   // ─── JOIN (auto-join or join request based on isPublic) ──────────────────
@@ -85,6 +90,12 @@ export class MembershipRequestsService {
         this.assertIsRootGroup(targetGroup);
       }
 
+      const rootGroup =
+        targetGroup.parentGroup === null
+          ? targetGroup
+          : await this.groupHierarchyService.getRootGroup(targetGroup.id, em);
+      await this.assertNotBanned(em, rootGroup.id, requestingUser.id);
+
       // Check if already a member (organization or group level)
       await this.assertNotAlreadyJoined(
         em,
@@ -96,6 +107,15 @@ export class MembershipRequestsService {
       if (targetGroup.isPublic) {
         // Auto-join path
         await this.fulfillJoin(em, targetGroup, targetType, requestingUser);
+        this.auditLogService.record(em, {
+          community: rootGroup,
+          action: AuditAction.JOIN_REQUEST,
+          actor: requestingUser,
+          targetType: AuditTargetType.COMMUNITY,
+          targetId: targetGroup.id,
+          metadata: { targetType, autoApproved: true },
+        });
+        await em.flush();
         return { joined: true };
       } else {
         // Create JOIN_REQUEST
@@ -117,6 +137,16 @@ export class MembershipRequestsService {
           }
           throw error;
         }
+
+        this.auditLogService.record(em, {
+          community: rootGroup,
+          action: AuditAction.JOIN_REQUEST,
+          actor: requestingUser,
+          targetType: AuditTargetType.MEMBERSHIP_REQUEST,
+          targetId: request.id,
+          metadata: { targetType, autoApproved: false },
+        });
+        await em.flush();
 
         return toMembershipRequestResponseDto(request);
       }
@@ -271,6 +301,17 @@ export class MembershipRequestsService {
         }
       }
 
+      const rootGroup =
+        targetGroup.parentGroup === null
+          ? targetGroup
+          : await this.groupHierarchyService.getRootGroup(targetGroup.id, em);
+      // Only checkable once an actual account is identified - an
+      // email-only invitee with no account yet cannot have been banned
+      // (banning requires having held a Membership first).
+      if (invitedUser) {
+        await this.assertNotBanned(em, rootGroup.id, invitedUser.id);
+      }
+
       const request = new MembershipRequest();
       request.type = MembershipRequestType.INVITATION;
       request.targetType = input.targetType;
@@ -295,6 +336,20 @@ export class MembershipRequestsService {
         }
         throw error;
       }
+
+      this.auditLogService.record(em, {
+        community: rootGroup,
+        action: AuditAction.INVITE_MEMBER,
+        actor: inviter,
+        targetType: AuditTargetType.MEMBERSHIP_REQUEST,
+        targetId: request.id,
+        metadata: {
+          targetType: input.targetType,
+          invitedUserId: invitedUser?.id ?? null,
+          invitedEmail: invitedEmail,
+        },
+      });
+      await em.flush();
 
       return toMembershipRequestResponseDto(request);
     });
@@ -448,6 +503,13 @@ export class MembershipRequestsService {
       request.status = MembershipRequestStatus.ACCEPTED;
       request.processedAt = new Date();
       request.processedBy = acceptingUser;
+
+      await this.recordRequestAudit(
+        em,
+        request,
+        AuditAction.ACCEPT_INVITATION,
+        acceptingUser,
+      );
       await em.flush();
     });
   }
@@ -463,7 +525,7 @@ export class MembershipRequestsService {
       const request = await em.findOne(
         MembershipRequest,
         { id: requestId },
-        { populate: ['invitedUser'] },
+        { populate: ['invitedUser', 'targetGroup'] },
       );
       if (!request) throw this.requestNotFound();
 
@@ -488,6 +550,13 @@ export class MembershipRequestsService {
       request.status = MembershipRequestStatus.REJECTED;
       request.processedAt = new Date();
       request.processedBy = rejectingUser;
+
+      await this.recordRequestAudit(
+        em,
+        request,
+        AuditAction.DECLINE_INVITATION,
+        rejectingUser,
+      );
       await em.flush();
     });
   }
@@ -528,6 +597,13 @@ export class MembershipRequestsService {
       request.status = MembershipRequestStatus.ACCEPTED;
       request.processedAt = new Date();
       request.processedBy = actor;
+
+      await this.recordRequestAudit(
+        em,
+        request,
+        AuditAction.APPROVE_JOIN_REQUEST,
+        actor,
+      );
       await em.flush();
     });
   }
@@ -537,7 +613,11 @@ export class MembershipRequestsService {
    */
   async rejectJoinRequest(requestId: string, actor: User): Promise<void> {
     await this.em.transactional(async (em) => {
-      const request = await em.findOne(MembershipRequest, { id: requestId });
+      const request = await em.findOne(
+        MembershipRequest,
+        { id: requestId },
+        { populate: ['targetGroup'] },
+      );
       if (!request) throw this.requestNotFound();
 
       if (request.type !== MembershipRequestType.JOIN_REQUEST) {
@@ -551,6 +631,13 @@ export class MembershipRequestsService {
       request.status = MembershipRequestStatus.REJECTED;
       request.processedAt = new Date();
       request.processedBy = actor;
+
+      await this.recordRequestAudit(
+        em,
+        request,
+        AuditAction.REJECT_JOIN_REQUEST,
+        actor,
+      );
       await em.flush();
     });
   }
@@ -653,6 +740,12 @@ export class MembershipRequestsService {
         ? targetGroup
         : await this.groupHierarchyService.getRootGroup(targetGroup.id, em);
 
+    // Re-checked here (not just at Join/Invite creation time) since this is
+    // also reached by acceptInvitation/approveJoinRequest, which can run
+    // well after the underlying request was created - a ban imposed in the
+    // meantime must still block the membership from actually being created.
+    await this.assertNotBanned(em, rootGroup.id, user.id);
+
     // Ensure Membership in Root Group
     let membership = await loadActiveMembership(em, rootGroup.id, user.id);
     if (!membership) {
@@ -738,6 +831,59 @@ export class MembershipRequestsService {
         }
       }
     }
+  }
+
+  /**
+   * Throws if `userId` currently holds an active (unlifted) GroupBan for
+   * `rootGroupId` - see GroupBan. Called from every path that would create
+   * or reactivate a Membership (join, and - via fulfillJoin -
+   * acceptInvitation/approveJoinRequest) and from createInvitation (so a
+   * banned user cannot even be re-invited).
+   */
+  private async assertNotBanned(
+    em: EntityManager,
+    rootGroupId: string,
+    userId: string,
+  ): Promise<void> {
+    const ban = await em.findOne(GroupBan, {
+      rootGroup: rootGroupId,
+      user: userId,
+      liftedAt: null,
+    });
+    if (ban) {
+      throw new ForbiddenException({
+        code: 'USER_BANNED',
+        message: 'This user is banned from this organization',
+      });
+    }
+  }
+
+  /**
+   * Resolves the Root Group to file the entry under (AuditLogEntry.community
+   * is always a Root Group, even when `request.targetGroup` is a Child
+   * Group) and records it. Shared by accept/decline Invitation and
+   * approve/reject Join Request.
+   */
+  private async recordRequestAudit(
+    em: EntityManager,
+    request: MembershipRequest,
+    action: AuditAction,
+    actor: User,
+  ): Promise<void> {
+    const community =
+      request.targetGroup.parentGroup === null
+        ? request.targetGroup
+        : await this.groupHierarchyService.getRootGroup(
+            request.targetGroup.id,
+            em,
+          );
+    this.auditLogService.record(em, {
+      community,
+      action,
+      actor,
+      targetType: AuditTargetType.MEMBERSHIP_REQUEST,
+      targetId: request.id,
+    });
   }
 
   /** Enforces that a MEMBER may only invite when memberInvitesAllowed=true. */

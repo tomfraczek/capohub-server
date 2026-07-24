@@ -32,6 +32,7 @@ const ANY_STATUS = [
   GroupStatus.ACTIVE,
   GroupStatus.READ_ONLY,
   GroupStatus.ARCHIVED,
+  GroupStatus.DELETED,
 ] as const;
 
 /**

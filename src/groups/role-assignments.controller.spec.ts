@@ -71,10 +71,11 @@ describe('RoleAssignmentsController', () => {
       const grantRole = jest.fn().mockResolvedValue(dto);
       const controller = buildController({ grantRole });
       const body = { membershipId: 'membership-1', role: 'ADMIN' } as never;
+      const user = { id: 'user-1' } as never;
 
-      const response = await controller.create('group-1', body);
+      const response = await controller.create('group-1', body, user);
 
-      expect(grantRole).toHaveBeenCalledWith('group-1', body);
+      expect(grantRole).toHaveBeenCalledWith('group-1', body, user);
       expect(response).toBe(dto);
     });
   });
@@ -112,10 +113,15 @@ describe('RoleAssignmentsController', () => {
     it('delegates to RoleAssignmentsService.revokeRole', async () => {
       const revokeRole = jest.fn().mockResolvedValue(undefined);
       const controller = buildController({ revokeRole });
+      const user = { id: 'user-1' } as never;
 
-      await controller.revoke('group-1', 'role-assignment-1');
+      await controller.revoke('group-1', 'role-assignment-1', user);
 
-      expect(revokeRole).toHaveBeenCalledWith('group-1', 'role-assignment-1');
+      expect(revokeRole).toHaveBeenCalledWith(
+        'group-1',
+        'role-assignment-1',
+        user,
+      );
     });
   });
 });

@@ -32,6 +32,7 @@ describe('GroupsController', () => {
     GroupStatus.ACTIVE,
     GroupStatus.READ_ONLY,
     GroupStatus.ARCHIVED,
+    GroupStatus.DELETED,
   ];
 
   describe.each<
@@ -53,6 +54,11 @@ describe('GroupsController', () => {
     ],
     ['activate', [GroupPermission.GROUP_ACTIVATE], [GroupStatus.READ_ONLY]],
     [
+      'delete',
+      [GroupPermission.GROUP_DELETE],
+      [GroupStatus.ACTIVE, GroupStatus.READ_ONLY, GroupStatus.ARCHIVED],
+    ],
+    [
       'transferOwnership',
       [GroupPermission.GROUP_OWNERSHIP_TRANSFER],
       undefined,
@@ -62,6 +68,10 @@ describe('GroupsController', () => {
     ['addMember', [GroupPermission.MEMBERSHIP_ADD], undefined],
     ['getMembership', [GroupPermission.GROUP_VIEW], ANY_STATUS],
     ['removeMember', [GroupPermission.MEMBERSHIP_REMOVE], undefined],
+    ['banMember', [GroupPermission.MEMBERSHIP_BAN], undefined],
+    ['unbanMember', [GroupPermission.MEMBERSHIP_UNBAN], undefined],
+    ['suspendMember', [GroupPermission.MEMBERSHIP_SUSPEND], undefined],
+    ['unsuspendMember', [GroupPermission.MEMBERSHIP_UNSUSPEND], undefined],
     ['assignSection', [GroupPermission.MEMBERSHIP_SECTION_ASSIGN], undefined],
     ['unassignSection', [GroupPermission.MEMBERSHIP_SECTION_ASSIGN], undefined],
   ])('%s', (method, expectedPermissions, expectedAllowedStatuses) => {
@@ -137,10 +147,11 @@ describe('GroupsController', () => {
       const update = jest.fn().mockResolvedValue(dto);
       const controller = buildController({ update });
       const body = { name: 'New name' } as never;
+      const user = { id: 'user-1' } as never;
 
-      const response = await controller.update('group-1', body);
+      const response = await controller.update('group-1', body, user);
 
-      expect(update).toHaveBeenCalledWith('group-1', body);
+      expect(update).toHaveBeenCalledWith('group-1', body, user);
       expect(response).toBe(dto);
     });
   });
@@ -150,10 +161,11 @@ describe('GroupsController', () => {
       const dto = { id: 'group-1' } as never;
       const archive = jest.fn().mockResolvedValue(dto);
       const controller = buildController({ archive });
+      const user = { id: 'user-1' } as never;
 
-      const response = await controller.archive('group-1');
+      const response = await controller.archive('group-1', user);
 
-      expect(archive).toHaveBeenCalledWith('group-1');
+      expect(archive).toHaveBeenCalledWith('group-1', user);
       expect(response).toBe(dto);
     });
   });
@@ -163,10 +175,11 @@ describe('GroupsController', () => {
       const dto = { id: 'group-1' } as never;
       const unarchive = jest.fn().mockResolvedValue(dto);
       const controller = buildController({ unarchive });
+      const user = { id: 'user-1' } as never;
 
-      const response = await controller.unarchive('group-1');
+      const response = await controller.unarchive('group-1', user);
 
-      expect(unarchive).toHaveBeenCalledWith('group-1');
+      expect(unarchive).toHaveBeenCalledWith('group-1', user);
       expect(response).toBe(dto);
     });
   });
@@ -176,10 +189,11 @@ describe('GroupsController', () => {
       const dto = { id: 'group-1' } as never;
       const setReadOnly = jest.fn().mockResolvedValue(dto);
       const controller = buildController({ setReadOnly });
+      const user = { id: 'user-1' } as never;
 
-      const response = await controller.setReadOnly('group-1');
+      const response = await controller.setReadOnly('group-1', user);
 
-      expect(setReadOnly).toHaveBeenCalledWith('group-1');
+      expect(setReadOnly).toHaveBeenCalledWith('group-1', user);
       expect(response).toBe(dto);
     });
   });
@@ -189,10 +203,25 @@ describe('GroupsController', () => {
       const dto = { id: 'group-1' } as never;
       const activate = jest.fn().mockResolvedValue(dto);
       const controller = buildController({ activate });
+      const user = { id: 'user-1' } as never;
 
-      const response = await controller.activate('group-1');
+      const response = await controller.activate('group-1', user);
 
-      expect(activate).toHaveBeenCalledWith('group-1');
+      expect(activate).toHaveBeenCalledWith('group-1', user);
+      expect(response).toBe(dto);
+    });
+  });
+
+  describe('delete', () => {
+    it('delegates to GroupsService.delete', async () => {
+      const dto = { id: 'group-1' } as never;
+      const deleteFn = jest.fn().mockResolvedValue(dto);
+      const controller = buildController({ delete: deleteFn });
+      const user = { id: 'user-1' } as never;
+
+      const response = await controller.delete('group-1', user);
+
+      expect(deleteFn).toHaveBeenCalledWith('group-1', user);
       expect(response).toBe(dto);
     });
   });
@@ -216,14 +245,20 @@ describe('GroupsController', () => {
       const transferOwnership = jest.fn().mockResolvedValue(dto);
       const controller = buildController({}, { transferOwnership });
       const body = { newOwnerUserId: 'user-2' } as never;
+      const user = { id: 'user-1' } as never;
 
       const response = await controller.transferOwnership(
         'group-1',
-        { id: 'user-1' } as never,
+        user,
         body,
       );
 
-      expect(transferOwnership).toHaveBeenCalledWith('group-1', 'user-1', body);
+      expect(transferOwnership).toHaveBeenCalledWith(
+        'group-1',
+        'user-1',
+        body,
+        user,
+      );
       expect(response).toBe(dto);
     });
   });
@@ -232,10 +267,11 @@ describe('GroupsController', () => {
     it('delegates to GroupMembershipsService.leave', async () => {
       const leave = jest.fn().mockResolvedValue(undefined);
       const controller = buildController({}, { leave });
+      const user = { id: 'user-1' } as never;
 
-      await controller.leave('group-1', { id: 'user-1' } as never);
+      await controller.leave('group-1', user);
 
-      expect(leave).toHaveBeenCalledWith('group-1', 'user-1');
+      expect(leave).toHaveBeenCalledWith('group-1', user);
     });
   });
 
@@ -286,10 +322,124 @@ describe('GroupsController', () => {
     it('delegates to GroupMembershipsService.removeMember', async () => {
       const removeMember = jest.fn().mockResolvedValue(undefined);
       const controller = buildController({}, { removeMember });
+      const user = { id: 'user-1' } as never;
 
-      await controller.removeMember('group-1', 'membership-1');
+      await controller.removeMember('group-1', 'membership-1', user);
 
-      expect(removeMember).toHaveBeenCalledWith('group-1', 'membership-1');
+      expect(removeMember).toHaveBeenCalledWith(
+        'group-1',
+        'membership-1',
+        user,
+      );
+    });
+  });
+
+  describe('banMember', () => {
+    it('delegates to GroupMembershipsService.banMember', async () => {
+      const banMember = jest.fn().mockResolvedValue(undefined);
+      const controller = buildController({}, { banMember });
+      const user = { id: 'user-1' } as never;
+      const body = { reason: 'Repeated rule violations' } as never;
+
+      await controller.banMember('group-1', 'membership-1', body, user);
+
+      expect(banMember).toHaveBeenCalledWith(
+        'group-1',
+        'membership-1',
+        user,
+        'Repeated rule violations',
+      );
+    });
+
+    it('passes null when no reason is given', async () => {
+      const banMember = jest.fn().mockResolvedValue(undefined);
+      const controller = buildController({}, { banMember });
+      const user = { id: 'user-1' } as never;
+
+      await controller.banMember('group-1', 'membership-1', {}, user);
+
+      expect(banMember).toHaveBeenCalledWith(
+        'group-1',
+        'membership-1',
+        user,
+        null,
+      );
+    });
+  });
+
+  describe('unbanMember', () => {
+    it('delegates to GroupMembershipsService.unbanMember', async () => {
+      const unbanMember = jest.fn().mockResolvedValue(undefined);
+      const controller = buildController({}, { unbanMember });
+      const user = { id: 'user-1' } as never;
+
+      await controller.unbanMember('group-1', 'membership-1', user);
+
+      expect(unbanMember).toHaveBeenCalledWith('group-1', 'membership-1', user);
+    });
+  });
+
+  describe('suspendMember', () => {
+    it('delegates to GroupMembershipsService.suspendMember, converting until to a Date', async () => {
+      const dto = { id: 'membership-1' } as never;
+      const suspendMember = jest.fn().mockResolvedValue(dto);
+      const controller = buildController({}, { suspendMember });
+      const user = { id: 'user-1' } as never;
+      const until = '2026-08-01T00:00:00.000Z';
+
+      const response = await controller.suspendMember(
+        'group-1',
+        'membership-1',
+        { until, reason: 'Cooldown' },
+        user,
+      );
+
+      expect(suspendMember).toHaveBeenCalledWith(
+        'group-1',
+        'membership-1',
+        user,
+        new Date(until),
+        'Cooldown',
+      );
+      expect(response).toBe(dto);
+    });
+
+    it('passes null for until/reason when omitted', async () => {
+      const suspendMember = jest.fn().mockResolvedValue({});
+      const controller = buildController({}, { suspendMember });
+      const user = { id: 'user-1' } as never;
+
+      await controller.suspendMember('group-1', 'membership-1', {}, user);
+
+      expect(suspendMember).toHaveBeenCalledWith(
+        'group-1',
+        'membership-1',
+        user,
+        null,
+        null,
+      );
+    });
+  });
+
+  describe('unsuspendMember', () => {
+    it('delegates to GroupMembershipsService.unsuspendMember', async () => {
+      const dto = { id: 'membership-1' } as never;
+      const unsuspendMember = jest.fn().mockResolvedValue(dto);
+      const controller = buildController({}, { unsuspendMember });
+      const user = { id: 'user-1' } as never;
+
+      const response = await controller.unsuspendMember(
+        'group-1',
+        'membership-1',
+        user,
+      );
+
+      expect(unsuspendMember).toHaveBeenCalledWith(
+        'group-1',
+        'membership-1',
+        user,
+      );
+      expect(response).toBe(dto);
     });
   });
 

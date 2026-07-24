@@ -8,20 +8,31 @@ import { LockMode } from '@mikro-orm/core';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
 import { User } from '../users/entities/user.entity';
+import { AuditLogService } from './audit-log.service';
 import { AddMemberInput } from './dto/add-member.schema';
 import { GroupMembershipResponseDto } from './dto/group-membership-response.dto';
 import { TransferOwnershipInput } from './dto/transfer-ownership.schema';
 import { TransferOwnershipResponseDto } from './dto/transfer-ownership-response.dto';
+import { AuditAction } from './enums/audit-action.enum';
+import { AuditTargetType } from './enums/audit-target-type.enum';
 import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { MembershipEndReason } from './enums/membership-end-reason.enum';
 import { SectionStatus } from './enums/section-status.enum';
+import {
+  GROUP_BANS_ACTIVE_UNIQUE_INDEX,
+  GroupBan,
+} from './entities/group-ban.entity';
 import {
   GROUP_MEMBERSHIPS_ACTIVE_UNIQUE_INDEX,
   GroupMembership,
 } from './entities/group-membership.entity';
 import { Group } from './entities/group.entity';
 import { MembershipSection } from './entities/membership-section.entity';
+import {
+  MEMBERSHIP_SUSPENSIONS_ACTIVE_UNIQUE_INDEX,
+  MembershipSuspension,
+} from './entities/membership-suspension.entity';
 import { Section } from './entities/section.entity';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { loadActiveMembership } from './group-membership.query';
@@ -40,6 +51,7 @@ export class GroupMembershipsService {
     private readonly em: EntityManager,
     private readonly groupHierarchyService: GroupHierarchyService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async listMembers(
@@ -174,7 +186,11 @@ export class GroupMembershipsService {
   // Runs inside a transaction with the Membership row locked
   // (PESSIMISTIC_WRITE) for the same reason leave() does - see
   // assertOwnsNoActiveGroups.
-  async removeMember(rootGroupId: string, membershipId: string): Promise<void> {
+  async removeMember(
+    rootGroupId: string,
+    membershipId: string,
+    actor: User,
+  ): Promise<void> {
     return this.em.transactional(async (em) => {
       const membership = await this.loadActiveMembershipByIdOrFail(
         em,
@@ -191,6 +207,13 @@ export class GroupMembershipsService {
       membership.status = GroupMembershipStatus.ARCHIVED;
       membership.leftAt = new Date();
       membership.endReason = MembershipEndReason.REMOVED;
+      this.auditLogService.record(em, {
+        community: membership.rootGroup,
+        action: AuditAction.REMOVE_MEMBER,
+        actor,
+        targetType: AuditTargetType.USER,
+        targetId: membership.user.id,
+      });
       await em.flush();
     });
   }
@@ -206,9 +229,9 @@ export class GroupMembershipsService {
   // about to name this same Membership the new owner of some Group,
   // which would otherwise leave that Group owned by a Membership this
   // call just archived.
-  async leave(rootGroupId: string, userId: string): Promise<void> {
+  async leave(rootGroupId: string, actor: User): Promise<void> {
     return this.em.transactional(async (em) => {
-      const membership = await loadActiveMembership(em, rootGroupId, userId, {
+      const membership = await loadActiveMembership(em, rootGroupId, actor.id, {
         lockMode: LockMode.PESSIMISTIC_WRITE,
       });
       if (!membership) {
@@ -223,6 +246,13 @@ export class GroupMembershipsService {
       membership.status = GroupMembershipStatus.ARCHIVED;
       membership.leftAt = new Date();
       membership.endReason = MembershipEndReason.LEFT;
+      this.auditLogService.record(em, {
+        community: membership.rootGroup,
+        action: AuditAction.LEAVE_COMMUNITY,
+        actor,
+        targetType: AuditTargetType.USER,
+        targetId: actor.id,
+      });
       await em.flush();
     });
   }
@@ -250,6 +280,7 @@ export class GroupMembershipsService {
     groupId: string,
     currentOwnerUserId: string,
     input: TransferOwnershipInput,
+    actor: User,
   ): Promise<TransferOwnershipResponseDto> {
     if (input.newOwnerUserId === currentOwnerUserId) {
       throw new BadRequestException({
@@ -318,6 +349,19 @@ export class GroupMembershipsService {
         group,
         GroupRole.OWNER,
       );
+
+      const auditCommunity = group.parentGroup
+        ? await this.groupHierarchyService.getRootGroup(group.id, em)
+        : group;
+      this.auditLogService.record(em, {
+        community: auditCommunity,
+        action: AuditAction.TRANSFER_OWNERSHIP,
+        actor,
+        targetType: AuditTargetType.USER,
+        targetId: input.newOwnerUserId,
+        metadata: { groupId, previousOwnerUserId: currentOwnerUserId },
+      });
+      await em.flush();
 
       return {
         previousOwner: await this.toResponseDto(
@@ -425,6 +469,238 @@ export class GroupMembershipsService {
     await this.em.remove(assignment).flush();
   }
 
+  // ─── Ban / Unban ──────────────────────────────────────────────────────────
+
+  /**
+   * Ends the Membership (like removeMember) and additionally records a
+   * durable GroupBan, which blocks the user from rejoining or being
+   * re-invited to this Organization until explicitly unbanned (see
+   * GroupBan, MembershipRequestsService.assertNotBanned). Scoped to the
+   * Organization (Root Group) only - see GroupBan's own comment for why
+   * there is no per-Child-Group ban.
+   *
+   * Same ownership guard as removeMember: a member who currently owns any
+   * Group in this Organization's tree cannot be banned until ownership is
+   * transferred - banning is a stronger form of removal, so it inherits
+   * every restriction removal already has.
+   */
+  async banMember(
+    rootGroupId: string,
+    membershipId: string,
+    actor: User,
+    reason: string | null,
+  ): Promise<void> {
+    return this.em.transactional(async (em) => {
+      const membership = await this.loadActiveMembershipByIdOrFail(
+        em,
+        rootGroupId,
+        membershipId,
+        { lockMode: LockMode.PESSIMISTIC_WRITE },
+      );
+      await this.assertOwnsNoActiveGroups(em, membership, rootGroupId, {
+        code: 'CANNOT_BAN_OWNER',
+        message:
+          'This member owns one or more Groups in this Organization - transfer ownership of each before banning them',
+      });
+
+      membership.status = GroupMembershipStatus.ARCHIVED;
+      membership.leftAt = new Date();
+      membership.endReason = MembershipEndReason.BANNED;
+
+      const ban = new GroupBan();
+      ban.rootGroup = membership.rootGroup;
+      ban.user = membership.user;
+      ban.bannedBy = actor;
+      ban.bannedAt = new Date();
+      ban.reason = reason;
+
+      try {
+        em.persist(ban);
+        await em.flush();
+      } catch (error) {
+        if (isUniqueViolationOn(error, GROUP_BANS_ACTIVE_UNIQUE_INDEX)) {
+          throw new ConflictException({
+            code: 'ALREADY_BANNED',
+            message: 'This user is already banned from this organization',
+          });
+        }
+        throw error;
+      }
+
+      this.auditLogService.record(em, {
+        community: membership.rootGroup,
+        action: AuditAction.BAN,
+        actor,
+        targetType: AuditTargetType.USER,
+        targetId: membership.user.id,
+        description: reason ?? undefined,
+      });
+      await em.flush();
+    });
+  }
+
+  /**
+   * Lifts an active ban - does not restore the Membership itself (banning
+   * is a terminal action for that Membership stint, same as removeMember;
+   * a returning user rejoins through the normal join/invite flow, which
+   * assertNotBanned now permits again).
+   */
+  async unbanMember(
+    rootGroupId: string,
+    membershipId: string,
+    actor: User,
+  ): Promise<void> {
+    return this.em.transactional(async (em) => {
+      const membership = await this.loadMembershipByIdOrFail(
+        em,
+        rootGroupId,
+        membershipId,
+      );
+
+      const ban = await em.findOne(GroupBan, {
+        rootGroup: rootGroupId,
+        user: membership.user.id,
+        liftedAt: null,
+      });
+      if (!ban) {
+        throw new NotFoundException({
+          code: 'BAN_NOT_FOUND',
+          message: 'This user is not currently banned from this organization',
+        });
+      }
+      ban.liftedAt = new Date();
+      ban.liftedBy = actor;
+
+      this.auditLogService.record(em, {
+        community: membership.rootGroup,
+        action: AuditAction.UNBAN,
+        actor,
+        targetType: AuditTargetType.USER,
+        targetId: membership.user.id,
+      });
+      await em.flush();
+    });
+  }
+
+  // ─── Suspend / Unsuspend ────────────────────────────────────────────────
+
+  /**
+   * Suspends an active Membership - sets its status to READ_ONLY (see
+   * organization-entities.md#membership: "READ_ONLY ... e.g. suspended
+   * member"), which the existing permission system already resolves
+   * correctly with no further change (GroupPermissionService,
+   * READ_ONLY_SAFE_PERMISSIONS): a suspended member, regardless of Role,
+   * keeps only the *_VIEW tier of permissions - including a suspended
+   * OWNER, who is not specially protected here (unlike Ban/Remove/Leave,
+   * suspension never ends the Membership, so there is no "Group left
+   * ownerless" risk to guard against).
+   *
+   * `until` is optional - null means an indefinite suspension. There is no
+   * background job to auto-expire it (see MembershipSuspension); expiry is
+   * resolved lazily the next time this Membership's authorization is
+   * checked (RoleAssignmentsService.resolveAuthorization).
+   */
+  async suspendMember(
+    rootGroupId: string,
+    membershipId: string,
+    actor: User,
+    until: Date | null,
+    reason: string | null,
+  ): Promise<GroupMembershipResponseDto> {
+    return this.em.transactional(async (em) => {
+      const membership = await this.loadActiveMembershipByIdOrFail(
+        em,
+        rootGroupId,
+        membershipId,
+        { lockMode: LockMode.PESSIMISTIC_WRITE },
+      );
+
+      membership.status = GroupMembershipStatus.READ_ONLY;
+
+      const suspension = new MembershipSuspension();
+      suspension.membership = membership;
+      suspension.suspendedBy = actor;
+      suspension.suspendedAt = new Date();
+      suspension.until = until;
+      suspension.reason = reason;
+
+      try {
+        em.persist(suspension);
+        await em.flush();
+      } catch (error) {
+        if (
+          isUniqueViolationOn(error, MEMBERSHIP_SUSPENSIONS_ACTIVE_UNIQUE_INDEX)
+        ) {
+          throw new ConflictException({
+            code: 'MEMBERSHIP_ALREADY_SUSPENDED',
+            message: 'This membership is already suspended',
+          });
+        }
+        throw error;
+      }
+
+      this.auditLogService.record(em, {
+        community: membership.rootGroup,
+        action: AuditAction.SUSPEND,
+        actor,
+        targetType: AuditTargetType.USER,
+        targetId: membership.user.id,
+        description: reason ?? undefined,
+        metadata: { until: until ? until.toISOString() : null },
+      });
+      await em.flush();
+
+      return this.toResponseDto(rootGroupId, membership, em);
+    });
+  }
+
+  async unsuspendMember(
+    rootGroupId: string,
+    membershipId: string,
+    actor: User,
+  ): Promise<GroupMembershipResponseDto> {
+    return this.em.transactional(async (em) => {
+      const membership = await this.loadMembershipByIdOrFail(
+        em,
+        rootGroupId,
+        membershipId,
+        { lockMode: LockMode.PESSIMISTIC_WRITE },
+      );
+      if (membership.status !== GroupMembershipStatus.READ_ONLY) {
+        throw new ConflictException({
+          code: 'MEMBERSHIP_NOT_SUSPENDED',
+          message: 'This membership is not currently suspended',
+        });
+      }
+
+      const suspension = await em.findOne(MembershipSuspension, {
+        membership: membershipId,
+        liftedAt: null,
+      });
+      if (!suspension) {
+        throw new NotFoundException({
+          code: 'SUSPENSION_NOT_FOUND',
+          message: 'No active suspension found for this membership',
+        });
+      }
+
+      membership.status = GroupMembershipStatus.ACTIVE;
+      suspension.liftedAt = new Date();
+      suspension.liftedBy = actor;
+
+      this.auditLogService.record(em, {
+        community: membership.rootGroup,
+        action: AuditAction.UNSUSPEND,
+        actor,
+        targetType: AuditTargetType.USER,
+        targetId: membership.user.id,
+      });
+      await em.flush();
+
+      return this.toResponseDto(rootGroupId, membership, em);
+    });
+  }
+
   private assertMembershipIsActive(membership: GroupMembership): void {
     if (membership.status !== GroupMembershipStatus.ACTIVE) {
       throw new ConflictException({
@@ -488,15 +764,19 @@ export class GroupMembershipsService {
   // membership that has ended is still a valid target for getMembership()
   // and for the membership-status checks in assignSection/unassignSection
   // (which need to distinguish "not found" from "found but not active").
+  // Also used by unbanMember/unsuspendMember, which by definition target a
+  // Membership that is no longer ACTIVE (ARCHIVED for a ban, READ_ONLY for
+  // a suspension).
   private async loadMembershipByIdOrFail(
     em: EntityManager,
     rootGroupId: string,
     membershipId: string,
+    options: { lockMode?: LockMode } = {},
   ): Promise<GroupMembership> {
     const membership = await em.findOne(
       GroupMembership,
       { id: membershipId, rootGroup: rootGroupId },
-      { populate: ['user'] },
+      { populate: ['user'], ...options },
     );
     if (!membership) {
       throw this.membershipNotFound();

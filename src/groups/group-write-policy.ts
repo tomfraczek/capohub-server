@@ -22,6 +22,10 @@ const STATUS_CONFLICTS: Readonly<
     code: 'GROUP_ARCHIVED',
     message: 'This group is archived and is read-only until it is restored',
   },
+  [GroupStatus.DELETED]: {
+    code: 'GROUP_DELETED',
+    message: 'This group has been permanently deleted',
+  },
 };
 
 /**

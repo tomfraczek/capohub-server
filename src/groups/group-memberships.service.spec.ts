@@ -6,20 +6,32 @@ import {
 import { UniqueConstraintViolationException } from '@mikro-orm/core';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
+import {
+  GROUP_BANS_ACTIVE_UNIQUE_INDEX,
+  GroupBan,
+} from './entities/group-ban.entity';
 import { GROUP_MEMBERSHIPS_ACTIVE_UNIQUE_INDEX } from './entities/group-membership.entity';
 import { GroupMembership } from './entities/group-membership.entity';
 import { Group } from './entities/group.entity';
+import {
+  MEMBERSHIP_SUSPENSIONS_ACTIVE_UNIQUE_INDEX,
+  MembershipSuspension,
+} from './entities/membership-suspension.entity';
 import { MembershipSection } from './entities/membership-section.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
 import { Section } from './entities/section.entity';
+import { AuditAction } from './enums/audit-action.enum';
 import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
 import { MembershipEndReason } from './enums/membership-end-reason.enum';
 import { SectionStatus } from './enums/section-status.enum';
+import { AuditLogService } from './audit-log.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupMembershipsService } from './group-memberships.service';
 import { RoleAssignmentsService } from './role-assignments.service';
+
+const ACTOR = { id: 'user-1', displayName: 'Actor' } as unknown as User;
 
 function buildGroup(overrides: Partial<Group> = {}): Group {
   const group = new Group();
@@ -78,6 +90,8 @@ interface MockRouting {
   sectionResults?: (Section | null)[];
   membershipSectionResults?: (MembershipSection | null)[];
   roleAssignmentResults?: (RoleAssignment | null)[];
+  groupBanResults?: (GroupBan | null)[];
+  membershipSuspensionResults?: (MembershipSuspension | null)[];
   // find (bulk) results, keyed by entity constructor. Not a FIFO queue -
   // every call to find() for the same entity gets the same static array,
   // which is enough for these tests since none of them depend on two
@@ -94,6 +108,10 @@ function buildMockEm(routing: MockRouting = {}) {
   const sectionQueue = [...(routing.sectionResults ?? [])];
   const membershipSectionQueue = [...(routing.membershipSectionResults ?? [])];
   const roleAssignmentQueue = [...(routing.roleAssignmentResults ?? [])];
+  const groupBanQueue = [...(routing.groupBanResults ?? [])];
+  const membershipSuspensionQueue = [
+    ...(routing.membershipSuspensionResults ?? []),
+  ];
 
   const findOneCalls: FindOneCall[] = [];
 
@@ -124,6 +142,12 @@ function buildMockEm(routing: MockRouting = {}) {
     }
     if (entity === RoleAssignment) {
       return Promise.resolve(roleAssignmentQueue.shift() ?? null);
+    }
+    if (entity === GroupBan) {
+      return Promise.resolve(groupBanQueue.shift() ?? null);
+    }
+    if (entity === MembershipSuspension) {
+      return Promise.resolve(membershipSuspensionQueue.shift() ?? null);
     }
     throw new Error(
       `Unexpected findOne entity in test mock: ${String(entity)}`,
@@ -172,21 +196,35 @@ function buildService(
   em: EntityManager,
   getRootGroupImpl?: (groupId: string) => Promise<Group>,
   getDescendantsImpl?: (groupId: string) => Promise<Group[]>,
+  auditLogServiceOverride?: AuditLogService,
 ) {
   const groupHierarchyService = {
     getRootGroup: getRootGroupImpl ?? (() => Promise.resolve(buildGroup())),
     getDescendants: getDescendantsImpl ?? (() => Promise.resolve([])),
   } as unknown as GroupHierarchyService;
+  const auditLogService =
+    auditLogServiceOverride ??
+    ({
+      record: jest.fn().mockResolvedValue(undefined),
+    } as unknown as AuditLogService);
   const roleAssignmentsService = new RoleAssignmentsService(
     em,
     groupHierarchyService,
+    auditLogService,
   );
 
   return new GroupMembershipsService(
     em,
     groupHierarchyService,
     roleAssignmentsService,
+    auditLogService,
   );
+}
+
+function buildAuditLogServiceMock(): AuditLogService & { record: jest.Mock } {
+  return { record: jest.fn() } as unknown as AuditLogService & {
+    record: jest.Mock;
+  };
 }
 
 describe('GroupMembershipsService', () => {
@@ -455,7 +493,7 @@ describe('GroupMembershipsService', () => {
       });
       const service = buildService(em);
 
-      await service.removeMember('root-1', 'membership-1');
+      await service.removeMember('root-1', 'membership-1', ACTOR);
 
       expect(membership.status).toBe(GroupMembershipStatus.ARCHIVED);
       expect(membership.endReason).toBe(MembershipEndReason.REMOVED);
@@ -473,7 +511,7 @@ describe('GroupMembershipsService', () => {
       const service = buildService(em);
 
       const error: unknown = await service
-        .removeMember('root-1', 'membership-1')
+        .removeMember('root-1', 'membership-1', ACTOR)
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
@@ -500,7 +538,7 @@ describe('GroupMembershipsService', () => {
       );
 
       const error: unknown = await service
-        .removeMember('root-1', 'membership-1')
+        .removeMember('root-1', 'membership-1', ACTOR)
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
@@ -520,7 +558,7 @@ describe('GroupMembershipsService', () => {
       });
       const service = buildService(em);
 
-      await service.leave('root-1', 'user-1');
+      await service.leave('root-1', ACTOR);
 
       expect(membership.status).toBe(GroupMembershipStatus.ARCHIVED);
       expect(membership.endReason).toBe(MembershipEndReason.LEFT);
@@ -538,7 +576,7 @@ describe('GroupMembershipsService', () => {
       const service = buildService(em);
 
       const error: unknown = await service
-        .leave('root-1', 'user-1')
+        .leave('root-1', ACTOR)
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
@@ -569,7 +607,7 @@ describe('GroupMembershipsService', () => {
       );
 
       const error: unknown = await service
-        .leave('root-1', 'user-1')
+        .leave('root-1', ACTOR)
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
@@ -596,7 +634,7 @@ describe('GroupMembershipsService', () => {
         Promise.resolve([archivedGroup]),
       );
 
-      await service.leave('root-1', 'user-1');
+      await service.leave('root-1', ACTOR);
 
       expect(membership.status).toBe(GroupMembershipStatus.ARCHIVED);
       expect(membership.endReason).toBe(MembershipEndReason.LEFT);
@@ -609,9 +647,14 @@ describe('GroupMembershipsService', () => {
       const service = buildService(em);
 
       const error: unknown = await service
-        .transferOwnership('root-1', 'user-1', {
-          newOwnerUserId: 'user-1',
-        })
+        .transferOwnership(
+          'root-1',
+          'user-1',
+          {
+            newOwnerUserId: 'user-1',
+          },
+          ACTOR,
+        )
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(BadRequestException);
@@ -634,9 +677,14 @@ describe('GroupMembershipsService', () => {
       const service = buildService(em);
 
       const error: unknown = await service
-        .transferOwnership('root-1', 'user-1', {
-          newOwnerUserId: 'user-2',
-        })
+        .transferOwnership(
+          'root-1',
+          'user-1',
+          {
+            newOwnerUserId: 'user-2',
+          },
+          ACTOR,
+        )
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(BadRequestException);
@@ -656,9 +704,14 @@ describe('GroupMembershipsService', () => {
       const service = buildService(em);
 
       const error: unknown = await service
-        .transferOwnership('root-1', 'user-1', {
-          newOwnerUserId: 'user-2',
-        })
+        .transferOwnership(
+          'root-1',
+          'user-1',
+          {
+            newOwnerUserId: 'user-2',
+          },
+          ACTOR,
+        )
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(NotFoundException);
@@ -691,9 +744,14 @@ describe('GroupMembershipsService', () => {
       });
       const service = buildService(em);
 
-      await service.transferOwnership('root-1', 'user-1', {
-        newOwnerUserId: 'user-2',
-      });
+      await service.transferOwnership(
+        'root-1',
+        'user-1',
+        {
+          newOwnerUserId: 'user-2',
+        },
+        ACTOR,
+      );
 
       expect(remove).toHaveBeenCalledWith(previousOwnerAssignment);
       // ensureMemberRole found an existing MEMBER row, so the only new
@@ -720,9 +778,14 @@ describe('GroupMembershipsService', () => {
       });
       const service = buildService(em);
 
-      await service.transferOwnership('root-1', 'user-1', {
-        newOwnerUserId: 'user-2',
-      });
+      await service.transferOwnership(
+        'root-1',
+        'user-1',
+        {
+          newOwnerUserId: 'user-2',
+        },
+        ACTOR,
+      );
 
       expect(persist).toHaveBeenCalledTimes(2);
       const grantedMemberRole = persist.mock.calls[0][0] as RoleAssignment;
@@ -736,9 +799,14 @@ describe('GroupMembershipsService', () => {
       const service = buildService(em);
 
       const error: unknown = await service
-        .transferOwnership('missing-group', 'user-1', {
-          newOwnerUserId: 'user-2',
-        })
+        .transferOwnership(
+          'missing-group',
+          'user-1',
+          {
+            newOwnerUserId: 'user-2',
+          },
+          ACTOR,
+        )
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(NotFoundException);
@@ -775,9 +843,14 @@ describe('GroupMembershipsService', () => {
         return Promise.resolve(rootGroup);
       });
 
-      await service.transferOwnership('child-1', 'user-1', {
-        newOwnerUserId: 'user-2',
-      });
+      await service.transferOwnership(
+        'child-1',
+        'user-1',
+        {
+          newOwnerUserId: 'user-2',
+        },
+        ACTOR,
+      );
 
       expect(remove).toHaveBeenCalledWith(previousOwnerAssignment);
       const grantedOwnerRole = persist.mock.calls[0][0] as RoleAssignment;
@@ -960,6 +1033,361 @@ describe('GroupMembershipsService', () => {
       expect((error as NotFoundException).getResponse()).toMatchObject({
         code: 'MEMBERSHIP_SECTION_ASSIGNMENT_NOT_FOUND',
       });
+    });
+  });
+
+  describe('banMember', () => {
+    it('archives the membership with endReason BANNED, records a GroupBan, and audit-logs BAN', async () => {
+      const membership = buildMembership();
+      const auditLogService = buildAuditLogServiceMock();
+      const { em, persist } = buildMockEm({
+        membershipResults: [membership],
+        // findOwnedActiveGroups(OWNER) check - owns nothing.
+        roleAssignmentFindResults: [],
+      });
+      const service = buildService(em, undefined, undefined, auditLogService);
+
+      await service.banMember(
+        'root-1',
+        'membership-1',
+        ACTOR,
+        'Repeated violations',
+      );
+
+      expect(membership.status).toBe(GroupMembershipStatus.ARCHIVED);
+      expect(membership.endReason).toBe(MembershipEndReason.BANNED);
+      expect(membership.leftAt).not.toBeNull();
+
+      const persistedBan = persist.mock.calls[0][0] as GroupBan;
+      expect(persistedBan.rootGroup).toBe(membership.rootGroup);
+      expect(persistedBan.user).toBe(membership.user);
+      expect(persistedBan.bannedBy).toBe(ACTOR);
+      expect(persistedBan.reason).toBe('Repeated violations');
+      expect(persistedBan.liftedAt).toBeNull();
+
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        em,
+        expect.objectContaining({
+          community: membership.rootGroup,
+          action: AuditAction.BAN,
+          actor: ACTOR,
+          targetId: membership.user.id,
+          description: 'Repeated violations',
+        }),
+      );
+    });
+
+    it('persists a null reason as-is when none is given', async () => {
+      const membership = buildMembership();
+      const { em, persist } = buildMockEm({
+        membershipResults: [membership],
+        roleAssignmentFindResults: [],
+      });
+      const service = buildService(em);
+
+      await service.banMember('root-1', 'membership-1', ACTOR, null);
+
+      const persistedBan = persist.mock.calls[0][0] as GroupBan;
+      expect(persistedBan.reason).toBeNull();
+    });
+
+    it('rejects with CANNOT_BAN_OWNER when the target owns one or more Groups in this Organization', async () => {
+      const membership = buildMembership();
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+        roleAssignmentFindResults: [
+          buildRoleAssignment({ role: GroupRole.OWNER, group: buildGroup() }),
+        ],
+      });
+      const service = buildService(em);
+
+      const error: unknown = await service
+        .banMember('root-1', 'membership-1', ACTOR, null)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).getResponse()).toMatchObject({
+        code: 'CANNOT_BAN_OWNER',
+        ownedGroupIds: ['root-1'],
+      });
+    });
+
+    it('maps a database-level unique-violation race to ALREADY_BANNED', async () => {
+      const membership = buildMembership();
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+        roleAssignmentFindResults: [],
+        flushError: new UniqueConstraintViolationException(
+          new Error(
+            `duplicate key value violates unique constraint "${GROUP_BANS_ACTIVE_UNIQUE_INDEX}"`,
+          ),
+        ),
+      });
+      const service = buildService(em);
+
+      const error: unknown = await service
+        .banMember('root-1', 'membership-1', ACTOR, null)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).getResponse()).toMatchObject({
+        code: 'ALREADY_BANNED',
+      });
+    });
+
+    it('rejects with MEMBERSHIP_NOT_FOUND when the target membership is not active', async () => {
+      const { em } = buildMockEm({ membershipResults: [null] });
+      const service = buildService(em);
+
+      const error: unknown = await service
+        .banMember('root-1', 'missing', ACTOR, null)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(NotFoundException);
+      expect((error as NotFoundException).getResponse()).toMatchObject({
+        code: 'MEMBERSHIP_NOT_FOUND',
+      });
+    });
+  });
+
+  describe('unbanMember', () => {
+    it('lifts an active ban and audit-logs UNBAN, without touching the (already-ended) membership', async () => {
+      const membership = buildMembership({
+        status: GroupMembershipStatus.ARCHIVED,
+        endReason: MembershipEndReason.BANNED,
+      });
+      const ban = new GroupBan();
+      ban.rootGroup = buildGroup();
+      ban.user = membership.user;
+      const auditLogService = buildAuditLogServiceMock();
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+        groupBanResults: [ban],
+      });
+      const service = buildService(em, undefined, undefined, auditLogService);
+
+      await service.unbanMember('root-1', 'membership-1', ACTOR);
+
+      expect(ban.liftedAt).not.toBeNull();
+      expect(ban.liftedBy).toBe(ACTOR);
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        em,
+        expect.objectContaining({
+          community: membership.rootGroup,
+          action: AuditAction.UNBAN,
+          actor: ACTOR,
+          targetId: membership.user.id,
+        }),
+      );
+    });
+
+    it('rejects with BAN_NOT_FOUND when the user is not currently banned', async () => {
+      const membership = buildMembership();
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+        groupBanResults: [null],
+      });
+      const service = buildService(em);
+
+      const error: unknown = await service
+        .unbanMember('root-1', 'membership-1', ACTOR)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(NotFoundException);
+      expect((error as NotFoundException).getResponse()).toMatchObject({
+        code: 'BAN_NOT_FOUND',
+      });
+    });
+
+    it('rejects with MEMBERSHIP_NOT_FOUND when the membership does not exist at all', async () => {
+      const { em } = buildMockEm({ membershipResults: [null] });
+      const service = buildService(em);
+
+      await expect(
+        service.unbanMember('root-1', 'missing', ACTOR),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('suspendMember', () => {
+    it('sets the membership to READ_ONLY, records a MembershipSuspension, and audit-logs SUSPEND with the until date', async () => {
+      const membership = buildMembership();
+      const auditLogService = buildAuditLogServiceMock();
+      const { em, persist } = buildMockEm({
+        membershipResults: [membership],
+        roleAssignmentFindResults: [],
+      });
+      const service = buildService(em, undefined, undefined, auditLogService);
+      const until = new Date('2026-12-31T00:00:00.000Z');
+
+      const result = await service.suspendMember(
+        'root-1',
+        'membership-1',
+        ACTOR,
+        until,
+        'Taking a break',
+      );
+
+      expect(membership.status).toBe(GroupMembershipStatus.READ_ONLY);
+      const persistedSuspension = persist.mock
+        .calls[0][0] as MembershipSuspension;
+      expect(persistedSuspension.membership).toBe(membership);
+      expect(persistedSuspension.suspendedBy).toBe(ACTOR);
+      expect(persistedSuspension.until).toBe(until);
+      expect(persistedSuspension.reason).toBe('Taking a break');
+
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        em,
+        expect.objectContaining({
+          action: AuditAction.SUSPEND,
+          metadata: { until: until.toISOString() },
+        }),
+      );
+      expect(result.status).toBe(GroupMembershipStatus.READ_ONLY);
+    });
+
+    it('supports an indefinite suspension (until=null), recorded as metadata.until=null', async () => {
+      const membership = buildMembership();
+      const auditLogService = buildAuditLogServiceMock();
+      const { em, persist } = buildMockEm({
+        membershipResults: [membership],
+        roleAssignmentFindResults: [],
+      });
+      const service = buildService(em, undefined, undefined, auditLogService);
+
+      await service.suspendMember('root-1', 'membership-1', ACTOR, null, null);
+
+      const persistedSuspension = persist.mock
+        .calls[0][0] as MembershipSuspension;
+      expect(persistedSuspension.until).toBeNull();
+      expect(persistedSuspension.reason).toBeNull();
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        em,
+        expect.objectContaining({ metadata: { until: null } }),
+      );
+    });
+
+    it('does not exempt an OWNER from being suspended (unlike ban/remove/leave)', async () => {
+      const membership = buildMembership();
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+      });
+      const service = buildService(em);
+
+      await service.suspendMember('root-1', 'membership-1', ACTOR, null, null);
+
+      expect(membership.status).toBe(GroupMembershipStatus.READ_ONLY);
+    });
+
+    it('maps a database-level unique-violation race to MEMBERSHIP_ALREADY_SUSPENDED', async () => {
+      const membership = buildMembership();
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+        flushError: new UniqueConstraintViolationException(
+          new Error(
+            `duplicate key value violates unique constraint "${MEMBERSHIP_SUSPENSIONS_ACTIVE_UNIQUE_INDEX}"`,
+          ),
+        ),
+      });
+      const service = buildService(em);
+
+      const error: unknown = await service
+        .suspendMember('root-1', 'membership-1', ACTOR, null, null)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).getResponse()).toMatchObject({
+        code: 'MEMBERSHIP_ALREADY_SUSPENDED',
+      });
+    });
+
+    it('rejects with MEMBERSHIP_NOT_FOUND when the target membership is not active', async () => {
+      const { em } = buildMockEm({ membershipResults: [null] });
+      const service = buildService(em);
+
+      await expect(
+        service.suspendMember('root-1', 'missing', ACTOR, null, null),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('unsuspendMember', () => {
+    it('restores the membership to ACTIVE, lifts the suspension, and audit-logs UNSUSPEND', async () => {
+      const membership = buildMembership({
+        status: GroupMembershipStatus.READ_ONLY,
+      });
+      const suspension = new MembershipSuspension();
+      suspension.membership = membership;
+      const auditLogService = buildAuditLogServiceMock();
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+        membershipSuspensionResults: [suspension],
+      });
+      const service = buildService(em, undefined, undefined, auditLogService);
+
+      const result = await service.unsuspendMember(
+        'root-1',
+        'membership-1',
+        ACTOR,
+      );
+
+      expect(membership.status).toBe(GroupMembershipStatus.ACTIVE);
+      expect(suspension.liftedAt).not.toBeNull();
+      expect(suspension.liftedBy).toBe(ACTOR);
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        em,
+        expect.objectContaining({
+          action: AuditAction.UNSUSPEND,
+          targetId: membership.user.id,
+        }),
+      );
+      expect(result.status).toBe(GroupMembershipStatus.ACTIVE);
+    });
+
+    it('rejects with MEMBERSHIP_NOT_SUSPENDED when the membership is not currently READ_ONLY', async () => {
+      const membership = buildMembership({
+        status: GroupMembershipStatus.ACTIVE,
+      });
+      const { em } = buildMockEm({ membershipResults: [membership] });
+      const service = buildService(em);
+
+      const error: unknown = await service
+        .unsuspendMember('root-1', 'membership-1', ACTOR)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).getResponse()).toMatchObject({
+        code: 'MEMBERSHIP_NOT_SUSPENDED',
+      });
+    });
+
+    it('rejects with SUSPENSION_NOT_FOUND when READ_ONLY but no active suspension row exists', async () => {
+      const membership = buildMembership({
+        status: GroupMembershipStatus.READ_ONLY,
+      });
+      const { em } = buildMockEm({
+        membershipResults: [membership],
+        membershipSuspensionResults: [null],
+      });
+      const service = buildService(em);
+
+      const error: unknown = await service
+        .unsuspendMember('root-1', 'membership-1', ACTOR)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(NotFoundException);
+      expect((error as NotFoundException).getResponse()).toMatchObject({
+        code: 'SUSPENSION_NOT_FOUND',
+      });
+    });
+
+    it('rejects with MEMBERSHIP_NOT_FOUND when the membership does not exist at all', async () => {
+      const { em } = buildMockEm({ membershipResults: [null] });
+      const service = buildService(em);
+
+      await expect(
+        service.unsuspendMember('root-1', 'missing', ACTOR),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

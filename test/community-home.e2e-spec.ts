@@ -37,6 +37,7 @@ import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter
 import { CommunityHomeResponseDto } from '../src/groups/dto/community-home-response.dto';
 import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
+import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { MembershipRequest } from '../src/groups/entities/membership-request.entity';
@@ -159,6 +160,9 @@ describe('Community Home (e2e)', () => {
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
     });
+    await cleanup.nativeDelete(AuditLogEntry, {
+      community: { $in: createdGroupIds },
+    });
     await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
     await cleanup.nativeDelete(User, {
       clerkUserId: { $in: TEST_CLERK_USER_IDS },
@@ -271,6 +275,19 @@ describe('Community Home (e2e)', () => {
       canCreateOrganization: true,
       canCreateGroupInCommunityIds: [],
       canReviewJoinRequestsInCommunityIds: [],
+      canViewMembersInCommunityIds: [],
+      canManageMembersInCommunityIds: [],
+      canInviteMembersInCommunityIds: [],
+      canManageInvitationsInCommunityIds: [],
+      canManageRolesInCommunityIds: [],
+      canTransferOwnershipInCommunityIds: [],
+      canArchiveCommunityIds: [],
+      canRestoreCommunityIds: [],
+      canDeleteCommunityIds: [],
+      canViewAuditLogInCommunityIds: [],
+      canManageNotificationsInCommunityIds: [],
+      canBanMembersInCommunityIds: [],
+      canSuspendMembersInCommunityIds: [],
       canManageAnyCommunity: false,
     });
   });
