@@ -1,8 +1,15 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { PaginatedResponse } from '../common/pagination/pagination.types';
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { User } from '../users/entities/user.entity';
 import { DiscoveredResourceDto } from './discovery-response.dto';
 import { DiscoveryService } from './discovery.service';
+import { CommunitySearchResultDto } from './dto/community-search-result.dto';
+import {
+  DiscoverySearchQueryDto,
+  discoverySearchQuerySchema,
+} from './dto/discovery-search-query.schema';
 
 @Controller('discovery')
 export class DiscoveryController {
@@ -24,16 +31,20 @@ export class DiscoveryController {
   }
 
   /**
-   * GET /discovery/groups?q=search
+   * GET /discovery/search?name=&country=&city=&type=&page=&limit=
    *
-   * Search visible (isHidden = false, status = ACTIVE) Groups.
-   * Returns at most 50 results ordered by name.
+   * "Discover Community" - the only way to browse Groups/Sections. At
+   * least one of name/country/city is required (400 VALIDATION_ERROR
+   * otherwise) - there is deliberately no unfiltered "list everything"
+   * endpoint. `type=GROUP`/`type=SECTION` narrows to one tab; omit it for
+   * the "All" tab. See discoverySearchQuerySchema and
+   * DiscoveryService.search for the full contract.
    */
-  @Get('groups')
-  searchGroups(
-    @Query('q') query: string | undefined,
-    @CurrentUser() user: User,
-  ): Promise<DiscoveredResourceDto[]> {
-    return this.discoveryService.searchVisibleGroups(query, user);
+  @Get('search')
+  search(
+    @Query(new ZodValidationPipe(discoverySearchQuerySchema))
+    query: DiscoverySearchQueryDto,
+  ): Promise<PaginatedResponse<CommunitySearchResultDto>> {
+    return this.discoveryService.search(query);
   }
 }

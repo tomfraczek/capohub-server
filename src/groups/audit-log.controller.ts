@@ -11,6 +11,10 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { AuditLogService } from './audit-log.service';
 import { AllowGroupStatuses } from './decorators/allow-group-statuses.decorator';
 import { RequireGroupPermission } from './decorators/require-group-permission.decorator';
+import {
+  RequireGroupKind,
+  GroupKind,
+} from './decorators/require-group-kind.decorator';
 import { AuditLogEntryResponseDto } from './dto/audit-log-entry-response.dto';
 import {
   AuditLogQueryDto,
@@ -29,9 +33,11 @@ const ANY_STATUS = [
 
 // One generic, paginated/filterable/sortable list endpoint for every
 // AuditAction (see AuditLogEntry) - never a dedicated endpoint per action
-// type. `:groupId` here always means the Organization (Root Group) whose
-// history is being read - AuditLogEntry.community is always a Root Group,
-// even for entries about a Child Group action (see AuditLogEntry).
+// type. `:groupId` here always means the Group whose history is being read
+// - AuditLogEntry.community is always a root Group, even for entries about
+// a Section-level action (see AuditLogEntry). @RequireGroupKind(ROOT) makes
+// this explicit: a Section id 404s here instead of silently returning an
+// (always-empty) page, which is what happened before this was enforced.
 @Controller('groups/:groupId/audit-log')
 @UseGuards(GroupPermissionsGuard)
 export class AuditLogController {
@@ -39,6 +45,7 @@ export class AuditLogController {
 
   @Get()
   @RequireGroupPermission(GroupPermission.AUDIT_LOG_VIEW)
+  @RequireGroupKind(GroupKind.ROOT)
   @AllowGroupStatuses(...ANY_STATUS)
   list(
     @Param('groupId', ParseUUIDPipe) groupId: string,

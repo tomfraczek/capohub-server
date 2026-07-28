@@ -14,16 +14,16 @@ import { EventType } from '../enums/event-type.enum';
 import { EventVisibility } from '../enums/event-visibility.enum';
 import { EventWaitlistPolicy } from '../enums/event-waitlist-policy.enum';
 
-// Belongs to exactly one Community - an Organization (Root Group) or a
+// Belongs to exactly one Community - a Group (Root Group) or a
 // Group (Child Group), never both, and never moved afterwards (spec: "Nie
 // przewidujemy późniejszego przenoszenia Eventu pomiędzy Community" - there
 // is deliberately no "move" operation anywhere in this module). Mirrors
-// Academy/Section: a plain @ManyToOne(() => Group), no discriminator
+// Academy/Cohort: a plain @ManyToOne(() => Group), no discriminator
 // column - "Community" has no entity of its own (ADR-001). Named
-// `community` (not `group`, unlike Academy/Section) because the Events
-// spec itself uses "Community" as the umbrella term for "Organization or
+// `community` (not `group`, unlike Academy/Cohort) because the Events
+// spec itself uses "Community" as the umbrella term for "Group or
 // Group" throughout - not because this field carries different semantics
-// from Academy.group/Section.group.
+// from Academy.group/Cohort.group.
 @Entity({ tableName: 'events' })
 @Index({ properties: ['community', 'status'] })
 export class Event extends BaseEntity {

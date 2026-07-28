@@ -40,7 +40,6 @@ describe('GroupsController', () => {
   >([
     ['getById', [GroupPermission.GROUP_VIEW], ANY_STATUS],
     ['update', [GroupPermission.GROUP_EDIT], undefined],
-    ['listChildren', [GroupPermission.GROUP_VIEW], ANY_STATUS],
     [
       'archive',
       [GroupPermission.GROUP_ARCHIVE],
@@ -72,8 +71,8 @@ describe('GroupsController', () => {
     ['unbanMember', [GroupPermission.MEMBERSHIP_UNBAN], undefined],
     ['suspendMember', [GroupPermission.MEMBERSHIP_SUSPEND], undefined],
     ['unsuspendMember', [GroupPermission.MEMBERSHIP_UNSUSPEND], undefined],
-    ['assignSection', [GroupPermission.MEMBERSHIP_SECTION_ASSIGN], undefined],
-    ['unassignSection', [GroupPermission.MEMBERSHIP_SECTION_ASSIGN], undefined],
+    ['assignCohort', [GroupPermission.MEMBERSHIP_COHORT_ASSIGN], undefined],
+    ['unassignCohort', [GroupPermission.MEMBERSHIP_COHORT_ASSIGN], undefined],
   ])('%s', (method, expectedPermissions, expectedAllowedStatuses) => {
     it(`requires ${expectedPermissions.join(', ')}`, () => {
       const reflector = new Reflector();
@@ -222,19 +221,6 @@ describe('GroupsController', () => {
       const response = await controller.delete('group-1', user);
 
       expect(deleteFn).toHaveBeenCalledWith('group-1', user);
-      expect(response).toBe(dto);
-    });
-  });
-
-  describe('listChildren', () => {
-    it('delegates to GroupsService.listChildren', async () => {
-      const dto = [{ id: 'child-1' }] as never;
-      const listChildren = jest.fn().mockResolvedValue(dto);
-      const controller = buildController({ listChildren });
-
-      const response = await controller.listChildren('group-1');
-
-      expect(listChildren).toHaveBeenCalledWith('group-1');
       expect(response).toBe(dto);
     });
   });
@@ -443,32 +429,32 @@ describe('GroupsController', () => {
     });
   });
 
-  describe('assignSection', () => {
-    it('delegates to GroupMembershipsService.assignSection', async () => {
-      const assignSection = jest.fn().mockResolvedValue(undefined);
-      const controller = buildController({}, { assignSection });
+  describe('assignCohort', () => {
+    it('delegates to GroupMembershipsService.assignCohort', async () => {
+      const assignCohort = jest.fn().mockResolvedValue(undefined);
+      const controller = buildController({}, { assignCohort });
 
-      await controller.assignSection('group-1', 'membership-1', 'section-1');
+      await controller.assignCohort('group-1', 'membership-1', 'cohort-1');
 
-      expect(assignSection).toHaveBeenCalledWith(
+      expect(assignCohort).toHaveBeenCalledWith(
         'group-1',
         'membership-1',
-        'section-1',
+        'cohort-1',
       );
     });
   });
 
-  describe('unassignSection', () => {
-    it('delegates to GroupMembershipsService.unassignSection', async () => {
-      const unassignSection = jest.fn().mockResolvedValue(undefined);
-      const controller = buildController({}, { unassignSection });
+  describe('unassignCohort', () => {
+    it('delegates to GroupMembershipsService.unassignCohort', async () => {
+      const unassignCohort = jest.fn().mockResolvedValue(undefined);
+      const controller = buildController({}, { unassignCohort });
 
-      await controller.unassignSection('group-1', 'membership-1', 'section-1');
+      await controller.unassignCohort('group-1', 'membership-1', 'cohort-1');
 
-      expect(unassignSection).toHaveBeenCalledWith(
+      expect(unassignCohort).toHaveBeenCalledWith(
         'group-1',
         'membership-1',
-        'section-1',
+        'cohort-1',
       );
     });
   });

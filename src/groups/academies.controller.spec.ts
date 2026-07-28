@@ -74,7 +74,11 @@ describe('AcademiesController', () => {
       const controller = buildController({ create });
       const body = { name: 'Center' } as never;
 
-      const response = await controller.create('group-1', body);
+      const response = await controller.create(
+        'group-1',
+        undefined as never,
+        body,
+      );
 
       expect(create).toHaveBeenCalledWith('group-1', body);
       expect(response).toBe(dto);
@@ -87,7 +91,7 @@ describe('AcademiesController', () => {
       const list = jest.fn().mockResolvedValue(dto);
       const controller = buildController({ list });
 
-      const response = await controller.list('group-1');
+      const response = await controller.list('group-1', undefined as never);
 
       expect(list).toHaveBeenCalledWith('group-1');
       expect(response).toBe(dto);
@@ -100,7 +104,11 @@ describe('AcademiesController', () => {
       const getById = jest.fn().mockResolvedValue(dto);
       const controller = buildController({ getById });
 
-      const response = await controller.getById('group-1', 'academy-1');
+      const response = await controller.getById(
+        'group-1',
+        undefined as never,
+        'academy-1',
+      );
 
       expect(getById).toHaveBeenCalledWith('group-1', 'academy-1');
       expect(response).toBe(dto);
@@ -114,7 +122,12 @@ describe('AcademiesController', () => {
       const controller = buildController({ update });
       const body = { name: 'New name' } as never;
 
-      const response = await controller.update('group-1', 'academy-1', body);
+      const response = await controller.update(
+        'group-1',
+        undefined as never,
+        'academy-1',
+        body,
+      );
 
       expect(update).toHaveBeenCalledWith('group-1', 'academy-1', body);
       expect(response).toBe(dto);
@@ -127,7 +140,11 @@ describe('AcademiesController', () => {
       const archive = jest.fn().mockResolvedValue(dto);
       const controller = buildController({ archive });
 
-      const response = await controller.archive('group-1', 'academy-1');
+      const response = await controller.archive(
+        'group-1',
+        undefined as never,
+        'academy-1',
+      );
 
       expect(archive).toHaveBeenCalledWith('group-1', 'academy-1');
       expect(response).toBe(dto);

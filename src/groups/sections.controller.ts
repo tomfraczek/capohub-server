@@ -4,21 +4,17 @@ import {
   Get,
   HttpCode,
   Param,
-  ParseUUIDPipe,
-  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { User } from '../users/entities/user.entity';
 import {
   CreateSectionDto,
   createSectionSchema,
 } from './dto/create-section.schema';
 import { SectionResponseDto } from './dto/section-response.dto';
-import {
-  UpdateSectionDto,
-  updateSectionSchema,
-} from './dto/update-section.schema';
 import { AllowGroupStatuses } from './decorators/allow-group-statuses.decorator';
 import { RequireGroupPermission } from './decorators/require-group-permission.decorator';
 import { GroupStatus } from './enums/group-status.enum';
@@ -33,10 +29,15 @@ const ANY_STATUS = [
   GroupStatus.DELETED,
 ] as const;
 
-// Section always belongs to exactly one Group and is never independently
-// addressable - every route is nested under the owning Group, same
-// structure as AcademiesController.
-@Controller('groups/:groupId/sections')
+// Creates/lists Sections directly under a parent, which may be a Group or
+// another Section (nesting is unlimited-depth - ADR-002) - hence the
+// dual-mounted path, matching whichever of :groupId/:sectionId the request
+// used. No @RequireGroupKind here: unlike SectionController (single-
+// resource), the parent may legitimately be either kind. Single-resource
+// operations on one specific Section (get/update/lifecycle) live on
+// SectionController (sections/:sectionId), mirroring the
+// EventsController/EventController split already used in this codebase.
+@Controller(['groups/:groupId/sections', 'sections/:sectionId/sections'])
 @UseGuards(GroupPermissionsGuard)
 export class SectionsController {
   constructor(private readonly sectionsService: SectionsService) {}
@@ -45,47 +46,21 @@ export class SectionsController {
   @HttpCode(201)
   @RequireGroupPermission(GroupPermission.SECTION_CREATE)
   create(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
+    @CurrentUser() user: User,
     @Body(new ZodValidationPipe(createSectionSchema)) dto: CreateSectionDto,
   ): Promise<SectionResponseDto> {
-    return this.sectionsService.create(groupId, dto);
+    return this.sectionsService.create(groupId ?? sectionId, user, dto);
   }
 
   @Get()
   @RequireGroupPermission(GroupPermission.SECTION_VIEW)
   @AllowGroupStatuses(...ANY_STATUS)
   list(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
   ): Promise<SectionResponseDto[]> {
-    return this.sectionsService.list(groupId);
-  }
-
-  @Get(':sectionId')
-  @RequireGroupPermission(GroupPermission.SECTION_VIEW)
-  @AllowGroupStatuses(...ANY_STATUS)
-  getById(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
-    @Param('sectionId', ParseUUIDPipe) sectionId: string,
-  ): Promise<SectionResponseDto> {
-    return this.sectionsService.getById(groupId, sectionId);
-  }
-
-  @Patch(':sectionId')
-  @RequireGroupPermission(GroupPermission.SECTION_EDIT)
-  update(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
-    @Param('sectionId', ParseUUIDPipe) sectionId: string,
-    @Body(new ZodValidationPipe(updateSectionSchema)) dto: UpdateSectionDto,
-  ): Promise<SectionResponseDto> {
-    return this.sectionsService.update(groupId, sectionId, dto);
-  }
-
-  @Post(':sectionId/archive')
-  @RequireGroupPermission(GroupPermission.SECTION_ARCHIVE)
-  archive(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
-    @Param('sectionId', ParseUUIDPipe) sectionId: string,
-  ): Promise<SectionResponseDto> {
-    return this.sectionsService.archive(groupId, sectionId);
+    return this.sectionsService.list(groupId ?? sectionId);
   }
 }

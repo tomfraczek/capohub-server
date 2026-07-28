@@ -37,13 +37,13 @@ import { RoleAssignmentsService } from './role-assignments.service';
 
 /**
  * Handles the full lifecycle of invitations and join requests for both
- * Organizations (Root Groups) and specific Groups.
+ * Groups and specific Sections.
  *
  * Key domain invariants enforced here:
- *  - Organization ownership does NOT grant any permissions in its Child Groups.
- *  - Accepting an ORGANIZATION-level request creates only a Membership; no
+ *  - Group ownership does NOT grant any permissions in its Sections.
+ *  - Accepting a GROUP-level request creates only a Membership; no
  *    RoleAssignment is created anywhere.
- *  - Accepting a GROUP-level request ensures Membership in the Root Group AND
+ *  - Accepting a SECTION-level request ensures Membership in the Group AND
  *    grants MEMBER in the exact targetGroup only.
  *  - Accepting is idempotent: duplicate Membership or duplicate MEMBER Role is
  *    treated as ALREADY_MEMBER / ALREADY_GROUP_MEMBER (not silently duplicated).
@@ -76,7 +76,7 @@ export class MembershipRequestsService {
    * the caller's intent.  If omitted or invalid the ZodValidationPipe
    * returns 400 before this method is called.
    *
-   * The ORGANIZATION path requires targetGroup to be a Root Group.
+   * The GROUP path requires targetGroup to be a root Group.
    */
   async join(
     targetGroupId: string,
@@ -86,7 +86,7 @@ export class MembershipRequestsService {
     return this.em.transactional(async (em) => {
       const targetGroup = await this.loadActiveGroupOrFail(em, targetGroupId);
 
-      if (targetType === MembershipRequestTarget.ORGANIZATION) {
+      if (targetType === MembershipRequestTarget.GROUP) {
         this.assertIsRootGroup(targetGroup);
       }
 
@@ -96,7 +96,7 @@ export class MembershipRequestsService {
           : await this.groupHierarchyService.getRootGroup(targetGroup.id, em);
       await this.assertNotBanned(em, rootGroup.id, requestingUser.id);
 
-      // Check if already a member (organization or group level)
+      // Check if already a member (GROUP or SECTION level)
       await this.assertNotAlreadyJoined(
         em,
         targetGroup,
@@ -236,13 +236,13 @@ export class MembershipRequestsService {
     return this.em.transactional(async (em) => {
       const targetGroup = await this.loadActiveGroupOrFail(em, targetGroupId);
 
-      if (input.targetType === MembershipRequestTarget.ORGANIZATION) {
+      if (input.targetType === MembershipRequestTarget.GROUP) {
         this.assertIsRootGroup(targetGroup);
-        // For organization-level invitations the caller needs MEMBERSHIP_INVITE,
+        // For GROUP-level invitations the caller needs MEMBERSHIP_INVITE,
         // which only ADMIN/OWNER have.  Guard already enforced it, but we
         // double-check the targetType matches the guard's expectation.
       } else {
-        // GROUP-level invitation: check memberInvitesAllowed for plain MEMBERs
+        // SECTION-level invitation: check memberInvitesAllowed for plain MEMBERs
         this.assertCanInviteToGroup(
           targetGroup,
           callerRoles,
@@ -451,8 +451,8 @@ export class MembershipRequestsService {
   /**
    * The invitee accepts their PENDING INVITATION.
    *
-   * For ORGANIZATION target: creates/reactivates a Membership only.
-   * For GROUP target: ensures Membership in Root Group AND grants MEMBER.
+   * For GROUP target: creates/reactivates a Membership only.
+   * For SECTION target: ensures Membership in Root Group AND grants MEMBER.
    *
    * Idempotent at the Membership/Role level: if the invitee is somehow
    * already an active member (e.g. accepted through a different path
@@ -726,8 +726,8 @@ export class MembershipRequestsService {
   /**
    * Creates or reactivates membership for an auto-join or accepted request.
    *
-   * ORGANIZATION target: only creates a Membership (no Role anywhere).
-   * GROUP target: ensures Membership in Root Group + MEMBER Role in targetGroup.
+   * GROUP target: only creates a Membership (no Role anywhere).
+   * SECTION target: ensures Membership in Root Group + MEMBER Role in targetGroup.
    */
   private async fulfillJoin(
     em: EntityManager,
@@ -778,12 +778,12 @@ export class MembershipRequestsService {
       }
     }
 
-    if (targetType === MembershipRequestTarget.ORGANIZATION) {
-      // Organization invitation/join: no Role is granted (see ADR-004).
+    if (targetType === MembershipRequestTarget.GROUP) {
+      // Group invitation/join: no Role is granted (see ADR-004).
       return;
     }
 
-    // GROUP target: grant MEMBER in the exact targetGroup
+    // SECTION target: grant MEMBER in the exact targetGroup
     await this.roleAssignmentsService.ensureMemberRole(
       em,
       membership,
@@ -793,7 +793,7 @@ export class MembershipRequestsService {
 
   /**
    * Throws if the user is already a member of the target (at the correct
-   * level - Membership for ORGANIZATION, MEMBER Role for GROUP).
+   * level - Membership for GROUP, MEMBER Role for SECTION).
    */
   private async assertNotAlreadyJoined(
     em: EntityManager,
@@ -808,7 +808,7 @@ export class MembershipRequestsService {
 
     const membership = await loadActiveMembership(em, rootGroup.id, user.id);
 
-    if (targetType === MembershipRequestTarget.ORGANIZATION) {
+    if (targetType === MembershipRequestTarget.GROUP) {
       if (membership) {
         throw new ConflictException({
           code: 'ALREADY_MEMBER',
@@ -816,7 +816,7 @@ export class MembershipRequestsService {
         });
       }
     } else {
-      // GROUP: check MEMBER Role Assignment in the specific group
+      // SECTION: check MEMBER Role Assignment in the specific group
       if (membership) {
         const memberRole = await em.findOne(RoleAssignment, {
           membership: membership.id,
@@ -918,7 +918,7 @@ export class MembershipRequestsService {
       throw new UnprocessableEntityException({
         code: 'NOT_A_ROOT_GROUP',
         message:
-          'Organization-level invitations and join requests require a Root Group as target',
+          'GROUP-level invitations and join requests require a root Group as target',
       });
     }
   }

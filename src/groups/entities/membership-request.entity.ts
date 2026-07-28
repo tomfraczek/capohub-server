@@ -37,8 +37,8 @@ export const MEMBERSHIP_REQUEST_PENDING_JOIN_IDX =
 //    - invitedUser = null, invitedEmail = null
 //
 // targetType encodes which *effect* accepting has:
-//  ORGANIZATION → creates/reactivates Membership only (no RoleAssignment)
-//  GROUP        → ensures Membership + grants MEMBER for the exact targetGroup
+//  GROUP   → creates/reactivates Membership only (no RoleAssignment)
+//  SECTION → ensures Membership + grants MEMBER for the exact targetGroup
 //
 // Lifecycle: PENDING → ACCEPTED / REJECTED / CANCELLED.  Terminal rows are
 // never reused.  No expiresAt or TTL.
@@ -80,21 +80,22 @@ export class MembershipRequest extends BaseEntity {
 
   // The Group targeted by this request.
   //
-  // IMPORTANT: this field serves a DUAL role depending on targetType:
-  //
-  //   targetType = ORGANIZATION
-  //     targetGroup MUST be a Root Group (parentGroup === null).
-  //     There is no separate Organization entity in this system (ADR-001).
-  //     A Root Group IS the Organization.  Accepting this request creates a
-  //     GroupMembership for the Root Group only — no RoleAssignment is
-  //     created anywhere (see ADR-004).
+  // IMPORTANT: this field serves a DUAL role depending on targetType (see
+  // the Group/Section rename ADR):
   //
   //   targetType = GROUP
-  //     targetGroup may be any Group (Root or Child).  Accepting this
-  //     request ensures a GroupMembership in the Root Group AND grants
-  //     a MEMBER RoleAssignment in exactly targetGroup.
+  //     targetGroup MUST be a root Group (parentGroup === null).
+  //     There is no separate Group entity in this system (ADR-001).
+  //     A root Group IS the organization.  Accepting this request creates a
+  //     GroupMembership for the Group only — no RoleAssignment is created
+  //     anywhere (see ADR-004).
   //
-  // No separate FK to an "Organization" entity exists and none will be
+  //   targetType = SECTION
+  //     targetGroup may be a Group or a Section, at any depth.  Accepting
+  //     this request ensures a GroupMembership in the Group AND grants a
+  //     MEMBER RoleAssignment in exactly targetGroup.
+  //
+  // No separate FK to an "Group" entity exists and none will be
   // added — the hierarchy model intentionally treats all organizational
   // units as the same entity type (ADR-001).
   @Index()

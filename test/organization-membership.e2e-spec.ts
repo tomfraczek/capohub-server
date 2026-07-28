@@ -17,14 +17,15 @@ import { HttpErrorResponse } from '../src/common/types/http-error-response.type'
 import { User } from '../src/users/entities/user.entity';
 import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
-import { GroupSummaryResponseDto } from '../src/groups/dto/group-summary-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
+import { GroupSummaryResponseDto } from '../src/groups/dto/group-summary-response.dto';
+import { CohortResponseDto } from '../src/groups/dto/cohort-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
-import { MembershipSection } from '../src/groups/entities/membership-section.entity';
+import { MembershipCohort } from '../src/groups/entities/membership-cohort.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
-import { Section } from '../src/groups/entities/section.entity';
+import { Cohort } from '../src/groups/entities/cohort.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
 
 const OWNER_TOKEN = 'valid-orgmem-owner-token';
@@ -106,7 +107,7 @@ async function bodyOf<T>(req: request.Test): Promise<T> {
   return res.body as T;
 }
 
-describe('Organization Membership (e2e)', () => {
+describe('Group Membership (e2e)', () => {
   let app: INestApplication<App>;
   const createdGroupIds: string[] = [];
   const localUserIdByToken = new Map<string, string>();
@@ -148,12 +149,12 @@ describe('Organization Membership (e2e)', () => {
 
   afterAll(async () => {
     const cleanup = app.get(EntityManager).fork();
-    await cleanup.nativeDelete(MembershipSection, {
+    await cleanup.nativeDelete(MembershipCohort, {
       membership: {
         rootGroup: { $in: createdGroupIds },
       },
     });
-    await cleanup.nativeDelete(Section, { group: { $in: createdGroupIds } });
+    await cleanup.nativeDelete(Cohort, { group: { $in: createdGroupIds } });
     await cleanup.nativeDelete(RoleAssignment, {
       group: { $in: createdGroupIds },
     });
@@ -210,12 +211,28 @@ describe('Organization Membership (e2e)', () => {
 
   async function createSection(
     token: string,
+    parentId: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<SectionResponseDto> {
+    const created = await bodyOf<SectionResponseDto>(
+      request(app.getHttpServer())
+        .post(`/api/v1/groups/${parentId}/sections`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(groupPayload({ country: 'PL', ...overrides }))
+        .expect(201),
+    );
+    createdGroupIds.push(created.id);
+    return created;
+  }
+
+  async function createCohort(
+    token: string,
     groupId: string,
     name: string,
-  ): Promise<SectionResponseDto> {
-    return bodyOf<SectionResponseDto>(
+  ): Promise<CohortResponseDto> {
+    return bodyOf<CohortResponseDto>(
       request(app.getHttpServer())
-        .post(`/api/v1/groups/${groupId}/sections`)
+        .post(`/api/v1/groups/${groupId}/cohorts`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name, description: null })
         .expect(201),
@@ -250,7 +267,7 @@ describe('Organization Membership (e2e)', () => {
 
       expect(membership.rootGroupId).toBe(root.id);
       expect(membership.status).toBe('ACTIVE');
-      expect(membership.sections).toEqual([]);
+      expect(membership.cohorts).toEqual([]);
     });
 
     it('creates only the Membership when role is omitted - belongs to the organization but not yet assigned to any Group', async () => {
@@ -325,13 +342,12 @@ describe('Organization Membership (e2e)', () => {
       expect(membershipInB.rootGroupId).toBe(rootB.id);
     });
 
-    it('rejects creating a membership for a Child Group', async () => {
+    it('rejects creating a membership for a Section - not reachable via /groups/:id/members at all (404)', async () => {
       const root = await createRootGroup(OWNER_TOKEN, {
         name: 'Child Membership Root',
       });
-      const child = await createRootGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Child Membership Child',
-        parentGroupId: root.id,
       });
 
       const response = await request(app.getHttpServer())
@@ -341,11 +357,9 @@ describe('Organization Membership (e2e)', () => {
           userId: localUserIdByToken.get(MEMBER_TOKEN),
           role: GroupRole.MEMBER,
         })
-        .expect(400);
+        .expect(404);
 
-      expect((response.body as HttpErrorResponse).code).toBe(
-        'MEMBERSHIP_ROOT_GROUP_MISMATCH',
-      );
+      expect((response.body as HttpErrorResponse).code).toBe('GROUP_NOT_FOUND');
     });
   });
 
@@ -386,12 +400,12 @@ describe('Organization Membership (e2e)', () => {
     });
   });
 
-  describe('section assignment', () => {
-    it('assigns an active membership to a Section in the same Root Group', async () => {
+  describe('cohort assignment', () => {
+    it('assigns an active membership to a Cohort in the same Root Group', async () => {
       const root = await createRootGroup(OWNER_TOKEN, {
-        name: 'Section Assignment Root',
+        name: 'Cohort Assignment Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, 'Kids');
+      const cohort = await createCohort(OWNER_TOKEN, root.id, 'Kids');
       const membership = await addMember(
         OWNER_TOKEN,
         root.id,
@@ -401,7 +415,7 @@ describe('Organization Membership (e2e)', () => {
 
       await request(app.getHttpServer())
         .post(
-          `/api/v1/groups/${root.id}/members/${membership.id}/sections/${section.id}`,
+          `/api/v1/groups/${root.id}/members/${membership.id}/cohorts/${cohort.id}`,
         )
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(201);
@@ -412,11 +426,11 @@ describe('Organization Membership (e2e)', () => {
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(200),
       );
-      expect(fetched.sections).toEqual([{ id: section.id, name: 'Kids' }]);
+      expect(fetched.cohorts).toEqual([{ id: cohort.id, name: 'Kids' }]);
 
       await request(app.getHttpServer())
         .delete(
-          `/api/v1/groups/${root.id}/members/${membership.id}/sections/${section.id}`,
+          `/api/v1/groups/${root.id}/members/${membership.id}/cohorts/${cohort.id}`,
         )
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(204);
@@ -427,20 +441,20 @@ describe('Organization Membership (e2e)', () => {
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(200),
       );
-      expect(afterUnassign.sections).toEqual([]);
+      expect(afterUnassign.cohorts).toEqual([]);
     });
 
-    it('rejects assigning a Section that belongs to a different Root Group', async () => {
+    it('rejects assigning a Cohort that belongs to a different Root Group', async () => {
       const root = await createRootGroup(OWNER_TOKEN, {
-        name: 'Cross Root Section Root',
+        name: 'Cross Root Cohort Root',
       });
       const otherRoot = await createRootGroup(OWNER_TOKEN, {
-        name: 'Cross Root Section Other Root',
+        name: 'Cross Root Cohort Other Root',
       });
-      const otherSection = await createSection(
+      const otherCohort = await createCohort(
         OWNER_TOKEN,
         otherRoot.id,
-        'Foreign Section',
+        'Foreign Cohort',
       );
       const membership = await addMember(
         OWNER_TOKEN,
@@ -451,27 +465,23 @@ describe('Organization Membership (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post(
-          `/api/v1/groups/${root.id}/members/${membership.id}/sections/${otherSection.id}`,
+          `/api/v1/groups/${root.id}/members/${membership.id}/cohorts/${otherCohort.id}`,
         )
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(400);
 
       expect((response.body as HttpErrorResponse).code).toBe(
-        'MEMBERSHIP_SECTION_MISMATCH',
+        'MEMBERSHIP_COHORT_MISMATCH',
       );
     });
 
-    it('rejects assigning an archived Section', async () => {
+    it('rejects assigning an archived Cohort', async () => {
       const root = await createRootGroup(OWNER_TOKEN, {
-        name: 'Archived Section Root',
+        name: 'Archived Cohort Root',
       });
-      const section = await createSection(
-        OWNER_TOKEN,
-        root.id,
-        'Soon Archived',
-      );
+      const cohort = await createCohort(OWNER_TOKEN, root.id, 'Soon Archived');
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${root.id}/sections/${section.id}/archive`)
+        .post(`/api/v1/groups/${root.id}/cohorts/${cohort.id}/archive`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(201);
       const membership = await addMember(
@@ -483,21 +493,21 @@ describe('Organization Membership (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post(
-          `/api/v1/groups/${root.id}/members/${membership.id}/sections/${section.id}`,
+          `/api/v1/groups/${root.id}/members/${membership.id}/cohorts/${cohort.id}`,
         )
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(409);
 
       expect((response.body as HttpErrorResponse).code).toBe(
-        'MEMBERSHIP_SECTION_ARCHIVED',
+        'MEMBERSHIP_COHORT_ARCHIVED',
       );
     });
 
     it('rejects a duplicate assignment', async () => {
       const root = await createRootGroup(OWNER_TOKEN, {
-        name: 'Duplicate Section Root',
+        name: 'Duplicate Cohort Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, 'Adults');
+      const cohort = await createCohort(OWNER_TOKEN, root.id, 'Adults');
       const membership = await addMember(
         OWNER_TOKEN,
         root.id,
@@ -506,28 +516,28 @@ describe('Organization Membership (e2e)', () => {
       );
       await request(app.getHttpServer())
         .post(
-          `/api/v1/groups/${root.id}/members/${membership.id}/sections/${section.id}`,
+          `/api/v1/groups/${root.id}/members/${membership.id}/cohorts/${cohort.id}`,
         )
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(201);
 
       const response = await request(app.getHttpServer())
         .post(
-          `/api/v1/groups/${root.id}/members/${membership.id}/sections/${section.id}`,
+          `/api/v1/groups/${root.id}/members/${membership.id}/cohorts/${cohort.id}`,
         )
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(409);
 
       expect((response.body as HttpErrorResponse).code).toBe(
-        'MEMBERSHIP_SECTION_ALREADY_ASSIGNED',
+        'MEMBERSHIP_COHORT_ALREADY_ASSIGNED',
       );
     });
 
-    it('rejects assigning a section to an inactive membership', async () => {
+    it('rejects assigning a cohort to an inactive membership', async () => {
       const root = await createRootGroup(OWNER_TOKEN, {
-        name: 'Inactive Membership Section Root',
+        name: 'Inactive Membership Cohort Root',
       });
-      const section = await createSection(
+      const cohort = await createCohort(
         OWNER_TOKEN,
         root.id,
         'Performance Team',
@@ -545,7 +555,7 @@ describe('Organization Membership (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post(
-          `/api/v1/groups/${root.id}/members/${membership.id}/sections/${section.id}`,
+          `/api/v1/groups/${root.id}/members/${membership.id}/cohorts/${cohort.id}`,
         )
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(409);

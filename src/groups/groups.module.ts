@@ -3,6 +3,8 @@ import { AcademiesController } from './academies.controller';
 import { AcademiesService } from './academies.service';
 import { AuditLogController } from './audit-log.controller';
 import { AuditLogService } from './audit-log.service';
+import { CohortsController } from './cohorts.controller';
+import { CohortsService } from './cohorts.service';
 import { CommunityHomeController } from './community-home.controller';
 import { CommunityHomeService } from './community-home.service';
 import { CommunityNotificationSettingsController } from './community-notification-settings.controller';
@@ -18,6 +20,7 @@ import { MembershipRequestsController } from './membership-requests.controller';
 import { MembershipRequestsService } from './membership-requests.service';
 import { RoleAssignmentsController } from './role-assignments.controller';
 import { RoleAssignmentsService } from './role-assignments.service';
+import { SectionController } from './section.controller';
 import { SectionsController } from './sections.controller';
 import { SectionsService } from './sections.service';
 
@@ -29,8 +32,10 @@ import { SectionsService } from './sections.service';
 @Module({
   controllers: [
     GroupsController,
-    AcademiesController,
     SectionsController,
+    SectionController,
+    AcademiesController,
+    CohortsController,
     RoleAssignmentsController,
     MembershipRequestsController,
     InvitationsController,
@@ -40,10 +45,11 @@ import { SectionsService } from './sections.service';
   ],
   providers: [
     GroupsService,
+    SectionsService,
     GroupHierarchyService,
     GroupMembershipsService,
     AcademiesService,
-    SectionsService,
+    CohortsService,
     GroupPermissionService,
     GroupPermissionsGuard,
     RoleAssignmentsService,

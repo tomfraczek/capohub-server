@@ -18,12 +18,13 @@ import { User } from '../src/users/entities/user.entity';
 import { AcademyResponseDto } from '../src/groups/dto/academy-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
+import { CohortResponseDto } from '../src/groups/dto/cohort-response.dto';
 import { Academy } from '../src/groups/entities/academy.entity';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
-import { Section } from '../src/groups/entities/section.entity';
+import { Cohort } from '../src/groups/entities/cohort.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
 
 const OWNER_TOKEN = 'valid-hierarchy-owner-token';
@@ -117,7 +118,7 @@ async function bodyOf<T>(req: request.Test): Promise<T> {
   return res.body as T;
 }
 
-describe('Group Hierarchy / Academies / Sections (e2e)', () => {
+describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
   let app: INestApplication<App>;
   const createdGroupIds: string[] = [];
   const localUserIdByToken = new Map<string, string>();
@@ -160,7 +161,7 @@ describe('Group Hierarchy / Academies / Sections (e2e)', () => {
   afterAll(async () => {
     const cleanup = app.get(EntityManager).fork();
     await cleanup.nativeDelete(Academy, { group: { $in: createdGroupIds } });
-    await cleanup.nativeDelete(Section, { group: { $in: createdGroupIds } });
+    await cleanup.nativeDelete(Cohort, { group: { $in: createdGroupIds } });
     await cleanup.nativeDelete(RoleAssignment, {
       group: { $in: createdGroupIds },
     });
@@ -222,6 +223,55 @@ describe('Group Hierarchy / Academies / Sections (e2e)', () => {
     return created;
   }
 
+  function sectionPayload(
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return {
+      name: 'Capoeira Brasil Poland',
+      description: null,
+      logoUrl: null,
+      coverImageUrl: null,
+      contactEmail: null,
+      contactPhone: null,
+      websiteUrl: null,
+      facebookUrl: null,
+      instagramUrl: null,
+      youtubeUrl: null,
+      isPublic: true,
+      isHidden: false,
+      memberInvitesAllowed: false,
+      timezone: 'Europe/Warsaw',
+      currencyCode: 'PLN',
+      // Required on Section (unlike Group, which may span multiple
+      // countries) - see create-section.schema.ts.
+      country: 'PL',
+      city: null,
+      ...overrides,
+    };
+  }
+
+  // A Section can be created under a Group (`parentKind: 'groups'`) or
+  // under another Section (`parentKind: 'sections'`) - the two routes are
+  // dual-mounted onto the same SectionsController (see
+  // sections.controller.ts). `parentId` is always the URL param, never a
+  // body field.
+  async function createSection(
+    token: string,
+    parentKind: 'groups' | 'sections',
+    parentId: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<SectionResponseDto> {
+    const created = await bodyOf<SectionResponseDto>(
+      request(app.getHttpServer())
+        .post(`/api/v1/${parentKind}/${parentId}/sections`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(sectionPayload(overrides))
+        .expect(201),
+    );
+    createdGroupIds.push(created.id);
+    return created;
+  }
+
   async function addMember(
     ownerToken: string,
     groupId: string,
@@ -236,74 +286,77 @@ describe('Group Hierarchy / Academies / Sections (e2e)', () => {
   }
 
   describe('hierarchy: create', () => {
-    it('creates a Root Group with parentGroupId null', async () => {
+    it('creates a Group as a root-level entity', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'World HQ' });
 
-      expect(root.parentGroupId).toBeNull();
+      // GroupResponseDto has no parent field at all any more - a Group is
+      // always root-level by construction (see create-group.schema.ts).
+      expect(root).not.toHaveProperty('parentGroupId');
+      expect(root).not.toHaveProperty('parentId');
     });
 
-    it('creates a Child Group under a Root Group when the caller can edit the parent', async () => {
+    it('creates a Section under a Group with parentId set', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Capoeira Brasil' });
 
-      const child = await createGroup(OWNER_TOKEN, {
+      const section = await createSection(OWNER_TOKEN, 'groups', root.id, {
         name: 'Capoeira Brasil Poland',
-        parentGroupId: root.id,
       });
 
-      expect(child.parentGroupId).toBe(root.id);
+      expect(section.parentId).toBe(root.id);
     });
 
-    it('supports multi-level hierarchy and lists direct children only', async () => {
+    it('supports multi-level hierarchy via nested Sections and lists direct children only', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Brasil' });
-      const poland = await createGroup(OWNER_TOKEN, {
+      const poland = await createSection(OWNER_TOKEN, 'groups', root.id, {
         name: 'Poland',
-        parentGroupId: root.id,
       });
-      const poznan = await createGroup(OWNER_TOKEN, {
+      const poznan = await createSection(OWNER_TOKEN, 'sections', poland.id, {
         name: 'Poznan',
-        parentGroupId: poland.id,
       });
 
-      const rootChildren = await bodyOf<GroupResponseDto[]>(
-        request(app.getHttpServer())
-          .get(`/api/v1/groups/${root.id}/children`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .expect(200),
-      );
-      expect(rootChildren.map((group) => group.id)).toEqual([poland.id]);
-      expect(rootChildren.map((group) => group.id)).not.toContain(poznan.id);
+      expect(poland.parentId).toBe(root.id);
+      expect(poznan.parentId).toBe(poland.id);
 
-      const polandChildren = await bodyOf<GroupResponseDto[]>(
+      const rootChildren = await bodyOf<SectionResponseDto[]>(
         request(app.getHttpServer())
-          .get(`/api/v1/groups/${poland.id}/children`)
+          .get(`/api/v1/groups/${root.id}/sections`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(200),
       );
-      expect(polandChildren.map((group) => group.id)).toEqual([poznan.id]);
+      expect(rootChildren.map((section) => section.id)).toEqual([poland.id]);
+      expect(rootChildren.map((section) => section.id)).not.toContain(
+        poznan.id,
+      );
+
+      const polandChildren = await bodyOf<SectionResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/sections/${poland.id}/sections`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(polandChildren.map((section) => section.id)).toEqual([poznan.id]);
     });
 
-    it('rejects creating a child under a parent the caller cannot edit (non-member)', async () => {
+    it('rejects creating a Section under a parent the caller cannot edit (non-member)', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Private Org' });
 
       const response = await request(app.getHttpServer())
-        .post('/api/v1/groups')
+        .post(`/api/v1/groups/${root.id}/sections`)
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
-        .send(groupPayload({ name: 'Sneaky Child', parentGroupId: root.id }))
+        .send(sectionPayload({ name: 'Sneaky Section' }))
         .expect(404);
 
-      expect((response.body as HttpErrorResponse).code).toBe(
-        'GROUP_PARENT_NOT_FOUND',
-      );
+      expect((response.body as HttpErrorResponse).code).toBe('GROUP_NOT_FOUND');
     });
 
-    it('rejects creating a child when the caller only has MEMBER in the parent', async () => {
+    it('rejects creating a Section when the caller only has MEMBER in the parent', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Guarded Org' });
       await addMember(OWNER_TOKEN, root.id, MEMBER_TOKEN, GroupRole.MEMBER);
 
       const response = await request(app.getHttpServer())
-        .post('/api/v1/groups')
+        .post(`/api/v1/groups/${root.id}/sections`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-        .send(groupPayload({ name: 'Blocked Child', parentGroupId: root.id }))
+        .send(sectionPayload({ name: 'Blocked Section' }))
         .expect(403);
 
       expect((response.body as HttpErrorResponse).code).toBe(
@@ -311,66 +364,57 @@ describe('Group Hierarchy / Academies / Sections (e2e)', () => {
       );
     });
 
-    it('rejects creating a child under a non-existent parent', async () => {
+    it('rejects creating a Section under a non-existent parent', async () => {
       const response = await request(app.getHttpServer())
-        .post('/api/v1/groups')
+        .post('/api/v1/groups/00000000-0000-0000-0000-000000000000/sections')
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-        .send(
-          groupPayload({
-            name: 'Orphan',
-            parentGroupId: '00000000-0000-0000-0000-000000000000',
-          }),
-        )
+        .send(sectionPayload({ name: 'Orphan' }))
         .expect(404);
 
-      expect((response.body as HttpErrorResponse).code).toBe(
-        'GROUP_PARENT_NOT_FOUND',
-      );
+      expect((response.body as HttpErrorResponse).code).toBe('GROUP_NOT_FOUND');
     });
   });
 
   describe('hierarchy: immutability', () => {
-    it('has no move endpoint - parentGroupId is fixed at creation', async () => {
+    it("has no move endpoint - a Section's parentId is fixed at creation", async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Immutable Root' });
-      const child = await createGroup(OWNER_TOKEN, {
-        name: 'Immutable Child',
-        parentGroupId: root.id,
+      const section = await createSection(OWNER_TOKEN, 'groups', root.id, {
+        name: 'Immutable Section',
       });
       const otherRoot = await createGroup(OWNER_TOKEN, {
         name: 'Immutable Other Root',
       });
 
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${child.id}/move`)
+        .post(`/api/v1/sections/${section.id}/move`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .send({ newParentGroupId: otherRoot.id })
         .expect(404);
 
-      const fetched = await bodyOf<GroupResponseDto>(
+      const fetched = await bodyOf<SectionResponseDto>(
         request(app.getHttpServer())
-          .get(`/api/v1/groups/${child.id}`)
+          .get(`/api/v1/sections/${section.id}`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(200),
       );
-      expect(fetched.parentGroupId).toBe(root.id);
+      expect(fetched.parentId).toBe(root.id);
     });
 
-    it('rejects parentGroupId on update with 400 instead of silently ignoring it', async () => {
+    it('rejects an unknown field on a Group update with 400 instead of silently ignoring it', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Update Root' });
       const otherRoot = await createGroup(OWNER_TOKEN, {
         name: 'Update Other Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
-        name: 'Update Child',
-        parentGroupId: root.id,
-      });
 
+      // parentGroupId is not just unrecognized - it never existed on
+      // updateGroupSchema (see create-group.schema.ts) - but any unknown
+      // field is rejected the same way by .strict() (update-group.schema.ts).
       const response = await request(app.getHttpServer())
-        .patch(`/api/v1/groups/${child.id}`)
+        .patch(`/api/v1/groups/${root.id}`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .send(
           groupPayload({
-            name: 'Update Child Renamed',
+            name: 'Update Root Renamed',
             parentGroupId: otherRoot.id,
           }),
         )
@@ -382,12 +426,77 @@ describe('Group Hierarchy / Academies / Sections (e2e)', () => {
 
       const fetched = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
-          .get(`/api/v1/groups/${child.id}`)
+          .get(`/api/v1/groups/${root.id}`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(200),
       );
-      expect(fetched.name).toBe('Update Child');
-      expect(fetched.parentGroupId).toBe(root.id);
+      expect(fetched.name).toBe('Update Root');
+    });
+
+    it('rejects an unknown field on a Section update with 400 instead of silently ignoring it', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Section Update Root',
+      });
+      const section = await createSection(OWNER_TOKEN, 'groups', root.id, {
+        name: 'Section Update Child',
+      });
+
+      const response = await request(app.getHttpServer())
+        .patch(`/api/v1/sections/${section.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(
+          sectionPayload({
+            name: 'Section Update Child Renamed',
+            parentId: root.id,
+          }),
+        )
+        .expect(400);
+
+      expect((response.body as HttpErrorResponse).code).toBe(
+        'VALIDATION_ERROR',
+      );
+
+      const fetched = await bodyOf<SectionResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/sections/${section.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(fetched.name).toBe('Section Update Child');
+    });
+  });
+
+  // Core Phase 2 invariant: a Group and a Section are the same underlying
+  // row, but are only ever reachable through their own route family - see
+  // decorators/require-group-kind.decorator.ts.
+  describe('kind guard: Group vs Section routes', () => {
+    it('a Section is not reachable via GET /groups/:id (404)', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Kind Guard Root',
+      });
+      const section = await createSection(OWNER_TOKEN, 'groups', root.id, {
+        name: 'Kind Guard Section',
+      });
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/groups/${section.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(404);
+
+      expect((response.body as HttpErrorResponse).code).toBe('GROUP_NOT_FOUND');
+    });
+
+    it('a Group is not reachable via GET /sections/:id (404)', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Kind Guard Root Two',
+      });
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/sections/${root.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(404);
+
+      expect((response.body as HttpErrorResponse).code).toBe('GROUP_NOT_FOUND');
     });
   });
 
@@ -522,48 +631,48 @@ describe('Group Hierarchy / Academies / Sections (e2e)', () => {
     });
   });
 
-  describe('sections', () => {
-    it('creates, lists, gets, updates and archives a section, and a group works with zero sections', async () => {
+  describe('cohorts', () => {
+    it('creates, lists, gets, updates and archives a cohort, and a group works with zero cohorts', async () => {
       const group = await createGroup(OWNER_TOKEN, {
-        name: 'Section Owner Group',
+        name: 'Cohort Owner Group',
       });
 
-      const noSections = await bodyOf<SectionResponseDto[]>(
+      const noCohorts = await bodyOf<CohortResponseDto[]>(
         request(app.getHttpServer())
-          .get(`/api/v1/groups/${group.id}/sections`)
+          .get(`/api/v1/groups/${group.id}/cohorts`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(200),
       );
-      expect(noSections).toEqual([]);
+      expect(noCohorts).toEqual([]);
 
-      const kids = await bodyOf<SectionResponseDto>(
+      const kids = await bodyOf<CohortResponseDto>(
         request(app.getHttpServer())
-          .post(`/api/v1/groups/${group.id}/sections`)
+          .post(`/api/v1/groups/${group.id}/cohorts`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .send({ name: 'Kids', description: null })
           .expect(201),
       );
-      const adults = await bodyOf<SectionResponseDto>(
+      const adults = await bodyOf<CohortResponseDto>(
         request(app.getHttpServer())
-          .post(`/api/v1/groups/${group.id}/sections`)
+          .post(`/api/v1/groups/${group.id}/cohorts`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .send({ name: 'Adults', description: null })
           .expect(201),
       );
 
-      const list = await bodyOf<SectionResponseDto[]>(
+      const list = await bodyOf<CohortResponseDto[]>(
         request(app.getHttpServer())
-          .get(`/api/v1/groups/${group.id}/sections`)
+          .get(`/api/v1/groups/${group.id}/cohorts`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(200),
       );
-      expect(list.map((section) => section.id).sort()).toEqual(
+      expect(list.map((cohort) => cohort.id).sort()).toEqual(
         [kids.id, adults.id].sort(),
       );
 
-      const updated = await bodyOf<SectionResponseDto>(
+      const updated = await bodyOf<CohortResponseDto>(
         request(app.getHttpServer())
-          .patch(`/api/v1/groups/${group.id}/sections/${kids.id}`)
+          .patch(`/api/v1/groups/${group.id}/cohorts/${kids.id}`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .send({ name: 'Kids Renamed', description: 'For the little ones' })
           .expect(200),
@@ -571,37 +680,35 @@ describe('Group Hierarchy / Academies / Sections (e2e)', () => {
       expect(updated.name).toBe('Kids Renamed');
       expect(updated.description).toBe('For the little ones');
 
-      const archived = await bodyOf<SectionResponseDto>(
+      const archived = await bodyOf<CohortResponseDto>(
         request(app.getHttpServer())
-          .post(`/api/v1/groups/${group.id}/sections/${kids.id}/archive`)
+          .post(`/api/v1/groups/${group.id}/cohorts/${kids.id}/archive`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(201),
       );
       expect(archived.status).toBe('ARCHIVED');
 
       const response = await request(app.getHttpServer())
-        .post(`/api/v1/groups/${group.id}/sections/${kids.id}/archive`)
+        .post(`/api/v1/groups/${group.id}/cohorts/${kids.id}/archive`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(409);
-      expect((response.body as HttpErrorResponse).code).toBe(
-        'SECTION_ARCHIVED',
-      );
+      expect((response.body as HttpErrorResponse).code).toBe('COHORT_ARCHIVED');
     });
 
-    it('returns SECTION_NOT_FOUND for an unknown section id', async () => {
+    it('returns COHORT_NOT_FOUND for an unknown cohort id', async () => {
       const group = await createGroup(OWNER_TOKEN, {
-        name: 'Section 404 Group',
+        name: 'Cohort 404 Group',
       });
 
       const response = await request(app.getHttpServer())
         .get(
-          `/api/v1/groups/${group.id}/sections/00000000-0000-0000-0000-000000000000`,
+          `/api/v1/groups/${group.id}/cohorts/00000000-0000-0000-0000-000000000000`,
         )
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(404);
 
       expect((response.body as HttpErrorResponse).code).toBe(
-        'SECTION_NOT_FOUND',
+        'COHORT_NOT_FOUND',
       );
     });
   });

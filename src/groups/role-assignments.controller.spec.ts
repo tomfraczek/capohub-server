@@ -73,7 +73,12 @@ describe('RoleAssignmentsController', () => {
       const body = { membershipId: 'membership-1', role: 'ADMIN' } as never;
       const user = { id: 'user-1' } as never;
 
-      const response = await controller.create('group-1', body, user);
+      const response = await controller.create(
+        'group-1',
+        undefined as never,
+        body,
+        user,
+      );
 
       expect(grantRole).toHaveBeenCalledWith('group-1', body, user);
       expect(response).toBe(dto);
@@ -86,7 +91,7 @@ describe('RoleAssignmentsController', () => {
       const listRoleAssignments = jest.fn().mockResolvedValue(dto);
       const controller = buildController({ listRoleAssignments });
 
-      const response = await controller.list('group-1');
+      const response = await controller.list('group-1', undefined as never);
 
       expect(listRoleAssignments).toHaveBeenCalledWith('group-1');
       expect(response).toBe(dto);
@@ -99,7 +104,11 @@ describe('RoleAssignmentsController', () => {
       const getRoleAssignment = jest.fn().mockResolvedValue(dto);
       const controller = buildController({ getRoleAssignment });
 
-      const response = await controller.getById('group-1', 'role-assignment-1');
+      const response = await controller.getById(
+        'group-1',
+        undefined as never,
+        'role-assignment-1',
+      );
 
       expect(getRoleAssignment).toHaveBeenCalledWith(
         'group-1',
@@ -115,7 +124,12 @@ describe('RoleAssignmentsController', () => {
       const controller = buildController({ revokeRole });
       const user = { id: 'user-1' } as never;
 
-      await controller.revoke('group-1', 'role-assignment-1', user);
+      await controller.revoke(
+        'group-1',
+        undefined as never,
+        'role-assignment-1',
+        user,
+      );
 
       expect(revokeRole).toHaveBeenCalledWith(
         'group-1',

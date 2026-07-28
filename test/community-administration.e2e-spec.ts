@@ -18,6 +18,7 @@ import { User } from '../src/users/entities/user.entity';
 import { CommunityNotificationSettingsResponseDto } from '../src/groups/dto/community-notification-settings-response.dto';
 import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
+import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { GroupBan } from '../src/groups/entities/group-ban.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
@@ -215,6 +216,22 @@ describe('Community Administration (e2e)', () => {
     return created;
   }
 
+  async function createSection(
+    token: string,
+    parentId: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<SectionResponseDto> {
+    const created = await bodyOf<SectionResponseDto>(
+      request(app.getHttpServer())
+        .post(`/api/v1/groups/${parentId}/sections`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(groupPayload({ country: 'PL', ...overrides }))
+        .expect(201),
+    );
+    createdGroupIds.push(created.id);
+    return created;
+  }
+
   async function addMember(
     ownerToken: string,
     groupId: string,
@@ -307,9 +324,8 @@ describe('Community Administration (e2e)', () => {
 
     it('rejects deleting a Community that still has an active Child Group - 409 GROUP_HAS_ACTIVE_CHILDREN', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Has Active Child' });
-      await createGroup(OWNER_TOKEN, {
+      await createSection(OWNER_TOKEN, root.id, {
         name: 'Active Child',
-        parentGroupId: root.id,
       });
 
       const response = await bodyOf<HttpErrorResponse>(
@@ -325,12 +341,11 @@ describe('Community Administration (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Root With Archived Child',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Archived Child',
-        parentGroupId: root.id,
       });
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${child.id}/archive`)
+        .post(`/api/v1/sections/${child.id}/archive`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(201);
 
@@ -383,7 +398,7 @@ describe('Community Administration (e2e)', () => {
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/join`)
           .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .send({ targetType: 'ORGANIZATION' })
+          .send({ targetType: 'GROUP' })
           .expect(403),
       );
       expect(joinResponse.code).toBe('USER_BANNED');
@@ -398,7 +413,7 @@ describe('Community Administration (e2e)', () => {
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/join`)
           .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .send({ targetType: 'ORGANIZATION' })
+          .send({ targetType: 'GROUP' })
           .expect(200),
       );
       expect(rejoinResult).toEqual({ joined: true });
@@ -450,9 +465,8 @@ describe('Community Administration (e2e)', () => {
 
     it('cannot ban a member who owns a Child Group - 409 CANNOT_BAN_OWNER', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Ban Owner Root' });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Ban Owner Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -461,7 +475,7 @@ describe('Community Administration (e2e)', () => {
         GroupRole.MEMBER,
       );
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${child.id}/transfer-ownership`)
+        .post(`/api/v1/sections/${child.id}/transfer-ownership`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .send({ newOwnerUserId: localUserIdByToken.get(MEMBER_TOKEN) })
         .expect(201);

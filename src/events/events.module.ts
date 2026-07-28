@@ -25,7 +25,7 @@ import { EventPermissionService } from './permissions/event-permission.service';
 // needed - same convention as GroupsModule. Imports GroupsModule to reuse
 // its Community-level authorization machinery (RoleAssignmentsService,
 // GroupPermissionService, GroupHierarchyService, GroupPermissionsGuard) -
-// never the reverse (ADR-024: Organization Domain independence; Events is
+// never the reverse (ADR-024: Group Domain independence; Events is
 // explicitly out of scope for it).
 @Module({
   imports: [GroupsModule],

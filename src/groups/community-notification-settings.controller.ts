@@ -20,7 +20,7 @@ import {
 // in this module) - see CommunityNotificationSettingsService's own comment
 // for why: that guard requires at least one Role Assignment to resolve
 // authorization at all, which would make this unreachable for a valid,
-// documented zero-Role Organization Membership. Authorization is a direct
+// documented zero-Role Group Membership. Authorization is a direct
 // Membership check inside the service instead.
 @Controller('groups/:groupId/notification-settings')
 export class CommunityNotificationSettingsController {

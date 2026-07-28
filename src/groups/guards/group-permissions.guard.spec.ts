@@ -159,7 +159,7 @@ describe('GroupPermissionsGuard', () => {
         .fn()
         .mockImplementation((key: string) =>
           key === GROUP_PERMISSIONS_KEY
-            ? [GroupPermission.SECTION_VIEW]
+            ? [GroupPermission.COHORT_VIEW]
             : undefined,
         ),
     } as unknown as Reflector;
@@ -176,7 +176,7 @@ describe('GroupPermissionsGuard', () => {
     );
 
     await guard.canActivate(
-      buildContext({ groupId: VALID_GROUP_ID, sectionId: 'section-1' }),
+      buildContext({ groupId: VALID_GROUP_ID, cohortId: 'cohort-1' }),
     );
 
     expect(resolveAuthorization).toHaveBeenCalledWith(VALID_GROUP_ID, USER_ID);

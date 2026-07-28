@@ -20,9 +20,9 @@ import { loadActiveMembership } from './group-membership.query';
 // requires at least one Role Assignment to resolve authorization for a
 // Group at all (see RoleAssignmentsService.resolveAuthorization), which
 // would make this feature unreachable for the well-documented, valid case
-// of an Organization Membership with zero Role Assignments
+// of a Group Membership with zero Role Assignments
 // (organization-entities.md#membership) - exactly the member this feature
-// most needs to work for, since they still belong to the Organization and
+// most needs to work for, since they still belong to the Group and
 // still receive its notifications. Authorization here is checked directly
 // against Membership instead (ACTIVE only, mirroring loadActiveMembership -
 // consistent with NOTIFICATION_SETTINGS_MANAGE being deliberately excluded
@@ -30,7 +30,7 @@ import { loadActiveMembership } from './group-membership.query';
 //
 // Settings are always resolved against the Root Group regardless of which
 // exact Group's id the caller passed (see CommunityNotificationSettings) -
-// there is one notification-preferences row per (user, Organization), not
+// there is one notification-preferences row per (user, Group), not
 // per Child Group.
 @Injectable()
 export class CommunityNotificationSettingsService {
@@ -77,10 +77,13 @@ export class CommunityNotificationSettingsService {
     });
   }
 
-  // Resolves `groupId` (Root or Child) to its Root Group and confirms the
-  // caller has an ACTIVE Membership there - never confirms the Group's
-  // existence to a non-member (404 either way), same convention as
-  // GroupPermissionsGuard.
+  // Confirms `groupId` is itself a root Group (see the Group/Section rename
+  // ADR - notification settings are one row per (user, Group), never per
+  // Section) and that the caller has an ACTIVE Membership there. A Section
+  // id 404s explicitly here rather than silently resolving to its Root
+  // Group's settings, which is what this used to do before it was made
+  // explicit. Never confirms the Group's existence to a non-member (404
+  // either way), same convention as GroupPermissionsGuard.
   private async assertMemberOrFail(
     em: EntityManager,
     groupId: string,
@@ -90,6 +93,12 @@ export class CommunityNotificationSettingsService {
       groupId,
       em,
     );
+    if (rootGroup.id !== groupId) {
+      throw new NotFoundException({
+        code: 'GROUP_NOT_FOUND',
+        message: 'Group not found',
+      });
+    }
     const membership = await loadActiveMembership(em, rootGroup.id, userId);
     if (!membership) {
       throw new NotFoundException({

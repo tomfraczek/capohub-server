@@ -24,7 +24,7 @@ import { Group } from './group.entity';
 //
 // `community` is always the Root Group the event is filed under - even for
 // an action on a Child Group (e.g. CREATE_CHILD_GROUP, ADD_ROLE for a Child
-// Group's Role Assignment), so that "this Organization's Audit Log" is a
+// Group's Role Assignment), so that "this Group's Audit Log" is a
 // single, complete query regardless of which exact Group within it was
 // acted on. No delete cascade: Groups/Users are soft-deleted, never
 // physically removed (ADR-007), so a Group being archived/deleted must not

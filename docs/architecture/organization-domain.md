@@ -8,6 +8,14 @@ last_updated: 2026-07-20
 
 # Organization Domain
 
+> **Terminology note (2026-07-28):** this document predates the
+> Group/Section domain rename (see
+> [ADR-031](../decisions/ADR-031-group-section-domain-rename.md)) and uses
+> its pre-rename vocabulary throughout. Mapping: "Organization"/"Root
+> Group" → **Group**; "Group" (a Child Group) → **Section**; "Section" (the
+> flat member tag) → **Cohort**. See the
+> [Glossary](../product/glossary.md) for current definitions.
+
 > This document defines the business architecture of the organizational
 > module used by CapoHub. It is intentionally technology-agnostic and
 > does not describe database implementation. The goal is to define

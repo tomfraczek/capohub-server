@@ -1,8 +1,36 @@
 import { z } from 'zod';
+import { isValidIsoCountryCode } from '../../common/validation/iso-3166-alpha2';
 
 // IANA time zone database is the runtime's own source of truth - no
 // hand-maintained list to fall out of date.
 const VALID_TIME_ZONES = new Set(Intl.supportedValuesOf('timeZone'));
+
+// ISO 3166-1 alpha-2 only (e.g. "PL", "DE", "BR") - never a free-text
+// country name. Uppercased before checking so "pl"/"Pl" are accepted and
+// normalized, matching currencyCodeSchema's convention below. Required by
+// default; wrap with `.optional()` at the call site for a Group (which may
+// span multiple countries - see create-group.schema.ts) rather than making
+// this schema itself optional, so a Section's requirement stays enforced
+// by construction.
+export const countryCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .refine(
+    isValidIsoCountryCode,
+    'Must be a valid ISO 3166-1 alpha-2 country code',
+  );
+
+// Free text - there is no canonical machine-checkable city list. Optional
+// and nullable on both Group and Section (see the country/city rollout in
+// the Group/Section rename ADR).
+export const citySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .nullish()
+  .transform((value) => (value ? value : null));
 
 export const timezoneSchema = z
   .string()

@@ -7,7 +7,7 @@ import { EventCapabilitiesDto } from './event-capabilities.dto';
 import { EventCommunityRefDto } from './event-community-ref.dto';
 
 // Used for both the list endpoint and the detail endpoint - Events, like
-// Academy/Section, has no separate "summary" shape (see academy-response.dto.ts).
+// Academy/Cohort, has no separate "summary" shape (see academy-response.dto.ts).
 export interface EventResponseDto {
   id: string;
   community: EventCommunityRefDto;

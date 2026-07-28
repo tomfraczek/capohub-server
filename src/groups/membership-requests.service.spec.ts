@@ -4,7 +4,7 @@
  * Covers:
  *  - join(): public group → auto-join; private group → JOIN_REQUEST;
  *    hidden+private → JOIN_REQUEST (hidden does NOT block join);
- *    ORGANIZATION target requires Root Group
+ *    GROUP target requires Root Group
  *  - cancelInvitation(): inviter can, ADMIN can, OWNER can, MEMBER cannot;
  *    already-cancelled → REQUEST_NOT_PENDING
  *  - createInvitation(): MEMBER blocked when memberInvitesAllowed=false;
@@ -182,7 +182,7 @@ describe('MembershipRequestsService', () => {
   // ─── join() ────────────────────────────────────────────────────────────
 
   describe('join()', () => {
-    it('auto-joins a public Group immediately and returns { joined: true }', async () => {
+    it('auto-joins a public Group immediately and returns { joined: true }, granting no Role for a GROUP target', async () => {
       const rootGroup = buildGroup({ id: 'root-1', isPublic: true });
       const { em, persist } = buildMockEm({
         groupResults: [rootGroup],
@@ -195,6 +195,28 @@ describe('MembershipRequestsService', () => {
       const result = await service.join(
         'root-1',
         MembershipRequestTarget.GROUP,
+        user,
+      );
+
+      expect(result).toEqual({ joined: true });
+      expect(persist).toHaveBeenCalled();
+      // GROUP target: only creates a Membership, never a Role (ADR-004).
+      expect(roleAssignmentsService.ensureMemberRole).not.toHaveBeenCalled();
+    });
+
+    it('auto-joins a public Section immediately and grants the MEMBER Role for a SECTION target', async () => {
+      const section = buildGroup({ id: 'root-1', isPublic: true });
+      const { em, persist } = buildMockEm({
+        groupResults: [section],
+        membershipResults: [null], // assertNotAlreadyJoined: no membership
+        // fulfillJoin reads existing membership to avoid duplicate
+      });
+      const { service, roleAssignmentsService } = buildService(em);
+      const user = buildUser();
+
+      const result = await service.join(
+        'root-1',
+        MembershipRequestTarget.SECTION,
         user,
       );
 
@@ -255,7 +277,7 @@ describe('MembershipRequestsService', () => {
       expect(persisted).toBeInstanceOf(MembershipRequest);
     });
 
-    it('rejects with NOT_A_ROOT_GROUP when targetType=ORGANIZATION targets a Child Group', async () => {
+    it('rejects with NOT_A_ROOT_GROUP when targetType=GROUP targets a Section', async () => {
       const childGroup = buildGroup({
         id: 'child-1',
         parentGroup: buildGroup({ id: 'root-1' }),
@@ -265,15 +287,11 @@ describe('MembershipRequestsService', () => {
       const { service } = buildService(em);
 
       await expect(
-        service.join(
-          'child-1',
-          MembershipRequestTarget.ORGANIZATION,
-          buildUser(),
-        ),
+        service.join('child-1', MembershipRequestTarget.GROUP, buildUser()),
       ).rejects.toMatchObject({ response: { code: 'NOT_A_ROOT_GROUP' } });
     });
 
-    it('rejects with ALREADY_MEMBER when user already has an active Membership (ORGANIZATION target)', async () => {
+    it('rejects with ALREADY_MEMBER when user already has an active Membership (GROUP target)', async () => {
       const rootGroup = buildGroup({ isPublic: true });
       const existingMembership = buildMembership({ rootGroup });
       const { em } = buildMockEm({
@@ -283,15 +301,11 @@ describe('MembershipRequestsService', () => {
       const { service } = buildService(em);
 
       await expect(
-        service.join(
-          'group-1',
-          MembershipRequestTarget.ORGANIZATION,
-          buildUser(),
-        ),
+        service.join('group-1', MembershipRequestTarget.GROUP, buildUser()),
       ).rejects.toMatchObject({ response: { code: 'ALREADY_MEMBER' } });
     });
 
-    it('rejects with ALREADY_GROUP_MEMBER when user already has MEMBER Role in the group', async () => {
+    it('rejects with ALREADY_GROUP_MEMBER when user already has MEMBER Role in the Section (SECTION target)', async () => {
       const rootGroup = buildGroup({ isPublic: true });
       const existingMembership = buildMembership({ rootGroup });
       const existingRole = new RoleAssignment();
@@ -305,7 +319,7 @@ describe('MembershipRequestsService', () => {
       const { service } = buildService(em);
 
       await expect(
-        service.join('group-1', MembershipRequestTarget.GROUP, buildUser()),
+        service.join('group-1', MembershipRequestTarget.SECTION, buildUser()),
       ).rejects.toMatchObject({ response: { code: 'ALREADY_GROUP_MEMBER' } });
     });
 
@@ -465,7 +479,7 @@ describe('MembershipRequestsService', () => {
         service.createInvitation(
           'group-1',
           {
-            targetType: MembershipRequestTarget.GROUP,
+            targetType: MembershipRequestTarget.SECTION,
             invitedUserId: 'user-2',
             invitedEmail: null,
           },
@@ -515,7 +529,7 @@ describe('MembershipRequestsService', () => {
         service.createInvitation(
           'group-1',
           {
-            targetType: MembershipRequestTarget.GROUP,
+            targetType: MembershipRequestTarget.SECTION,
             invitedUserId: 'invitee-1',
             invitedEmail: null,
           },

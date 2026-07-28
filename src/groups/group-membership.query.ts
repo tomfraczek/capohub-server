@@ -13,7 +13,7 @@ import { GroupMembership } from './entities/group-membership.entity';
 // checks a caller's Role/Permission directly against whatever Group is being
 // acted on (Root or Child - see ADR-013, Role/Permission is never inherited
 // through the hierarchy and is a separate concept from Membership), while
-// Membership-domain operations (join/leave/remove/section-assignment) only
+// Membership-domain operations (join/leave/remove/cohort-assignment) only
 // ever pass a Root Group id, since Membership itself is always Root
 // Group-scoped (see organization-entities.md#membership).
 //

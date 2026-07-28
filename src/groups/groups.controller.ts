@@ -31,6 +31,10 @@ import {
 import { UpdateGroupDto, updateGroupSchema } from './dto/update-group.schema';
 import { AllowGroupStatuses } from './decorators/allow-group-statuses.decorator';
 import { RequireGroupPermission } from './decorators/require-group-permission.decorator';
+import {
+  RequireGroupKind,
+  GroupKind,
+} from './decorators/require-group-kind.decorator';
 import { GroupStatus } from './enums/group-status.enum';
 import { GroupPermissionsGuard } from './guards/group-permissions.guard';
 import { GroupMembershipsService } from './group-memberships.service';
@@ -48,7 +52,13 @@ const ANY_STATUS = [
 // effect on handlers decorated with @RequireGroupPermission(...), which read
 // the group id from :id (see GroupPermissionsGuard). create() and list() act
 // on no specific group yet, so they carry no such decorator and pass
-// through unguarded (beyond the global ClerkAuthGuard).
+// through unguarded (beyond the global ClerkAuthGuard). Every other handler
+// additionally carries @RequireGroupKind(GroupKind.ROOT): a Group is always
+// root-level (see the Group/Section rename ADR), so a Section id must 404
+// here rather than being silently served - it is only ever reached via
+// /sections/:sectionId (SectionController). There is no GET :id/children
+// here anymore: listing/creating Sections directly under a Group is
+// SectionsController's job (/groups/:groupId/sections).
 @Controller('groups')
 @UseGuards(GroupPermissionsGuard)
 export class GroupsController {
@@ -73,6 +83,7 @@ export class GroupsController {
 
   @Get(':id')
   @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupKind(GroupKind.ROOT)
   @AllowGroupStatuses(...ANY_STATUS)
   getById(@Param('id', ParseUUIDPipe) id: string): Promise<GroupResponseDto> {
     return this.groupsService.getById(id);
@@ -80,6 +91,7 @@ export class GroupsController {
 
   @Patch(':id')
   @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupKind(GroupKind.ROOT)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(updateGroupSchema)) dto: UpdateGroupDto,
@@ -92,6 +104,7 @@ export class GroupsController {
   // ARCHIVED is blocked by the guard with 409 GROUP_ARCHIVED.
   @Post(':id/archive')
   @RequireGroupPermission(GroupPermission.GROUP_ARCHIVE)
+  @RequireGroupKind(GroupKind.ROOT)
   @AllowGroupStatuses(GroupStatus.ACTIVE, GroupStatus.READ_ONLY)
   archive(
     @Param('id', ParseUUIDPipe) id: string,
@@ -104,6 +117,7 @@ export class GroupsController {
   // transition, so this must not accept a READ_ONLY starting point.
   @Post(':id/unarchive')
   @RequireGroupPermission(GroupPermission.GROUP_UNARCHIVE)
+  @RequireGroupKind(GroupKind.ROOT)
   @AllowGroupStatuses(GroupStatus.ARCHIVED)
   unarchive(
     @Param('id', ParseUUIDPipe) id: string,
@@ -115,6 +129,7 @@ export class GroupsController {
   // Only valid from ACTIVE.
   @Post(':id/read-only')
   @RequireGroupPermission(GroupPermission.GROUP_SET_READ_ONLY)
+  @RequireGroupKind(GroupKind.ROOT)
   @AllowGroupStatuses(GroupStatus.ACTIVE)
   setReadOnly(
     @Param('id', ParseUUIDPipe) id: string,
@@ -126,6 +141,7 @@ export class GroupsController {
   // Only valid from READ_ONLY - ARCHIVED must go through /unarchive instead.
   @Post(':id/activate')
   @RequireGroupPermission(GroupPermission.GROUP_ACTIVATE)
+  @RequireGroupKind(GroupKind.ROOT)
   @AllowGroupStatuses(GroupStatus.READ_ONLY)
   activate(
     @Param('id', ParseUUIDPipe) id: string,
@@ -140,6 +156,7 @@ export class GroupsController {
   // GROUP_DELETED, same mechanism as every other terminal-status guard.
   @Post(':id/delete')
   @RequireGroupPermission(GroupPermission.GROUP_DELETE)
+  @RequireGroupKind(GroupKind.ROOT)
   @AllowGroupStatuses(
     GroupStatus.ACTIVE,
     GroupStatus.READ_ONLY,
@@ -152,17 +169,9 @@ export class GroupsController {
     return this.groupsService.delete(id, user);
   }
 
-  @Get(':id/children')
-  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
-  @AllowGroupStatuses(...ANY_STATUS)
-  listChildren(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<GroupResponseDto[]> {
-    return this.groupsService.listChildren(id);
-  }
-
   @Post(':id/transfer-ownership')
   @RequireGroupPermission(GroupPermission.GROUP_OWNERSHIP_TRANSFER)
+  @RequireGroupKind(GroupKind.ROOT)
   transferOwnership(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
@@ -180,6 +189,7 @@ export class GroupsController {
   @Post(':id/leave')
   @HttpCode(204)
   @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupKind(GroupKind.ROOT)
   leave(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
@@ -189,6 +199,7 @@ export class GroupsController {
 
   @Get(':id/members')
   @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupKind(GroupKind.ROOT)
   @AllowGroupStatuses(...ANY_STATUS)
   listMembers(
     @Param('id', ParseUUIDPipe) id: string,
@@ -199,6 +210,7 @@ export class GroupsController {
   @Post(':id/members')
   @HttpCode(201)
   @RequireGroupPermission(GroupPermission.MEMBERSHIP_ADD)
+  @RequireGroupKind(GroupKind.ROOT)
   addMember(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(addMemberSchema)) dto: AddMemberDto,
@@ -211,6 +223,7 @@ export class GroupsController {
   // accident, this endpoint is meant to serve archived memberships too.
   @Get(':id/members/:membershipId')
   @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupKind(GroupKind.ROOT)
   @AllowGroupStatuses(...ANY_STATUS)
   getMembership(
     @Param('id', ParseUUIDPipe) id: string,
@@ -222,12 +235,13 @@ export class GroupsController {
   // There is no PATCH .../members/:membershipId to "change the member's
   // role": a Membership may hold several Roles for the same Group at once
   // (see ADR-028), so there is no longer a single Role to target by this
-  // route. Granting, changing, or revoking a specific Role - for the Root
-  // Group or any Child Group - always goes through
-  // RoleAssignmentsController (/groups/:groupId/role-assignments/...).
+  // route. Granting, changing, or revoking a specific Role - for the Group
+  // or any Section - always goes through RoleAssignmentsController
+  // (/groups/:groupId/role-assignments/... or /sections/:sectionId/role-assignments/...).
   @Delete(':id/members/:membershipId')
   @HttpCode(204)
   @RequireGroupPermission(GroupPermission.MEMBERSHIP_REMOVE)
+  @RequireGroupKind(GroupKind.ROOT)
   removeMember(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
@@ -241,6 +255,7 @@ export class GroupsController {
   @Post(':id/members/:membershipId/ban')
   @HttpCode(204)
   @RequireGroupPermission(GroupPermission.MEMBERSHIP_BAN)
+  @RequireGroupKind(GroupKind.ROOT)
   banMember(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
@@ -262,6 +277,7 @@ export class GroupsController {
   @Post(':id/members/:membershipId/unban')
   @HttpCode(204)
   @RequireGroupPermission(GroupPermission.MEMBERSHIP_UNBAN)
+  @RequireGroupKind(GroupKind.ROOT)
   unbanMember(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
@@ -274,6 +290,7 @@ export class GroupsController {
   // window - see MembershipSuspension and GroupMembershipsService.
   @Post(':id/members/:membershipId/suspend')
   @RequireGroupPermission(GroupPermission.MEMBERSHIP_SUSPEND)
+  @RequireGroupKind(GroupKind.ROOT)
   suspendMember(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
@@ -294,6 +311,7 @@ export class GroupsController {
   // gates the *Group's* status, not the Membership's).
   @Post(':id/members/:membershipId/unsuspend')
   @RequireGroupPermission(GroupPermission.MEMBERSHIP_UNSUSPEND)
+  @RequireGroupKind(GroupKind.ROOT)
   unsuspendMember(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
@@ -302,33 +320,35 @@ export class GroupsController {
     return this.groupMembershipsService.unsuspendMember(id, membershipId, user);
   }
 
-  @Post(':id/members/:membershipId/sections/:sectionId')
+  @Post(':id/members/:membershipId/cohorts/:cohortId')
   @HttpCode(201)
-  @RequireGroupPermission(GroupPermission.MEMBERSHIP_SECTION_ASSIGN)
-  assignSection(
+  @RequireGroupPermission(GroupPermission.MEMBERSHIP_COHORT_ASSIGN)
+  @RequireGroupKind(GroupKind.ROOT)
+  assignCohort(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
-    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+    @Param('cohortId', ParseUUIDPipe) cohortId: string,
   ): Promise<void> {
-    return this.groupMembershipsService.assignSection(
+    return this.groupMembershipsService.assignCohort(
       id,
       membershipId,
-      sectionId,
+      cohortId,
     );
   }
 
-  @Delete(':id/members/:membershipId/sections/:sectionId')
+  @Delete(':id/members/:membershipId/cohorts/:cohortId')
   @HttpCode(204)
-  @RequireGroupPermission(GroupPermission.MEMBERSHIP_SECTION_ASSIGN)
-  unassignSection(
+  @RequireGroupPermission(GroupPermission.MEMBERSHIP_COHORT_ASSIGN)
+  @RequireGroupKind(GroupKind.ROOT)
+  unassignCohort(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
-    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+    @Param('cohortId', ParseUUIDPipe) cohortId: string,
   ): Promise<void> {
-    return this.groupMembershipsService.unassignSection(
+    return this.groupMembershipsService.unassignCohort(
       id,
       membershipId,
-      sectionId,
+      cohortId,
     );
   }
 }

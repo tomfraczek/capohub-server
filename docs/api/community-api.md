@@ -7,6 +7,15 @@ last_updated: 2026-07-24
 
 # Community API
 
+> **Terminology note (2026-07-28):** the backend underwent the Group/Section
+> domain rename (see
+> [ADR-031](../decisions/ADR-031-group-section-domain-rename.md)) after this
+> document was last generated - endpoints and field names below may be
+> stale (e.g. `/organizations/*` never existed; former Child Group routes
+> moved to `/sections/*`; `isOrganization` is now `isRootGroup`). This
+> document needs a full regeneration pass against the current backend -
+> treat the source code as authoritative until then.
+
 This document is the complete API reference for the **Community** module. It
 is generated directly from the current backend implementation
 (`src/groups/*`, `src/discovery/*`). Frontend engineers should be able to

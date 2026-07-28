@@ -48,7 +48,7 @@ export class EventAccessService {
   }
 
   /**
-   * The Root Group (Organization) that owns `event`'s Community - itself,
+   * The Root Group (Group) that owns `event`'s Community - itself,
    * when the Community already *is* the Root Group. Community membership
    * (GroupMembership) is always Root-Group-scoped (ADR-004), so this is
    * the id every membership-based check below resolves against, even when

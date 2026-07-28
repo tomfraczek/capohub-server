@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
+import { PaginatedResponse } from '../common/pagination/pagination.types';
+import { createPaginationMeta } from '../common/pagination/pagination.utils';
 import { Group } from '../groups/entities/group.entity';
 import { GroupMembership } from '../groups/entities/group-membership.entity';
 import { MembershipRequest } from '../groups/entities/membership-request.entity';
@@ -12,6 +14,8 @@ import {
   PublicGroupProfileDto,
   PublicUserProfileDto,
 } from './discovery-response.dto';
+import { CommunitySearchResultDto } from './dto/community-search-result.dto';
+import { DiscoverySearchQuery } from './dto/discovery-search-query.schema';
 
 @Injectable()
 export class DiscoveryService {
@@ -36,10 +40,10 @@ export class DiscoveryService {
         group.id,
         requestingUser,
       );
-      // Root Groups (parentGroup === null) represent Organizations (ADR-001).
-      // The client uses this to decide which targetType to send on join.
-      const resourceType =
-        group.parentGroup === null ? 'ORGANIZATION' : 'GROUP';
+      // A root Group (parentGroup === null) is presented as "Group"; any
+      // other depth is a "Section" (see the Group/Section rename ADR). The
+      // client uses this to decide which targetType to send on join.
+      const resourceType = group.parentGroup === null ? 'GROUP' : 'SECTION';
       return {
         resourceType,
         group: toPublicGroupProfile(group),
@@ -68,52 +72,89 @@ export class DiscoveryService {
   }
 
   /**
-   * Search visible Groups (isHidden = false, status = ACTIVE).
-   * Optional query param `q` filters by name (case-insensitive, partial).
+   * "Discover Community" search - the only way to browse Groups/Sections;
+   * there is deliberately no unfiltered "list everything" endpoint (see the
+   * Group/Section rename ADR). `discoverySearchQuerySchema` already
+   * guarantees at least one of name/country/city is present before this
+   * ever runs. Only visible rows (isHidden = false, status = ACTIVE) are
+   * ever returned - same visibility rule the old ad-hoc search used.
+   *
+   * Three calls build the "All / Groups / Sections" tabs on the client:
+   * omit `type` for "All", or pass `type=GROUP`/`type=SECTION` for the
+   * other two - a single call cannot honor independent pagination per
+   * sub-list, so this is the only shape consistent with this codebase's
+   * `PaginatedResponse<T>` contract (see audit-log.service.ts for the same
+   * pattern).
    */
-  async searchVisibleGroups(
-    query: string | undefined,
-    requestingUser: User,
-  ): Promise<DiscoveredResourceDto[]> {
+  async search(
+    query: DiscoverySearchQuery,
+  ): Promise<PaginatedResponse<CommunitySearchResultDto>> {
     const where: Record<string, unknown> = {
       isHidden: false,
       status: GroupStatus.ACTIVE,
     };
-    if (query && query.trim().length > 0) {
-      where.name = { $ilike: `%${query.trim()}%` };
+    if (query.name) {
+      where.name = { $ilike: `%${query.name}%` };
+    }
+    if (query.country) {
+      where.country = query.country;
+    }
+    if (query.city) {
+      where.city = { $ilike: `%${query.city}%` };
+    }
+    if (query.type === 'GROUP') {
+      where.parentGroup = null;
+    } else if (query.type === 'SECTION') {
+      where.parentGroup = { $ne: null };
     }
 
-    const groups = await this.em.find(Group, where, {
+    const [groups, totalItems] = await this.em.findAndCount(Group, where, {
       orderBy: { name: 'asc' },
-      limit: 50,
+      limit: query.limit,
+      offset: (query.page - 1) * query.limit,
     });
 
-    return Promise.all(
-      groups.map(async (group) => {
-        const isMember = await this.checkGroupMembership(group, requestingUser);
-        const hasPendingRequest = await this.checkPendingRequest(
-          group.id,
-          requestingUser,
-        );
-        // Search only returns isHidden=false groups, so all results are Child
-        // or Root Groups that opted into visibility.  Still set resourceType
-        // correctly so clients get consistent responses.
-        const resourceType =
-          group.parentGroup === null
-            ? ('ORGANIZATION' as const)
-            : ('GROUP' as const);
-        return {
-          resourceType,
-          group: toPublicGroupProfile(group),
-          user: null,
-          isMember,
-          hasPendingRequest,
-        };
+    const groupOnlyIds = groups
+      .filter((group) => group.parentGroup === null)
+      .map((group) => group.id);
+    const sectionsCountByGroupId = await this.countDirectSections(groupOnlyIds);
+
+    return {
+      data: groups.map((group) =>
+        toCommunitySearchResultDto(
+          group,
+          sectionsCountByGroupId.get(group.id) ?? null,
+        ),
+      ),
+      meta: createPaginationMeta({
+        page: query.page,
+        limit: query.limit,
+        totalItems,
       }),
-    );
+    };
   }
 
   // ─── Private helpers ─────────────────────────────────────────────────────
+
+  // Direct-children count only (not the whole subtree), scoped to just the
+  // current page's Group ids - never a per-row N+1, never a full-table
+  // aggregate. No existing precedent for a grouped-count query in this
+  // codebase, so this uses the connection directly rather than the ORM
+  // query builder.
+  private async countDirectSections(
+    groupIds: string[],
+  ): Promise<Map<string, number>> {
+    if (groupIds.length === 0) {
+      return new Map();
+    }
+    const rows = await this.em
+      .getConnection()
+      .execute<{ parent_group_id: string; count: string }[]>(
+        `select parent_group_id, count(*) as count from groups where parent_group_id in (?) group by parent_group_id`,
+        [groupIds],
+      );
+    return new Map(rows.map((row) => [row.parent_group_id, Number(row.count)]));
+  }
 
   private async checkGroupMembership(
     group: Group,
@@ -182,12 +223,13 @@ function toPublicGroupProfile(group: Group): PublicGroupProfileDto {
     isPublic: group.isPublic,
     isHidden: group.isHidden,
     publicCode: group.publicCode,
-    // Root Groups (parentGroup === null) represent Organizations (ADR-001).
     // The FK is null if and only if the DB row has no parent_group_id,
     // which is set during entity load without needing to populate the
-    // relation object.  A Reference proxy is non-null even before population,
-    // so this check correctly distinguishes Root from Child Groups.
-    isOrganization: group.parentGroup === null,
+    // relation object.  A Reference proxy is non-null even before
+    // population, so this check correctly distinguishes a root Group
+    // ("Group") from a non-root one ("Section" - see the Group/Section
+    // rename ADR).
+    isRootGroup: group.parentGroup === null,
   };
 }
 
@@ -197,5 +239,27 @@ function toPublicUserProfile(user: User): PublicUserProfileDto {
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
     publicCode: user.publicCode,
+  };
+}
+
+function toCommunitySearchResultDto(
+  group: Group,
+  sectionsCount: number | null,
+): CommunitySearchResultDto {
+  const isRootGroup = group.parentGroup === null;
+  return {
+    id: group.id,
+    type: isRootGroup ? 'GROUP' : 'SECTION',
+    name: group.name,
+    publicCode: group.publicCode,
+    logoUrl: group.logoUrl,
+    country: group.country,
+    city: group.city,
+    description: group.description,
+    isPublic: group.isPublic,
+    isHidden: group.isHidden,
+    status: group.status,
+    parentId: isRootGroup ? null : group.parentGroup!.id,
+    sectionsCount: isRootGroup ? (sectionsCount ?? 0) : null,
   };
 }

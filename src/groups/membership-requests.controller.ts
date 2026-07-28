@@ -36,20 +36,23 @@ const ANY_STATUS = [
 ] as const;
 
 /**
- * Handles the invitation and join-request flows nested under /groups/:groupId.
+ * Handles the invitation and join-request flows nested under a Group or a
+ * Section (dual-mounted: an invitation/join-request may target either
+ * level directly - see MembershipRequest.targetType and
+ * MembershipRequestsService.join).
  *
  * Authorization is performed at two levels:
  *  1. GroupPermissionsGuard reads the caller's Role Assignment(s) for the
- *     exact group identified by :groupId.
+ *     exact entity identified by :groupId/:sectionId.
  *  2. MembershipRequestsService enforces the business rules that the guard
  *     cannot express statically (e.g. MEMBER invites only when
  *     Group.memberInvitesAllowed = true).
  *
- * Organization-ownership does NOT grant any permissions in Child Groups - this
- * is enforced because the guard always resolves authorization against the
- * exact :groupId param, never a parent.
+ * Group-ownership does NOT grant any permissions in a Section - this is
+ * enforced because the guard always resolves authorization against the
+ * exact :groupId/:sectionId param, never a parent.
  */
-@Controller('groups/:groupId')
+@Controller(['groups/:groupId', 'sections/:sectionId'])
 @UseGuards(GroupPermissionsGuard)
 export class MembershipRequestsController {
   constructor(
@@ -60,13 +63,13 @@ export class MembershipRequestsController {
   // ─── JOIN ──────────────────────────────────────────────────────────────────
 
   /**
-   * POST /groups/:groupId/join
+   * POST /groups/:groupId/join or POST /sections/:sectionId/join
    *
-   * Body: { targetType: 'ORGANIZATION' | 'GROUP' }  — required, no default.
+   * Body: { targetType: 'GROUP' | 'SECTION' }  — required, no default.
    *
-   * Any authenticated user may call this.  If the group is public, returns
+   * Any authenticated user may call this.  If the target is public, returns
    * `{ joined: true }`.  If private (isPublic = false), creates a JOIN_REQUEST.
-   * If the group is isHidden = true that does not block this endpoint;
+   * If the target is isHidden = true that does not block this endpoint;
    * hidden means "not discoverable via search", not "unjoinable".
    *
    * targetType is mandatory.  Omitting it or supplying an invalid value
@@ -75,34 +78,43 @@ export class MembershipRequestsController {
   @Post('join')
   @HttpCode(200)
   async join(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
     @Body(new ZodValidationPipe(joinGroupSchema)) dto: JoinGroupDto,
     @CurrentUser() user: User,
   ): Promise<{ joined: true } | MembershipRequestResponseDto> {
-    return this.membershipRequestsService.join(groupId, dto.targetType, user);
+    return this.membershipRequestsService.join(
+      groupId ?? sectionId,
+      dto.targetType,
+      user,
+    );
   }
 
   /**
-   * DELETE /groups/:groupId/join-requests/mine
+   * DELETE /groups/:groupId/join-requests/mine (or /sections/:sectionId/...)
    *
-   * Withdraw the caller's own PENDING JOIN_REQUEST for this group.
+   * Withdraw the caller's own PENDING JOIN_REQUEST for this target.
    */
   @Delete('join-requests/mine')
   @HttpCode(204)
   async withdrawJoinRequest(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
     @CurrentUser() user: User,
   ): Promise<void> {
-    // We look up the pending request by groupId + user in the service
-    await this.membershipRequestsService.withdrawMyJoinRequest(groupId, user);
+    // We look up the pending request by target id + user in the service
+    await this.membershipRequestsService.withdrawMyJoinRequest(
+      groupId ?? sectionId,
+      user,
+    );
   }
 
   // ─── INVITATIONS (target admin view) ──────────────────────────────────────
 
   /**
-   * POST /groups/:groupId/invitations
+   * POST /groups/:groupId/invitations (or /sections/:sectionId/...)
    *
-   * Create an Invitation for this group.
+   * Create an Invitation for this target.
    * Guard: GROUP_INVITE (MEMBER + ADMIN + OWNER all have it; service enforces
    * memberInvitesAllowed for plain MEMBERs).
    */
@@ -110,17 +122,19 @@ export class MembershipRequestsController {
   @HttpCode(201)
   @RequireGroupPermission(GroupPermission.GROUP_INVITE)
   async createInvitation(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
     @Body(new ZodValidationPipe(createInvitationSchema))
     dto: CreateInvitationDto,
     @CurrentUser() user: User,
   ): Promise<MembershipRequestResponseDto> {
+    const targetId = groupId ?? sectionId;
     const { roles, membershipStatus } = await this.resolveCallerContext(
-      groupId,
+      targetId,
       user.id,
     );
     return this.membershipRequestsService.createInvitation(
-      groupId,
+      targetId,
       dto,
       user,
       roles,
@@ -129,24 +143,27 @@ export class MembershipRequestsController {
   }
 
   /**
-   * GET /groups/:groupId/invitations
+   * GET /groups/:groupId/invitations (or /sections/:sectionId/...)
    *
-   * List all PENDING invitations sent for this group (admin view).
+   * List all PENDING invitations sent for this target (admin view).
    */
   @Get('invitations')
   @RequireGroupPermission(GroupPermission.MEMBERSHIP_VIEW)
   @AllowGroupStatuses(...ANY_STATUS)
   async listInvitations(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
   ): Promise<MembershipRequestResponseDto[]> {
-    return this.membershipRequestsService.listInvitationsForGroup(groupId);
+    return this.membershipRequestsService.listInvitationsForGroup(
+      groupId ?? sectionId,
+    );
   }
 
   /**
-   * POST /groups/:groupId/invitations/:invitationId/cancel
+   * POST /groups/:groupId/invitations/:invitationId/cancel (or /sections/...)
    *
    * Cancel a PENDING Invitation.  The service enforces that only the
-   * original inviter (initiatedBy), ADMIN, or OWNER of the target Group may
+   * original inviter (initiatedBy), ADMIN, or OWNER of the target may
    * cancel.  A plain MEMBER cannot cancel an invitation that was created by
    * someone else.  The guard gate (MEMBERSHIP_VIEW) is intentionally the
    * lowest permission so that all roles reach the service; the finer check
@@ -157,11 +174,15 @@ export class MembershipRequestsController {
   @RequireGroupPermission(GroupPermission.MEMBERSHIP_VIEW)
   @AllowGroupStatuses(...ANY_STATUS)
   async cancelInvitation(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
     @Param('invitationId', ParseUUIDPipe) invitationId: string,
     @CurrentUser() user: User,
   ): Promise<void> {
-    const { roles } = await this.resolveCallerContext(groupId, user.id);
+    const { roles } = await this.resolveCallerContext(
+      groupId ?? sectionId,
+      user.id,
+    );
     await this.membershipRequestsService.cancelInvitation(
       invitationId,
       user,
@@ -170,7 +191,7 @@ export class MembershipRequestsController {
   }
 
   /**
-   * POST /groups/:groupId/invitations/:invitationId/resend
+   * POST /groups/:groupId/invitations/:invitationId/resend (or /sections/...)
    *
    * Cancel the existing PENDING Invitation and create a fresh one.
    */
@@ -178,12 +199,13 @@ export class MembershipRequestsController {
   @HttpCode(201)
   @RequireGroupPermission(GroupPermission.GROUP_INVITE)
   async resendInvitation(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
     @Param('invitationId', ParseUUIDPipe) invitationId: string,
     @CurrentUser() user: User,
   ): Promise<MembershipRequestResponseDto> {
     const { roles, membershipStatus } = await this.resolveCallerContext(
-      groupId,
+      groupId ?? sectionId,
       user.id,
     );
     return this.membershipRequestsService.resendInvitation(
@@ -197,21 +219,24 @@ export class MembershipRequestsController {
   // ─── JOIN REQUESTS (admin view) ────────────────────────────────────────────
 
   /**
-   * GET /groups/:groupId/join-requests
+   * GET /groups/:groupId/join-requests (or /sections/:sectionId/...)
    *
-   * List all PENDING join requests for this group.
+   * List all PENDING join requests for this target.
    */
   @Get('join-requests')
   @RequireGroupPermission(GroupPermission.GROUP_JOIN_REQUEST_REVIEW)
   @AllowGroupStatuses(...ANY_STATUS)
   async listJoinRequests(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
   ): Promise<MembershipRequestResponseDto[]> {
-    return this.membershipRequestsService.listJoinRequestsForGroup(groupId);
+    return this.membershipRequestsService.listJoinRequestsForGroup(
+      groupId ?? sectionId,
+    );
   }
 
   /**
-   * POST /groups/:groupId/join-requests/:requestId/approve
+   * POST /groups/:groupId/join-requests/:requestId/approve (or /sections/...)
    */
   @Post('join-requests/:requestId/approve')
   @HttpCode(204)
@@ -224,7 +249,7 @@ export class MembershipRequestsController {
   }
 
   /**
-   * POST /groups/:groupId/join-requests/:requestId/reject
+   * POST /groups/:groupId/join-requests/:requestId/reject (or /sections/...)
    */
   @Post('join-requests/:requestId/reject')
   @HttpCode(204)
@@ -239,16 +264,16 @@ export class MembershipRequestsController {
   // ─── Private helpers ────────────────────────────────────────────────────────
 
   /**
-   * Reads the caller's current Role Assignments for groupId so the service
+   * Reads the caller's current Role Assignments for targetId so the service
    * can apply the memberInvitesAllowed business rule without a second DB
    * round-trip for the guard's result.
    */
   private async resolveCallerContext(
-    groupId: string,
+    targetId: string,
     userId: string,
   ): Promise<{ roles: GroupRole[]; membershipStatus: GroupMembershipStatus }> {
     const authorization =
-      await this.roleAssignmentsService.resolveAuthorization(groupId, userId);
+      await this.roleAssignmentsService.resolveAuthorization(targetId, userId);
     if (!authorization) {
       return { roles: [], membershipStatus: GroupMembershipStatus.ARCHIVED };
     }

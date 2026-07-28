@@ -483,7 +483,7 @@ describe('UserService', () => {
       ]);
     });
 
-    it('allows a user belonging to several Organizations to delete the account, checking ownership once per Membership', async () => {
+    it('allows a user belonging to several Groups to delete the account, checking ownership once per Membership', async () => {
       const deleteUser = jest.fn();
       const { calls, nativeDelete } = buildTrackedEm(deleteUser);
       const memberships = [

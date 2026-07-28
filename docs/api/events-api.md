@@ -7,6 +7,14 @@ last_updated: 2026-07-27
 
 # Events API
 
+> **Terminology note (2026-07-28):** the backend underwent the Group/Section
+> domain rename (see
+> [ADR-031](../decisions/ADR-031-group-section-domain-rename.md)) after this
+> document was last generated - "Organization" below means **Group**, and a
+> "Group" (Child Group) means **Section**; some routes may have moved
+> accordingly. Treat the source code as authoritative until this document is
+> regenerated.
+
 ## What is an Event?
 
 An Event is a universal, organizer-defined happening owned by exactly one

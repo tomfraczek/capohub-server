@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
 import { CreateGroupInput } from './dto/create-group.schema';
@@ -11,14 +11,12 @@ import { GroupStatus } from './enums/group-status.enum';
 import { AuditLogService } from './audit-log.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupsService } from './groups.service';
-import { GroupPermissionService } from './permissions/group-permission.service';
 import { RoleAssignmentsService } from './role-assignments.service';
 
 function buildCreateInput(
   overrides: Partial<CreateGroupInput> = {},
 ): CreateGroupInput {
   return {
-    parentGroupId: null,
     name: 'Capoeira Angola SP',
     description: null,
     logoUrl: null,
@@ -34,6 +32,8 @@ function buildCreateInput(
     memberInvitesAllowed: false,
     timezone: 'Europe/Warsaw',
     currencyCode: 'PLN',
+    country: null,
+    city: null,
     ...overrides,
   };
 }
@@ -152,7 +152,6 @@ function buildMockEm(routing: MockRouting = {}) {
 }
 
 function buildService(em: EntityManager) {
-  const groupPermissionService = new GroupPermissionService();
   const groupHierarchyService = {
     getRootGroup: () => Promise.resolve(buildGroup()),
   } as unknown as GroupHierarchyService;
@@ -166,20 +165,14 @@ function buildService(em: EntityManager) {
   );
 
   return {
-    service: new GroupsService(
-      em,
-      groupPermissionService,
-      roleAssignmentsService,
-      groupHierarchyService,
-      auditLogService,
-    ),
+    service: new GroupsService(em, roleAssignmentsService, auditLogService),
     auditLogService,
   };
 }
 
 describe('GroupsService', () => {
   describe('create', () => {
-    it('creates a Root Group (no parentGroupId), a Membership, and MEMBER + OWNER Role Assignments', async () => {
+    it('creates a Root Group, a Membership, and MEMBER + OWNER Role Assignments', async () => {
       const { em, persist } = buildMockEm({
         // ensureMemberRole's existence check - no MEMBER row yet.
         roleAssignmentResults: [null],
@@ -211,125 +204,6 @@ describe('GroupsService', () => {
       expect(persistedOwnerRole.role).toBe(GroupRole.OWNER);
       expect(persistedOwnerRole.membership).toBe(persistedMembership);
       expect(persistedOwnerRole.group).toBe(persistedGroup);
-    });
-
-    it('creates a Child Group when the caller has an OWNER Role Assignment (GROUP_EDIT) in the parent, reusing the existing Membership', async () => {
-      const parentGroup = buildGroup({ id: 'parent-1' });
-      const membership = buildMembership({ rootGroup: parentGroup });
-      const roleAssignment = buildRoleAssignment({
-        membership,
-        group: parentGroup,
-        role: GroupRole.OWNER,
-      });
-      const { em, persist } = buildMockEm({
-        groupResults: [parentGroup],
-        membershipResults: [membership],
-        roleAssignmentFindResults: [roleAssignment],
-        // ensureMemberRole's existence check for the new Child Group.
-        roleAssignmentResults: [null],
-      });
-      const { service } = buildService(em);
-      const user = buildUser();
-
-      await service.create(
-        user,
-        buildCreateInput({ parentGroupId: 'parent-1' }),
-      );
-
-      const persistedGroup = persist.mock.calls[0][0] as Group;
-      const persistedMemberRole = persist.mock.calls[1][0] as RoleAssignment;
-      const persistedOwnerRole = persist.mock.calls[2][0] as RoleAssignment;
-
-      expect(persistedGroup.parentGroup).toBe(parentGroup);
-      // No second Membership is created for a Child Group - the caller's
-      // existing Membership in the parent's Root Group is reused.
-      expect(persistedMemberRole.membership).toBe(membership);
-      expect(persistedMemberRole.role).toBe(GroupRole.MEMBER);
-      expect(persistedOwnerRole.membership).toBe(membership);
-      expect(persistedOwnerRole.role).toBe(GroupRole.OWNER);
-    });
-
-    it('rejects creating a Child Group when the caller has no active membership in the parent', async () => {
-      const parentGroup = buildGroup({ id: 'parent-1' });
-      const { em } = buildMockEm({
-        groupResults: [parentGroup],
-        membershipResults: [null],
-      });
-      const { service } = buildService(em);
-
-      await expect(
-        service.create(
-          buildUser(),
-          buildCreateInput({ parentGroupId: 'parent-1' }),
-        ),
-      ).rejects.toMatchObject({ response: { code: 'GROUP_PARENT_NOT_FOUND' } });
-    });
-
-    it('rejects creating a Child Group when the caller lacks GROUP_EDIT in the parent', async () => {
-      const parentGroup = buildGroup({ id: 'parent-1' });
-      const membership = buildMembership({ rootGroup: parentGroup });
-      const roleAssignment = buildRoleAssignment({
-        membership,
-        group: parentGroup,
-        role: GroupRole.MEMBER,
-      });
-      const { em } = buildMockEm({
-        groupResults: [parentGroup],
-        membershipResults: [membership],
-        roleAssignmentFindResults: [roleAssignment],
-      });
-      const { service } = buildService(em);
-
-      const promise = service.create(
-        buildUser(),
-        buildCreateInput({ parentGroupId: 'parent-1' }),
-      );
-
-      await expect(promise).rejects.toBeInstanceOf(ForbiddenException);
-      await expect(promise).rejects.toMatchObject({
-        response: { code: 'INSUFFICIENT_GROUP_PERMISSIONS' },
-      });
-    });
-
-    it('rejects creating a Child Group under an archived parent', async () => {
-      const parentGroup = buildGroup({
-        id: 'parent-1',
-        status: GroupStatus.ARCHIVED,
-      });
-      const membership = buildMembership({ rootGroup: parentGroup });
-      const roleAssignment = buildRoleAssignment({
-        membership,
-        group: parentGroup,
-        role: GroupRole.OWNER,
-      });
-      const { em } = buildMockEm({
-        groupResults: [parentGroup],
-        membershipResults: [membership],
-        roleAssignmentFindResults: [roleAssignment],
-      });
-      const { service } = buildService(em);
-
-      await expect(
-        service.create(
-          buildUser(),
-          buildCreateInput({ parentGroupId: 'parent-1' }),
-        ),
-      ).rejects.toMatchObject({ response: { code: 'GROUP_ARCHIVED' } });
-    });
-  });
-
-  describe('listChildren', () => {
-    it('returns the direct children of a group', async () => {
-      const children = [
-        buildGroup({ id: 'child-1' }),
-        buildGroup({ id: 'child-2' }),
-      ];
-      const { em } = buildMockEm({ children });
-      const { service } = buildService(em);
-
-      const result = await service.listChildren('group-1');
-
-      expect(result.map((child) => child.id)).toEqual(['child-1', 'child-2']);
     });
   });
 

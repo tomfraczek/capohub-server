@@ -17,6 +17,7 @@ import { HttpErrorResponse } from '../src/common/types/http-error-response.type'
 import { User } from '../src/users/entities/user.entity';
 import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
+import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { RoleAssignmentResponseDto } from '../src/groups/dto/role-assignment-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
@@ -211,6 +212,22 @@ describe('Users (e2e)', () => {
     return created;
   }
 
+  async function createSection(
+    token: string,
+    parentId: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<SectionResponseDto> {
+    const created = await bodyOf<SectionResponseDto>(
+      request(app.getHttpServer())
+        .post(`/api/v1/groups/${parentId}/sections`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(groupPayload({ country: 'PL', ...overrides }))
+        .expect(201),
+    );
+    createdGroupIds.push(created.id);
+    return created;
+  }
+
   async function addMember(
     ownerToken: string,
     rootGroupId: string,
@@ -244,9 +261,8 @@ describe('Users (e2e)', () => {
       const root = await createGroup(ADMIN_TOKEN, {
         name: 'Delete Account Root',
       });
-      const child = await createGroup(ADMIN_TOKEN, {
+      const child = await createSection(ADMIN_TOKEN, root.id, {
         name: 'Delete Account Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         ADMIN_TOKEN,
@@ -346,9 +362,8 @@ describe('Users (e2e)', () => {
       const root = await createGroup(ADMIN_TOKEN, {
         name: 'Delete Account Owner Root',
       });
-      const child = await createGroup(ADMIN_TOKEN, {
+      const child = await createSection(ADMIN_TOKEN, root.id, {
         name: 'Delete Account Owner Child',
-        parentGroupId: root.id,
       });
       await addMember(
         ADMIN_TOKEN,
@@ -359,7 +374,7 @@ describe('Users (e2e)', () => {
 
       // Hand the Child Group's ownership to CHILD_OWNER_TOKEN.
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${child.id}/transfer-ownership`)
+        .post(`/api/v1/sections/${child.id}/transfer-ownership`)
         .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
         .send({ newOwnerUserId: localUserIdByToken.get(CHILD_OWNER_TOKEN) })
         .expect(201);
@@ -384,7 +399,7 @@ describe('Users (e2e)', () => {
 
       // Transfer the Child Group's ownership away, back to ADMIN_TOKEN.
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${child.id}/transfer-ownership`)
+        .post(`/api/v1/sections/${child.id}/transfer-ownership`)
         .set('Authorization', `Bearer ${CHILD_OWNER_TOKEN}`)
         .send({ newOwnerUserId: localUserIdByToken.get(ADMIN_TOKEN) })
         .expect(201);

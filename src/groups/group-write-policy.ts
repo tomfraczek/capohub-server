@@ -35,7 +35,7 @@ const STATUS_CONFLICTS: Readonly<
  * for every @RequireGroupPermission(...) handler, using the statuses listed
  * in that handler's @AllowGroupStatuses(...) (default: ACTIVE only - see
  * decorators/allow-group-statuses.decorator.ts). Future group-scoped modules
- * (sections, trainings, announcements, events, dues) can import and call
+ * (cohorts, trainings, announcements, events, dues) can import and call
  * this same function once they've loaded their own parent Group, so "is this
  * group in a status that allows this action" is answered in exactly one
  * place project-wide.
@@ -60,7 +60,7 @@ export function assertGroupStatusAllowed(
  * Convenience wrapper for the common case: an ordinary write action that
  * only ever makes sense while the group is fully ACTIVE (edit, add/remove/
  * re-role a member, leave, transfer ownership, and - for future modules -
- * anything section/training/announcement/event/due related). Lifecycle
+ * anything cohort/training/announcement/event/due related). Lifecycle
  * actions that legitimately run from more than one status (archive,
  * unarchive, read-only, activate) use assertGroupStatusAllowed directly with
  * their own explicit allow-list instead - see GroupPermissionsGuard.

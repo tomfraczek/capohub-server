@@ -4,6 +4,12 @@
 
 Accepted
 
+> **Terminology note (2026-07-28):** the entity this ADR calls "Section" was
+> renamed to **Cohort** by the Group/Section domain rename (see ADR-031),
+> which reused the name "Section" for a different, previously-unnamed
+> concept (a nested Group, formerly called a "Child Group"). Everything
+> below describes the Cohort entity under its old name.
+
 ## Context
 
 Sections are an organizational convenience (e.g. Kids, Adults, Monday,

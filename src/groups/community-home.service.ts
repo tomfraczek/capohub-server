@@ -34,7 +34,7 @@ const PENDING_SECTION_LIMIT = 20;
 // per-community lists).
 type CapabilityListKey = Exclude<
   keyof CommunityHomeCapabilitiesDto,
-  'canCreateOrganization' | 'canManageAnyCommunity'
+  'canCreateGroup' | 'canManageAnyCommunity'
 >;
 
 interface ParticipationResult {
@@ -140,37 +140,37 @@ export class CommunityHomeService {
           pendingInvitations.total + pendingJoinRequests.total,
       },
       capabilities: {
-        // Creating a Root Group requires no permission at all - any
+        // Creating a Group requires no permission at all - any
         // authenticated user may (see GroupsService.create).
-        canCreateOrganization: true,
+        canCreateGroup: true,
         ...capabilityLists,
         canManageAnyCommunity:
-          capabilityLists.canCreateGroupInCommunityIds.length > 0,
+          capabilityLists.canCreateSectionInCommunityIds.length > 0,
       },
     };
   }
 
   /**
-   * Resolves every community (Organization or Group, at any hierarchy
-   * depth) the caller currently participates in, batched into a fixed
-   * number of queries regardless of how many communities that turns out to
-   * be, and every capability-flag id-list alongside it in the same pass:
-   *   1. the caller's ACTIVE or READ_ONLY (suspended) Memberships (one Root
-   *      Group each) - READ_ONLY is included so a suspended member's
-   *      communities remain visible (organization-entities.md#membership:
-   *      "remains visible... but loses operational permissions"), exactly
-   *      like a READ_ONLY Group already does,
+   * Resolves every community (Group or Section, at any hierarchy depth) the
+   * caller currently participates in, batched into a fixed number of
+   * queries regardless of how many communities that turns out to be, and
+   * every capability-flag id-list alongside it in the same pass:
+   *   1. the caller's ACTIVE or READ_ONLY (suspended) Memberships (one Group
+   *      each) - READ_ONLY is included so a suspended member's communities
+   *      remain visible (organization-entities.md#membership: "remains
+   *      visible... but loses operational permissions"), exactly like a
+   *      READ_ONLY Group already does,
    *   2. every Role Assignment any of those Memberships holds, for any
-   *      Group (root or descendant),
+   *      Group or Section (root or descendant),
    *   3. the Group rows themselves, excluding only DELETED ones - ARCHIVED
    *      Groups ARE fetched here (unlike before) because
    *      canRestoreCommunityIds/canDeleteCommunityIds need to see them, even
    *      though an ARCHIVED Group is still excluded from `communities`
    *      (myCommunities) itself, same as before.
-   * An Organization always appears even with zero Role Assignments there -
-   * an ACTIVE Membership with no Role anywhere is a normal, valid state
-   * (see organization-entities.md#membership) and Membership itself is
-   * what "belonging to this Organization" means.
+   * A Group always appears even with zero Role Assignments there - an
+   * ACTIVE Membership with no Role anywhere is a normal, valid state (see
+   * organization-entities.md#membership) and Membership itself is what
+   * "belonging to this Group" means.
    */
   private async buildParticipation(
     userId: string,
@@ -225,7 +225,7 @@ export class CommunityHomeService {
 
     const communities: CommunityHomeCommunityDto[] = [];
     const capabilityLists: Record<CapabilityListKey, string[]> = {
-      canCreateGroupInCommunityIds: [],
+      canCreateSectionInCommunityIds: [],
       canReviewJoinRequestsInCommunityIds: [],
       canViewMembersInCommunityIds: [],
       canManageMembersInCommunityIds: [],
@@ -271,7 +271,7 @@ export class CommunityHomeService {
         // thereof, defaulting to ACTIVE-only) on the corresponding endpoint -
         // see groups.controller.ts / audit-log.controller.ts.
         if (has(GroupPermission.GROUP_EDIT)) {
-          capabilityLists.canCreateGroupInCommunityIds.push(groupId);
+          capabilityLists.canCreateSectionInCommunityIds.push(groupId);
         }
         if (
           group.status === GroupStatus.ACTIVE &&

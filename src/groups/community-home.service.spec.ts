@@ -2,7 +2,7 @@
  * Unit tests for CommunityHomeService.
  *
  * Covers:
- *  - aggregating a user's active Organizations and every Child Group they
+ *  - aggregating a user's active Groups and every Child Group they
  *    hold a Role in (including several Roles for the same Group),
  *  - excluding ARCHIVED communities, a user with no communities at all,
  *  - filtering pending invitations to the current user,
@@ -160,11 +160,11 @@ describe('CommunityHomeService', () => {
         pendingJoinRequestsCount: 0,
         actionableItemsCount: 0,
       });
-      expect(result.capabilities.canCreateOrganization).toBe(true);
-      expect(result.capabilities.canCreateGroupInCommunityIds).toEqual([]);
+      expect(result.capabilities.canCreateGroup).toBe(true);
+      expect(result.capabilities.canCreateSectionInCommunityIds).toEqual([]);
     });
 
-    it('includes the Organization even when the Membership holds zero Role Assignments there', async () => {
+    it('includes the Group even when the Membership holds zero Role Assignments there', async () => {
       const root = buildGroup({ id: 'root-1', name: 'Cordão de Ouro' });
       const membership = buildMembership({ id: 'm-1', rootGroup: root });
       const { em } = buildMockEm([membership], { groupFindResults: [root] });
@@ -181,7 +181,7 @@ describe('CommunityHomeService', () => {
       });
     });
 
-    it('includes a Child Group the Membership holds Roles in, alongside its Organization, with multiple Roles preserved as an array', async () => {
+    it('includes a Child Group the Membership holds Roles in, alongside its Group, with multiple Roles preserved as an array', async () => {
       const root = buildGroup({ id: 'root-1', name: 'Cordão de Ouro' });
       const child = buildGroup({
         id: 'child-1',
@@ -207,7 +207,7 @@ describe('CommunityHomeService', () => {
       expect(result.myCommunities).toHaveLength(2);
       const childEntry = result.myCommunities.find((c) => c.id === 'child-1');
       expect(childEntry).toMatchObject({
-        parentGroupId: 'root-1',
+        parentId: 'root-1',
         rootGroupId: 'root-1',
         isRootGroup: false,
         myRoles: [GroupRole.MEMBER, GroupRole.INSTRUCTOR],
@@ -233,7 +233,7 @@ describe('CommunityHomeService', () => {
   });
 
   describe('getHome() - capabilities', () => {
-    it('grants canCreateGroupInCommunityIds only where the union of held Roles includes GROUP_EDIT (Admin/Owner)', async () => {
+    it('grants canCreateSectionInCommunityIds only where the union of held Roles includes GROUP_EDIT (Admin/Owner)', async () => {
       const root = buildGroup({ id: 'root-1' });
       const membership = buildMembership({ id: 'm-1', rootGroup: root });
       const { em } = buildMockEm([membership], { groupFindResults: [root] });
@@ -245,13 +245,13 @@ describe('CommunityHomeService', () => {
 
       const result = await service.getHome(buildUser());
 
-      expect(result.capabilities.canCreateGroupInCommunityIds).toEqual([
+      expect(result.capabilities.canCreateSectionInCommunityIds).toEqual([
         'root-1',
       ]);
       expect(result.capabilities.canManageAnyCommunity).toBe(true);
     });
 
-    it('does not grant canCreateGroupInCommunityIds for a plain MEMBER', async () => {
+    it('does not grant canCreateSectionInCommunityIds for a plain MEMBER', async () => {
       const root = buildGroup({ id: 'root-1' });
       const membership = buildMembership({ id: 'm-1', rootGroup: root });
       const { em } = buildMockEm([membership], { groupFindResults: [root] });
@@ -267,7 +267,7 @@ describe('CommunityHomeService', () => {
 
       const result = await service.getHome(buildUser());
 
-      expect(result.capabilities.canCreateGroupInCommunityIds).toEqual([]);
+      expect(result.capabilities.canCreateSectionInCommunityIds).toEqual([]);
       expect(result.capabilities.canManageAnyCommunity).toBe(false);
     });
 
@@ -289,7 +289,7 @@ describe('CommunityHomeService', () => {
       // GROUP_EDIT is still allowed while READ_ONLY-parented child creation
       // is concerned - only ARCHIVED parents are rejected, see
       // GroupsService.loadUsableParentForCreation.
-      expect(result.capabilities.canCreateGroupInCommunityIds).toEqual([
+      expect(result.capabilities.canCreateSectionInCommunityIds).toEqual([
         'root-1',
       ]);
     });

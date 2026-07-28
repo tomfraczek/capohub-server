@@ -6,17 +6,17 @@ import { Group } from './group.entity';
 export const GROUP_BANS_ACTIVE_UNIQUE_INDEX =
   'group_bans_root_group_id_user_id_active_unique';
 
-// A durable record that a User is banned from an Organization (Root Group),
+// A durable record that a User is banned from a Group (Root Group),
 // independent of any GroupMembership row - a ban must still block rejoining
 // even though the Membership it ended is, like every Membership, never
 // physically deleted and stays ARCHIVED forever (ADR-007). Scoped to the
 // Root Group only, mirroring Membership's own scope (ADR-004: Membership
-// only exists at the Organization level) - there is no per-Child-Group ban,
+// only exists at the Group level) - there is no per-Child-Group ban,
 // since removing someone from a Child Group specifically is already fully
 // covered by revoking their Role Assignment there
 // (RoleAssignmentsService.revokeRole); what a ban adds beyond that is
 // exclusively the "block future rejoining" guarantee, which only has
-// meaning at the level where joining itself is defined (the Organization).
+// meaning at the level where joining itself is defined (the Group).
 //
 // `liftedAt === null` means the ban is currently active. Unbanning sets
 // `liftedAt`/`liftedBy` rather than deleting the row, so a lifted ban still

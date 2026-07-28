@@ -141,7 +141,12 @@ describe('CommunityNotificationSettingsService', () => {
       });
     });
 
-    it('resolves settings against the Root Group even when a Child Group id is passed', async () => {
+    it('rejects with GROUP_NOT_FOUND when a Section id is passed - settings are per root Group only, never silently resolved', async () => {
+      // Section (a non-root Group) - resolving its Root Group id ('root-1')
+      // differs from the requested id ('child-1'), which is exactly what
+      // assertMemberOrFail rejects (see its own comment: this used to
+      // silently resolve to the Root Group's settings before it was made
+      // explicit).
       const rootGroup = buildGroup({ id: 'root-1' });
       const { em, findOne } = buildMockEm({ membership: buildMembership() });
       const { groupHierarchyService, getRootGroup } =
@@ -151,12 +156,14 @@ describe('CommunityNotificationSettingsService', () => {
         groupHierarchyService,
       );
 
-      await service.get('child-1', buildUser());
+      await expect(service.get('child-1', buildUser())).rejects.toMatchObject({
+        response: { code: 'GROUP_NOT_FOUND' },
+      });
 
       expect(getRootGroup).toHaveBeenCalledWith('child-1', em);
-      expect(findOne).toHaveBeenCalledWith(
+      expect(findOne).not.toHaveBeenCalledWith(
         CommunityNotificationSettings,
-        expect.objectContaining({ community: 'root-1' }),
+        expect.anything(),
       );
     });
   });

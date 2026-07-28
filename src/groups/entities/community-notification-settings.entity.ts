@@ -4,12 +4,12 @@ import { User } from '../../users/entities/user.entity';
 import { Group } from './group.entity';
 
 // One row per (user, community) pair - the user's own notification
-// preferences for that specific Organization (Root Group). Scoped to the
+// preferences for that specific Group (Root Group). Scoped to the
 // Root Group, not any Child Group, mirroring Membership's own scope
 // (ADR-004) - every event listed below (join requests, invitations, role
 // changes, ownership transfer, lifecycle changes) is either inherently
-// Organization-wide or, for a Child-Group-scoped event like ADD_ROLE, still
-// filed under the Organization's Audit Log the same way (see
+// Group-wide or, for a Child-Group-scoped event like ADD_ROLE, still
+// filed under the Group's Audit Log the same way (see
 // AuditLogEntry.community) - there is no finer-grained per-Child-Group
 // notification preference.
 //

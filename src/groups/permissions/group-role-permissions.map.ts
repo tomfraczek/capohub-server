@@ -23,6 +23,7 @@ const MEMBER_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.GROUP_VIEW,
   GroupPermission.MEMBERSHIP_VIEW,
   GroupPermission.ACADEMY_VIEW,
+  GroupPermission.COHORT_VIEW,
   GroupPermission.SECTION_VIEW,
   // GROUP_INVITE is intentionally included here even though service-layer
   // logic additionally gates it on Group.memberInvitesAllowed.  This allows
@@ -51,7 +52,7 @@ const ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.MEMBERSHIP_ADD,
   GroupPermission.MEMBERSHIP_ROLE_CHANGE,
   GroupPermission.MEMBERSHIP_REMOVE,
-  GroupPermission.MEMBERSHIP_SECTION_ASSIGN,
+  GroupPermission.MEMBERSHIP_COHORT_ASSIGN,
   GroupPermission.MEMBERSHIP_INVITE,
   GroupPermission.MEMBERSHIP_REQUEST_REVIEW,
   GroupPermission.GROUP_JOIN_REQUEST_REVIEW,
@@ -66,9 +67,10 @@ const ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.ACADEMY_CREATE,
   GroupPermission.ACADEMY_EDIT,
   GroupPermission.ACADEMY_ARCHIVE,
+  GroupPermission.COHORT_CREATE,
+  GroupPermission.COHORT_EDIT,
+  GroupPermission.COHORT_ARCHIVE,
   GroupPermission.SECTION_CREATE,
-  GroupPermission.SECTION_EDIT,
-  GroupPermission.SECTION_ARCHIVE,
   // Creating an Event, and the oversight/override tier over every Event in
   // this community - see the Event enum values' own comments.
   GroupPermission.EVENT_CREATE,
@@ -114,6 +116,7 @@ export const READ_ONLY_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> = new Set(
     GroupPermission.GROUP_VIEW,
     GroupPermission.MEMBERSHIP_VIEW,
     GroupPermission.ACADEMY_VIEW,
+    GroupPermission.COHORT_VIEW,
     GroupPermission.SECTION_VIEW,
     // Reading history poses no operational risk and matches "remains
     // visible" for READ_ONLY (see organization-entities.md#membership) -

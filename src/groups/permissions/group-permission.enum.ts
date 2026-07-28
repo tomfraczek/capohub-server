@@ -7,7 +7,7 @@
 // split).
 //
 // Deliberately one enum per existing domain only (Group, Membership,
-// Academy, Section) - no permissions for domains that don't exist yet
+// Academy, Cohort) - no permissions for domains that don't exist yet
 // (Graduation, Invitations, Visibility Scope, ...). Role Assignment
 // management itself has no dedicated permission - it is authorized against
 // GROUP_EDIT/GROUP_VIEW for the Group the Role Assignment targets, the same
@@ -51,7 +51,7 @@ export enum GroupPermission {
   MEMBERSHIP_ADD = 'MEMBERSHIP_ADD',
   MEMBERSHIP_ROLE_CHANGE = 'MEMBERSHIP_ROLE_CHANGE',
   MEMBERSHIP_REMOVE = 'MEMBERSHIP_REMOVE',
-  MEMBERSHIP_SECTION_ASSIGN = 'MEMBERSHIP_SECTION_ASSIGN',
+  MEMBERSHIP_COHORT_ASSIGN = 'MEMBERSHIP_COHORT_ASSIGN',
   // Ends the Membership (like MEMBERSHIP_REMOVE) and additionally blocks the
   // user from rejoining or being re-invited until unbanned - see GroupBan.
   MEMBERSHIP_BAN = 'MEMBERSHIP_BAN',
@@ -63,9 +63,9 @@ export enum GroupPermission {
   // the Membership the way Ban/Remove do.
   MEMBERSHIP_SUSPEND = 'MEMBERSHIP_SUSPEND',
   MEMBERSHIP_UNSUSPEND = 'MEMBERSHIP_UNSUSPEND',
-  // Organization-level invitation and join-request management.
+  // Group-level invitation and join-request management.
   // These are checked on the Root Group and act on Membership (not on a
-  // specific Group's MEMBER role).  OWNER Organization does NOT receive
+  // specific Group's MEMBER role).  OWNER Group does NOT receive
   // these in any Child Group - authorization is always per-group and
   // never inherited (see ADR-013, ADR-024).
   MEMBERSHIP_INVITE = 'MEMBERSHIP_INVITE',
@@ -85,11 +85,26 @@ export enum GroupPermission {
   ACADEMY_EDIT = 'ACADEMY_EDIT',
   ACADEMY_ARCHIVE = 'ACADEMY_ARCHIVE',
 
-  // Section
+  // Cohort
+  COHORT_VIEW = 'COHORT_VIEW',
+  COHORT_CREATE = 'COHORT_CREATE',
+  COHORT_EDIT = 'COHORT_EDIT',
+  COHORT_ARCHIVE = 'COHORT_ARCHIVE',
+
+  // Section (a non-root Group, i.e. a child in the hierarchy - see the
+  // Group/Section rename ADR). Unlike Academy/Cohort, a Section is not a
+  // plain property of its owning Group - it is itself a Group row with its
+  // own lifecycle and ownership. So only the "sub-resource of a parent"
+  // half of the Academy/Cohort pattern applies here: SECTION_CREATE/VIEW
+  // gate creating/listing Sections directly under a Group or another
+  // Section (checked against the *parent*). Once a Section is addressed
+  // directly (/sections/:sectionId/...), it is checked with the same
+  // level-agnostic GROUP_VIEW/GROUP_EDIT/GROUP_ARCHIVE/... permissions used
+  // for a root Group - there is no separate SECTION_EDIT/SECTION_ARCHIVE,
+  // mirroring RoleAssignmentsController's "same administrative capability
+  // regardless of whether the Group is a Root or a Child" precedent.
   SECTION_VIEW = 'SECTION_VIEW',
   SECTION_CREATE = 'SECTION_CREATE',
-  SECTION_EDIT = 'SECTION_EDIT',
-  SECTION_ARCHIVE = 'SECTION_ARCHIVE',
 
   // Event - community-level gate only. Administering one *specific* Event
   // once it exists (edit/publish/cancel/organizers/moderators/check-in/...)

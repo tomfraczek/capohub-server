@@ -30,7 +30,7 @@ export function toCommunityHomeCommunityDto(
     description: group.description,
     logoUrl: group.logoUrl,
     coverImageUrl: group.coverImageUrl,
-    parentGroupId: group.parentGroup ? group.parentGroup.id : null,
+    parentId: group.parentGroup ? group.parentGroup.id : null,
     rootGroupId,
     isRootGroup: group.parentGroup === null,
     myRoles,

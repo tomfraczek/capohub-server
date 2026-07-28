@@ -10,6 +10,10 @@ import { uuidSchema } from '../../songs/dto/song-validation.helpers';
 import { AuthenticatedRequest } from '../../auth/types/authenticated-request.type';
 import { ALLOW_GROUP_STATUSES_KEY } from '../decorators/allow-group-statuses.decorator';
 import { GROUP_PERMISSIONS_KEY } from '../decorators/require-group-permission.decorator';
+import {
+  GROUP_KIND_KEY,
+  GroupKind,
+} from '../decorators/require-group-kind.decorator';
 import { assertGroupStatusAllowed } from '../group-write-policy';
 import { GroupStatus } from '../enums/group-status.enum';
 import { GroupPermission } from '../permissions/group-permission.enum';
@@ -21,10 +25,11 @@ const DEFAULT_ALLOWED_STATUSES: readonly GroupStatus[] = [GroupStatus.ACTIVE];
 /**
  * Not global - only runs on routes decorated with
  * @UseGuards(GroupPermissionsGuard) alongside @RequireGroupPermission(...)
- * (see GroupsController). Reads the group id from the route's :id param,
- * or :groupId for routes nested under a Group (e.g.
- * AcademiesController/SectionsController at groups/:groupId/academies) -
- * the two never collide, since a route only ever has one or the other.
+ * (see GroupsController). Reads the group id from the route's :id param, or
+ * :groupId/:sectionId for routes nested under a Group or a Section (e.g.
+ * AcademiesController/CohortsController at groups/:groupId/academies, dual-
+ * mounted at sections/:sectionId/academies) - the three never collide,
+ * since a route only ever has one of the three.
  *
  * Whether the group exists at all and whether the caller can see it are the
  * same question here: a user with no usable authorization for it gets 404,
@@ -76,7 +81,8 @@ export class GroupPermissionsGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const groupId: unknown = request.params.groupId ?? request.params.id;
+    const groupId: unknown =
+      request.params.groupId ?? request.params.sectionId ?? request.params.id;
 
     if (typeof groupId !== 'string' || !uuidSchema.safeParse(groupId).success) {
       throw this.groupNotFound();
@@ -106,6 +112,18 @@ export class GroupPermissionsGuard implements CanActivate {
         code: 'INSUFFICIENT_GROUP_PERMISSIONS',
         message: 'Insufficient permissions in this group',
       });
+    }
+
+    const requiredKind = this.reflector.getAllAndOverride<GroupKind>(
+      GROUP_KIND_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (requiredKind) {
+      const isRoot = group.parentGroup === null;
+      const matches = requiredKind === GroupKind.ROOT ? isRoot : !isRoot;
+      if (!matches) {
+        throw this.groupNotFound();
+      }
     }
 
     const allowedStatuses =

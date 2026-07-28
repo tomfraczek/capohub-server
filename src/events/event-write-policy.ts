@@ -5,7 +5,7 @@ import { EventStatusHistory } from './entities/event-status-history.entity';
 import { EventStatus } from './enums/event-status.enum';
 
 // Event's own lifecycle status is a business object concept, not a Group
-// concept (mirrors Academy/Section's own `status` field, asserted inline
+// concept (mirrors Academy/Cohort's own `status` field, asserted inline
 // in their services - not GroupStatus, which is enforced centrally by
 // GroupPermissionsGuard/AllowGroupStatuses). Every Event write action
 // calls this directly against the Event's *current* status, keyed the same

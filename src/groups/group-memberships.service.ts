@@ -18,7 +18,7 @@ import { AuditTargetType } from './enums/audit-target-type.enum';
 import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { MembershipEndReason } from './enums/membership-end-reason.enum';
-import { SectionStatus } from './enums/section-status.enum';
+import { CohortStatus } from './enums/cohort-status.enum';
 import {
   GROUP_BANS_ACTIVE_UNIQUE_INDEX,
   GroupBan,
@@ -28,22 +28,22 @@ import {
   GroupMembership,
 } from './entities/group-membership.entity';
 import { Group } from './entities/group.entity';
-import { MembershipSection } from './entities/membership-section.entity';
+import { MembershipCohort } from './entities/membership-cohort.entity';
 import {
   MEMBERSHIP_SUSPENSIONS_ACTIVE_UNIQUE_INDEX,
   MembershipSuspension,
 } from './entities/membership-suspension.entity';
-import { Section } from './entities/section.entity';
+import { Cohort } from './entities/cohort.entity';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { loadActiveMembership } from './group-membership.query';
 import {
   toGroupMembershipResponseDto,
-  toMembershipSectionRefDto,
+  toMembershipCohortRefDto,
 } from './mappers/group.mapper';
 import { RoleAssignmentsService } from './role-assignments.service';
 
-const MEMBERSHIP_SECTIONS_UNIQUE_INDEX =
-  'membership_sections_membership_id_section_id_unique';
+const MEMBERSHIP_COHORTS_UNIQUE_INDEX =
+  'membership_cohorts_membership_id_cohort_id_unique';
 
 @Injectable()
 export class GroupMembershipsService {
@@ -201,7 +201,7 @@ export class GroupMembershipsService {
       await this.assertOwnsNoActiveGroups(em, membership, rootGroupId, {
         code: 'CANNOT_REMOVE_OWNER',
         message:
-          'This member owns one or more Groups in this Organization - transfer ownership of each before removing them',
+          'This member owns one or more Groups in this Group - transfer ownership of each before removing them',
       });
 
       membership.status = GroupMembershipStatus.ARCHIVED;
@@ -240,7 +240,7 @@ export class GroupMembershipsService {
       await this.assertOwnsNoActiveGroups(em, membership, rootGroupId, {
         code: 'OWNER_MUST_TRANSFER_OWNERSHIP',
         message:
-          'Transfer ownership of every Group you own in this Organization before leaving',
+          'Transfer ownership of every Group you own in this Group before leaving',
       });
 
       membership.status = GroupMembershipStatus.ARCHIVED;
@@ -374,15 +374,15 @@ export class GroupMembershipsService {
     });
   }
 
-  // Assigning a Section requires the Membership to be ACTIVE, and the
-  // Section to belong to the same Root Group as the Membership (it may
+  // Assigning a Cohort requires the Membership to be ACTIVE, and the
+  // Cohort to belong to the same Root Group as the Membership (it may
   // belong to any Group within that organization's tree - see
   // GroupHierarchyService.getRootGroup) and not be archived. See
-  // organization-entities.md#section.
-  async assignSection(
+  // organization-entities.md#cohort.
+  async assignCohort(
     rootGroupId: string,
     membershipId: string,
-    sectionId: string,
+    cohortId: string,
   ): Promise<void> {
     return this.em.transactional(async (em) => {
       const membership = await this.loadMembershipByIdOrFail(
@@ -392,55 +392,54 @@ export class GroupMembershipsService {
       );
       this.assertMembershipIsActive(membership);
 
-      const section = await em.findOne(Section, { id: sectionId });
-      if (!section) {
+      const cohort = await em.findOne(Cohort, { id: cohortId });
+      if (!cohort) {
         throw new NotFoundException({
-          code: 'SECTION_NOT_FOUND',
-          message: 'Section not found',
+          code: 'COHORT_NOT_FOUND',
+          message: 'Cohort not found',
         });
       }
-      if (section.status === SectionStatus.ARCHIVED) {
+      if (cohort.status === CohortStatus.ARCHIVED) {
         throw new ConflictException({
-          code: 'MEMBERSHIP_SECTION_ARCHIVED',
-          message: 'This section is archived and cannot accept new members',
+          code: 'MEMBERSHIP_COHORT_ARCHIVED',
+          message: 'This cohort is archived and cannot accept new members',
         });
       }
 
-      const sectionRoot = await this.groupHierarchyService.getRootGroup(
-        section.group.id,
+      const cohortRoot = await this.groupHierarchyService.getRootGroup(
+        cohort.group.id,
         em,
       );
-      if (sectionRoot.id !== rootGroupId) {
+      if (cohortRoot.id !== rootGroupId) {
         throw new BadRequestException({
-          code: 'MEMBERSHIP_SECTION_MISMATCH',
-          message:
-            "This section does not belong to the membership's Root Group",
+          code: 'MEMBERSHIP_COHORT_MISMATCH',
+          message: "This cohort does not belong to the membership's Root Group",
         });
       }
 
-      const existing = await em.findOne(MembershipSection, {
+      const existing = await em.findOne(MembershipCohort, {
         membership: membershipId,
-        section: sectionId,
+        cohort: cohortId,
       });
       if (existing) {
         throw new ConflictException({
-          code: 'MEMBERSHIP_SECTION_ALREADY_ASSIGNED',
-          message: 'This member is already assigned to this section',
+          code: 'MEMBERSHIP_COHORT_ALREADY_ASSIGNED',
+          message: 'This member is already assigned to this cohort',
         });
       }
 
-      const assignment = new MembershipSection();
+      const assignment = new MembershipCohort();
       assignment.membership = em.getReference(GroupMembership, membershipId);
-      assignment.section = em.getReference(Section, sectionId);
+      assignment.cohort = em.getReference(Cohort, cohortId);
 
       try {
         await em.persist(assignment).flush();
       } catch (error) {
         // Race backstop - see the equivalent comment in addMember().
-        if (isUniqueViolationOn(error, MEMBERSHIP_SECTIONS_UNIQUE_INDEX)) {
+        if (isUniqueViolationOn(error, MEMBERSHIP_COHORTS_UNIQUE_INDEX)) {
           throw new ConflictException({
-            code: 'MEMBERSHIP_SECTION_ALREADY_ASSIGNED',
-            message: 'This member is already assigned to this section',
+            code: 'MEMBERSHIP_COHORT_ALREADY_ASSIGNED',
+            message: 'This member is already assigned to this cohort',
           });
         }
         throw error;
@@ -448,21 +447,21 @@ export class GroupMembershipsService {
     });
   }
 
-  async unassignSection(
+  async unassignCohort(
     rootGroupId: string,
     membershipId: string,
-    sectionId: string,
+    cohortId: string,
   ): Promise<void> {
     await this.loadMembershipByIdOrFail(this.em, rootGroupId, membershipId);
 
-    const assignment = await this.em.findOne(MembershipSection, {
+    const assignment = await this.em.findOne(MembershipCohort, {
       membership: membershipId,
-      section: sectionId,
+      cohort: cohortId,
     });
     if (!assignment) {
       throw new NotFoundException({
-        code: 'MEMBERSHIP_SECTION_ASSIGNMENT_NOT_FOUND',
-        message: 'This member is not assigned to this section',
+        code: 'MEMBERSHIP_COHORT_ASSIGNMENT_NOT_FOUND',
+        message: 'This member is not assigned to this cohort',
       });
     }
 
@@ -474,13 +473,13 @@ export class GroupMembershipsService {
   /**
    * Ends the Membership (like removeMember) and additionally records a
    * durable GroupBan, which blocks the user from rejoining or being
-   * re-invited to this Organization until explicitly unbanned (see
+   * re-invited to this Group until explicitly unbanned (see
    * GroupBan, MembershipRequestsService.assertNotBanned). Scoped to the
-   * Organization (Root Group) only - see GroupBan's own comment for why
+   * Group (Root Group) only - see GroupBan's own comment for why
    * there is no per-Child-Group ban.
    *
    * Same ownership guard as removeMember: a member who currently owns any
-   * Group in this Organization's tree cannot be banned until ownership is
+   * Group in this Group's tree cannot be banned until ownership is
    * transferred - banning is a stronger form of removal, so it inherits
    * every restriction removal already has.
    */
@@ -500,7 +499,7 @@ export class GroupMembershipsService {
       await this.assertOwnsNoActiveGroups(em, membership, rootGroupId, {
         code: 'CANNOT_BAN_OWNER',
         message:
-          'This member owns one or more Groups in this Organization - transfer ownership of each before banning them',
+          'This member owns one or more Groups in this Group - transfer ownership of each before banning them',
       });
 
       membership.status = GroupMembershipStatus.ARCHIVED;
@@ -732,7 +731,7 @@ export class GroupMembershipsService {
   }
 
   // Shared by leave() and removeMember() - the one place that decides
-  // whether a Membership may end. Organization-wide: checks the Root
+  // whether a Membership may end. Group-wide: checks the Root
   // Group and every Child Group beneath it (see
   // RoleAssignmentsService.findOwnedActiveGroups), not just the Root
   // Group the Membership itself is scoped to - a Membership can hold
@@ -762,7 +761,7 @@ export class GroupMembershipsService {
 
   // Unlike loadActiveMembershipByIdOrFail, does not filter by status - a
   // membership that has ended is still a valid target for getMembership()
-  // and for the membership-status checks in assignSection/unassignSection
+  // and for the membership-status checks in assignCohort/unassignCohort
   // (which need to distinguish "not found" from "found but not active").
   // Also used by unbanMember/unsuspendMember, which by definition target a
   // Membership that is no longer ACTIVE (ARCHIVED for a ban, READ_ONLY for
@@ -789,8 +788,8 @@ export class GroupMembershipsService {
     membership: GroupMembership,
     em: EntityManager = this.em,
   ): Promise<GroupMembershipResponseDto> {
-    const [sections, rootRoleAssignments] = await Promise.all([
-      this.loadSectionRefs(em, [membership.id]),
+    const [cohorts, rootRoleAssignments] = await Promise.all([
+      this.loadCohortRefs(em, [membership.id]),
       this.roleAssignmentsService.getRoleAssignmentsForMembership(
         em,
         membership.id,
@@ -800,7 +799,7 @@ export class GroupMembershipsService {
     return toGroupMembershipResponseDto(
       membership,
       rootRoleAssignments.map((roleAssignment) => roleAssignment.role),
-      sections.get(membership.id) ?? [],
+      cohorts.get(membership.id) ?? [],
     );
   }
 
@@ -808,8 +807,8 @@ export class GroupMembershipsService {
     rootGroupId: string,
     memberships: GroupMembership[],
   ): Promise<GroupMembershipResponseDto[]> {
-    const [sectionsByMembership, rootRoles] = await Promise.all([
-      this.loadSectionRefs(
+    const [cohortsByMembership, rootRoles] = await Promise.all([
+      this.loadCohortRefs(
         this.em,
         memberships.map((membership) => membership.id),
       ),
@@ -822,33 +821,33 @@ export class GroupMembershipsService {
       toGroupMembershipResponseDto(
         membership,
         rootRoles.get(membership.id) ?? [],
-        sectionsByMembership.get(membership.id) ?? [],
+        cohortsByMembership.get(membership.id) ?? [],
       ),
     );
   }
 
-  private async loadSectionRefs(
+  private async loadCohortRefs(
     em: EntityManager,
     membershipIds: string[],
-  ): Promise<Map<string, ReturnType<typeof toMembershipSectionRefDto>[]>> {
+  ): Promise<Map<string, ReturnType<typeof toMembershipCohortRefDto>[]>> {
     if (membershipIds.length === 0) {
       return new Map();
     }
 
     const assignments = await em.find(
-      MembershipSection,
+      MembershipCohort,
       { membership: { $in: membershipIds } },
-      { populate: ['section'] },
+      { populate: ['cohort'] },
     );
 
     const byMembership = new Map<
       string,
-      ReturnType<typeof toMembershipSectionRefDto>[]
+      ReturnType<typeof toMembershipCohortRefDto>[]
     >();
     for (const assignment of assignments) {
       const membershipId = assignment.membership.id;
       const refs = byMembership.get(membershipId) ?? [];
-      refs.push(toMembershipSectionRefDto(assignment.section));
+      refs.push(toMembershipCohortRefDto(assignment.cohort));
       byMembership.set(membershipId, refs);
     }
     return byMembership;

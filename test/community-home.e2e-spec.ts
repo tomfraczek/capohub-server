@@ -4,7 +4,7 @@
  * Scenarios:
  *  1. Unauthenticated request → 401
  *  2. Brand new user → empty dashboard with correct default capabilities
- *  3. User belonging to several Organizations → every active Membership's
+ *  3. User belonging to several Groups → every active Membership's
  *     Root Group appears in myCommunities
  *  4. A Membership holding several Roles for the same Group → myRoles is
  *     an array containing all of them (never collapsed to one `role`)
@@ -272,8 +272,8 @@ describe('Community Home (e2e)', () => {
       actionableItemsCount: 0,
     });
     expect(home.capabilities).toEqual({
-      canCreateOrganization: true,
-      canCreateGroupInCommunityIds: [],
+      canCreateGroup: true,
+      canCreateSectionInCommunityIds: [],
       canReviewJoinRequestsInCommunityIds: [],
       canViewMembersInCommunityIds: [],
       canManageMembersInCommunityIds: [],
@@ -293,7 +293,7 @@ describe('Community Home (e2e)', () => {
   });
 
   describe('My Communities', () => {
-    it('lists every active Membership across several Organizations, and preserves multiple Roles for the same Group as an array', async () => {
+    it('lists every active Membership across several Groups, and preserves multiple Roles for the same Group as an array', async () => {
       const orgOne = await createRootGroup(tokenFor('ch-owner'), {
         name: 'Cordão de Ouro',
       });
@@ -346,7 +346,7 @@ describe('Community Home (e2e)', () => {
         .post(`/api/v1/groups/${org.id}/invitations`)
         .set('Authorization', `Bearer ${tokenFor('ch-owner')}`)
         .send({
-          targetType: 'ORGANIZATION',
+          targetType: 'GROUP',
           invitedUserId: localUserIdByToken.get(tokenFor('ch-invitee')),
         })
         .expect(201);
@@ -396,7 +396,7 @@ describe('Community Home (e2e)', () => {
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${org.id}/join`)
         .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
-        .send({ targetType: 'ORGANIZATION' })
+        .send({ targetType: 'GROUP' })
         .expect(200);
 
       const ownerHome = await getHome(tokenFor('ch-owner'));

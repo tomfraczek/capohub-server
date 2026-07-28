@@ -1,18 +1,17 @@
 import { GroupMembership } from '../entities/group-membership.entity';
 import { Group } from '../entities/group.entity';
 import { RoleAssignment } from '../entities/role-assignment.entity';
-import { Section } from '../entities/section.entity';
+import { Cohort } from '../entities/cohort.entity';
 import { GroupResponseDto } from '../dto/group-response.dto';
 import { GroupMembershipResponseDto } from '../dto/group-membership-response.dto';
 import { GroupRole } from '../enums/group-role.enum';
 import { GroupSummaryResponseDto } from '../dto/group-summary-response.dto';
-import { MembershipSectionRefDto } from '../dto/membership-section-ref.dto';
+import { MembershipCohortRefDto } from '../dto/membership-cohort-ref.dto';
 import { RoleAssignmentResponseDto } from '../dto/role-assignment-response.dto';
 
 export function toGroupResponseDto(group: Group): GroupResponseDto {
   return {
     id: group.id,
-    parentGroupId: group.parentGroup ? group.parentGroup.id : null,
     name: group.name,
     description: group.description,
     logoUrl: group.logoUrl,
@@ -30,6 +29,8 @@ export function toGroupResponseDto(group: Group): GroupResponseDto {
     status: group.status,
     timezone: group.timezone,
     currencyCode: group.currencyCode,
+    country: group.country,
+    city: group.city,
     createdAt: group.createdAt.toISOString(),
     updatedAt: group.updatedAt.toISOString(),
   };
@@ -54,7 +55,7 @@ export function toGroupSummaryResponseDto(
 export function toGroupMembershipResponseDto(
   membership: GroupMembership,
   rootRoles: GroupRole[],
-  sections: MembershipSectionRefDto[],
+  cohorts: MembershipCohortRefDto[],
 ): GroupMembershipResponseDto {
   return {
     id: membership.id,
@@ -68,16 +69,16 @@ export function toGroupMembershipResponseDto(
     joinedAt: membership.joinedAt.toISOString(),
     leftAt: membership.leftAt ? membership.leftAt.toISOString() : null,
     endReason: membership.endReason,
-    sections,
+    cohorts,
   };
 }
 
-export function toMembershipSectionRefDto(
-  section: Section,
-): MembershipSectionRefDto {
+export function toMembershipCohortRefDto(
+  cohort: Cohort,
+): MembershipCohortRefDto {
   return {
-    id: section.id,
-    name: section.name,
+    id: cohort.id,
+    name: cohort.name,
   };
 }
 

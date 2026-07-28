@@ -568,7 +568,7 @@ export class RoleAssignmentsService {
    * already know which Groups to ask about; it discovers every Group each
    * Membership actually participates in. Used by Community Home to build
    * the "My Communities" list, which must include Child Groups the caller
-   * holds a Role in, not just the Organizations they have a Membership in
+   * holds a Role in, not just the Groups they have a Membership in
    * (see organization-entities.md#roleassignment: Role Assignment is
    * independent of Membership and can target any Group).
    */

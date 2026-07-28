@@ -9,7 +9,7 @@
 //
 // BANNED is a third, distinct reason: like REMOVED, it is administrator-
 // initiated, but it additionally prevents the user from rejoining or being
-// re-invited to the same Organization until explicitly unbanned - see
+// re-invited to the same Group until explicitly unbanned - see
 // GroupBan and GroupMembershipsService.banMember.
 export enum MembershipEndReason {
   LEFT = 'LEFT',

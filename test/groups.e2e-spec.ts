@@ -17,6 +17,7 @@ import { HttpErrorResponse } from '../src/common/types/http-error-response.type'
 import { User } from '../src/users/entities/user.entity';
 import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
+import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { GroupSummaryResponseDto } from '../src/groups/dto/group-summary-response.dto';
 import { RoleAssignmentResponseDto } from '../src/groups/dto/role-assignment-response.dto';
 import { TransferOwnershipResponseDto } from '../src/groups/dto/transfer-ownership-response.dto';
@@ -207,6 +208,22 @@ describe('Groups (e2e)', () => {
         .post('/api/v1/groups')
         .set('Authorization', `Bearer ${token}`)
         .send(groupPayload(overrides))
+        .expect(201),
+    );
+    createdGroupIds.push(created.id);
+    return created;
+  }
+
+  async function createSection(
+    token: string,
+    parentId: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<SectionResponseDto> {
+    const created = await bodyOf<SectionResponseDto>(
+      request(app.getHttpServer())
+        .post(`/api/v1/groups/${parentId}/sections`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(groupPayload({ country: 'PL', ...overrides }))
         .expect(201),
     );
     createdGroupIds.push(created.id);
@@ -819,18 +836,17 @@ describe('Groups (e2e)', () => {
   });
 
   describe('Child Group ownership (e2e)', () => {
-    it("blocks leaving the Organization while owning a Child Group, and allows it once that Child Group's ownership is transferred - the Child Group keeps exactly one OWNER throughout", async () => {
+    it("blocks leaving the Group while owning a Child Group, and allows it once that Child Group's ownership is transferred - the Child Group keeps exactly one OWNER throughout", async () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Child Ownership Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Child Ownership Child',
-        parentGroupId: root.id,
       });
       await addMember(OWNER_TOKEN, root.id, SECOND_TOKEN, GroupRole.MEMBER);
 
       // OWNER_TOKEN hands off the Root Group itself to SECOND_TOKEN, so
-      // OWNER_TOKEN becomes a plain member of the Organization - but still
+      // OWNER_TOKEN becomes a plain member of the Group - but still
       // owns the Child Group created above.
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${root.id}/transfer-ownership`)
@@ -851,7 +867,7 @@ describe('Groups (e2e)', () => {
       // Transfer the Child Group's ownership too - directly at the Child
       // Group's own transfer-ownership endpoint.
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${child.id}/transfer-ownership`)
+        .post(`/api/v1/sections/${child.id}/transfer-ownership`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .send({ newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN) })
         .expect(201);
@@ -877,13 +893,11 @@ describe('Groups (e2e)', () => {
 
     it('blocks leaving while owning multiple Child Groups - only succeeds once every one of them has been transferred', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Multi Child Root' });
-      const childA = await createGroup(OWNER_TOKEN, {
+      const childA = await createSection(OWNER_TOKEN, root.id, {
         name: 'Multi Child A',
-        parentGroupId: root.id,
       });
-      const childB = await createGroup(OWNER_TOKEN, {
+      const childB = await createSection(OWNER_TOKEN, root.id, {
         name: 'Multi Child B',
-        parentGroupId: root.id,
       });
       await addMember(OWNER_TOKEN, root.id, SECOND_TOKEN, GroupRole.MEMBER);
       await request(app.getHttpServer())
@@ -900,7 +914,7 @@ describe('Groups (e2e)', () => {
 
       // Transfer only one Child Group - still blocked by the other.
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${childA.id}/transfer-ownership`)
+        .post(`/api/v1/sections/${childA.id}/transfer-ownership`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .send({ newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN) })
         .expect(201);
@@ -915,7 +929,7 @@ describe('Groups (e2e)', () => {
 
       // Transfer the second Child Group too - leaving now succeeds.
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${childB.id}/transfer-ownership`)
+        .post(`/api/v1/sections/${childB.id}/transfer-ownership`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .send({ newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN) })
         .expect(201);
@@ -930,9 +944,8 @@ describe('Groups (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Remove Owner Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Remove Owner Child',
-        parentGroupId: root.id,
       });
       const thirdMembership = await addMember(
         OWNER_TOKEN,
@@ -945,7 +958,7 @@ describe('Groups (e2e)', () => {
       // remains the Root Group's OWNER throughout, exercising removeMember
       // (an administrative action) rather than leave (self-service).
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${child.id}/transfer-ownership`)
+        .post(`/api/v1/sections/${child.id}/transfer-ownership`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .send({ newOwnerUserId: localUserIdByToken.get(THIRD_TOKEN) })
         .expect(201);
@@ -960,7 +973,7 @@ describe('Groups (e2e)', () => {
 
       // THIRD_TOKEN (the Child Group's current OWNER) transfers it back.
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${child.id}/transfer-ownership`)
+        .post(`/api/v1/sections/${child.id}/transfer-ownership`)
         .set('Authorization', `Bearer ${THIRD_TOKEN}`)
         .send({ newOwnerUserId: localUserIdByToken.get(OWNER_TOKEN) })
         .expect(201);

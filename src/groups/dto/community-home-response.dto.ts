@@ -6,8 +6,8 @@ import { GroupUserRefDto } from './group-user-ref.dto';
 
 // Minimal community reference used inside dashboard cards (invitations,
 // join requests) - never the full GroupResponseDto. `isRootGroup` lets the
-// frontend label the card "Organization" vs "Group" without re-deriving it
-// from a `parentGroupId` the caller may not even have loaded (see PAD-001
+// frontend label the card "Group" vs "Section" without re-deriving it
+// from a `parentId` the caller may not even have loaded (see PAD-001
 // §3.3 Shared Screens).
 export interface CommunityHomeCommunityRefDto {
   id: string;
@@ -26,11 +26,11 @@ export interface CommunityHomeCommunityDto {
   description: string | null;
   logoUrl: string | null;
   coverImageUrl: string | null;
-  parentGroupId: string | null;
-  // The Root Group (Organization) this community belongs to - itself, when
-  // this row already *is* the Root Group. Needed to group Child Groups
-  // under their Organization in the UI even when they are not immediate
-  // children of it (hierarchy depth is unlimited - ADR-002).
+  parentId: string | null;
+  // The Group this community belongs to - itself, when this row already
+  // *is* the Group. Needed to group Sections under their Group in the UI
+  // even when they are not immediate children of it (hierarchy depth is
+  // unlimited - ADR-002).
   rootGroupId: string;
   isRootGroup: boolean;
   myRoles: GroupRole[];
@@ -74,18 +74,18 @@ export interface CommunityHomeSummaryDto {
   actionableItemsCount: number;
 }
 
-// Contextual capability data. `canCreateOrganization` is a real global
-// boolean (creating a Root Group requires no permission - see
-// GroupsService.create). Every other field is a list of community ids, NOT
-// a global boolean - which action is available always depends on which
-// specific community (Root or Child Group) the user holds the underlying
-// permission for, so the frontend always receives the exact set of ids
-// rather than a lie-by-omission boolean (see PAD-001 §17.4 "Permission
-// Transparency"). The frontend must never compute any of these from
+// Contextual capability data. `canCreateGroup` is a real global boolean
+// (creating a Group requires no permission - see GroupsService.create).
+// Every other field is a list of community ids, NOT a global boolean -
+// which action is available always depends on which specific community
+// (Group or Section) the user holds the underlying permission for, so the
+// frontend always receives the exact set of ids rather than a
+// lie-by-omission boolean (see PAD-001 §17.4 "Permission Transparency").
+// The frontend must never compute any of these from
 // `myRoles`/`myCommunities` - always read them from here.
 export interface CommunityHomeCapabilitiesDto {
-  canCreateOrganization: boolean;
-  canCreateGroupInCommunityIds: string[];
+  canCreateGroup: boolean;
+  canCreateSectionInCommunityIds: string[];
   canReviewJoinRequestsInCommunityIds: string[];
   // Read access to a community's member list (GET .../members) - works in
   // any Group status.
@@ -133,9 +133,9 @@ export interface CommunityHomeCapabilitiesDto {
   // Suspend/unsuspend a member (MEMBERSHIP_SUSPEND/MEMBERSHIP_UNSUSPEND
   // tier) - requires ACTIVE.
   canSuspendMembersInCommunityIds: string[];
-  // True iff canCreateGroupInCommunityIds is non-empty - i.e. the user
-  // holds GROUP_EDIT (Admin/Owner) in at least one community, root or
-  // child. A convenience aggregate, not an independent business rule.
+  // True iff canCreateSectionInCommunityIds is non-empty - i.e. the user
+  // holds GROUP_EDIT (Admin/Owner) in at least one community, Group or
+  // Section. A convenience aggregate, not an independent business rule.
   canManageAnyCommunity: boolean;
 }
 

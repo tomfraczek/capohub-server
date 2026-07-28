@@ -53,7 +53,7 @@ describe('GroupPermissionService', () => {
       ).toBe(false);
     });
 
-    it('grants ADMIN the membership-, academy- and section-management permissions', () => {
+    it('grants ADMIN the membership-, academy- and cohort-management permissions', () => {
       expect(
         service.hasPermission(GroupRole.ADMIN, GroupPermission.MEMBERSHIP_ADD),
       ).toBe(true);
@@ -72,14 +72,14 @@ describe('GroupPermissionService', () => {
       expect(
         service.hasPermission(
           GroupRole.ADMIN,
-          GroupPermission.MEMBERSHIP_SECTION_ASSIGN,
+          GroupPermission.MEMBERSHIP_COHORT_ASSIGN,
         ),
       ).toBe(true);
       expect(
         service.hasPermission(GroupRole.ADMIN, GroupPermission.ACADEMY_CREATE),
       ).toBe(true);
       expect(
-        service.hasPermission(GroupRole.ADMIN, GroupPermission.SECTION_CREATE),
+        service.hasPermission(GroupRole.ADMIN, GroupPermission.COHORT_CREATE),
       ).toBe(true);
     });
 

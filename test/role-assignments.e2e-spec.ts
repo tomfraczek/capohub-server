@@ -17,13 +17,14 @@ import { HttpErrorResponse } from '../src/common/types/http-error-response.type'
 import { User } from '../src/users/entities/user.entity';
 import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
-import { RoleAssignmentResponseDto } from '../src/groups/dto/role-assignment-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
+import { RoleAssignmentResponseDto } from '../src/groups/dto/role-assignment-response.dto';
+import { CohortResponseDto } from '../src/groups/dto/cohort-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
-import { Section } from '../src/groups/entities/section.entity';
+import { Cohort } from '../src/groups/entities/cohort.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
 
 const OWNER_TOKEN = 'valid-roleassign-owner-token';
@@ -150,7 +151,7 @@ describe('Role Assignments (e2e)', () => {
     await cleanup.nativeDelete(RoleAssignment, {
       group: { $in: createdGroupIds },
     });
-    await cleanup.nativeDelete(Section, { group: { $in: createdGroupIds } });
+    await cleanup.nativeDelete(Cohort, { group: { $in: createdGroupIds } });
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
     });
@@ -207,6 +208,22 @@ describe('Role Assignments (e2e)', () => {
     return created;
   }
 
+  async function createSection(
+    token: string,
+    parentId: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<SectionResponseDto> {
+    const created = await bodyOf<SectionResponseDto>(
+      request(app.getHttpServer())
+        .post(`/api/v1/groups/${parentId}/sections`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(groupPayload({ country: 'PL', ...overrides }))
+        .expect(201),
+    );
+    createdGroupIds.push(created.id);
+    return created;
+  }
+
   async function addMember(
     ownerToken: string,
     rootGroupId: string,
@@ -222,14 +239,14 @@ describe('Role Assignments (e2e)', () => {
     );
   }
 
-  async function createSection(
+  async function createCohort(
     token: string,
     groupId: string,
     name: string,
-  ): Promise<SectionResponseDto> {
-    return bodyOf<SectionResponseDto>(
+  ): Promise<CohortResponseDto> {
+    return bodyOf<CohortResponseDto>(
       request(app.getHttpServer())
-        .post(`/api/v1/groups/${groupId}/sections`)
+        .post(`/api/v1/groups/${groupId}/cohorts`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name, description: null })
         .expect(201),
@@ -239,9 +256,8 @@ describe('Role Assignments (e2e)', () => {
   describe('granting a Role for a Child Group', () => {
     it('grants a Role for the Child Group to a Membership that is active in its Root Group', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Grant Root' });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Grant Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -264,7 +280,7 @@ describe('Role Assignments (e2e)', () => {
 
       // The Role now grants direct access to the Child Group.
       await request(app.getHttpServer())
-        .get(`/api/v1/groups/${child.id}`)
+        .get(`/api/v1/sections/${child.id}`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .expect(200);
     });
@@ -274,9 +290,8 @@ describe('Role Assignments (e2e)', () => {
       const otherRoot = await createGroup(OWNER_TOKEN, {
         name: 'Mismatch Other Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Mismatch Child',
-        parentGroupId: root.id,
       });
       const outsideMembership = await addMember(
         OWNER_TOKEN,
@@ -302,9 +317,8 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Inactive Membership Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Inactive Membership Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -331,9 +345,8 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Duplicate Role Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Duplicate Role Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -361,9 +374,8 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Multi-Role Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Multi-Role Child (Poznan)',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -407,9 +419,8 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Revoke One Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Revoke One Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -488,14 +499,13 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'No Inherit Down Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'No Inherit Down Child',
-        parentGroupId: root.id,
       });
       await addMember(OWNER_TOKEN, root.id, MEMBER_TOKEN, GroupRole.ADMIN);
 
       await request(app.getHttpServer())
-        .get(`/api/v1/groups/${child.id}`)
+        .get(`/api/v1/sections/${child.id}`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .expect(404);
     });
@@ -504,9 +514,8 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'No Inherit Up Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'No Inherit Up Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -535,13 +544,11 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'No Inherit Sibling Root',
       });
-      const childA = await createGroup(OWNER_TOKEN, {
+      const childA = await createSection(OWNER_TOKEN, root.id, {
         name: 'Sibling A',
-        parentGroupId: root.id,
       });
-      const childB = await createGroup(OWNER_TOKEN, {
+      const childB = await createSection(OWNER_TOKEN, root.id, {
         name: 'Sibling B',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -563,7 +570,7 @@ describe('Role Assignments (e2e)', () => {
       // standing there.
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
-          .patch(`/api/v1/groups/${childB.id}`)
+          .patch(`/api/v1/sections/${childB.id}`)
           .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
           .send(groupPayload({ name: 'Should not apply' }))
           .expect(404),
@@ -572,41 +579,40 @@ describe('Role Assignments (e2e)', () => {
     });
   });
 
-  describe('Academy/Section owner-Group verification', () => {
-    it('rejects PATCH /groups/:groupId/sections/:sectionId when the section belongs to a different Group - 404 SECTION_NOT_FOUND', async () => {
+  describe('Academy/Cohort owner-Group verification', () => {
+    it('rejects PATCH /groups/:groupId/cohorts/:cohortId when the cohort belongs to a different Group - 404 COHORT_NOT_FOUND', async () => {
       const groupA = await createGroup(OWNER_TOKEN, {
         name: 'Owner Verify Group A',
       });
       const groupB = await createGroup(OWNER_TOKEN, {
         name: 'Owner Verify Group B',
       });
-      const sectionInA = await createSection(OWNER_TOKEN, groupA.id, 'Kids');
+      const cohortInA = await createCohort(OWNER_TOKEN, groupA.id, 'Kids');
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
-          .patch(`/api/v1/groups/${groupB.id}/sections/${sectionInA.id}`)
+          .patch(`/api/v1/groups/${groupB.id}/cohorts/${cohortInA.id}`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .send({ name: 'Hijacked', description: null })
           .expect(404),
       );
-      expect(response.code).toBe('SECTION_NOT_FOUND');
+      expect(response.code).toBe('COHORT_NOT_FOUND');
 
-      const stillIntact = await bodyOf<SectionResponseDto>(
+      const stillIntact = await bodyOf<CohortResponseDto>(
         request(app.getHttpServer())
-          .get(`/api/v1/groups/${groupA.id}/sections/${sectionInA.id}`)
+          .get(`/api/v1/groups/${groupA.id}/cohorts/${cohortInA.id}`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(200),
       );
       expect(stillIntact.name).toBe('Kids');
     });
 
-    it('authorizes Section management in a Child Group via a Role Assignment scoped to that Child Group', async () => {
+    it('authorizes Cohort management in a Child Group via a Role Assignment scoped to that Child Group', async () => {
       const root = await createGroup(OWNER_TOKEN, {
-        name: 'Section Auth Root',
+        name: 'Cohort Auth Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
-        name: 'Section Auth Child',
-        parentGroupId: root.id,
+      const child = await createSection(OWNER_TOKEN, root.id, {
+        name: 'Cohort Auth Child',
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -621,7 +627,7 @@ describe('Role Assignments (e2e)', () => {
         .expect(201);
 
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${child.id}/sections`)
+        .post(`/api/v1/groups/${child.id}/cohorts`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .send({ name: 'Advanced', description: null })
         .expect(201);
@@ -633,9 +639,8 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Inactivity Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Inactivity Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -650,7 +655,7 @@ describe('Role Assignments (e2e)', () => {
         .expect(201);
 
       await request(app.getHttpServer())
-        .get(`/api/v1/groups/${child.id}`)
+        .get(`/api/v1/sections/${child.id}`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .expect(200);
 
@@ -663,7 +668,7 @@ describe('Role Assignments (e2e)', () => {
       // Membership ends), but grants no effective access any more - never
       // a fallback, never a stale grant.
       await request(app.getHttpServer())
-        .get(`/api/v1/groups/${child.id}`)
+        .get(`/api/v1/sections/${child.id}`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .expect(404);
 
@@ -681,9 +686,8 @@ describe('Role Assignments (e2e)', () => {
   describe('Role Assignment management', () => {
     it('lists and fetches Role Assignments for a Group', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'List Root' });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'List Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -718,9 +722,8 @@ describe('Role Assignments (e2e)', () => {
 
     it('granting an additional Role never "changes" an existing one - both coexist, and there is no PATCH to change one directly', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Change Root' });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Change Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -771,9 +774,8 @@ describe('Role Assignments (e2e)', () => {
 
     it('revokes a non-owner Role Assignment', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Revoke Root' });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Revoke Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -804,9 +806,8 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Forbid Grant Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Forbid Grant Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -844,9 +845,8 @@ describe('Role Assignments (e2e)', () => {
   describe('MEMBER is the base role of every Group', () => {
     it('automatically grants MEMBER alongside the first Role granted for a Group', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Base Role Root' });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Base Role Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -881,9 +881,8 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Base Role Guard Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Base Role Guard Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -923,9 +922,8 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Base Role Leave Root',
       });
-      const child = await createGroup(OWNER_TOKEN, {
+      const child = await createSection(OWNER_TOKEN, root.id, {
         name: 'Base Role Leave Child',
-        parentGroupId: root.id,
       });
       const membership = await addMember(
         OWNER_TOKEN,
@@ -970,7 +968,7 @@ describe('Role Assignments (e2e)', () => {
         .expect(204);
 
       await request(app.getHttpServer())
-        .get(`/api/v1/groups/${child.id}`)
+        .get(`/api/v1/sections/${child.id}`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .expect(404);
     });

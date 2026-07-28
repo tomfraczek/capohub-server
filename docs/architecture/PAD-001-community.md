@@ -10,6 +10,12 @@
 
 **Ostatnia aktualizacja:** 2026-07-22
 
+> **Uwaga terminologiczna (2026-07-28):** ten dokument powstał przed
+> zmianą nazewnictwa Group/Section (zob.
+> [ADR-031](../decisions/ADR-031-group-section-domain-rename.md)) i używa
+> starej terminologii: "Organization"/"Root Group" → **Group**; "Group"
+> (Child Group) → **Section**; dawny "Section" (tag członków) → **Cohort**.
+
 ---
 
 ## Relationship to Organization Domain Documentation

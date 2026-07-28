@@ -33,12 +33,13 @@ const ANY_STATUS = [
   GroupStatus.DELETED,
 ] as const;
 
-// Academy always belongs to exactly one Group and is never independently
-// addressable - every route is nested under the owning Group, and
-// GroupPermissionsGuard (generalized to also read :groupId, see its
-// comment) enforces both membership/permission and the Group's own
-// lifecycle status before any handler here runs.
-@Controller('groups/:groupId/academies')
+// Academy always belongs to exactly one Group-kind entity (a root Group or
+// a Section) and is never independently addressable - every route is
+// nested under the owning entity, dual-mounted since Academy can attach at
+// any level. GroupPermissionsGuard (generalized to also read :groupId/
+// :sectionId, see its comment) enforces both membership/permission and the
+// owner's own lifecycle status before any handler here runs.
+@Controller(['groups/:groupId/academies', 'sections/:sectionId/academies'])
 @UseGuards(GroupPermissionsGuard)
 export class AcademiesController {
   constructor(private readonly academiesService: AcademiesService) {}
@@ -47,47 +48,52 @@ export class AcademiesController {
   @HttpCode(201)
   @RequireGroupPermission(GroupPermission.ACADEMY_CREATE)
   create(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
     @Body(new ZodValidationPipe(createAcademySchema)) dto: CreateAcademyDto,
   ): Promise<AcademyResponseDto> {
-    return this.academiesService.create(groupId, dto);
+    return this.academiesService.create(groupId ?? sectionId, dto);
   }
 
   @Get()
   @RequireGroupPermission(GroupPermission.ACADEMY_VIEW)
   @AllowGroupStatuses(...ANY_STATUS)
   list(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
   ): Promise<AcademyResponseDto[]> {
-    return this.academiesService.list(groupId);
+    return this.academiesService.list(groupId ?? sectionId);
   }
 
   @Get(':academyId')
   @RequireGroupPermission(GroupPermission.ACADEMY_VIEW)
   @AllowGroupStatuses(...ANY_STATUS)
   getById(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
     @Param('academyId', ParseUUIDPipe) academyId: string,
   ): Promise<AcademyResponseDto> {
-    return this.academiesService.getById(groupId, academyId);
+    return this.academiesService.getById(groupId ?? sectionId, academyId);
   }
 
   @Patch(':academyId')
   @RequireGroupPermission(GroupPermission.ACADEMY_EDIT)
   update(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
     @Param('academyId', ParseUUIDPipe) academyId: string,
     @Body(new ZodValidationPipe(updateAcademySchema)) dto: UpdateAcademyDto,
   ): Promise<AcademyResponseDto> {
-    return this.academiesService.update(groupId, academyId, dto);
+    return this.academiesService.update(groupId ?? sectionId, academyId, dto);
   }
 
   @Post(':academyId/archive')
   @RequireGroupPermission(GroupPermission.ACADEMY_ARCHIVE)
   archive(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
     @Param('academyId', ParseUUIDPipe) academyId: string,
   ): Promise<AcademyResponseDto> {
-    return this.academiesService.archive(groupId, academyId);
+    return this.academiesService.archive(groupId ?? sectionId, academyId);
   }
 }

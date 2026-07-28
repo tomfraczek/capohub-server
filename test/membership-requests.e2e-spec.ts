@@ -6,9 +6,9 @@
  *  2. POST /groups/:id/join for a public Group (isPublic=true) → auto-join
  *  3. POST /groups/:id/join for a private Group (isPublic=false) → JOIN_REQUEST
  *  4. POST /groups/:id/join for a hidden+private Group → JOIN_REQUEST (hidden does not block)
- *  5. GET  /discovery/resolve/:code for a Root Group (Organization) → resourceType = ORGANIZATION
+ *  5. GET  /discovery/resolve/:code for a Group → resourceType = GROUP
  *  6. GET  /discovery/resolve/:code for a hidden Group → returned (hidden bypass)
- *  7. GET  /discovery/groups → hidden groups excluded from results
+ *  7. GET  /discovery/search → hidden groups excluded from results
  *  8. POST /groups/:id/invitations/:id/cancel — inviter can cancel
  *  9. POST /groups/:id/invitations/:id/cancel — OWNER can cancel
  * 10. POST /groups/:id/invitations/:id/cancel — plain MEMBER cannot cancel someone else's
@@ -302,13 +302,13 @@ describe('MembershipRequests + Discovery (e2e)', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // 2. GET /discovery/resolve/:code — Organization vs Group vs hidden bypass
+  // 2. GET /discovery/resolve/:code — Group vs Group vs hidden bypass
   // ──────────────────────────────────────────────────────────────────────────
 
   describe('GET /discovery/resolve/:code', () => {
-    it('resolves a Root Group as resourceType=ORGANIZATION with isOrganization=true', async () => {
+    it('resolves a Group as resourceType=GROUP with isRootGroup=true', async () => {
       const group = await createGroup(OWNER_TOKEN);
-      // A group created without parentGroupId is a Root Group = Organization
+      // A Group is always root-level - see the Group/Section rename ADR.
 
       const res = await request(app.getHttpServer())
         .get(`/api/v1/discovery/resolve/${group.publicCode}`)
@@ -316,11 +316,11 @@ describe('MembershipRequests + Discovery (e2e)', () => {
         .expect(200);
 
       expect(res.body).toMatchObject({
-        resourceType: 'ORGANIZATION',
+        resourceType: 'GROUP',
         group: {
           id: group.id,
           publicCode: group.publicCode,
-          isOrganization: true,
+          isRootGroup: true,
         },
         user: null,
       });
@@ -358,10 +358,10 @@ describe('MembershipRequests + Discovery (e2e)', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // 3. GET /discovery/groups — hidden groups excluded
+  // 3. GET /discovery/search — hidden groups excluded
   // ──────────────────────────────────────────────────────────────────────────
 
-  describe('GET /discovery/groups', () => {
+  describe('GET /discovery/search', () => {
     it('does not include hidden (isHidden=true) groups in search results', async () => {
       const visible = await createGroup(OWNER_TOKEN, {
         name: 'MR Visible Group',
@@ -373,32 +373,32 @@ describe('MembershipRequests + Discovery (e2e)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .get('/api/v1/discovery/groups?q=MR')
+        .get('/api/v1/discovery/search?name=MR')
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .expect(200);
 
-      const ids = (res.body as Array<{ group: { id: string } }>).map(
-        (r) => r.group.id,
-      );
+      const searchBody = res.body as { data: Array<{ id: string }> };
+      const ids = searchBody.data.map((r) => r.id);
       expect(ids).toContain(visible.id);
       expect(ids).not.toContain(hidden.id);
     });
 
-    it('returns resourceType=ORGANIZATION for Root Groups in search results', async () => {
+    it('returns type=GROUP for a Group in search results', async () => {
       const rootGroup = await createGroup(OWNER_TOKEN, {
         name: 'MR Root Discovery Group',
         isHidden: false,
       });
 
       const res = await request(app.getHttpServer())
-        .get('/api/v1/discovery/groups?q=MR Root Discovery Group')
+        .get('/api/v1/discovery/search?name=MR Root Discovery Group')
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .expect(200);
 
-      const result = (
-        res.body as Array<{ resourceType: string; group: { id: string } }>
-      ).find((r) => r.group.id === rootGroup.id);
-      expect(result?.resourceType).toBe('ORGANIZATION');
+      const searchBody = res.body as {
+        data: Array<{ type: string; id: string }>;
+      };
+      const result = searchBody.data.find((r) => r.id === rootGroup.id);
+      expect(result?.type).toBe('GROUP');
     });
   });
 
@@ -417,11 +417,14 @@ describe('MembershipRequests + Discovery (e2e)', () => {
         memberInvitesAllowed: true,
       });
 
-      // Member joins the group
+      // Member joins the group with targetType=SECTION so they're granted a
+      // MEMBER Role Assignment for group.id (targetType=GROUP would only
+      // create a Membership, no Role - see MembershipRequestTarget), which
+      // this test needs for the GROUP_INVITE permission check below.
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/join`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-        .send({ targetType: 'GROUP' })
+        .send({ targetType: 'SECTION' })
         .expect(200);
 
       const em = app.get(EntityManager).fork();
@@ -475,18 +478,21 @@ describe('MembershipRequests + Discovery (e2e)', () => {
         memberInvitesAllowed: true,
       });
 
-      // member joins
+      // member joins with targetType=SECTION so they hold a MEMBER Role
+      // Assignment (needed for the GROUP_INVITE check below) - see the
+      // comment in setupGroupAndInvitation above.
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/join`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-        .send({ targetType: 'GROUP' })
+        .send({ targetType: 'SECTION' })
         .expect(200);
 
-      // second_outsider also joins
+      // second_outsider also joins, same reasoning (needs a Role to be a
+      // "plain MEMBER" for the 403 check below, not a 404 not-found).
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/join`)
         .set('Authorization', `Bearer ${SECOND_OUTSIDER_TOKEN}`)
-        .send({ targetType: 'GROUP' })
+        .send({ targetType: 'SECTION' })
         .expect(200);
 
       const em = app.get(EntityManager).fork();

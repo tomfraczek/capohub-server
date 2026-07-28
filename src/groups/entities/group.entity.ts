@@ -10,7 +10,7 @@ import { BaseEntity } from '../../database/entities/base.entity';
 import { GroupStatus } from '../enums/group-status.enum';
 
 // Organizational data only - no address/location/academy/training-venue
-// fields (those live on Academy/Section, each owned by exactly one Group).
+// fields (those live on Academy/Cohort, each owned by exactly one Group).
 // Membership (who belongs, with what role) lives on GroupMembership, not
 // here.
 @Entity({ tableName: 'groups' })
@@ -57,14 +57,27 @@ export class Group extends BaseEntity {
   @Property({ nullable: true, length: 2048 })
   youtubeUrl: string | null = null;
 
-  // Whether users can join this Group/Organization without admin approval.
+  // ISO 3166-1 alpha-2 (e.g. "PL"), validated in the application layer -
+  // see countryCodeSchema. Nullable at the DB layer since existing rows
+  // predate this field and there is no value to safely backfill; required
+  // on create for a Section (single place), optional for a Group (may span
+  // multiple countries, e.g. an international federation) - see
+  // create-group.schema.ts / create-section.schema.ts.
+  @Property({ nullable: true, length: 2 })
+  country: string | null = null;
+
+  // Free text, optional on both Group and Section.
+  @Property({ nullable: true, length: 100 })
+  city: string | null = null;
+
+  // Whether users can join this Group without admin approval.
   // true  → auto-join (Membership or MEMBER Role created immediately on "join").
   // false → "join" creates a JOIN_REQUEST that must be approved.
   // Defaults to true (open/public) to match the historical visibility=PUBLIC default.
   @Property()
   isPublic: boolean = true;
 
-  // Whether this Group/Organization is discoverable via the regular search
+  // Whether this Group is discoverable via the regular search
   // and listings.  Hidden resources are still reachable via direct link,
   // publicCode, or QR code.
   @Property()

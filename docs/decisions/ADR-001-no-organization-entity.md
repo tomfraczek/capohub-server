@@ -4,6 +4,13 @@
 
 Accepted
 
+> **Terminology note (2026-07-28):** the informal term "Organization" used
+> throughout this ADR was formalized as **Group** by the Group/Section
+> domain rename (see ADR-031) - a root Group (`parentGroup === null`) is
+> what this document calls "the Organization". The core decision below -
+> one entity for every hierarchy level, no dedicated Organization
+> entity/table - is unchanged and still accurate.
+
 ## Context
 
 CapoHub must support independent schools, local groups, national organizations,

@@ -17,15 +17,15 @@ import {
   MEMBERSHIP_SUSPENSIONS_ACTIVE_UNIQUE_INDEX,
   MembershipSuspension,
 } from './entities/membership-suspension.entity';
-import { MembershipSection } from './entities/membership-section.entity';
+import { MembershipCohort } from './entities/membership-cohort.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
-import { Section } from './entities/section.entity';
+import { Cohort } from './entities/cohort.entity';
 import { AuditAction } from './enums/audit-action.enum';
 import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
 import { MembershipEndReason } from './enums/membership-end-reason.enum';
-import { SectionStatus } from './enums/section-status.enum';
+import { CohortStatus } from './enums/cohort-status.enum';
 import { AuditLogService } from './audit-log.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupMembershipsService } from './group-memberships.service';
@@ -65,13 +65,13 @@ function buildRoleAssignment(
   return Object.assign(assignment, overrides);
 }
 
-function buildSection(overrides: Partial<Section> = {}): Section {
-  const section = new Section();
-  section.id = 'section-1';
-  section.name = 'Kids';
-  section.status = SectionStatus.ACTIVE;
-  section.group = buildGroup();
-  return Object.assign(section, overrides);
+function buildCohort(overrides: Partial<Cohort> = {}): Cohort {
+  const cohort = new Cohort();
+  cohort.id = 'cohort-1';
+  cohort.name = 'Kids';
+  cohort.status = CohortStatus.ACTIVE;
+  cohort.group = buildGroup();
+  return Object.assign(cohort, overrides);
 }
 
 interface FindOneCall {
@@ -87,8 +87,8 @@ interface MockRouting {
   groupResults?: (Group | null)[];
   userResults?: (User | null)[];
   membershipResults?: (GroupMembership | null)[];
-  sectionResults?: (Section | null)[];
-  membershipSectionResults?: (MembershipSection | null)[];
+  cohortResults?: (Cohort | null)[];
+  membershipCohortResults?: (MembershipCohort | null)[];
   roleAssignmentResults?: (RoleAssignment | null)[];
   groupBanResults?: (GroupBan | null)[];
   membershipSuspensionResults?: (MembershipSuspension | null)[];
@@ -96,7 +96,7 @@ interface MockRouting {
   // every call to find() for the same entity gets the same static array,
   // which is enough for these tests since none of them depend on two
   // *different* bulk-find results for the same entity within one test.
-  membershipSectionFindResults?: MembershipSection[];
+  membershipCohortFindResults?: MembershipCohort[];
   roleAssignmentFindResults?: RoleAssignment[];
   flushError?: Error;
 }
@@ -105,8 +105,8 @@ function buildMockEm(routing: MockRouting = {}) {
   const groupQueue = [...(routing.groupResults ?? [])];
   const userQueue = [...(routing.userResults ?? [])];
   const membershipQueue = [...(routing.membershipResults ?? [])];
-  const sectionQueue = [...(routing.sectionResults ?? [])];
-  const membershipSectionQueue = [...(routing.membershipSectionResults ?? [])];
+  const cohortQueue = [...(routing.cohortResults ?? [])];
+  const membershipCohortQueue = [...(routing.membershipCohortResults ?? [])];
   const roleAssignmentQueue = [...(routing.roleAssignmentResults ?? [])];
   const groupBanQueue = [...(routing.groupBanResults ?? [])];
   const membershipSuspensionQueue = [
@@ -134,11 +134,11 @@ function buildMockEm(routing: MockRouting = {}) {
     if (entity === GroupMembership) {
       return Promise.resolve(membershipQueue.shift() ?? null);
     }
-    if (entity === Section) {
-      return Promise.resolve(sectionQueue.shift() ?? null);
+    if (entity === Cohort) {
+      return Promise.resolve(cohortQueue.shift() ?? null);
     }
-    if (entity === MembershipSection) {
-      return Promise.resolve(membershipSectionQueue.shift() ?? null);
+    if (entity === MembershipCohort) {
+      return Promise.resolve(membershipCohortQueue.shift() ?? null);
     }
     if (entity === RoleAssignment) {
       return Promise.resolve(roleAssignmentQueue.shift() ?? null);
@@ -155,8 +155,8 @@ function buildMockEm(routing: MockRouting = {}) {
   });
 
   const find = jest.fn((entity: unknown) => {
-    if (entity === MembershipSection) {
-      return Promise.resolve(routing.membershipSectionFindResults ?? []);
+    if (entity === MembershipCohort) {
+      return Promise.resolve(routing.membershipCohortFindResults ?? []);
     }
     if (entity === RoleAssignment) {
       return Promise.resolve(routing.roleAssignmentFindResults ?? []);
@@ -860,25 +860,25 @@ describe('GroupMembershipsService', () => {
     });
   });
 
-  describe('assignSection', () => {
-    it('assigns an active membership to a section in the same Root Group', async () => {
+  describe('assignCohort', () => {
+    it('assigns an active membership to a cohort in the same Root Group', async () => {
       const membership = buildMembership();
-      const section = buildSection();
+      const cohort = buildCohort();
       const { em, persist } = buildMockEm({
         membershipResults: [membership],
-        sectionResults: [section],
-        membershipSectionResults: [null],
+        cohortResults: [cohort],
+        membershipCohortResults: [null],
       });
       const service = buildService(em, () => Promise.resolve(buildGroup()));
 
-      await service.assignSection('root-1', 'membership-1', 'section-1');
+      await service.assignCohort('root-1', 'membership-1', 'cohort-1');
 
-      const persisted = persist.mock.calls[0][0] as MembershipSection;
+      const persisted = persist.mock.calls[0][0] as MembershipCohort;
       expect(persisted.membership).toEqual({ id: 'membership-1' });
-      expect(persisted.section).toEqual({ id: 'section-1' });
+      expect(persisted.cohort).toEqual({ id: 'cohort-1' });
     });
 
-    it('rejects assigning a section to an inactive membership', async () => {
+    it('rejects assigning a cohort to an inactive membership', async () => {
       const membership = buildMembership({
         status: GroupMembershipStatus.ARCHIVED,
       });
@@ -886,7 +886,7 @@ describe('GroupMembershipsService', () => {
       const service = buildService(em);
 
       const error: unknown = await service
-        .assignSection('root-1', 'membership-1', 'section-1')
+        .assignCohort('root-1', 'membership-1', 'cohort-1')
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
@@ -895,143 +895,143 @@ describe('GroupMembershipsService', () => {
       });
     });
 
-    it('rejects with SECTION_NOT_FOUND when the section does not exist', async () => {
+    it('rejects with COHORT_NOT_FOUND when the cohort does not exist', async () => {
       const membership = buildMembership();
       const { em } = buildMockEm({
         membershipResults: [membership],
-        sectionResults: [null],
+        cohortResults: [null],
       });
       const service = buildService(em);
 
       const error: unknown = await service
-        .assignSection('root-1', 'membership-1', 'missing')
+        .assignCohort('root-1', 'membership-1', 'missing')
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(NotFoundException);
       expect((error as NotFoundException).getResponse()).toMatchObject({
-        code: 'SECTION_NOT_FOUND',
+        code: 'COHORT_NOT_FOUND',
       });
     });
 
-    it('rejects assigning an archived section', async () => {
+    it('rejects assigning an archived cohort', async () => {
       const membership = buildMembership();
-      const section = buildSection({ status: SectionStatus.ARCHIVED });
+      const cohort = buildCohort({ status: CohortStatus.ARCHIVED });
       const { em } = buildMockEm({
         membershipResults: [membership],
-        sectionResults: [section],
+        cohortResults: [cohort],
       });
       const service = buildService(em);
 
       const error: unknown = await service
-        .assignSection('root-1', 'membership-1', 'section-1')
+        .assignCohort('root-1', 'membership-1', 'cohort-1')
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
       expect((error as ConflictException).getResponse()).toMatchObject({
-        code: 'MEMBERSHIP_SECTION_ARCHIVED',
+        code: 'MEMBERSHIP_COHORT_ARCHIVED',
       });
     });
 
-    it('rejects a section belonging to a different Root Group', async () => {
+    it('rejects a cohort belonging to a different Root Group', async () => {
       const membership = buildMembership();
-      const section = buildSection({
+      const cohort = buildCohort({
         group: buildGroup({ id: 'child-of-other-root' }),
       });
       const { em } = buildMockEm({
         membershipResults: [membership],
-        sectionResults: [section],
+        cohortResults: [cohort],
       });
       const service = buildService(em, () =>
         Promise.resolve(buildGroup({ id: 'other-root' })),
       );
 
       const error: unknown = await service
-        .assignSection('root-1', 'membership-1', 'section-1')
+        .assignCohort('root-1', 'membership-1', 'cohort-1')
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(BadRequestException);
       expect((error as BadRequestException).getResponse()).toMatchObject({
-        code: 'MEMBERSHIP_SECTION_MISMATCH',
+        code: 'MEMBERSHIP_COHORT_MISMATCH',
       });
     });
 
     it('rejects a duplicate assignment', async () => {
       const membership = buildMembership();
-      const section = buildSection();
-      const existingAssignment = new MembershipSection();
+      const cohort = buildCohort();
+      const existingAssignment = new MembershipCohort();
       const { em } = buildMockEm({
         membershipResults: [membership],
-        sectionResults: [section],
-        membershipSectionResults: [existingAssignment],
+        cohortResults: [cohort],
+        membershipCohortResults: [existingAssignment],
       });
       const service = buildService(em);
 
       const error: unknown = await service
-        .assignSection('root-1', 'membership-1', 'section-1')
+        .assignCohort('root-1', 'membership-1', 'cohort-1')
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
       expect((error as ConflictException).getResponse()).toMatchObject({
-        code: 'MEMBERSHIP_SECTION_ALREADY_ASSIGNED',
+        code: 'MEMBERSHIP_COHORT_ALREADY_ASSIGNED',
       });
     });
 
-    it('maps a database-level unique-violation race to MEMBERSHIP_SECTION_ALREADY_ASSIGNED', async () => {
+    it('maps a database-level unique-violation race to MEMBERSHIP_COHORT_ALREADY_ASSIGNED', async () => {
       const membership = buildMembership();
-      const section = buildSection();
+      const cohort = buildCohort();
       const { em } = buildMockEm({
         membershipResults: [membership],
-        sectionResults: [section],
-        membershipSectionResults: [null],
+        cohortResults: [cohort],
+        membershipCohortResults: [null],
         flushError: new UniqueConstraintViolationException(
           new Error(
-            'duplicate key value violates unique constraint "membership_sections_membership_id_section_id_unique"',
+            'duplicate key value violates unique constraint "membership_cohorts_membership_id_cohort_id_unique"',
           ),
         ),
       });
       const service = buildService(em);
 
       const error: unknown = await service
-        .assignSection('root-1', 'membership-1', 'section-1')
+        .assignCohort('root-1', 'membership-1', 'cohort-1')
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(ConflictException);
       expect((error as ConflictException).getResponse()).toMatchObject({
-        code: 'MEMBERSHIP_SECTION_ALREADY_ASSIGNED',
+        code: 'MEMBERSHIP_COHORT_ALREADY_ASSIGNED',
       });
     });
   });
 
-  describe('unassignSection', () => {
+  describe('unassignCohort', () => {
     it('removes an existing assignment', async () => {
       const membership = buildMembership();
-      const assignment = new MembershipSection();
+      const assignment = new MembershipCohort();
       const { em, remove } = buildMockEm({
         membershipResults: [membership],
-        membershipSectionResults: [assignment],
+        membershipCohortResults: [assignment],
       });
       const service = buildService(em);
 
-      await service.unassignSection('root-1', 'membership-1', 'section-1');
+      await service.unassignCohort('root-1', 'membership-1', 'cohort-1');
 
       expect(remove).toHaveBeenCalledWith(assignment);
     });
 
-    it('throws MEMBERSHIP_SECTION_ASSIGNMENT_NOT_FOUND when no assignment exists', async () => {
+    it('throws MEMBERSHIP_COHORT_ASSIGNMENT_NOT_FOUND when no assignment exists', async () => {
       const membership = buildMembership();
       const { em } = buildMockEm({
         membershipResults: [membership],
-        membershipSectionResults: [null],
+        membershipCohortResults: [null],
       });
       const service = buildService(em);
 
       const error: unknown = await service
-        .unassignSection('root-1', 'membership-1', 'section-1')
+        .unassignCohort('root-1', 'membership-1', 'cohort-1')
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(NotFoundException);
       expect((error as NotFoundException).getResponse()).toMatchObject({
-        code: 'MEMBERSHIP_SECTION_ASSIGNMENT_NOT_FOUND',
+        code: 'MEMBERSHIP_COHORT_ASSIGNMENT_NOT_FOUND',
       });
     });
   });
@@ -1091,7 +1091,7 @@ describe('GroupMembershipsService', () => {
       expect(persistedBan.reason).toBeNull();
     });
 
-    it('rejects with CANNOT_BAN_OWNER when the target owns one or more Groups in this Organization', async () => {
+    it('rejects with CANNOT_BAN_OWNER when the target owns one or more Groups in this Group', async () => {
       const membership = buildMembership();
       const { em } = buildMockEm({
         membershipResults: [membership],

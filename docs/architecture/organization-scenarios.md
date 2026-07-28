@@ -8,6 +8,14 @@ last_updated: 2026-07-20
 
 # Organization Business Scenarios
 
+> **Terminology note (2026-07-28):** this document predates the
+> Group/Section domain rename (see
+> [ADR-031](../decisions/ADR-031-group-section-domain-rename.md)) and uses
+> its pre-rename vocabulary throughout. Mapping: "Organization"/"Root
+> Group" → **Group**; "Group" (a Child Group) → **Section**; "Section" (the
+> flat member tag) → **Cohort**. See the
+> [Glossary](../product/glossary.md) for current definitions.
+
 > This chapter describes typical business scenarios supported by the
 > Organization Domain. Their purpose is to demonstrate expected system
 > behavior, and they should also serve as the basis for integration

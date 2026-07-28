@@ -1,6 +1,6 @@
 import { GroupStatus } from '../groups/enums/group-status.enum';
 
-/** Mirrors GroupResponseDto but filtered to publicly safe fields. */
+/** Mirrors GroupResponseDto/SectionResponseDto but filtered to publicly safe fields. */
 export interface PublicGroupProfileDto {
   id: string;
   name: string;
@@ -13,12 +13,13 @@ export interface PublicGroupProfileDto {
   isHidden: boolean;
   publicCode: string | null;
   /**
-   * True when this Group is a Root Group (parentGroup === null), meaning it
-   * represents an Organization in the domain model (see ADR-001).  Clients
-   * can use this flag to render "Join organization" vs "Join group" UI and
-   * to decide which targetType to supply to POST /groups/:id/join.
+   * True when this Group is a root Group (parentGroup === null), i.e. it is
+   * presented as "Group" rather than "Section" (see the Group/Section
+   * rename ADR). Clients can use this flag to render "Join group" vs "Join
+   * section" UI and to decide which targetType to supply to
+   * POST /groups/:id/join or POST /sections/:id/join.
    */
-  isOrganization: boolean;
+  isRootGroup: boolean;
 }
 
 /** Public user profile - only fields safe to expose to any authenticated user. */
@@ -32,22 +33,22 @@ export interface PublicUserProfileDto {
 /**
  * The type of the discovered resource.
  *
- * - 'ORGANIZATION': a Root Group (parentGroup === null) — represents an
- *   organization.  Use targetType = ORGANIZATION when calling
- *   POST /groups/:id/join.
- * - 'GROUP': a Child Group — represents a team, section, city chapter, etc.
- *   Use targetType = GROUP when calling POST /groups/:id/join.
+ * - 'GROUP': a root Group (parentGroup === null). Use targetType = GROUP
+ *   when calling POST /groups/:id/join.
+ * - 'SECTION': a non-root Group, at any depth — represents a team, city
+ *   chapter, etc. Use targetType = SECTION when calling
+ *   POST /sections/:id/join.
  * - 'USER': a user profile.
  */
-export type DiscoveredResourceType = 'USER' | 'GROUP' | 'ORGANIZATION';
+export type DiscoveredResourceType = 'USER' | 'GROUP' | 'SECTION';
 
 export interface DiscoveredResourceDto {
   resourceType: DiscoveredResourceType;
   // Exactly one of the two profile shapes is non-null
   group: PublicGroupProfileDto | null;
   user: PublicUserProfileDto | null;
-  // Whether the requesting user is already a member (org-level for groups,
-  // N/A for users)
+  // Whether the requesting user is already a member (root-Group-level for
+  // groups/sections, N/A for users)
   isMember: boolean;
   // Whether the requesting user has a PENDING invitation or join request
   hasPendingRequest: boolean;

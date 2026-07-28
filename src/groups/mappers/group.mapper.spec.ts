@@ -80,7 +80,7 @@ describe('group.mapper', () => {
   });
 
   describe('toGroupMembershipResponseDto', () => {
-    it('maps the membership, every Root Group Role it holds, its minimal user reference, and assigned sections', () => {
+    it('maps the membership, every Root Group Role it holds, its minimal user reference, and assigned cohorts', () => {
       const membership = new GroupMembership();
       membership.id = 'membership-1';
       membership.rootGroup = buildGroup({ id: 'root-1' });
@@ -96,7 +96,7 @@ describe('group.mapper', () => {
       const dto = toGroupMembershipResponseDto(
         membership,
         [GroupRole.MEMBER, GroupRole.OWNER],
-        [{ id: 'section-1', name: 'Kids' }],
+        [{ id: 'cohort-1', name: 'Kids' }],
       );
 
       expect(dto).toEqual({
@@ -108,7 +108,7 @@ describe('group.mapper', () => {
         joinedAt: '2026-01-01T00:00:00.000Z',
         leftAt: null,
         endReason: null,
-        sections: [{ id: 'section-1', name: 'Kids' }],
+        cohorts: [{ id: 'cohort-1', name: 'Kids' }],
       });
     });
 
