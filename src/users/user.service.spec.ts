@@ -3,6 +3,7 @@ import { EntityManager, EntityRepository } from '@mikro-orm/postgresql';
 import type { ClerkClient } from '@clerk/backend';
 import { AuthContext } from '../auth/types/auth-context.type';
 import { GlobalRole } from '../auth/permissions/global-role.enum';
+import { EventRolesService } from '../events/event-roles.service';
 import { GroupMembership } from '../groups/entities/group-membership.entity';
 import { Group } from '../groups/entities/group.entity';
 import { RoleAssignment } from '../groups/entities/role-assignment.entity';
@@ -43,6 +44,7 @@ describe('UserService', () => {
     deleteUser?: jest.Mock;
     findMemberships?: jest.Mock;
     findOwnedActiveGroups?: jest.Mock;
+    findOwnedActiveEvents?: jest.Mock;
     nativeDelete?: jest.Mock;
     findOneOrFailUser?: jest.Mock;
     emFindOne?: jest.Mock;
@@ -60,6 +62,7 @@ describe('UserService', () => {
     userRepository: { findOne: jest.Mock };
     clerkClient: { users: { getUser: jest.Mock; deleteUser: jest.Mock } };
     roleAssignmentsService: { findOwnedActiveGroups: jest.Mock };
+    eventRolesService: { findOwnedActiveEvents: jest.Mock };
   } {
     const em: Record<string, jest.Mock> = {
       flush: jest.fn().mockResolvedValue(undefined),
@@ -88,12 +91,17 @@ describe('UserService', () => {
       findOwnedActiveGroups:
         options.findOwnedActiveGroups ?? jest.fn().mockResolvedValue([]),
     };
+    const eventRolesService = {
+      findOwnedActiveEvents:
+        options.findOwnedActiveEvents ?? jest.fn().mockResolvedValue([]),
+    };
 
     const service = new UserService(
       em as unknown as EntityManager,
       userRepository as unknown as EntityRepository<User>,
       clerkClient as unknown as ClerkClient,
       roleAssignmentsService as unknown as RoleAssignmentsService,
+      eventRolesService as unknown as EventRolesService,
     );
 
     return {
@@ -102,6 +110,7 @@ describe('UserService', () => {
       userRepository,
       clerkClient,
       roleAssignmentsService,
+      eventRolesService,
     };
   }
 

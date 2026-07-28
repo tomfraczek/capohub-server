@@ -16,6 +16,7 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.notificationsEnabled = false;
   user.globalRole = GlobalRole.EDITOR;
   user.isActive = true;
+  user.publicCode = 'ABCD-1234';
   user.lastLoginAt = new Date('2026-07-10T10:00:00.000Z');
   user.createdAt = new Date('2026-01-01T00:00:00.000Z');
   user.updatedAt = new Date('2026-02-01T00:00:00.000Z');
@@ -36,6 +37,7 @@ describe('toUserResponseDto', () => {
       theme: 'dark',
       notificationsEnabled: false,
       globalRole: GlobalRole.EDITOR,
+      publicCode: 'ABCD-1234',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-02-01T00:00:00.000Z',
     });

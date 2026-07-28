@@ -12,6 +12,12 @@ export interface UserResponseDto {
   theme: Theme;
   notificationsEnabled: boolean;
   globalRole: GlobalRole;
+  // Stable, immutable, non-guessable code identifying this user without
+  // revealing their id - e.g. encoded as this user's personal check-in QR
+  // code (see events-api.md "Check-in"). Every user has one, generated at
+  // account creation (see UserService.findOrCreateFromClerk). Not a secret
+  // and never usable as an authorization token on its own.
+  publicCode: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { EntityManager } from '@mikro-orm/postgresql';
+import { Event } from '../../events/entities/event.entity';
 import { Group } from '../../groups/entities/group.entity';
 import { User } from '../../users/entities/user.entity';
 
@@ -25,9 +26,9 @@ export function generatePublicCode(): string {
 }
 
 /**
- * Generates a public code that does not already exist in either the `users`
- * or `groups` table (and can be extended for future entity types). Retries
- * up to 10 times on the astronomically rare collision.
+ * Generates a public code that does not already exist in the `users`,
+ * `groups` or `events` tables (and can be extended for future entity
+ * types). Retries up to 10 times on the astronomically rare collision.
  *
  * Must be called with the EntityManager that is currently active for the
  * caller's request (or transaction fork) - never `this.em` from inside an
@@ -38,11 +39,12 @@ export async function generateUniquePublicCode(
 ): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = generatePublicCode();
-    const [existingUser, existingGroup] = await Promise.all([
+    const [existingUser, existingGroup, existingEvent] = await Promise.all([
       em.findOne(User, { publicCode: code }),
       em.findOne(Group, { publicCode: code }),
+      em.findOne(Event, { publicCode: code }),
     ]);
-    if (!existingUser && !existingGroup) {
+    if (!existingUser && !existingGroup && !existingEvent) {
       return code;
     }
   }

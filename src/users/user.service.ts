@@ -9,6 +9,7 @@ import type { ClerkClient } from '@clerk/backend';
 import { CLERK_CLIENT } from '../auth/clerk/clerk-client.provider';
 import { AuthContext } from '../auth/types/auth-context.type';
 import { generateUniquePublicCode } from '../common/utils/public-code';
+import { EventRolesService } from '../events/event-roles.service';
 import { GroupMembership } from '../groups/entities/group-membership.entity';
 import { RoleAssignment } from '../groups/entities/role-assignment.entity';
 import { RoleAssignmentsService } from '../groups/role-assignments.service';
@@ -32,6 +33,7 @@ export class UserService {
     @Inject(CLERK_CLIENT)
     private readonly clerkClient: ClerkClient,
     private readonly roleAssignmentsService: RoleAssignmentsService,
+    private readonly eventRolesService: EventRolesService,
   ) {}
 
   /**
@@ -132,6 +134,24 @@ export class UserService {
         { id: user.id },
         { lockMode: LockMode.PESSIMISTIC_WRITE },
       );
+
+      // Mirrors the Group-ownership check just below, for the same reason:
+      // an Event must never be left ownerless (see
+      // EVENT_ROLE_ASSIGNMENTS_OWNER_UNIQUE_INDEX). Only DRAFT/PUBLISHED
+      // Events block deletion - CANCELLED/FINISHED are terminal/historical,
+      // see EventRolesService.findOwnedActiveEvents.
+      const ownedEvents = await this.eventRolesService.findOwnedActiveEvents(
+        em,
+        user.id,
+      );
+      if (ownedEvents.length > 0) {
+        throw new ConflictException({
+          code: 'CANNOT_DELETE_ACCOUNT_OWNS_EVENTS',
+          message:
+            'This account owns one or more Events - transfer ownership of each before deleting the account',
+          ownedEventIds: ownedEvents.map((event) => event.id),
+        });
+      }
 
       const memberships = await em.find(
         GroupMembership,

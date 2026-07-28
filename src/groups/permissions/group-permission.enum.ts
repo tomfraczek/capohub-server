@@ -90,4 +90,27 @@ export enum GroupPermission {
   SECTION_CREATE = 'SECTION_CREATE',
   SECTION_EDIT = 'SECTION_EDIT',
   SECTION_ARCHIVE = 'SECTION_ARCHIVE',
+
+  // Event - community-level gate only. Administering one *specific* Event
+  // once it exists (edit/publish/cancel/organizers/moderators/check-in/...)
+  // is deliberately NOT here - it is answered by the Event's own
+  // Owner/Organizer/Moderator tier instead (see
+  // events/permissions/event-permission.enum.ts), kept independent of
+  // Community roles per the Events spec ("Oddziel role administracyjne
+  // Eventu od ról Community"). Viewing one specific Event's detail is also
+  // not here - that is gated by the Event's own `visibility` field,
+  // resolved in EventsService against the caller's Community membership /
+  // invitations, never by a fixed Role-based permission.
+  EVENT_CREATE = 'EVENT_CREATE',
+  // Oversight only: list/view every Event under this community, including
+  // Drafts and Invite-Only ones the caller holds no Event role for. Grants
+  // no write access - see EVENT_MODERATE.
+  EVENT_VIEW_ALL = 'EVENT_VIEW_ALL',
+  // Narrow emergency-moderation override: cancel any Event under this
+  // community even without holding any Event role there. Grants no
+  // edit/publish/organizer-management rights - those stay exclusively
+  // Event-role-gated. Not requested explicitly by the product spec; added
+  // so a community is never held hostage by an unresponsive/departed Event
+  // Owner - see docs/api/events-api.md "Architectural decisions".
+  EVENT_MODERATE = 'EVENT_MODERATE',
 }

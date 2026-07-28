@@ -13,6 +13,7 @@ export function toUserResponseDto(user: User): UserResponseDto {
     theme: user.theme,
     notificationsEnabled: user.notificationsEnabled,
     globalRole: user.globalRole,
+    publicCode: user.publicCode,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };

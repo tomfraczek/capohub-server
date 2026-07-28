@@ -69,6 +69,11 @@ const ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.SECTION_CREATE,
   GroupPermission.SECTION_EDIT,
   GroupPermission.SECTION_ARCHIVE,
+  // Creating an Event, and the oversight/override tier over every Event in
+  // this community - see the Event enum values' own comments.
+  GroupPermission.EVENT_CREATE,
+  GroupPermission.EVENT_VIEW_ALL,
+  GroupPermission.EVENT_MODERATE,
 ];
 
 // Every lifecycle-status permission (ARCHIVE, UNARCHIVE, SET_READ_ONLY,

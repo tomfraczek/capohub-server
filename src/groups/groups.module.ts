@@ -54,8 +54,19 @@ import { SectionsService } from './sections.service';
   ],
   // RoleAssignmentsService is exported for UsersModule - DELETE /users/me
   // must not hard-delete a User who still owns a Group (see
-  // UserService.assertOwnsNoGroups). One-directional: GroupsModule never
-  // imports UsersModule back.
-  exports: [RoleAssignmentsService],
+  // UserService.assertOwnsNoGroups). GroupPermissionService,
+  // GroupHierarchyService and GroupPermissionsGuard are additionally
+  // exported for EventsModule - resolving a caller's Community-level
+  // Role/permissions (for the GroupPermission.EVENT_CREATE gate on
+  // POST .../events and the EVENT_MODERATE oversight override - see
+  // events/guards/event-permissions.guard.ts) reuses this exact machinery
+  // rather than duplicating it. One-directional: GroupsModule never
+  // imports UsersModule or EventsModule back.
+  exports: [
+    RoleAssignmentsService,
+    GroupPermissionService,
+    GroupHierarchyService,
+    GroupPermissionsGuard,
+  ],
 })
 export class GroupsModule {}
