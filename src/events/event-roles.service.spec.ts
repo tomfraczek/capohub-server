@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { EventAccessService } from './event-access.service';
 import { EventRoleAssignment } from './entities/event-role-assignment.entity';
@@ -172,6 +176,38 @@ describe('EventRolesService', () => {
         response: { code: 'EVENT_ROLE_ALREADY_EXISTS' },
       });
     });
+
+    it.each([EventStatus.FINISHED, EventStatus.CANCELLED])(
+      'rejects granting a role once the event is %s',
+      async (status) => {
+        const { em } = buildMockEm({ userRolesForActor: [EventRole.OWNER] });
+        const service = buildService(em, buildEvent({ status }));
+
+        await expect(
+          service.grantRole(
+            'event-1',
+            { userId: 'user-2', role: EventRole.MODERATOR },
+            ACTOR,
+          ),
+        ).rejects.toBeInstanceOf(ConflictException);
+      },
+    );
+
+    it.each([EventStatus.DRAFT, EventStatus.PUBLISHED])(
+      'allows granting a role while the event is %s',
+      async (status) => {
+        const { em } = buildMockEm({ userRolesForActor: [EventRole.OWNER] });
+        const service = buildService(em, buildEvent({ status }));
+
+        await expect(
+          service.grantRole(
+            'event-1',
+            { userId: 'user-2', role: EventRole.MODERATOR },
+            ACTOR,
+          ),
+        ).resolves.toMatchObject({ role: EventRole.MODERATOR });
+      },
+    );
   });
 
   describe('revokeRole', () => {
@@ -225,6 +261,22 @@ describe('EventRolesService', () => {
         service.revokeRole('event-1', 'missing', ACTOR),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
+
+    it.each([EventStatus.FINISHED, EventStatus.CANCELLED])(
+      'rejects revoking a role once the event is %s',
+      async (status) => {
+        const { em } = buildMockEm({
+          eventRoleAssignmentResults: [
+            buildRoleAssignment({ role: EventRole.MODERATOR }),
+          ],
+        });
+        const service = buildService(em, buildEvent({ status }));
+
+        await expect(
+          service.revokeRole('event-1', 'role-assignment-1', ACTOR),
+        ).rejects.toBeInstanceOf(ConflictException);
+      },
+    );
   });
 
   describe('transferOwnership', () => {
@@ -295,6 +347,22 @@ describe('EventRolesService', () => {
         response: { code: 'EVENT_ROLE_TARGET_NOT_COMMUNITY_MEMBER' },
       });
     });
+
+    it.each([EventStatus.FINISHED, EventStatus.CANCELLED])(
+      'rejects transferring ownership once the event is %s',
+      async (status) => {
+        const { em } = buildMockEm({
+          eventRoleAssignmentResults: [
+            buildRoleAssignment({ role: EventRole.OWNER, user: ACTOR }),
+          ],
+        });
+        const service = buildService(em, buildEvent({ status }));
+
+        await expect(
+          service.transferOwnership('event-1', { toUserId: 'user-2' }, ACTOR),
+        ).rejects.toBeInstanceOf(ConflictException);
+      },
+    );
   });
 
   describe('findOwnedActiveEvents', () => {

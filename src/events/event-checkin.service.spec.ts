@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { EventAccessService } from './event-access.service';
 import { EventAttendee } from './entities/event-attendee.entity';
@@ -161,6 +161,20 @@ describe('EventCheckInService', () => {
         service.identify('event-1', 'ABCD-1234'),
       ).resolves.toBeDefined();
     });
+
+    it('rejects identification once the event is CANCELLED', async () => {
+      const { em } = buildMockEm({ scannedUser: buildUser() });
+      const service = buildService(
+        em,
+        buildEvent({ status: EventStatus.CANCELLED }),
+      );
+
+      await expect(
+        service.identify('event-1', 'ABCD-1234'),
+      ).rejects.toMatchObject({
+        response: { code: 'EVENT_CANCELLED' },
+      });
+    });
   });
 
   describe('markPresent', () => {
@@ -210,6 +224,24 @@ describe('EventCheckInService', () => {
         ),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
+
+    it.each([EventStatus.DRAFT, EventStatus.CANCELLED])(
+      'rejects marking present while the event is %s',
+      async (status) => {
+        const attendee = buildAttendee({ checkedIn: false });
+        const { em } = buildMockEm({ attendeeById: attendee });
+        const service = buildService(em, buildEvent({ status }));
+
+        await expect(
+          service.markPresent(
+            'event-1',
+            'attendee-1',
+            EventCheckInMethod.MANUAL,
+            ACTOR,
+          ),
+        ).rejects.toBeInstanceOf(ConflictException);
+      },
+    );
   });
 
   describe('undoCheckIn', () => {
@@ -240,5 +272,36 @@ describe('EventCheckInService', () => {
         response: { code: 'ATTENDEE_NOT_CHECKED_IN' },
       });
     });
+
+    it('allows undoing a check-in while the event has FINISHED', async () => {
+      const attendee = buildAttendee({
+        checkedIn: true,
+        checkedInAt: new Date(),
+        checkedInBy: ACTOR,
+        checkInMethod: EventCheckInMethod.MANUAL,
+      });
+      const { em } = buildMockEm({ attendeeById: attendee });
+      const service = buildService(
+        em,
+        buildEvent({ status: EventStatus.FINISHED }),
+      );
+
+      await expect(
+        service.undoCheckIn('event-1', 'attendee-1'),
+      ).resolves.toMatchObject({ checkedIn: false });
+    });
+
+    it.each([EventStatus.DRAFT, EventStatus.CANCELLED])(
+      'rejects undoing a check-in while the event is %s',
+      async (status) => {
+        const attendee = buildAttendee({ checkedIn: true });
+        const { em } = buildMockEm({ attendeeById: attendee });
+        const service = buildService(em, buildEvent({ status }));
+
+        await expect(
+          service.undoCheckIn('event-1', 'attendee-1'),
+        ).rejects.toBeInstanceOf(ConflictException);
+      },
+    );
   });
 });

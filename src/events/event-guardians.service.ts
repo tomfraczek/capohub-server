@@ -11,6 +11,10 @@ import { EventAccessService } from './event-access.service';
 import { EventAttendee } from './entities/event-attendee.entity';
 import { EventGuardianAssignment } from './entities/event-guardian-assignment.entity';
 import { EventAttendeeSubjectType } from './enums/event-attendee-subject-type.enum';
+import {
+  ADMIN_OPERATION_STATUSES,
+  assertEventStatusAllowed,
+} from './event-write-policy';
 import { toEventGuardianAssignmentResponseDto } from './mappers/event-guardian.mapper';
 
 /**
@@ -55,6 +59,7 @@ export class EventGuardiansService {
   ): Promise<EventGuardianAssignmentResponseDto> {
     return this.em.transactional(async (em) => {
       const event = await this.eventAccessService.loadOrFail(em, eventId);
+      assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
 
       const attendee = await em.findOne(EventAttendee, {
         id: attendeeId,
@@ -104,6 +109,9 @@ export class EventGuardiansService {
 
   async revoke(eventId: string, attendeeId: string): Promise<void> {
     return this.em.transactional(async (em) => {
+      const event = await this.eventAccessService.loadOrFail(em, eventId);
+      assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
+
       const assignment = await em.findOne(EventGuardianAssignment, {
         event: eventId,
         attendee: attendeeId,

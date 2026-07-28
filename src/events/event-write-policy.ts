@@ -47,6 +47,20 @@ export function assertEventStatusAllowed(
   );
 }
 
+// Shared allow-list for every "administrative" action on an Event: editing
+// its own fields, granting/revoking/transferring its Owner/Organizer/
+// Moderator roles, managing invitations, managing guardian assignments,
+// and manually promoting from the waitlist. All of these are valid while
+// the Event is still being organized (DRAFT) or is live (PUBLISHED), and
+// are blocked once it is over, one way or another (FINISHED, CANCELLED) -
+// see docs/api/events-api.md "Event lifecycle status". Centralized here,
+// rather than repeated as an inline array per call site, so every one of
+// these operations is guaranteed to agree on exactly the same rule.
+export const ADMIN_OPERATION_STATUSES: readonly EventStatus[] = [
+  EventStatus.DRAFT,
+  EventStatus.PUBLISHED,
+];
+
 /**
  * Lazily reconciles a PUBLISHED Event whose `endsAt` has passed to
  * FINISHED - this codebase has no scheduler/cron infrastructure, so

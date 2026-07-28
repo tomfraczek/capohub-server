@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/postgresql';
+import { EntityManager, LockMode } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
 import { CHILDREN_DIRECTORY_PORT } from './integration/children-directory.port';
 import type { ChildrenDirectoryPort } from './integration/children-directory.port';
@@ -22,7 +22,10 @@ import { EventStatus } from './enums/event-status.enum';
 import { EventVisibility } from './enums/event-visibility.enum';
 import { EventWaitlistPolicy } from './enums/event-waitlist-policy.enum';
 import { Event } from './entities/event.entity';
-import { assertEventStatusAllowed } from './event-write-policy';
+import {
+  ADMIN_OPERATION_STATUSES,
+  assertEventStatusAllowed,
+} from './event-write-policy';
 import { toEventAttendeeResponseDto } from './mappers/event-attendee.mapper';
 
 /**
@@ -211,12 +214,19 @@ export class EventRsvpService {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
         'community',
       ]);
+      assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
       if (event.waitlistPolicy !== EventWaitlistPolicy.MANUAL) {
         throw new ConflictException({
           code: 'EVENT_NOT_MANUAL_WAITLIST',
           message: 'This event does not use a manual waitlist',
         });
       }
+
+      // See assignSeatOrWaitlist for why this lock is required - a manual
+      // promotion is a capacity-relevant mutation just like a fresh
+      // registration, and must be serialized against any concurrent one
+      // for this same Event.
+      await em.lock(event, LockMode.PESSIMISTIC_WRITE);
 
       const attendee = await em.findOne(
         EventAttendee,
@@ -327,6 +337,24 @@ export class EventRsvpService {
     return attendee;
   }
 
+  /**
+   * Decides whether `attendee` claims a seat or is waitlisted - the one
+   * place capacity is actually enforced, so it is also the one place a
+   * concurrency guard is required. Without it, two concurrent
+   * registrations for the same Event could each run the `count` below
+   * before either has committed, both see e.g. "9 of 10 seats taken", and
+   * both grant a seat - overshooting `capacity`.
+   *
+   * `em.lock(event, LockMode.PESSIMISTIC_WRITE)` issues a `SELECT ... FOR
+   * UPDATE` against this Event's own row (same primitive
+   * UserService.deleteLocalAccountData already relies on for an analogous
+   * invariant - see its own comment on PESSIMISTIC_WRITE). Postgres blocks
+   * any other transaction trying to acquire the same lock until this one
+   * commits or rolls back, so the count below is always accurate relative
+   * to every other concurrent registration/RSVP-change/manual-promotion
+   * for this exact Event - concurrent requests for *different* Events are
+   * completely unaffected, since each Event's row is locked independently.
+   */
   private async assignSeatOrWaitlist(
     em: EntityManager,
     event: Event,
@@ -336,6 +364,8 @@ export class EventRsvpService {
       attendee.isWaitlisted = false;
       return;
     }
+
+    await em.lock(event, LockMode.PESSIMISTIC_WRITE);
 
     const seatsTaken = await em.count(EventAttendee, {
       event: event.id,
@@ -366,6 +396,13 @@ export class EventRsvpService {
     if (event.waitlistPolicy !== EventWaitlistPolicy.AUTOMATIC) {
       return;
     }
+
+    // Same reasoning as assignSeatOrWaitlist - promoting the next waitlisted
+    // attendee is itself a capacity-relevant mutation and must be
+    // serialized against a concurrent fresh registration/promotion for
+    // this same Event.
+    await em.lock(event, LockMode.PESSIMISTIC_WRITE);
+
     const next = await em.findOne(
       EventAttendee,
       { event: event.id, isWaitlisted: true },

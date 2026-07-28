@@ -112,6 +112,9 @@ export class EventCheckInService {
     attendeeId: string,
   ): Promise<EventAttendeeResponseDto> {
     return this.em.transactional(async (em) => {
+      const event = await this.eventAccessService.loadOrFail(em, eventId);
+      assertEventStatusAllowed(event, [...CHECK_IN_ALLOWED_STATUSES]);
+
       const attendee = await this.loadAttendeeOrFail(em, eventId, attendeeId);
       if (!attendee.checkedIn) {
         throw new ConflictException({

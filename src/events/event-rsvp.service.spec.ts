@@ -1,4 +1,5 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
+import { LockMode } from '@mikro-orm/postgresql';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { EventAccessService } from './event-access.service';
 import { ChildrenDirectoryPort } from './integration/children-directory.port';
@@ -103,6 +104,8 @@ function buildMockEm(routing: MockRouting = {}) {
     throw new Error(`Unexpected find entity: ${String(entity)}`);
   });
 
+  const lock = jest.fn().mockResolvedValue(undefined);
+
   const raw = {
     findOne,
     find,
@@ -110,6 +113,7 @@ function buildMockEm(routing: MockRouting = {}) {
     persist,
     flush,
     getReference,
+    lock,
     transactional: jest
       .fn()
       .mockImplementation((cb: (em: EntityManager) => unknown) =>
@@ -117,7 +121,14 @@ function buildMockEm(routing: MockRouting = {}) {
       ),
   };
 
-  return { em: raw as unknown as EntityManager, persist, findOne, find, count };
+  return {
+    em: raw as unknown as EntityManager,
+    persist,
+    findOne,
+    find,
+    count,
+    lock,
+  };
 }
 
 function buildService(em: EntityManager, routing: MockRouting = {}) {
@@ -255,6 +266,38 @@ describe('EventRsvpService', () => {
         response: { code: 'CHILDREN_DIRECTORY_NOT_AVAILABLE' },
       });
     });
+
+    // Concurrency guard (see assignSeatOrWaitlist's own comment): capacity
+    // enforcement is only race-free if the Event row is locked before the
+    // seats-taken count runs. These tests can't reproduce the actual race
+    // (the mocked EntityManager has no real transactions/locks) - see
+    // events.e2e-spec.ts for a real-concurrency reproduction against
+    // Postgres - but they do guard against silently losing the lock call
+    // itself in a future refactor.
+    it('locks the Event row before counting seats when a capacity limit is set', async () => {
+      const { em, lock } = buildMockEm({
+        existingAttendeeQueue: [null],
+        seatsTakenQueue: [0],
+      });
+      const event = buildEvent({
+        capacity: 5,
+        waitlistPolicy: EventWaitlistPolicy.AUTOMATIC,
+      });
+      const service = buildService(em, { event });
+
+      await service.register('event-1', buildRegisterInput(), ACTOR);
+
+      expect(lock).toHaveBeenCalledWith(event, LockMode.PESSIMISTIC_WRITE);
+    });
+
+    it('does not lock the Event row when there is no capacity limit', async () => {
+      const { em, lock } = buildMockEm({ existingAttendeeQueue: [null] });
+      const service = buildService(em);
+
+      await service.register('event-1', buildRegisterInput(), ACTOR);
+
+      expect(lock).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateRsvp', () => {
@@ -374,5 +417,56 @@ describe('EventRsvpService', () => {
         response: { code: 'ATTENDEE_NOT_WAITLISTED' },
       });
     });
+
+    it('locks the Event row before promoting', async () => {
+      const event = buildEvent({
+        capacity: 1,
+        waitlistPolicy: EventWaitlistPolicy.MANUAL,
+      });
+      const attendee = buildAttendee({ isWaitlisted: true });
+      const { em, lock } = buildMockEm();
+      const service = buildService(em, { event });
+      (em.findOne as jest.Mock).mockResolvedValueOnce(attendee);
+
+      await service.promoteFromWaitlist('event-1', 'attendee-1');
+
+      expect(lock).toHaveBeenCalledWith(event, LockMode.PESSIMISTIC_WRITE);
+    });
+
+    it.each([EventStatus.FINISHED, EventStatus.CANCELLED])(
+      'rejects manual promotion once the event is %s',
+      async (status) => {
+        const event = buildEvent({
+          status,
+          capacity: 1,
+          waitlistPolicy: EventWaitlistPolicy.MANUAL,
+        });
+        const { em } = buildMockEm();
+        const service = buildService(em, { event });
+
+        await expect(
+          service.promoteFromWaitlist('event-1', 'attendee-1'),
+        ).rejects.toBeInstanceOf(ConflictException);
+      },
+    );
+
+    it.each([EventStatus.DRAFT, EventStatus.PUBLISHED])(
+      'allows manual promotion while the event is %s',
+      async (status) => {
+        const event = buildEvent({
+          status,
+          capacity: 1,
+          waitlistPolicy: EventWaitlistPolicy.MANUAL,
+        });
+        const attendee = buildAttendee({ isWaitlisted: true });
+        const { em } = buildMockEm();
+        const service = buildService(em, { event });
+        (em.findOne as jest.Mock).mockResolvedValueOnce(attendee);
+
+        await expect(
+          service.promoteFromWaitlist('event-1', 'attendee-1'),
+        ).resolves.toMatchObject({ isWaitlisted: false });
+      },
+    );
   });
 });

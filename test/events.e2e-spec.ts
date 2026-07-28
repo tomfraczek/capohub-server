@@ -877,4 +877,273 @@ describe('Events (e2e)', () => {
       expect(response.code).toBe('EVENT_NOT_FOUND');
     });
   });
+
+  describe('status lifecycle guards', () => {
+    it('blocks transfer-ownership, role grants, invitations, and manual promotion once CANCELLED', async () => {
+      const community = await createCommunityWithMembers();
+      const event = await createEvent(OWNER_TOKEN, community.id, {
+        capacity: 5,
+        waitlistPolicy: EventWaitlistPolicy.MANUAL,
+      });
+      await publishEvent(OWNER_TOKEN, event.id);
+      await request(app.getHttpServer())
+        .post(`/api/v1/events/${event.id}/cancel`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({})
+        .expect(201);
+
+      const transferResponse = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/events/${event.id}/transfer-ownership`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ toUserId: localUserIdByToken.get(ORGANIZER_TOKEN) })
+          .expect(409),
+      );
+      expect(transferResponse.code).toBe('EVENT_CANCELLED');
+
+      const grantRoleResponse = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/events/${event.id}/roles`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({
+            userId: localUserIdByToken.get(ORGANIZER_TOKEN),
+            role: 'ORGANIZER',
+          })
+          .expect(409),
+      );
+      expect(grantRoleResponse.code).toBe('EVENT_CANCELLED');
+
+      const invitationResponse = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/events/${event.id}/invitations`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ userId: localUserIdByToken.get(MEMBER_TOKEN) })
+          .expect(409),
+      );
+      expect(invitationResponse.code).toBe('EVENT_CANCELLED');
+
+      // A well-formed but non-existent attendee id is enough - the status
+      // check runs before the attendee is looked up.
+      const promoteResponse = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(
+            `/api/v1/events/${event.id}/participants/00000000-0000-0000-0000-000000000000/promote`,
+          )
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(409),
+      );
+      expect(promoteResponse.code).toBe('EVENT_CANCELLED');
+
+      const rsvpResponse = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/events/${event.id}/register`)
+          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+          .send({ attendSelf: true, children: [] })
+          .expect(409),
+      );
+      expect(rsvpResponse.code).toBe('EVENT_CANCELLED');
+
+      const checkInResponse = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/events/${event.id}/checkin/identify`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ code: 'ABCD-1234' })
+          .expect(409),
+      );
+      expect(checkInResponse.code).toBe('EVENT_CANCELLED');
+    });
+
+    it('blocks transfer-ownership, role grants, invitations, guardians, and manual promotion once FINISHED, but still allows check-in', async () => {
+      const community = await createCommunityWithMembers();
+      const event = await createEvent(OWNER_TOKEN, community.id, {
+        capacity: 5,
+        waitlistPolicy: EventWaitlistPolicy.MANUAL,
+      });
+      await publishEvent(OWNER_TOKEN, event.id);
+
+      // Register while still PUBLISHED (endsAt is still in the future at
+      // this point), then push endsAt into the past directly in the
+      // database - registering against an already-past endsAt would itself
+      // be rejected, since the very next load lazily reconciles PUBLISHED
+      // -> FINISHED (see reconcileEventFinished) before the register
+      // endpoint's own status check runs.
+      const memberAttendee = await bodyOf<EventAttendeeResponseDto[]>(
+        request(app.getHttpServer())
+          .post(`/api/v1/events/${event.id}/register`)
+          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+          .send({ attendSelf: true, children: [] })
+          .expect(201),
+      );
+
+      const em = app.get(EntityManager).fork();
+      await em.nativeUpdate(
+        Event,
+        { id: event.id },
+        { endsAt: new Date('2020-01-10T18:00:00.000Z') },
+      );
+
+      // Reading the Event now triggers the lazy FINISHED reconciliation.
+      const afterFinish = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/events/${event.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(afterFinish.status).toBe('FINISHED');
+
+      const transferResponse = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/events/${event.id}/transfer-ownership`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ toUserId: localUserIdByToken.get(ORGANIZER_TOKEN) })
+          .expect(409),
+      );
+      expect(transferResponse.code).toBe('EVENT_FINISHED');
+
+      const grantRoleResponse = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/events/${event.id}/roles`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({
+            userId: localUserIdByToken.get(ORGANIZER_TOKEN),
+            role: 'ORGANIZER',
+          })
+          .expect(409),
+      );
+      expect(grantRoleResponse.code).toBe('EVENT_FINISHED');
+
+      const invitationResponse = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/events/${event.id}/invitations`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ userId: localUserIdByToken.get(OUTSIDER_TOKEN) })
+          .expect(409),
+      );
+      expect(invitationResponse.code).toBe('EVENT_FINISHED');
+
+      const guardianResponse = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(
+            `/api/v1/events/${event.id}/attendees/${memberAttendee[0].id}/guardian`,
+          )
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ guardianUserId: localUserIdByToken.get(MEMBER_TOKEN) })
+          .expect(409),
+      );
+      expect(guardianResponse.code).toBe('EVENT_FINISHED');
+
+      const promoteResponse = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(
+            `/api/v1/events/${event.id}/participants/${memberAttendee[0].id}/promote`,
+          )
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(409),
+      );
+      expect(promoteResponse.code).toBe('EVENT_FINISHED');
+
+      // Check-in and undo remain available once FINISHED.
+      const memberProfile = await bodyOf<UserResponseDto>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/me')
+          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+          .expect(200),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/events/${event.id}/checkin/${memberAttendee[0].id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ method: 'MANUAL' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/api/v1/events/${event.id}/checkin/${memberAttendee[0].id}/undo`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(201);
+      expect(memberProfile.publicCode).toEqual(expect.any(String));
+    });
+  });
+
+  describe('concurrent registrations under a capacity limit', () => {
+    it('never seats more attendees than capacity when many registrations race', async () => {
+      const community = await createCommunityWithMembers();
+      const event = await createEvent(OWNER_TOKEN, community.id, {
+        visibility: EventVisibility.PUBLIC,
+        capacity: 1,
+        waitlistPolicy: EventWaitlistPolicy.NONE,
+      });
+      await publishEvent(OWNER_TOKEN, event.id);
+
+      const contenders = [
+        OWNER_TOKEN,
+        ORGANIZER_TOKEN,
+        MODERATOR_TOKEN,
+        MEMBER_TOKEN,
+        OUTSIDER_TOKEN,
+      ];
+
+      const results = await Promise.all(
+        contenders.map((token) =>
+          request(app.getHttpServer())
+            .post(`/api/v1/events/${event.id}/register`)
+            .set('Authorization', `Bearer ${token}`)
+            .send({ attendSelf: true, children: [] }),
+        ),
+      );
+
+      const succeeded = results.filter((res) => res.status === 201);
+      const rejected = results.filter((res) => res.status === 409);
+      expect(succeeded).toHaveLength(1);
+      expect(rejected).toHaveLength(contenders.length - 1);
+      for (const response of rejected) {
+        expect((response.body as HttpErrorResponse).code).toBe('EVENT_FULL');
+      }
+
+      const participants = await bodyOf<EventAttendeeResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/events/${event.id}/participants`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      const seated = participants.filter((p) => !p.isWaitlisted);
+      expect(seated).toHaveLength(1);
+    });
+
+    it('waitlists every registration beyond capacity under an AUTOMATIC policy, never seating more than capacity', async () => {
+      const community = await createCommunityWithMembers();
+      const event = await createEvent(OWNER_TOKEN, community.id, {
+        visibility: EventVisibility.PUBLIC,
+        capacity: 2,
+        waitlistPolicy: EventWaitlistPolicy.AUTOMATIC,
+      });
+      await publishEvent(OWNER_TOKEN, event.id);
+
+      const contenders = [
+        OWNER_TOKEN,
+        ORGANIZER_TOKEN,
+        MODERATOR_TOKEN,
+        MEMBER_TOKEN,
+        OUTSIDER_TOKEN,
+      ];
+
+      await Promise.all(
+        contenders.map((token) =>
+          request(app.getHttpServer())
+            .post(`/api/v1/events/${event.id}/register`)
+            .set('Authorization', `Bearer ${token}`)
+            .send({ attendSelf: true, children: [] }),
+        ),
+      );
+
+      const participants = await bodyOf<EventAttendeeResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/events/${event.id}/participants`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(participants).toHaveLength(contenders.length);
+      const seated = participants.filter((p) => !p.isWaitlisted);
+      const waitlisted = participants.filter((p) => p.isWaitlisted);
+      expect(seated).toHaveLength(2);
+      expect(waitlisted).toHaveLength(contenders.length - 2);
+    });
+  });
 });

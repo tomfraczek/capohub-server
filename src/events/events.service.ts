@@ -26,6 +26,7 @@ import { EventWaitlistPolicy } from './enums/event-waitlist-policy.enum';
 import { EventVisibility } from './enums/event-visibility.enum';
 import { EventRolesService } from './event-roles.service';
 import {
+  ADMIN_OPERATION_STATUSES,
   assertEventStatusAllowed,
   reconcileEventFinished,
 } from './event-write-policy';
@@ -94,10 +95,7 @@ export class EventsService {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
         'community',
       ]);
-      assertEventStatusAllowed(event, [
-        EventStatus.DRAFT,
-        EventStatus.PUBLISHED,
-      ]);
+      assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
       this.applyFields(event, input);
       await em.flush();
 
@@ -142,10 +140,7 @@ export class EventsService {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
         'community',
       ]);
-      assertEventStatusAllowed(event, [
-        EventStatus.DRAFT,
-        EventStatus.PUBLISHED,
-      ]);
+      assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
       await this.transitionStatus(
         em,
         event,

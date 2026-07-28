@@ -18,6 +18,10 @@ import {
 } from './entities/event-role-assignment.entity';
 import { EventRole } from './enums/event-role.enum';
 import { EventStatus } from './enums/event-status.enum';
+import {
+  ADMIN_OPERATION_STATUSES,
+  assertEventStatusAllowed,
+} from './event-write-policy';
 import { toEventRoleAssignmentResponseDto } from './mappers/event-role-assignment.mapper';
 
 /**
@@ -111,6 +115,7 @@ export class EventRolesService {
   ): Promise<EventRoleAssignmentResponseDto> {
     return this.em.transactional(async (em) => {
       const event = await this.eventAccessService.loadOrFail(em, eventId);
+      assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
       const actorRoles = await this.getRolesForUser(em, eventId, actor.id);
 
       if (
@@ -190,6 +195,9 @@ export class EventRolesService {
     actor: User,
   ): Promise<void> {
     return this.em.transactional(async (em) => {
+      const event = await this.eventAccessService.loadOrFail(em, eventId);
+      assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
+
       const assignment = await em.findOne(EventRoleAssignment, {
         id: roleAssignmentId,
         event: eventId,
@@ -240,6 +248,7 @@ export class EventRolesService {
   ): Promise<EventRoleAssignmentResponseDto> {
     return this.em.transactional(async (em) => {
       const event = await this.eventAccessService.loadOrFail(em, eventId);
+      assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
 
       const currentOwnerAssignment = await em.findOne(EventRoleAssignment, {
         event: eventId,

@@ -16,6 +16,10 @@ import {
   EventInvitation,
 } from './entities/event-invitation.entity';
 import { EventInvitationStatus } from './enums/event-invitation-status.enum';
+import {
+  ADMIN_OPERATION_STATUSES,
+  assertEventStatusAllowed,
+} from './event-write-policy';
 import { toEventInvitationResponseDto } from './mappers/event-invitation.mapper';
 
 @Injectable()
@@ -32,6 +36,7 @@ export class EventInvitationsService {
   ): Promise<EventInvitationResponseDto> {
     return this.em.transactional(async (em) => {
       const event = await this.eventAccessService.loadOrFail(em, eventId);
+      assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
 
       let invitedUser: User | null = null;
       if (input.userId) {
@@ -84,6 +89,9 @@ export class EventInvitationsService {
 
   async cancel(eventId: string, invitationId: string): Promise<void> {
     return this.em.transactional(async (em) => {
+      const event = await this.eventAccessService.loadOrFail(em, eventId);
+      assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
+
       const invitation = await this.loadOrFail(em, eventId, invitationId);
       if (invitation.status !== EventInvitationStatus.PENDING) {
         throw new ConflictException({
@@ -108,6 +116,9 @@ export class EventInvitationsService {
     actor: User,
   ): Promise<void> {
     return this.em.transactional(async (em) => {
+      const event = await this.eventAccessService.loadOrFail(em, eventId);
+      assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
+
       const invitation = await this.loadOrFail(em, eventId, invitationId);
 
       const isInvitee =
