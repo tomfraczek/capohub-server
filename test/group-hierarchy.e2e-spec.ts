@@ -206,6 +206,8 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
       currencyCode: 'PLN',
       country: 'PL',
       city: 'Poznań',
+      region: 'Greater Poland',
+      geonameId: 3088171,
       ...overrides,
     };
   }
@@ -247,6 +249,8 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
       // Required on Section, same as Group - see create-section.schema.ts.
       country: 'PL',
       city: 'Warsaw',
+      region: 'Mazovia',
+      geonameId: 756135,
       ...overrides,
     };
   }
@@ -463,6 +467,75 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .send(sectionPayload({ name: 'Editable Section', city: '' }))
         .expect(400);
+    });
+
+    it('rejects creating a Section with no geonameId', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'No Geoname Section Root',
+      });
+      const input = sectionPayload({ name: 'No Geoname Section' });
+      delete (input as { geonameId?: unknown }).geonameId;
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/sections`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(input)
+        .expect(400);
+      expect((response.body as HttpErrorResponse).code).toBe(
+        'VALIDATION_ERROR',
+      );
+    });
+
+    // Regression coverage for the city-identification problem: Poland has
+    // two different towns both named "Piaski", in different regions, each
+    // with its own stable geonameId - see groups.e2e-spec.ts for the
+    // identical scenario against a Group.
+    it('rejects creating a Section whose geonameId does not match its own city/region', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Ambiguous Section Root',
+      });
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/sections`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(
+          sectionPayload({
+            name: 'Ambiguous Section',
+            city: 'Piaski',
+            region: 'Lublin',
+            geonameId: 3089217, // the *other* Piaski's geonameId
+          }),
+        )
+        .expect(400);
+      expect((response.body as HttpErrorResponse).code).toBe(
+        'VALIDATION_ERROR',
+      );
+    });
+
+    it('creates a Section with an ambiguous city name given its own correct geonameId, and reconstructs it identically on reopen', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Ambiguous Section Root 2',
+      });
+
+      const section = await createSection(OWNER_TOKEN, 'groups', root.id, {
+        name: 'Disambiguated Section',
+        city: 'Piaski',
+        region: 'Lublin',
+        geonameId: 762390,
+      });
+      expect(section.city).toBe('Piaski');
+      expect(section.region).toBe('Lublin');
+      expect(section.geonameId).toBe(762390);
+
+      const fetched = await bodyOf<SectionResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/sections/${section.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(fetched.city).toBe('Piaski');
+      expect(fetched.region).toBe('Lublin');
+      expect(fetched.geonameId).toBe(762390);
     });
   });
 

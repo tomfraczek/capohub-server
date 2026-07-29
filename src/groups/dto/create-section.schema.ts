@@ -5,8 +5,10 @@ import {
   citySchema,
   countryCodeSchema,
   currencyCodeSchema,
+  geonameIdSchema,
   optionalNullableUrl,
-  refineCityMatchesCountry,
+  refineCityIdentification,
+  regionSchema,
   timezoneSchema,
 } from './group-validation.helpers';
 
@@ -48,10 +50,14 @@ export const createSectionObjectSchema = z.object({
   currencyCode: currencyCodeSchema,
   country: countryCodeSchema,
   city: citySchema,
+  region: regionSchema,
+  // The GeoNames identifier of the chosen city - see
+  // create-group.schema.ts's identical field for the full reasoning.
+  geonameId: geonameIdSchema,
 });
 
 export const createSectionSchema = createSectionObjectSchema.superRefine(
-  refineCityMatchesCountry,
+  refineCityIdentification,
 );
 
 export class CreateSectionDto extends createZodDto(createSectionSchema) {}

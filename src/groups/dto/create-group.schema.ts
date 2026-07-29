@@ -5,8 +5,10 @@ import {
   citySchema,
   countryCodeSchema,
   currencyCodeSchema,
+  geonameIdSchema,
   optionalNullableUrl,
-  refineCityMatchesCountry,
+  refineCityIdentification,
+  regionSchema,
   timezoneSchema,
 } from './group-validation.helpers';
 
@@ -59,13 +61,21 @@ export const createGroupObjectSchema = z.object({
   // supported reason to leave this blank).
   country: countryCodeSchema,
   city: citySchema,
+  region: regionSchema,
+  // The GeoNames identifier of the chosen city (see
+  // common/geo/city-directory.ts) - the actual source of truth
+  // country/city/region are cross-checked against, see
+  // refineCityIdentification. Required: every newly created or edited
+  // Group/Section must resolve to a real, specific GeoNames place, not
+  // just a free-text name.
+  geonameId: geonameIdSchema,
 });
 
-// `.superRefine` also validates that `city` is actually a city of `country`
-// (see refineCityMatchesCountry) - a check that needs both fields at once,
-// so it cannot live on citySchema alone.
+// `.superRefine` also validates that geonameId/country/city/region are all
+// consistent with each other (see refineCityIdentification) - a check that
+// needs all four fields at once, so it cannot live on citySchema alone.
 export const createGroupSchema = createGroupObjectSchema.superRefine(
-  refineCityMatchesCountry,
+  refineCityIdentification,
 );
 
 export class CreateGroupDto extends createZodDto(createGroupSchema) {}

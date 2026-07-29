@@ -135,6 +135,8 @@ describe('Discovery search (e2e)', () => {
       isHidden: false,
       country: 'PL',
       city: 'Poznań',
+      region: 'Greater Poland',
+      geonameId: 3088171,
       ...overrides,
     };
   }
@@ -148,6 +150,8 @@ describe('Discovery search (e2e)', () => {
       isHidden: false,
       country: 'BR',
       city: 'São Paulo',
+      region: 'São Paulo',
+      geonameId: 3448439,
       ...overrides,
     };
   }
@@ -246,6 +250,8 @@ describe('Discovery search (e2e)', () => {
       name: `${uniqueSuffix} CountryFilter`,
       country: 'DE',
       city: 'Berlin',
+      region: 'State of Berlin',
+      geonameId: 2950159,
     });
 
     const matching = await bodyOf<PaginatedResponse<CommunitySearchResultDto>>(
@@ -266,6 +272,8 @@ describe('Discovery search (e2e)', () => {
       name: `${uniqueSuffix} CityFilter`,
       country: 'PL',
       city: 'Warsaw',
+      region: 'Mazovia',
+      geonameId: 756135,
     });
 
     const res = await bodyOf<PaginatedResponse<CommunitySearchResultDto>>(
@@ -389,12 +397,12 @@ describe('Discovery search (e2e)', () => {
       await searchCities('country=PL&limit=1000').expect(400);
     });
 
-    it('never returns a duplicate (name, region) pair', async () => {
+    it('never returns a duplicate geonameId', async () => {
       const res = await bodyOf<CityResultDto[]>(
         searchCities('country=PL&limit=50').expect(200),
       );
-      const keys = res.map((city) => `${city.name}|${city.region ?? ''}`);
-      expect(new Set(keys).size).toBe(keys.length);
+      const ids = res.map((city) => city.geonameId);
+      expect(new Set(ids).size).toBe(ids.length);
     });
 
     it('rejects an unauthenticated request', async () => {
@@ -403,13 +411,14 @@ describe('Discovery search (e2e)', () => {
         .expect(401);
     });
 
-    it('distinguishes two different cities that share a name via their own region', async () => {
+    it('distinguishes two different cities that share a name via their own geonameId and region', async () => {
       const res = await bodyOf<CityResultDto[]>(
         searchCities('country=PL&search=Piaski&limit=50').expect(200),
       );
       const piaskiEntries = res.filter((city) => city.name === 'Piaski');
 
       expect(piaskiEntries).toHaveLength(2);
+      expect(new Set(piaskiEntries.map((city) => city.geonameId)).size).toBe(2);
       expect(piaskiEntries.every((city) => city.region !== null)).toBe(true);
       expect(new Set(piaskiEntries.map((city) => city.region)).size).toBe(2);
     });
@@ -419,44 +428,89 @@ describe('Discovery search (e2e)', () => {
         searchCities('country=PL&search=Poznań&limit=50').expect(200),
       );
       expect(narrow).toEqual([
-        { name: 'Poznań', country: 'PL', region: 'Greater Poland' },
+        {
+          geonameId: 3088171,
+          name: 'Poznań',
+          country: 'PL',
+          region: 'Greater Poland',
+        },
       ]);
 
       const withoutSearch = await bodyOf<CityResultDto[]>(
         searchCities('country=PL&search=pozna').expect(200),
       );
-      const poznanEntry = withoutSearch.find((city) => city.name === 'Poznań');
+      const poznanEntry = withoutSearch.find(
+        (city) => city.geonameId === 3088171,
+      );
       expect(poznanEntry?.region).toBe('Greater Poland');
     });
 
-    // Regression coverage for the disclosed "local name" limitation - see
-    // city-directory.ts's own comment. Documents today's actual behavior:
-    // the underlying dataset has no local-name data for Poland's capital,
-    // so it is only findable by its English exonym.
-    it('[known limitation] finds the capital by "Warsaw", not by its local name "Warszawa"', async () => {
+    // The bundled GeoNames dataset lists "Warszawa" among the alternate
+    // names for geonameId 756135 (Poland's capital, displayed as "Warsaw")
+    // - searching either term must resolve to that exact same record (see
+    // city-directory.ts / city-search.service.ts).
+    it('finds the same record via the local name "Warszawa" as via the English exonym "Warsaw"', async () => {
       const byExonym = await bodyOf<CityResultDto[]>(
         searchCities('country=PL&search=Warsaw').expect(200),
       );
-      expect(byExonym.some((city) => city.name === 'Warsaw')).toBe(true);
-
       const byLocalName = await bodyOf<CityResultDto[]>(
         searchCities('country=PL&search=Warszawa').expect(200),
       );
-      expect(byLocalName.some((city) => city.name === 'Warsaw')).toBe(false);
+
+      expect(byExonym).toHaveLength(1);
+      expect(byLocalName).toHaveLength(1);
+      expect(byExonym[0]).toEqual(byLocalName[0]);
+      expect(byExonym[0]).toMatchObject({ geonameId: 756135, name: 'Warsaw' });
     });
 
-    it('returns a name that Group/Section creation accepts as-is (endpoint and validation share one source)', async () => {
+    it('returns a geonameId/name/region that Group/Section creation accepts as-is (endpoint and validation share one source)', async () => {
       const res = await bodyOf<CityResultDto[]>(
         searchCities('country=BR&search=Paulo').expect(200),
       );
-      const saoPaulo = res.find((city) => city.name === 'São Paulo');
+      const saoPaulo = res.find((city) => city.geonameId === 3448439);
       expect(saoPaulo).toBeDefined();
 
-      await createGroup({
+      const created = await createGroup({
         name: `${uniqueSuffix} CityContractMatch`,
         country: 'BR',
         city: saoPaulo!.name,
+        region: saoPaulo!.region,
+        geonameId: saoPaulo!.geonameId,
       });
+      expect(created.geonameId).toBe(3448439);
+    });
+
+    // Regression coverage for the city-identification problem: the two
+    // "Piaski" entries the search endpoint returns must each be usable
+    // as-is (name + region + geonameId) to create a Group unambiguously -
+    // proving the endpoint and the create validation agree on exactly
+    // which (geonameId, name, region) combinations are real.
+    it('lets each of two same-named cities be created unambiguously using the exact record the endpoint returned', async () => {
+      const res = await bodyOf<CityResultDto[]>(
+        searchCities('country=PL&search=Piaski&limit=50').expect(200),
+      );
+      const piaskiEntries = res.filter((city) => city.name === 'Piaski');
+      expect(piaskiEntries).toHaveLength(2);
+
+      const [first, second] = piaskiEntries;
+      const createdFirst = await createGroup({
+        name: `${uniqueSuffix} Piaski First`,
+        country: 'PL',
+        city: first.name,
+        region: first.region,
+        geonameId: first.geonameId,
+      });
+      const createdSecond = await createGroup({
+        name: `${uniqueSuffix} Piaski Second`,
+        country: 'PL',
+        city: second.name,
+        region: second.region,
+        geonameId: second.geonameId,
+      });
+
+      expect(createdFirst.geonameId).toBe(first.geonameId);
+      expect(createdSecond.geonameId).toBe(second.geonameId);
+      expect(createdFirst.geonameId).not.toBe(createdSecond.geonameId);
     });
   });
 });

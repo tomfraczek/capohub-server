@@ -33,6 +33,13 @@ export interface SectionResponseDto {
   // (which is genuinely optional) - see the Group/Section rename ADR.
   country: string | null;
   city: string | null;
+  // The admin1 region name - display/compatibility only, see `city`.
+  region: string | null;
+  // The GeoNames identifier this location resolves to - the source of
+  // truth `country`/`city`/`region` are cross-checked against (see
+  // group-validation.helpers.ts#refineCityIdentification). `null` only on
+  // a legacy row created before this field existed - see group.entity.ts.
+  geonameId: number | null;
   createdAt: string;
   updatedAt: string;
 }

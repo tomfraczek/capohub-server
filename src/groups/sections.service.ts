@@ -254,6 +254,8 @@ export class SectionsService {
     section.currencyCode = input.currencyCode;
     section.country = input.country;
     section.city = input.city;
+    section.region = input.region;
+    section.geonameId = input.geonameId;
   }
 
   private async loadOrFail(

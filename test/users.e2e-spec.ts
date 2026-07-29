@@ -195,6 +195,8 @@ describe('Users (e2e)', () => {
       currencyCode: 'PLN',
       country: 'PL',
       city: 'Poznań',
+      region: 'Greater Poland',
+      geonameId: 3088171,
       ...overrides,
     };
   }

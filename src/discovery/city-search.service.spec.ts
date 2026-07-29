@@ -2,18 +2,17 @@
  * Unit tests for CitySearchService.
  *
  * Covers:
- *  - only cities of the given country are returned,
- *  - `search` narrows by a case-insensitive substring match,
+ *  - only cities of the given country are returned, each with a geonameId,
+ *  - `search` narrows by a case-insensitive substring match on name,
+ *  - `search` also matches GeoNames alternate names, so a local name (e.g.
+ *    "Warszawa") resolves to the same record as its English exonym
+ *    ("Warsaw") - same geonameId, same displayed name,
  *  - results are capped at `limit`,
- *  - results are sorted predictably (alphabetically by name),
- *  - no duplicate (name, region) pairs are ever returned,
- *  - `region` is always present when the dataset resolves one for a city -
- *    stable across `search`/`limit`, never dependent on whether some other
- *    same-named city also happens to appear in the same response,
+ *  - results are sorted predictably (name, then region, then geonameId),
  *  - two different cities sharing a name are distinguished by their own,
- *    independently-correct `region`,
- *  - the known "local name" limitation (see city-directory.ts) is
- *    documented by an explicit regression test, not silently assumed.
+ *    independently-correct geonameId and region,
+ *  - `region` is always present when the dataset resolves one for a city -
+ *    stable across `search`/`limit`.
  */
 
 import { CitySearchService } from './city-search.service';
@@ -34,11 +33,14 @@ describe('CitySearchService', () => {
     service = new CitySearchService();
   });
 
-  it('only returns cities belonging to the requested country', () => {
+  it('only returns cities belonging to the requested country, each with a geonameId', () => {
     const results = service.search(buildQuery({ country: 'PL' }));
 
     expect(results.length).toBeGreaterThan(0);
     expect(results.every((city) => city.country === 'PL')).toBe(true);
+    expect(results.every((city) => Number.isInteger(city.geonameId))).toBe(
+      true,
+    );
   });
 
   it('narrows results by a case-insensitive substring match on name', () => {
@@ -50,6 +52,28 @@ describe('CitySearchService', () => {
     expect(
       results.every((city) => city.name.toLowerCase().includes('pozna')),
     ).toBe(true);
+  });
+
+  // The GeoNames record for Poland's capital ("Warsaw") lists "Warszawa"
+  // among its alternate names - searching either term must resolve to the
+  // exact same record (see city-directory.ts).
+  it('finds the same record via a GeoNames alternate name as via its own displayed name', () => {
+    const byExonym = service.search(
+      buildQuery({ country: 'PL', search: 'Warsaw' }),
+    );
+    const byLocalName = service.search(
+      buildQuery({ country: 'PL', search: 'Warszawa' }),
+    );
+
+    expect(byExonym).toHaveLength(1);
+    expect(byLocalName).toHaveLength(1);
+    expect(byExonym[0]).toEqual(byLocalName[0]);
+    expect(byExonym[0]).toMatchObject({
+      geonameId: 756135,
+      name: 'Warsaw',
+      country: 'PL',
+      region: 'Mazovia',
+    });
   });
 
   it('caps the number of results at the requested limit', () => {
@@ -65,34 +89,38 @@ describe('CitySearchService', () => {
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
   });
 
-  it('never returns duplicate (name, region) pairs', () => {
+  it('never returns duplicate geonameIds', () => {
     const results = service.search(buildQuery({ country: 'PL', limit: 50 }));
-    const keys = results.map((city) => `${city.name}|${city.region ?? ''}`);
+    const ids = results.map((city) => city.geonameId);
 
-    expect(new Set(keys).size).toBe(keys.length);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('distinguishes two different cities that share a name via their own, independently-correct region', () => {
+  it('distinguishes two different cities that share a name via their own distinct geonameId and region', () => {
     // Poland has two different cities named "Piaski" (see city-directory's
     // own fixture data) in two different regions - both must appear, each
-    // with its own non-null, distinct region.
+    // with its own distinct geonameId and region.
     const results = service.search(
       buildQuery({ country: 'PL', search: 'Piaski', limit: 50 }),
     );
     const piaskiEntries = results.filter((city) => city.name === 'Piaski');
     expect(piaskiEntries).toHaveLength(2);
+    expect(new Set(piaskiEntries.map((city) => city.geonameId)).size).toBe(2);
     expect(piaskiEntries.every((city) => city.region !== null)).toBe(true);
     expect(new Set(piaskiEntries.map((city) => city.region)).size).toBe(2);
   });
 
-  it('always includes region when the dataset resolves one, regardless of search/limit/other results - never only when a name is ambiguous', () => {
-    // Poznań has exactly one match under this search term (no same-named
-    // city anywhere else in the response) - region must still be present.
+  it('always includes region when the dataset resolves one, regardless of search/limit', () => {
     const narrow = service.search(
       buildQuery({ country: 'PL', search: 'Poznań', limit: 50 }),
     );
     expect(narrow).toEqual([
-      { name: 'Poznań', country: 'PL', region: 'Greater Poland' },
+      {
+        geonameId: 3088171,
+        name: 'Poznań',
+        country: 'PL',
+        region: 'Greater Poland',
+      },
     ]);
 
     // Same city, unfiltered and with a much larger page (the query schema
@@ -102,31 +130,11 @@ describe('CitySearchService', () => {
     // depend on `search` narrowing the result set) - identical region
     // either way, proving it is not a function of `search` or `limit`.
     const wide = service.search(buildQuery({ country: 'PL', limit: 3000 }));
-    const poznanInWideResults = wide.find((city) => city.name === 'Poznań');
+    const poznanInWideResults = wide.find((city) => city.geonameId === 3088171);
     expect(poznanInWideResults?.region).toBe('Greater Poland');
   });
 
   it('returns an empty array for a country with no known cities', () => {
     expect(service.search(buildQuery({ country: 'AQ' }))).toEqual([]);
-  });
-
-  // Regression coverage for the disclosed "local name" limitation (see
-  // city-directory.ts's own comment for the full investigation): the
-  // bundled dataset stores a handful of internationally prominent cities,
-  // Poland's capital included, under their common English exonym rather
-  // than the local-language name, and has no alternate/local name data to
-  // recover it from. This test documents *today's actual* behavior so a
-  // future change to the underlying data source is a deliberate, visible
-  // change to this test, not a silent regression either way.
-  it('[known limitation] finds the capital by its English exonym "Warsaw", not yet by its local name "Warszawa"', () => {
-    const byExonym = service.search(
-      buildQuery({ country: 'PL', search: 'Warsaw' }),
-    );
-    expect(byExonym.some((city) => city.name === 'Warsaw')).toBe(true);
-
-    const byLocalName = service.search(
-      buildQuery({ country: 'PL', search: 'Warszawa' }),
-    );
-    expect(byLocalName.some((city) => city.name === 'Warsaw')).toBe(false);
   });
 });

@@ -353,8 +353,10 @@ Body (JSON):
 | `memberInvitesAllowed` | boolean | No (default `false`) | Whether a plain `MEMBER` (not `ADMIN`/`OWNER`) may send Invitations. |
 | `timezone` | string | Yes | Must be a valid IANA timezone id (e.g. `"Europe/Warsaw"`), validated against the runtime's own IANA database. |
 | `currencyCode` | string | Yes | Normalized to uppercase; must match `^[A-Z]{3}$` (structural check only — not validated against an actual ISO 4217 list). |
-| `country` | ISO 3166-1 alpha-2 string | Yes | Required on both an Organization and a Group — no exception for an Organization spanning multiple countries. |
-| `city` | string (1-100 chars, trimmed) | Yes | Must be a real city of `country` — see [Search Cities](#35b-search-cities), which returns exactly the values accepted here. |
+| `country` | ISO 3166-1 alpha-2 string | Yes | Required on both an Organization and a Group — no exception for an Organization spanning multiple countries. Must match the country of the city `geonameId` refers to. |
+| `city` | string (1-100 chars, trimmed) | Yes | Must equal the `name` of the city `geonameId` refers to exactly — see [Search Cities](#35b-search-cities), which returns exactly the values accepted here. |
+| `region` | string (1-100 chars, trimmed) or `null` | Yes | Must equal the `region` of the city `geonameId` refers to exactly (including both being `null`, for a city with no admin1 region in the source) — exactly the `region` value [Search Cities](#35b-search-cities) returns alongside the chosen city. |
+| `geonameId` | positive integer | Yes | The GeoNames-assigned, globally stable identifier of the chosen city (see [Search Cities](#35b-search-cities)) — the actual source of truth `country`/`city`/`region` are cross-checked against. |
 
 **Response** — `201 Created`, body: [`GroupResponseDto`](#groupresponsedto).
 
@@ -362,15 +364,19 @@ Body (JSON):
 
 | Status | Code | When |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | Body fails schema validation (see table above) — including `city` missing/empty, or not a real city of `country`. |
+| 400 | `VALIDATION_ERROR` | Body fails schema validation (see table above) — including `city`/`region` missing/empty, `geonameId` missing or not a known city, or `country`/`city`/`region` not matching the city `geonameId` refers to. |
 | 404 | `GROUP_PARENT_NOT_FOUND` | `parentGroupId` doesn't resolve to a Group the caller has any usable authorization for (also returned if the parent simply doesn't exist — the two cases are indistinguishable by design). |
 | 403 | `INSUFFICIENT_GROUP_PERMISSIONS` | Caller has a Role Assignment for the parent Group, but it doesn't include `GROUP_EDIT`. |
 | 409 | `GROUP_ARCHIVED` | The named parent Group is archived. |
 
 Editing (`PATCH /groups/:id`) is a full-replace of the same shape (see
-[Update Community](#4-update-community)), so `country`/`city` are equally
-required there — an edit can never clear them, and is subject to the same
-country/city match check.
+[Update Community](#4-update-community)), so `country`/`city`/`region`/
+`geonameId` are equally required there — an edit can never clear them, and
+is subject to the same identification check. A Group/Section created
+before `geonameId` existed reads back with `geonameId: null` (see
+[GroupResponseDto](#groupresponsedto)) until its next edit, at which point
+a real `geonameId` becomes required the same as for any other edit — there
+is no automatic backfill (see the GeoNames migration's own notes).
 
 ---
 
@@ -1496,24 +1502,21 @@ Query:
 **Description:** Lists cities belonging to one country, optionally narrowed
 by name — backs a "pick your city" step constrained to a previously-chosen
 country on Create/Edit Community (see [Create Community](#1-create-community),
-whose `city` field must be one of the names this endpoint can return). Reads
-from a static, bundled geographic reference dataset
-(`cities.json`/GeoNames — see the backend's `common/geo/city-directory.ts`
-for the exact source and its licensing/limitations), not from
-Group/Section data itself — unrelated to [Search Groups](#35-search-groups)
-above, which searches communities, not raw geography.
+whose `city`/`region`/`geonameId` fields must be exactly what this endpoint
+returned for the chosen city). Reads from a static, bundled geographic
+reference dataset built from official GeoNames export files (CC BY 4.0 —
+see the backend's `common/geo/city-directory.ts` and
+`common/geo/build/generate-cities-dataset.ts` for the exact source files
+and how the bundled dataset is generated), not from Group/Section data
+itself — unrelated to [Search Groups](#35-search-groups) above, which
+searches communities, not raw geography.
 
-**Known limitation — local names:** the underlying GeoNames data stores a
-handful of internationally prominent cities (not only capitals — e.g. also
-Naples, Florence, Milan, Antwerp) under their common English exonym rather
-than the local-language name — e.g. Poland's capital is only searchable
-here as `"Warsaw"`, not `"Warszawa"`, and is returned that way too. This is
-a property of the underlying dataset itself, confirmed against GeoNames'
-own raw data (see `city-directory.ts`'s own comment for the full
-investigation) — not something this endpoint or the Group/Section
-validation adds on top. Fixing it correctly (not via a hand-maintained
-alias list) requires a separate data-source project — out of scope for
-this pass.
+**Local names:** `search` matches both a city's own displayed name (partial,
+case-insensitive) *and* its GeoNames alternate names (exact, case-
+insensitive) — so `search=Warszawa` and `search=Warsaw` both resolve to the
+one record for Poland's capital (`geonameId: 756135`, displayed `name:
+"Warsaw"` — GeoNames' own canonical name for this specific place, not
+changed by which term found it).
 
 **Required authorization:** Signed-in user.
 
@@ -1526,19 +1529,20 @@ Query:
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `country` | ISO 3166-1 alpha-2 string | Yes | Restricts results to this country only — there is no "browse every city" mode. |
-| `search` | string (1-100 chars) | No | Case-insensitive substring match against city name. |
+| `search` | string (1-100 chars) | No | Matches the city's own name (partial) or any GeoNames alternate name (exact) — see "Local names" above. |
 | `limit` | integer 1-50 | No (default 20) | |
 
 **Response** — `200 OK`, body: array of `CityResultDto`:
 
 | Field | Type | Description |
 |---|---|---|
+| `geonameId` | integer | The GeoNames-assigned, globally stable identifier for this place — the value to submit as `geonameId` on Create/Edit Community; the actual source of truth `country`/`city`/`region` are cross-checked against there. |
 | `name` | string | The city's name, exactly as stored — this is also the value to submit as `city` on Create/Edit Community. |
 | `country` | string | Echoes the request's `country`. |
 | `region` | string or `null` | The admin1 region's English name (e.g. "Mazovia") whenever the dataset resolves one for this city — `null` only when the source itself has none for it. Always present when available, regardless of `search`/`limit`/whether another same-named city also appears in the response — a stable per-city fact, never a function of the rest of the result set. |
 
-Sorted alphabetically by name (region as tiebreaker), capped at `limit`,
-never contains a duplicate (name, region) pair.
+Sorted alphabetically by name (region, then geonameId, as tiebreakers), capped at `limit`,
+never contains a duplicate `geonameId`.
 
 **Possible errors**
 
@@ -1966,6 +1970,10 @@ Unarchive/Read-Only/Activate, List Direct Children.
 | `status` | `"ACTIVE"` \| `"READ_ONLY"` \| `"ARCHIVED"` \| `"DELETED"` | No | `DELETED` is terminal — see [Delete Community](#36-delete-community). |
 | `timezone` | string | No | IANA timezone id. |
 | `currencyCode` | string | No | 3-letter uppercase code. |
+| `country` | string | Yes* | ISO 3166-1 alpha-2. Always non-null on a newly created/edited row — see [Create Community](#1-create-community); `null` only possible on a legacy row that predates this field. |
+| `city` | string | Yes* | Same nullability caveat as `country`. |
+| `region` | string | Yes | The admin1 region name — `null` either on a legacy row, or when the city genuinely has no admin1 region in the source (see [Create Community](#1-create-community) and [Search Cities](#35b-search-cities)). |
+| `geonameId` | integer | Yes | The GeoNames identifier this location resolves to — the source of truth `country`/`city`/`region` are cross-checked against (see [Create Community](#1-create-community)). `null` only on a legacy row created before this field existed; never null on a row that has been created or edited since. |
 | `createdAt` | string (ISO 8601) | No | |
 | `updatedAt` | string (ISO 8601) | No | |
 

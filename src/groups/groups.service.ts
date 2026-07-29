@@ -268,6 +268,8 @@ export class GroupsService {
     group.currencyCode = input.currencyCode;
     group.country = input.country;
     group.city = input.city;
+    group.region = input.region;
+    group.geonameId = input.geonameId;
   }
 
   private async loadGroupOrFail(

@@ -32,6 +32,8 @@ export function toSectionResponseDto(group: Group): SectionResponseDto {
     currencyCode: group.currencyCode,
     country: group.country,
     city: group.city,
+    region: group.region,
+    geonameId: group.geonameId,
     createdAt: group.createdAt.toISOString(),
     updatedAt: group.updatedAt.toISOString(),
   };

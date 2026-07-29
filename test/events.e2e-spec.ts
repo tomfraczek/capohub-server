@@ -234,6 +234,8 @@ describe('Events (e2e)', () => {
       currencyCode: 'PLN',
       country: 'PL',
       city: 'Poznań',
+      region: 'Greater Poland',
+      geonameId: 3088171,
       ...overrides,
     };
   }
@@ -383,6 +385,8 @@ describe('Events (e2e)', () => {
             currencyCode: 'PLN',
             country: 'PL',
             city: 'Poznań',
+            region: 'Greater Poland',
+            geonameId: 3088171,
           })
           .expect(201),
       );
@@ -1294,6 +1298,8 @@ describe('Events (e2e)', () => {
             currencyCode: 'PLN',
             country: 'PL',
             city: 'Poznań',
+            region: 'Greater Poland',
+            geonameId: 3088171,
           })
           .expect(201),
       );

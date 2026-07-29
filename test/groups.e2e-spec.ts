@@ -197,6 +197,8 @@ describe('Groups (e2e)', () => {
       currencyCode: 'PLN',
       country: 'PL',
       city: 'Poznań',
+      region: 'Greater Poland',
+      geonameId: 3088171,
       ...overrides,
     };
   }
@@ -359,15 +361,108 @@ describe('Groups (e2e)', () => {
       expect(response.code).toBe('VALIDATION_ERROR');
     });
 
-    it('creates a group with a valid country/city combination', async () => {
+    it('creates a group with a valid country/city/region/geonameId combination', async () => {
       const created = await createGroup(OWNER_TOKEN, {
         name: 'Country City Test',
         country: 'BR',
         city: 'São Paulo',
+        region: 'São Paulo',
+        geonameId: 3448439,
       });
 
       expect(created.country).toBe('BR');
       expect(created.city).toBe('São Paulo');
+      expect(created.region).toBe('São Paulo');
+      expect(created.geonameId).toBe(3448439);
+    });
+
+    it('rejects creation with no geonameId', async () => {
+      const input = groupPayload({ name: 'No Geoname' });
+      delete (input as { geonameId?: unknown }).geonameId;
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post('/api/v1/groups')
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(input)
+          .expect(400),
+      );
+      expect(response.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('rejects creation when geonameId does not refer to a known city', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/groups')
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(groupPayload({ name: 'Fake Geoname', geonameId: 999999999999 }))
+        .expect(400);
+    });
+
+    it('rejects creation when country/city/region do not match the city geonameId refers to', async () => {
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post('/api/v1/groups')
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(groupPayload({ name: 'Mismatched Geoname', region: 'Lublin' }))
+          .expect(400),
+      );
+      expect(response.code).toBe('VALIDATION_ERROR');
+    });
+
+    // Regression coverage for the city-identification problem: Poland has
+    // two different towns both named "Piaski", in different regions -
+    // (country, city) alone cannot tell them apart, but each has its own
+    // stable geonameId (see
+    // group-validation.helpers.ts#refineCityIdentification).
+    describe('two different cities that happen to share a name ("Piaski")', () => {
+      it('rejects a geonameId/region combination that does not match either real Piaski', async () => {
+        await request(app.getHttpServer())
+          .post('/api/v1/groups')
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(
+            groupPayload({
+              name: 'Ambiguous City Wrong Region',
+              city: 'Piaski',
+              region: 'Mazovia',
+              geonameId: 762390,
+            }),
+          )
+          .expect(400);
+      });
+
+      it('creates each of the two independently, given its own correct geonameId/region, and reconstructs it identically on reopen', async () => {
+        const created = await createGroup(OWNER_TOKEN, {
+          name: 'Ambiguous City Disambiguated',
+          city: 'Piaski',
+          region: 'Lublin',
+          geonameId: 762390,
+        });
+
+        expect(created.city).toBe('Piaski');
+        expect(created.region).toBe('Lublin');
+        expect(created.geonameId).toBe(762390);
+
+        // Reopening the form (GET) must reconstruct the exact same city -
+        // this is the actual "jednoznaczna identyfikacja" requirement.
+        const fetched = await bodyOf<GroupResponseDto>(
+          request(app.getHttpServer())
+            .get(`/api/v1/groups/${created.id}`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(200),
+        );
+        expect(fetched.city).toBe('Piaski');
+        expect(fetched.region).toBe('Lublin');
+        expect(fetched.geonameId).toBe(762390);
+
+        const other = await createGroup(OWNER_TOKEN, {
+          name: 'Ambiguous City Disambiguated Other',
+          city: 'Piaski',
+          region: 'Greater Poland',
+          geonameId: 3089217,
+        });
+        expect(other.geonameId).toBe(3089217);
+        expect(other.geonameId).not.toBe(created.geonameId);
+      });
     });
   });
 
@@ -484,18 +579,138 @@ describe('Groups (e2e)', () => {
         .expect(400);
     });
 
-    it('allows editing to a different, valid country/city combination', async () => {
+    it('allows editing to a different, valid country/city/region/geonameId combination', async () => {
       const created = await createGroup(OWNER_TOKEN);
 
       const updated = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${created.id}`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .send(groupPayload({ country: 'DE', city: 'Berlin' }))
+          .send(
+            groupPayload({
+              country: 'DE',
+              city: 'Berlin',
+              region: 'State of Berlin',
+              geonameId: 2950159,
+            }),
+          )
           .expect(200),
       );
       expect(updated.country).toBe('DE');
       expect(updated.city).toBe('Berlin');
+      expect(updated.geonameId).toBe(2950159);
+    });
+
+    it('rejects an edit with no geonameId at all', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+      const input = groupPayload();
+      delete (input as { geonameId?: unknown }).geonameId;
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/groups/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(input)
+          .expect(400),
+      );
+      expect(response.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('rejects an edit whose geonameId does not match its own city/region', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/groups/${created.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(
+          groupPayload({
+            city: 'Piaski',
+            region: 'Lublin',
+            geonameId: 3089217, // the *other* Piaski's geonameId
+          }),
+        )
+        .expect(400);
+    });
+
+    it('allows editing into one of two same-named cities, given its own correct geonameId', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+
+      const updated = await bodyOf<GroupResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/groups/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(
+            groupPayload({
+              city: 'Piaski',
+              region: 'Greater Poland',
+              geonameId: 3089217,
+            }),
+          )
+          .expect(200),
+      );
+      expect(updated.city).toBe('Piaski');
+      expect(updated.region).toBe('Greater Poland');
+      expect(updated.geonameId).toBe(3089217);
+    });
+  });
+
+  // Regression coverage for the switch to GeoNames-backed geonameId: a row
+  // created before this field existed (simulated here by nulling it out
+  // directly in the DB, since the API itself can no longer create such a
+  // row) must keep reading back correctly, and must be forced to resolve a
+  // real geonameId the next time it is edited - see group.entity.ts and
+  // group-validation.helpers.ts#refineCityIdentification.
+  describe('legacy Group (predates geonameId)', () => {
+    async function nullOutGeonameId(groupId: string): Promise<void> {
+      const em = app.get(EntityManager).fork();
+      const group = await em.findOneOrFail(Group, { id: groupId });
+      group.geonameId = null;
+      await em.flush();
+    }
+
+    it('is still readable, with geonameId: null, and does not break GET', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+      await nullOutGeonameId(created.id);
+
+      const fetched = await bodyOf<GroupResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(fetched.geonameId).toBeNull();
+      // country/city/region themselves are untouched - only geonameId was
+      // never resolved for this row.
+      expect(fetched.country).toBe(created.country);
+      expect(fetched.city).toBe(created.city);
+    });
+
+    it('rejects an edit that omits geonameId, same as any other Group', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+      await nullOutGeonameId(created.id);
+
+      const input = groupPayload();
+      delete (input as { geonameId?: unknown }).geonameId;
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/groups/${created.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(input)
+        .expect(400);
+    });
+
+    it('accepts an edit that resolves a real geonameId, leaving the row fully up to date', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+      await nullOutGeonameId(created.id);
+
+      const updated = await bodyOf<GroupResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/groups/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(groupPayload())
+          .expect(200),
+      );
+      expect(updated.geonameId).toBe(3088171);
     });
   });
 
