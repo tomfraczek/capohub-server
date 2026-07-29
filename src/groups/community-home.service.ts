@@ -226,6 +226,7 @@ export class CommunityHomeService {
     const communities: CommunityHomeCommunityDto[] = [];
     const capabilityLists: Record<CapabilityListKey, string[]> = {
       canCreateSectionInCommunityIds: [],
+      canCreateEventInCommunityIds: [],
       canReviewJoinRequestsInCommunityIds: [],
       canViewMembersInCommunityIds: [],
       canManageMembersInCommunityIds: [],
@@ -272,6 +273,12 @@ export class CommunityHomeService {
         // see groups.controller.ts / audit-log.controller.ts.
         if (has(GroupPermission.GROUP_EDIT)) {
           capabilityLists.canCreateSectionInCommunityIds.push(groupId);
+        }
+        if (
+          group.status === GroupStatus.ACTIVE &&
+          has(GroupPermission.EVENT_CREATE)
+        ) {
+          capabilityLists.canCreateEventInCommunityIds.push(groupId);
         }
         if (
           group.status === GroupStatus.ACTIVE &&

@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { GroupPermissionService } from '../groups/permissions/group-permission.service';
 import { RoleAssignmentsService } from '../groups/role-assignments.service';
+import { GroupHierarchyService } from '../groups/group-hierarchy.service';
 import { Group } from '../groups/entities/group.entity';
 import { EventAccessService } from './event-access.service';
 import { EventAttendee } from './entities/event-attendee.entity';
@@ -158,6 +159,9 @@ function buildService(
   } as unknown as RoleAssignmentsService;
 
   const groupPermissionService = new GroupPermissionService();
+  const groupHierarchyService = {
+    getDescendants: jest.fn().mockResolvedValue([]),
+  } as unknown as GroupHierarchyService;
 
   return new EventsService(
     em,
@@ -166,6 +170,7 @@ function buildService(
     eventPermissionService,
     roleAssignmentsService,
     groupPermissionService,
+    groupHierarchyService,
   );
 }
 

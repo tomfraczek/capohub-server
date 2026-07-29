@@ -2,6 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
 import { generateUniquePublicCode } from '../common/utils/public-code';
 import { Group } from '../groups/entities/group.entity';
+import { GroupMembership } from '../groups/entities/group-membership.entity';
+import { GroupMembershipStatus } from '../groups/enums/group-membership-status.enum';
+import { GroupHierarchyService } from '../groups/group-hierarchy.service';
 import { GroupPermission } from '../groups/permissions/group-permission.enum';
 import { GroupPermissionService } from '../groups/permissions/group-permission.service';
 import { RoleAssignmentsService } from '../groups/role-assignments.service';
@@ -52,6 +55,7 @@ export class EventsService {
     private readonly eventPermissionService: EventPermissionService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly groupPermissionService: GroupPermissionService,
+    private readonly groupHierarchyService: GroupHierarchyService,
   ) {}
 
   async create(
@@ -309,6 +313,131 @@ export class EventsService {
           rolesByEvent.get(event.id) ?? [],
           oversight,
         ),
+      ),
+    );
+
+    return {
+      items,
+      total,
+      hasMore: query.offset + items.length < total,
+    };
+  }
+
+  /**
+   * Every Event visible to `viewer` across every Community they have any
+   * relationship to - the "global events" feed (see events-api.md § Global
+   * Events). Reuses exactly the same visibility rule as list() (PUBLIC to
+   * anyone, COMMUNITY_MEMBERS to active members of that specific
+   * Community, INVITE_ONLY to invitees, any Event role always included),
+   * just without pre-selecting one `communityGroupId` - so the frontend
+   * never has to fetch every Group/Section it belongs to and merge one
+   * per-community request itself.
+   *
+   * Deliberately excludes the Community-level oversight override
+   * (GroupPermission.EVENT_VIEW_ALL/EVENT_MODERATE) that list() resolves
+   * for a single community: that is an Admin/Owner "browse every Draft
+   * under the community I manage" tool, already served by
+   * GET /groups/:groupId/events - not part of "the events relevant to me"
+   * that this feed answers.
+   */
+  async listForViewer(
+    viewer: User,
+    query: EventListQueryInput,
+  ): Promise<EventListResult> {
+    const em = this.em;
+
+    const memberships = await em.find(GroupMembership, {
+      user: viewer.id,
+      status: {
+        $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
+      },
+    });
+    const myCommunityGroupIds = new Set<string>();
+    for (const membership of memberships) {
+      const rootGroupId = membership.rootGroup.id;
+      myCommunityGroupIds.add(rootGroupId);
+      const descendants = await this.groupHierarchyService.getDescendants(
+        rootGroupId,
+        em,
+      );
+      for (const descendant of descendants) {
+        myCommunityGroupIds.add(descendant.id);
+      }
+    }
+
+    const [roleAssignments, invitations] = await Promise.all([
+      em.find(
+        EventRoleAssignment,
+        { user: viewer.id },
+        { populate: ['event'] },
+      ),
+      em.find(EventInvitation, {
+        status: {
+          $in: [EventInvitationStatus.PENDING, EventInvitationStatus.ACCEPTED],
+        },
+        $or: [{ invitedUser: viewer.id }, { invitedEmail: viewer.email }],
+      }),
+    ]);
+    const roleEventIds = [
+      ...new Set(roleAssignments.map((assignment) => assignment.event.id)),
+    ];
+    const invitedEventIds = [
+      ...new Set(invitations.map((invitation) => invitation.event.id)),
+    ];
+    const rolesByEvent = new Map<string, EventRole[]>();
+    for (const assignment of roleAssignments) {
+      const list = rolesByEvent.get(assignment.event.id) ?? [];
+      list.push(assignment.role);
+      rolesByEvent.set(assignment.event.id, list);
+    }
+
+    const where: FilterQuery<Event> = {};
+    if (query.status) where.status = query.status;
+    if (query.type) where.type = query.type;
+    if (query.from) where.endsAt = { $gte: new Date(query.from) };
+    if (query.to) where.startsAt = { $lte: new Date(query.to) };
+
+    const visibilityOr: FilterQuery<Event>[] = [
+      { visibility: EventVisibility.PUBLIC },
+    ];
+    if (myCommunityGroupIds.size > 0) {
+      visibilityOr.push({
+        visibility: EventVisibility.COMMUNITY_MEMBERS,
+        community: { $in: [...myCommunityGroupIds] },
+      });
+    }
+    if (invitedEventIds.length > 0) {
+      visibilityOr.push({ id: { $in: invitedEventIds } });
+    }
+
+    where.$and = [
+      {
+        $or: [
+          {
+            $and: [
+              { status: { $ne: EventStatus.DRAFT } },
+              { $or: visibilityOr },
+            ],
+          },
+          ...(roleEventIds.length > 0 ? [{ id: { $in: roleEventIds } }] : []),
+        ],
+      },
+    ];
+
+    const [events, total] = await em.findAndCount(Event, where, {
+      populate: ['community'],
+      orderBy: { startsAt: 'asc' },
+      limit: query.limit,
+      offset: query.offset,
+    });
+
+    for (const event of events) {
+      await reconcileEventFinished(em, event);
+    }
+
+    const items = await Promise.all(
+      events.map((event) =>
+        this.buildResponse(em, event, viewer, rolesByEvent.get(event.id) ?? []),
       ),
     );
 

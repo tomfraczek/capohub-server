@@ -52,6 +52,7 @@ const TOKENS = [
   'ch-outsider',
   'ch-invitee',
   'ch-newuser',
+  'ch-section-member',
 ] as const;
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {};
@@ -223,6 +224,28 @@ describe('Community Home (e2e)', () => {
     );
   }
 
+  async function createSection(
+    ownerToken: string,
+    parentGroupId: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<GroupResponseDto> {
+    const created = await bodyOf<GroupResponseDto>(
+      request(app.getHttpServer())
+        .post(`/api/v1/groups/${parentGroupId}/sections`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          name: 'Community Home Test Section',
+          timezone: 'Europe/Warsaw',
+          currencyCode: 'PLN',
+          country: 'PL',
+          ...overrides,
+        })
+        .expect(201),
+    );
+    createdGroupIds.push(created.id);
+    return created;
+  }
+
   async function grantRole(
     granterToken: string,
     groupId: string,
@@ -274,6 +297,7 @@ describe('Community Home (e2e)', () => {
     expect(home.capabilities).toEqual({
       canCreateGroup: true,
       canCreateSectionInCommunityIds: [],
+      canCreateEventInCommunityIds: [],
       canReviewJoinRequestsInCommunityIds: [],
       canViewMembersInCommunityIds: [],
       canManageMembersInCommunityIds: [],
@@ -333,6 +357,41 @@ describe('Community Home (e2e)', () => {
         ['INSTRUCTOR', 'MEMBER'].sort(),
       );
       expect(home.summary.communitiesCount).toBe(2);
+    });
+
+    // Regression coverage for the "Moje społeczności" business rule:
+    // joining a Section must never be treated as joining its parent Group
+    // (ADR-004 "no membership inheritance"). GroupMembership.rootGroup is
+    // always the Group (mandatory - see group-membership.entity.ts), so
+    // this Section-only joiner's Membership still points there; the Group
+    // legitimately still appears (it owns the tree this Section lives in -
+    // see PAD-001 §11 "grouped by organization"), but only with an empty
+    // myRoles - proving no Role/participation was ever granted for it.
+    it('joining only a Section never grants a derived Role in its parent Group - the Group appears with an empty myRoles, the Section with the real one', async () => {
+      const org = await createRootGroup(tokenFor('ch-owner'), {
+        name: 'Cordão de Ouro (Section test)',
+      });
+      const section = await createSection(tokenFor('ch-owner'), org.id, {
+        name: 'Poznań',
+      });
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/sections/${section.id}/join`)
+        .set('Authorization', `Bearer ${tokenFor('ch-section-member')}`)
+        .send({ targetType: 'SECTION' })
+        .expect(200);
+
+      const home = await getHome(tokenFor('ch-section-member'));
+
+      expect(home.myCommunities).toHaveLength(2);
+      const orgEntry = home.myCommunities.find((c) => c.id === org.id);
+      const sectionEntry = home.myCommunities.find((c) => c.id === section.id);
+      expect(orgEntry).toMatchObject({ isRootGroup: true, myRoles: [] });
+      expect(sectionEntry).toMatchObject({
+        isRootGroup: false,
+        parentId: org.id,
+        myRoles: ['MEMBER'],
+      });
     });
   });
 

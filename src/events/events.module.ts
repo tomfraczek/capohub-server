@@ -18,6 +18,7 @@ import { EventsService } from './events.service';
 import { EventPermissionsGuard } from './guards/event-permissions.guard';
 import { CHILDREN_DIRECTORY_PORT } from './integration/children-directory.port';
 import { NullChildrenDirectoryService } from './integration/null-children-directory.service';
+import { MyEventsController } from './my-events.controller';
 import { EventPermissionService } from './permissions/event-permission.service';
 
 // Entities are driven through the plain EntityManager (auto-discovered
@@ -31,6 +32,7 @@ import { EventPermissionService } from './permissions/event-permission.service';
   imports: [GroupsModule],
   controllers: [
     EventsController,
+    MyEventsController,
     EventController,
     EventRolesController,
     EventInvitationsController,

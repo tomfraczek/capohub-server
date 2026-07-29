@@ -177,11 +177,14 @@ to one Event, so every flag is a plain boolean.
 ### 1. Create Event
 
 **HTTP Method:** `POST`
-**URL:** `/groups/:groupId/events`
+**URL:** `/groups/:groupId/events` or `/sections/:sectionId/events`
 
 **Description:** Creates a new Event under the given Community (Root or
 Child Group), always as `DRAFT`. The caller is automatically granted
-`EventRole.OWNER` for the new Event.
+`EventRole.OWNER` for the new Event. Dual-mounted the same way
+Academies/Cohorts/RoleAssignments are (see [community-api.md](community-api.md#what-is-community))
+— both routes resolve identically; `:groupId`/`:sectionId` is only ever
+present on whichever route matched.
 
 **Required authorization:** Signed-in user with a usable Role Assignment
 for `:groupId`, which must be `ACTIVE`.
@@ -228,14 +231,15 @@ Body (JSON):
 ### 2. List Events
 
 **HTTP Method:** `GET`
-**URL:** `/groups/:groupId/events`
+**URL:** `/groups/:groupId/events` or `/sections/:sectionId/events`
 
-**Description:** Lists Events under a Community, filtered by the caller's
-own visibility (see [Visibility](#visibility)) unless the caller holds
-`GroupPermission.EVENT_VIEW_ALL` (Community Admin/Owner oversight), in
-which case every Event is returned regardless of status/visibility. Every
-Event the caller holds any Event role for is always included, regardless
-of status or visibility (e.g. their own Drafts).
+**Description:** Lists Events under a single Community, filtered by the
+caller's own visibility (see [Visibility](#visibility)) unless the caller
+holds `GroupPermission.EVENT_VIEW_ALL` (Community Admin/Owner oversight),
+in which case every Event is returned regardless of status/visibility.
+Every Event the caller holds any Event role for is always included,
+regardless of status or visibility (e.g. their own Drafts). See
+[Global Events](#global-events) below for the cross-community equivalent.
 
 **Required authorization:** Any signed-in user (open — a `PUBLIC` Event
 must remain listable to non-members).
@@ -266,6 +270,51 @@ Query:
 |---|---|---|
 | 400 | `VALIDATION_ERROR` | Query fails schema validation. |
 | 404 | `GROUP_NOT_FOUND` | `:groupId` doesn't exist. |
+
+---
+
+### 2b. Global Events
+
+**HTTP Method:** `GET`
+**URL:** `/events`
+
+**Description:** Lists every Event visible to the caller across **every**
+Community they have any relationship to, in one request — the "global
+events" feed. Exists so a cross-community Events screen never has to fetch
+every Group/Section the caller belongs to and issue one
+[List Events](#2-list-events) request per community, merging the results
+itself. Applies the exact same per-Event visibility rule as List Events —
+`PUBLIC` to anyone, `COMMUNITY_MEMBERS` to active/read-only members of
+that specific Event's Community, `INVITE_ONLY` to invitees — resolved
+across every Community the caller belongs to (not just one), plus every
+Event the caller holds any Event role for, regardless of Community
+membership. **Does not** include the `EVENT_VIEW_ALL`/`EVENT_MODERATE`
+Community oversight override that List Events applies for a single
+community — that remains an Admin/Owner "browse every Draft under the one
+community I manage" tool, already served by List Events; this feed only
+ever answers "what's relevant to me."
+
+**Required authorization:** Any signed-in user.
+
+**Required permissions:** None — visibility is resolved per-Event, exactly
+like List Events.
+
+**Request**
+
+Query: identical to [List Events](#2-list-events) (`status`, `type`,
+`from`, `to`, `limit`, `offset`).
+
+**Response** — `200 OK`, body: `{ items: EventResponseDto[], total: number, hasMore: boolean }`.
+Each item's own `community` field (see
+[`EventCommunityRefDto`](#eventcommunityrefdto)) identifies which Group or
+Section it belongs to — the frontend never needs a separate lookup to
+group/label results by community.
+
+**Possible errors**
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | Query fails schema validation. |
 
 ---
 

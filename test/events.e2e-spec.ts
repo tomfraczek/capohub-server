@@ -365,6 +365,48 @@ describe('Events (e2e)', () => {
       );
       expect(response.code).toBe('GROUP_NOT_FOUND');
     });
+
+    // An Event's Community may be a Group or a Section (event.entity.ts) -
+    // EventsController is dual-mounted the same way RoleAssignments/
+    // Academies/Cohorts are, so both route families must work identically.
+    it('creates and lists an Event under a Section via /api/v1/sections/:sectionId/events', async () => {
+      const community = await createCommunityWithMembers();
+      const section = await bodyOf<{ id: string }>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${community.id}/sections`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({
+            name: 'Section Events Test',
+            timezone: 'Europe/Warsaw',
+            currencyCode: 'PLN',
+            country: 'PL',
+          })
+          .expect(201),
+      );
+      // A Section is a Group-kind row too (single self-referencing entity) -
+      // must be registered the same as createGroup() does, or afterAll's
+      // cleanup skips deleting it and the OWNER RoleAssignment it creates,
+      // leaving that RoleAssignment still pointing at the GroupMembership
+      // cleanup tries to delete next (FK violation on role_assignments).
+      createdGroupIds.push(section.id);
+
+      const created = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/sections/${section.id}/events`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(eventPayload({ name: 'Section-scoped Event' }))
+          .expect(201),
+      );
+      expect(created.status).toBe('DRAFT');
+
+      const list = await bodyOf<{ items: EventResponseDto[] }>(
+        request(app.getHttpServer())
+          .get(`/api/v1/sections/${section.id}/events`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(list.items.some((event) => event.id === created.id)).toBe(true);
+    });
   });
 
   describe('roles (Owner / Organizer / Moderator)', () => {
@@ -1144,6 +1186,149 @@ describe('Events (e2e)', () => {
       const waitlisted = participants.filter((p) => p.isWaitlisted);
       expect(seated).toHaveLength(2);
       expect(waitlisted).toHaveLength(contenders.length - 2);
+    });
+  });
+
+  describe('global events feed (GET /events)', () => {
+    // A distinct, otherwise-unused date window per test, and a matching
+    // from/to filter on every request - the shared test database
+    // accumulates events across every other test in this file (`startsAt`
+    // defaults to the same instant in eventPayload()), so an unscoped
+    // request could easily miss a just-created event past the default
+    // limit of 20. Scoping by date keeps every assertion exact rather than
+    // a defensive `.some(...)`.
+    function globalFeedEvent(
+      overrides: Record<string, unknown> = {},
+    ): Record<string, unknown> {
+      return eventPayload({
+        startsAt: '2031-03-01T10:00:00.000Z',
+        endsAt: '2031-03-01T18:00:00.000Z',
+        ...overrides,
+      });
+    }
+
+    async function fetchGlobalFeed(token: string): Promise<EventResponseDto[]> {
+      const result = await bodyOf<{ items: EventResponseDto[] }>(
+        request(app.getHttpServer())
+          .get('/api/v1/events')
+          .query({
+            from: '2031-02-28T00:00:00.000Z',
+            to: '2031-03-02T00:00:00.000Z',
+            limit: 100,
+          })
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200),
+      );
+      return result.items;
+    }
+
+    it('includes a PUBLIC event for a non-member, but excludes a COMMUNITY_MEMBERS event under a community they do not belong to', async () => {
+      const community = await createCommunityWithMembers();
+      const publicEvent = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${community.id}/events`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(
+            globalFeedEvent({
+              name: 'Global Feed Public Event',
+              visibility: EventVisibility.PUBLIC,
+            }),
+          )
+          .expect(201),
+      );
+      await publishEvent(OWNER_TOKEN, publicEvent.id);
+
+      const membersOnlyEvent = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${community.id}/events`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(
+            globalFeedEvent({
+              name: 'Global Feed Members-Only Event',
+              visibility: EventVisibility.COMMUNITY_MEMBERS,
+            }),
+          )
+          .expect(201),
+      );
+      await publishEvent(OWNER_TOKEN, membersOnlyEvent.id);
+
+      const feed = await fetchGlobalFeed(OUTSIDER_TOKEN);
+
+      expect(feed.some((e) => e.id === publicEvent.id)).toBe(true);
+      expect(feed.some((e) => e.id === membersOnlyEvent.id)).toBe(false);
+    });
+
+    it('includes a COMMUNITY_MEMBERS event for an active member of its Group, with no per-community request', async () => {
+      const community = await createCommunityWithMembers();
+      const event = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${community.id}/events`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(
+            globalFeedEvent({
+              name: 'Global Feed Member-Visible Event',
+              visibility: EventVisibility.COMMUNITY_MEMBERS,
+            }),
+          )
+          .expect(201),
+      );
+      await publishEvent(OWNER_TOKEN, event.id);
+
+      const feed = await fetchGlobalFeed(MEMBER_TOKEN);
+
+      expect(feed.some((e) => e.id === event.id)).toBe(true);
+    });
+
+    it('includes a Section-scoped event for an active member of the parent Group, with no per-Section request', async () => {
+      const community = await createCommunityWithMembers();
+      const section = await bodyOf<{ id: string }>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${community.id}/sections`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({
+            name: 'Global Feed Section',
+            timezone: 'Europe/Warsaw',
+            currencyCode: 'PLN',
+            country: 'PL',
+          })
+          .expect(201),
+      );
+      createdGroupIds.push(section.id);
+
+      const event = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/sections/${section.id}/events`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(
+            globalFeedEvent({
+              name: 'Global Feed Section Event',
+              visibility: EventVisibility.COMMUNITY_MEMBERS,
+            }),
+          )
+          .expect(201),
+      );
+      await publishEvent(OWNER_TOKEN, event.id);
+
+      const feed = await fetchGlobalFeed(MEMBER_TOKEN);
+
+      expect(feed.some((e) => e.id === event.id)).toBe(true);
+    });
+
+    it('excludes a DRAFT event for someone with no Event role, but includes it for its own Owner via their Event role', async () => {
+      const community = await createCommunityWithMembers();
+      const draft = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${community.id}/events`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(globalFeedEvent({ name: 'Global Feed Draft Event' }))
+          .expect(201),
+      );
+
+      const outsiderFeed = await fetchGlobalFeed(OUTSIDER_TOKEN);
+      expect(outsiderFeed.some((e) => e.id === draft.id)).toBe(false);
+
+      const ownerFeed = await fetchGlobalFeed(OWNER_TOKEN);
+      expect(ownerFeed.some((e) => e.id === draft.id)).toBe(true);
     });
   });
 });

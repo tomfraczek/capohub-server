@@ -86,6 +86,13 @@ export interface CommunityHomeSummaryDto {
 export interface CommunityHomeCapabilitiesDto {
   canCreateGroup: boolean;
   canCreateSectionInCommunityIds: string[];
+  // Create an Event under this community (GroupPermission.EVENT_CREATE,
+  // Admin/Owner tier) - requires the community to be ACTIVE, mirroring
+  // EventsController's route guard (no @AllowGroupStatuses override there,
+  // so the default ACTIVE-only policy applies). Lets the frontend show a
+  // "Create Event" action per community without guessing eligibility from
+  // `myRoles`/GroupRole.
+  canCreateEventInCommunityIds: string[];
   canReviewJoinRequestsInCommunityIds: string[];
   // Read access to a community's member list (GET .../members) - works in
   // any Group status.
