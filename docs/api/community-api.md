@@ -353,6 +353,8 @@ Body (JSON):
 | `memberInvitesAllowed` | boolean | No (default `false`) | Whether a plain `MEMBER` (not `ADMIN`/`OWNER`) may send Invitations. |
 | `timezone` | string | Yes | Must be a valid IANA timezone id (e.g. `"Europe/Warsaw"`), validated against the runtime's own IANA database. |
 | `currencyCode` | string | Yes | Normalized to uppercase; must match `^[A-Z]{3}$` (structural check only — not validated against an actual ISO 4217 list). |
+| `country` | ISO 3166-1 alpha-2 string | Yes | Required on both an Organization and a Group — no exception for an Organization spanning multiple countries. |
+| `city` | string (1-100 chars, trimmed) | Yes | Must be a real city of `country` — see [Search Cities](#35b-search-cities), which returns exactly the values accepted here. |
 
 **Response** — `201 Created`, body: [`GroupResponseDto`](#groupresponsedto).
 
@@ -360,10 +362,15 @@ Body (JSON):
 
 | Status | Code | When |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | Body fails schema validation (see table above). |
+| 400 | `VALIDATION_ERROR` | Body fails schema validation (see table above) — including `city` missing/empty, or not a real city of `country`. |
 | 404 | `GROUP_PARENT_NOT_FOUND` | `parentGroupId` doesn't resolve to a Group the caller has any usable authorization for (also returned if the parent simply doesn't exist — the two cases are indistinguishable by design). |
 | 403 | `INSUFFICIENT_GROUP_PERMISSIONS` | Caller has a Role Assignment for the parent Group, but it doesn't include `GROUP_EDIT`. |
 | 409 | `GROUP_ARCHIVED` | The named parent Group is archived. |
+
+Editing (`PATCH /groups/:id`) is a full-replace of the same shape (see
+[Update Community](#4-update-community)), so `country`/`city` are equally
+required there — an edit can never clear them, and is subject to the same
+country/city match check.
 
 ---
 
@@ -1478,6 +1485,66 @@ Query:
 **Response** — `200 OK`, body: array (≤50) of [`DiscoveredResourceDto`](#discoveredresourcedto).
 
 **Possible errors:** None beyond the global 401.
+
+---
+
+### 35b. Search Cities
+
+**HTTP Method:** `GET`
+**URL:** `/discovery/cities`
+
+**Description:** Lists cities belonging to one country, optionally narrowed
+by name — backs a "pick your city" step constrained to a previously-chosen
+country on Create/Edit Community (see [Create Community](#1-create-community),
+whose `city` field must be one of the names this endpoint can return). Reads
+from a static, bundled geographic reference dataset
+(`cities.json`/GeoNames — see the backend's `common/geo/city-directory.ts`
+for the exact source and its licensing/limitations), not from
+Group/Section data itself — unrelated to [Search Groups](#35-search-groups)
+above, which searches communities, not raw geography.
+
+**Known limitation — local names:** the underlying GeoNames data stores a
+handful of internationally prominent cities (not only capitals — e.g. also
+Naples, Florence, Milan, Antwerp) under their common English exonym rather
+than the local-language name — e.g. Poland's capital is only searchable
+here as `"Warsaw"`, not `"Warszawa"`, and is returned that way too. This is
+a property of the underlying dataset itself, confirmed against GeoNames'
+own raw data (see `city-directory.ts`'s own comment for the full
+investigation) — not something this endpoint or the Group/Section
+validation adds on top. Fixing it correctly (not via a hand-maintained
+alias list) requires a separate data-source project — out of scope for
+this pass.
+
+**Required authorization:** Signed-in user.
+
+**Required permissions:** None.
+
+**Request**
+
+Query:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `country` | ISO 3166-1 alpha-2 string | Yes | Restricts results to this country only — there is no "browse every city" mode. |
+| `search` | string (1-100 chars) | No | Case-insensitive substring match against city name. |
+| `limit` | integer 1-50 | No (default 20) | |
+
+**Response** — `200 OK`, body: array of `CityResultDto`:
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | The city's name, exactly as stored — this is also the value to submit as `city` on Create/Edit Community. |
+| `country` | string | Echoes the request's `country`. |
+| `region` | string or `null` | The admin1 region's English name (e.g. "Mazovia") whenever the dataset resolves one for this city — `null` only when the source itself has none for it. Always present when available, regardless of `search`/`limit`/whether another same-named city also appears in the response — a stable per-city fact, never a function of the rest of the result set. |
+
+Sorted alphabetically by name (region as tiebreaker), capped at `limit`,
+never contains a duplicate (name, region) pair.
+
+**Possible errors**
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `country` missing/invalid, or `search`/`limit` out of bounds. |
 
 ---
 

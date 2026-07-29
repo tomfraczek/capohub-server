@@ -32,8 +32,8 @@ function buildCreateInput(
     memberInvitesAllowed: false,
     timezone: 'Europe/Warsaw',
     currencyCode: 'PLN',
-    country: null,
-    city: null,
+    country: 'PL',
+    city: 'Poznań',
     ...overrides,
   };
 }

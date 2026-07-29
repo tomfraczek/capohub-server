@@ -58,15 +58,19 @@ export class Group extends BaseEntity {
   youtubeUrl: string | null = null;
 
   // ISO 3166-1 alpha-2 (e.g. "PL"), validated in the application layer -
-  // see countryCodeSchema. Nullable at the DB layer since existing rows
-  // predate this field and there is no value to safely backfill; required
-  // on create for a Section (single place), optional for a Group (may span
-  // multiple countries, e.g. an international federation) - see
-  // create-group.schema.ts / create-section.schema.ts.
+  // see countryCodeSchema. Required on create/update for both Group and
+  // Section (see create-group.schema.ts / create-section.schema.ts, both
+  // enforced full-replace on update too) - still `nullable: true` at the DB
+  // layer only because existing rows predate this field and there is no
+  // value to safely backfill onto them; every new write goes through the
+  // application-layer schema, which never lets it be saved empty again.
   @Property({ nullable: true, length: 2 })
   country: string | null = null;
 
-  // Free text, optional on both Group and Section.
+  // Free text, constrained to a real city of `country` - see
+  // group-validation.helpers.ts#refineCityMatchesCountry. Required on
+  // create/update for both Group and Section, same DB-nullable-for-legacy-
+  // rows caveat as `country` above.
   @Property({ nullable: true, length: 100 })
   city: string | null = null;
 

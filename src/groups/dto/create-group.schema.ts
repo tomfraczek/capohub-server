@@ -6,19 +6,25 @@ import {
   countryCodeSchema,
   currencyCodeSchema,
   optionalNullableUrl,
+  refineCityMatchesCountry,
   timezoneSchema,
 } from './group-validation.helpers';
 
 const DESCRIPTION_MAX_LENGTH = 5000;
 const URL_MAX_LENGTH = 2048;
 
+// Exported separately from createGroupSchema (below) purely so
+// update-group.schema.ts can call `.strict()` on it - `.strict()` is a
+// ZodObject-only method, unavailable once `.superRefine()` wraps it in a
+// ZodEffects (see createGroupSchema's own comment).
+//
 // A Group is always a root-level entity - creating a nested/child entity
 // under a Group goes through POST /groups/:groupId/sections instead (see
 // create-section.schema.ts and the Group/Section rename ADR). There is no
 // parentGroupId here: unlike before the rename, "root vs child" is no
 // longer a single creation endpoint distinguished by an optional field -
 // Group (this schema) and Section each have their own creation endpoint.
-export const createGroupSchema = z.object({
+export const createGroupObjectSchema = z.object({
   name: z.string().trim().min(1).max(150),
   description: optionalNullableText(DESCRIPTION_MAX_LENGTH),
   logoUrl: optionalNullableUrl(URL_MAX_LENGTH),
@@ -47,12 +53,20 @@ export const createGroupSchema = z.object({
   memberInvitesAllowed: z.boolean().default(false),
   timezone: timezoneSchema,
   currencyCode: currencyCodeSchema,
-  // Optional for a Group (unlike Section) - a Group may span multiple
-  // countries, e.g. an international federation (see the Group/Section
-  // rename ADR).
-  country: countryCodeSchema.nullish().transform((value) => value ?? null),
+  // Required, same as Section (business rule: every Group must have a
+  // country and a city, on create and on edit - a plain Group spanning
+  // multiple countries, e.g. an international federation, is no longer a
+  // supported reason to leave this blank).
+  country: countryCodeSchema,
   city: citySchema,
 });
+
+// `.superRefine` also validates that `city` is actually a city of `country`
+// (see refineCityMatchesCountry) - a check that needs both fields at once,
+// so it cannot live on citySchema alone.
+export const createGroupSchema = createGroupObjectSchema.superRefine(
+  refineCityMatchesCountry,
+);
 
 export class CreateGroupDto extends createZodDto(createGroupSchema) {}
 

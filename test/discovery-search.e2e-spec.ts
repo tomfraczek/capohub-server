@@ -16,6 +16,7 @@ import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter
 import { PaginatedResponse } from '../src/common/pagination/pagination.types';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
+import { CityResultDto } from '../src/discovery/dto/city-result.dto';
 import { CommunitySearchResultDto } from '../src/discovery/dto/community-search-result.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
@@ -132,6 +133,8 @@ describe('Discovery search (e2e)', () => {
       currencyCode: 'PLN',
       isPublic: true,
       isHidden: false,
+      country: 'PL',
+      city: 'Poznań',
       ...overrides,
     };
   }
@@ -144,6 +147,7 @@ describe('Discovery search (e2e)', () => {
       isPublic: true,
       isHidden: false,
       country: 'BR',
+      city: 'São Paulo',
       ...overrides,
     };
   }
@@ -241,6 +245,7 @@ describe('Discovery search (e2e)', () => {
     const group = await createGroup({
       name: `${uniqueSuffix} CountryFilter`,
       country: 'DE',
+      city: 'Berlin',
     });
 
     const matching = await bodyOf<PaginatedResponse<CommunitySearchResultDto>>(
@@ -260,11 +265,11 @@ describe('Discovery search (e2e)', () => {
     const group = await createGroup({
       name: `${uniqueSuffix} CityFilter`,
       country: 'PL',
-      city: 'Warszawa',
+      city: 'Warsaw',
     });
 
     const res = await bodyOf<PaginatedResponse<CommunitySearchResultDto>>(
-      search(`name=${encodeURIComponent(uniqueSuffix)}&city=warsz`).expect(200),
+      search(`name=${encodeURIComponent(uniqueSuffix)}&city=wars`).expect(200),
     );
     expect(res.data.some((row) => row.id === group.id)).toBe(true);
   });
@@ -331,5 +336,127 @@ describe('Discovery search (e2e)', () => {
     expect(page2.data.length).toBe(1);
     expect(page2.meta.hasNextPage).toBe(false);
     expect(page2.meta.hasPreviousPage).toBe(true);
+  });
+
+  describe('GET /discovery/cities', () => {
+    function searchCities(qs: string) {
+      return request(app.getHttpServer())
+        .get(`/api/v1/discovery/cities?${qs}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`);
+    }
+
+    it('returns only cities of the requested country', async () => {
+      const res = await bodyOf<CityResultDto[]>(
+        searchCities('country=PL&search=krak').expect(200),
+      );
+
+      expect(res.length).toBeGreaterThan(0);
+      expect(res.every((city) => city.country === 'PL')).toBe(true);
+      expect(res.some((city) => city.name === 'Kraków')).toBe(true);
+    });
+
+    it('narrows by a case-insensitive substring match on name', async () => {
+      const res = await bodyOf<CityResultDto[]>(
+        searchCities('country=PL&search=pozna').expect(200),
+      );
+
+      expect(res.some((city) => city.name === 'Poznań')).toBe(true);
+      expect(
+        res.every((city) => city.name.toLowerCase().includes('pozna')),
+      ).toBe(true);
+    });
+
+    it('caps results at the requested limit', async () => {
+      const res = await bodyOf<CityResultDto[]>(
+        searchCities('country=PL&limit=3').expect(200),
+      );
+
+      expect(res.length).toBeLessThanOrEqual(3);
+    });
+
+    it('rejects a missing country', async () => {
+      const res = await bodyOf<HttpErrorResponse>(
+        searchCities('search=Pozn').expect(400),
+      );
+      expect(res.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('rejects an invalid country code', async () => {
+      await searchCities('country=XX').expect(400);
+    });
+
+    it('rejects a limit above the maximum', async () => {
+      await searchCities('country=PL&limit=1000').expect(400);
+    });
+
+    it('never returns a duplicate (name, region) pair', async () => {
+      const res = await bodyOf<CityResultDto[]>(
+        searchCities('country=PL&limit=50').expect(200),
+      );
+      const keys = res.map((city) => `${city.name}|${city.region ?? ''}`);
+      expect(new Set(keys).size).toBe(keys.length);
+    });
+
+    it('rejects an unauthenticated request', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/discovery/cities?country=PL')
+        .expect(401);
+    });
+
+    it('distinguishes two different cities that share a name via their own region', async () => {
+      const res = await bodyOf<CityResultDto[]>(
+        searchCities('country=PL&search=Piaski&limit=50').expect(200),
+      );
+      const piaskiEntries = res.filter((city) => city.name === 'Piaski');
+
+      expect(piaskiEntries).toHaveLength(2);
+      expect(piaskiEntries.every((city) => city.region !== null)).toBe(true);
+      expect(new Set(piaskiEntries.map((city) => city.region)).size).toBe(2);
+    });
+
+    it('always includes region when resolvable, regardless of search text or limit', async () => {
+      const narrow = await bodyOf<CityResultDto[]>(
+        searchCities('country=PL&search=Poznań&limit=50').expect(200),
+      );
+      expect(narrow).toEqual([
+        { name: 'Poznań', country: 'PL', region: 'Greater Poland' },
+      ]);
+
+      const withoutSearch = await bodyOf<CityResultDto[]>(
+        searchCities('country=PL&search=pozna').expect(200),
+      );
+      const poznanEntry = withoutSearch.find((city) => city.name === 'Poznań');
+      expect(poznanEntry?.region).toBe('Greater Poland');
+    });
+
+    // Regression coverage for the disclosed "local name" limitation - see
+    // city-directory.ts's own comment. Documents today's actual behavior:
+    // the underlying dataset has no local-name data for Poland's capital,
+    // so it is only findable by its English exonym.
+    it('[known limitation] finds the capital by "Warsaw", not by its local name "Warszawa"', async () => {
+      const byExonym = await bodyOf<CityResultDto[]>(
+        searchCities('country=PL&search=Warsaw').expect(200),
+      );
+      expect(byExonym.some((city) => city.name === 'Warsaw')).toBe(true);
+
+      const byLocalName = await bodyOf<CityResultDto[]>(
+        searchCities('country=PL&search=Warszawa').expect(200),
+      );
+      expect(byLocalName.some((city) => city.name === 'Warsaw')).toBe(false);
+    });
+
+    it('returns a name that Group/Section creation accepts as-is (endpoint and validation share one source)', async () => {
+      const res = await bodyOf<CityResultDto[]>(
+        searchCities('country=BR&search=Paulo').expect(200),
+      );
+      const saoPaulo = res.find((city) => city.name === 'São Paulo');
+      expect(saoPaulo).toBeDefined();
+
+      await createGroup({
+        name: `${uniqueSuffix} CityContractMatch`,
+        country: 'BR',
+        city: saoPaulo!.name,
+      });
+    });
   });
 });

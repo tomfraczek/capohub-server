@@ -3,8 +3,14 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PaginatedResponse } from '../common/pagination/pagination.types';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { User } from '../users/entities/user.entity';
+import { CitySearchService } from './city-search.service';
 import { DiscoveredResourceDto } from './discovery-response.dto';
 import { DiscoveryService } from './discovery.service';
+import { CityResultDto } from './dto/city-result.dto';
+import {
+  CitySearchQueryDto,
+  citySearchQuerySchema,
+} from './dto/city-search-query.schema';
 import { CommunitySearchResultDto } from './dto/community-search-result.dto';
 import {
   DiscoverySearchQueryDto,
@@ -13,7 +19,10 @@ import {
 
 @Controller('discovery')
 export class DiscoveryController {
-  constructor(private readonly discoveryService: DiscoveryService) {}
+  constructor(
+    private readonly discoveryService: DiscoveryService,
+    private readonly citySearchService: CitySearchService,
+  ) {}
 
   /**
    * GET /discovery/resolve/:code
@@ -46,5 +55,24 @@ export class DiscoveryController {
     query: DiscoverySearchQueryDto,
   ): Promise<PaginatedResponse<CommunitySearchResultDto>> {
     return this.discoveryService.search(query);
+  }
+
+  /**
+   * GET /discovery/cities?country=&search=&limit=
+   *
+   * Cities of one country (`country` is required - there is no "browse
+   * every city" mode), optionally narrowed by name. Backs a "pick your
+   * city" step constrained to a previously-chosen country (see
+   * create-group.schema.ts / create-section.schema.ts - the same values
+   * this endpoint returns are the ones accepted there). Not a Group/Section
+   * search - see CitySearchService and common/geo/city-directory.ts for the
+   * static reference dataset this reads from.
+   */
+  @Get('cities')
+  searchCities(
+    @Query(new ZodValidationPipe(citySearchQuerySchema))
+    query: CitySearchQueryDto,
+  ): CityResultDto[] {
+    return this.citySearchService.search(query);
   }
 }

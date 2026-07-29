@@ -204,6 +204,8 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
       memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
+      country: 'PL',
+      city: 'Poznań',
       ...overrides,
     };
   }
@@ -242,10 +244,9 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
       memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
-      // Required on Section (unlike Group, which may span multiple
-      // countries) - see create-section.schema.ts.
+      // Required on Section, same as Group - see create-section.schema.ts.
       country: 'PL',
-      city: null,
+      city: 'Warsaw',
       ...overrides,
     };
   }
@@ -372,6 +373,96 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
         .expect(404);
 
       expect((response.body as HttpErrorResponse).code).toBe('GROUP_NOT_FOUND');
+    });
+
+    // Regression coverage for the "every Section must have a country and a
+    // city" business rule (see create-section.schema.ts).
+    it('rejects creating a Section with no country', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Country City Root',
+      });
+      const input = sectionPayload({ name: 'No Country Section' });
+      delete (input as { country?: unknown }).country;
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/sections`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(input)
+        .expect(400);
+      expect((response.body as HttpErrorResponse).code).toBe(
+        'VALIDATION_ERROR',
+      );
+    });
+
+    it('rejects creating a Section with no city', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Country City Root 2',
+      });
+      const input = sectionPayload({ name: 'No City Section' });
+      delete (input as { city?: unknown }).city;
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/sections`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(input)
+        .expect(400);
+      expect((response.body as HttpErrorResponse).code).toBe(
+        'VALIDATION_ERROR',
+      );
+    });
+
+    it('rejects creating a Section with an empty-string country or city', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Country City Root 3',
+      });
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/sections`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(sectionPayload({ name: 'Empty Country', country: '' }))
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/sections`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(sectionPayload({ name: 'Empty City', city: '' }))
+        .expect(400);
+    });
+
+    it('rejects creating a Section whose city does not belong to its country', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Country City Root 4',
+      });
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/groups/${root.id}/sections`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(
+          sectionPayload({
+            name: 'Mismatched Section',
+            country: 'FR',
+            city: 'Warsaw',
+          }),
+        )
+        .expect(400);
+      expect((response.body as HttpErrorResponse).code).toBe(
+        'VALIDATION_ERROR',
+      );
+    });
+
+    it('rejects a Section edit that would leave city empty', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Country City Root 5',
+      });
+      const section = await createSection(OWNER_TOKEN, 'groups', root.id, {
+        name: 'Editable Section',
+      });
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/sections/${section.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(sectionPayload({ name: 'Editable Section', city: '' }))
+        .expect(400);
     });
   });
 

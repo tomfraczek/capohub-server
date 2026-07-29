@@ -195,6 +195,8 @@ describe('Groups (e2e)', () => {
       memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
+      country: 'PL',
+      city: 'Poznań',
       ...overrides,
     };
   }
@@ -299,6 +301,74 @@ describe('Groups (e2e)', () => {
         .send(groupPayload())
         .expect(401);
     });
+
+    // Regression coverage for the "every Group must have a country and a
+    // city" business rule - country is no longer optional for a Group (it
+    // used to be, for an Organization spanning multiple countries - see
+    // create-group.schema.ts).
+    it('rejects creation with no country', async () => {
+      const input = groupPayload();
+      delete (input as { country?: unknown }).country;
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post('/api/v1/groups')
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(input)
+          .expect(400),
+      );
+      expect(response.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('rejects creation with no city', async () => {
+      const input = groupPayload();
+      delete (input as { city?: unknown }).city;
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post('/api/v1/groups')
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(input)
+          .expect(400),
+      );
+      expect(response.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('rejects creation with an empty-string country or city', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/groups')
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(groupPayload({ country: '' }))
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .post('/api/v1/groups')
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(groupPayload({ city: '' }))
+        .expect(400);
+    });
+
+    it('rejects creation when city does not belong to country', async () => {
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post('/api/v1/groups')
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(groupPayload({ country: 'DE', city: 'Poznań' }))
+          .expect(400),
+      );
+      expect(response.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('creates a group with a valid country/city combination', async () => {
+      const created = await createGroup(OWNER_TOKEN, {
+        name: 'Country City Test',
+        country: 'BR',
+        city: 'São Paulo',
+      });
+
+      expect(created.country).toBe('BR');
+      expect(created.city).toBe('São Paulo');
+    });
   });
 
   describe('listMine', () => {
@@ -374,6 +444,58 @@ describe('Groups (e2e)', () => {
         .set('Authorization', `Bearer ${SECOND_TOKEN}`)
         .send(groupPayload({ name: 'Hijacked' }))
         .expect(403);
+    });
+
+    // Update is full-replace (see update-group.schema.ts), so an edit can
+    // never clear country/city any more than creation can.
+    it('rejects an edit that would leave city empty', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/groups/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(groupPayload({ city: '' }))
+          .expect(400),
+      );
+      expect(response.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('rejects an edit that would leave country empty', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/groups/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(groupPayload({ country: '' }))
+          .expect(400),
+      );
+      expect(response.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('rejects an edit moving the city out of sync with the country', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/groups/${created.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(groupPayload({ country: 'FR', city: 'Poznań' }))
+        .expect(400);
+    });
+
+    it('allows editing to a different, valid country/city combination', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+
+      const updated = await bodyOf<GroupResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/groups/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(groupPayload({ country: 'DE', city: 'Berlin' }))
+          .expect(200),
+      );
+      expect(updated.country).toBe('DE');
+      expect(updated.city).toBe('Berlin');
     });
   });
 

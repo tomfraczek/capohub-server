@@ -207,6 +207,8 @@ describe('MembershipRequests + Discovery (e2e)', () => {
       memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
+      country: 'PL',
+      city: 'Poznań',
       ...overrides,
     };
   }

@@ -232,6 +232,8 @@ describe('Events (e2e)', () => {
       memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
+      country: 'PL',
+      city: 'Poznań',
       ...overrides,
     };
   }
@@ -380,6 +382,7 @@ describe('Events (e2e)', () => {
             timezone: 'Europe/Warsaw',
             currencyCode: 'PLN',
             country: 'PL',
+            city: 'Poznań',
           })
           .expect(201),
       );
@@ -1290,6 +1293,7 @@ describe('Events (e2e)', () => {
             timezone: 'Europe/Warsaw',
             currencyCode: 'PLN',
             country: 'PL',
+            city: 'Poznań',
           })
           .expect(201),
       );

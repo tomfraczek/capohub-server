@@ -6,19 +6,25 @@ import {
   countryCodeSchema,
   currencyCodeSchema,
   optionalNullableUrl,
+  refineCityMatchesCountry,
   timezoneSchema,
 } from './group-validation.helpers';
 
 const DESCRIPTION_MAX_LENGTH = 5000;
 const URL_MAX_LENGTH = 2048;
 
+// Exported separately from createSectionSchema (below) purely so
+// update-section.schema.ts can call `.strict()` on it - see
+// create-group.schema.ts's identical comment on createGroupObjectSchema.
+//
 // A Section is a non-root Group nested under an existing Group or Section
 // (see the Group/Section rename ADR) - the parent is always the route's
 // :groupId/:sectionId, never a body field (mirrors how Academy/Cohort are
-// created under their owning Group). Field set mirrors create-group.schema.ts,
-// except `country` is required here (a Section operates in one place),
-// where it is optional on a Group (which may span multiple countries).
-export const createSectionSchema = z.object({
+// created under their owning Group). Field set mirrors
+// create-group.schema.ts - country/city are required on both (a Section
+// always operates in one place, and a Group is no longer allowed to leave
+// them blank either).
+export const createSectionObjectSchema = z.object({
   name: z.string().trim().min(1).max(150),
   description: optionalNullableText(DESCRIPTION_MAX_LENGTH),
   logoUrl: optionalNullableUrl(URL_MAX_LENGTH),
@@ -43,6 +49,10 @@ export const createSectionSchema = z.object({
   country: countryCodeSchema,
   city: citySchema,
 });
+
+export const createSectionSchema = createSectionObjectSchema.superRefine(
+  refineCityMatchesCountry,
+);
 
 export class CreateSectionDto extends createZodDto(createSectionSchema) {}
 
