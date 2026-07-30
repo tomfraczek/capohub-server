@@ -61,7 +61,9 @@ import { EventPermissionService } from './permissions/event-permission.service';
   // EventRolesService is exported for UsersModule - DELETE /users/me must
   // not hard-delete a User who solely owns a live (DRAFT/PUBLISHED) Event
   // (see EventRolesService.findOwnedActiveEvents and
-  // UserService.deleteLocalAccountData).
-  exports: [EventRolesService],
+  // UserService.deleteLocalAccountData). EventsService is exported for
+  // HomeModule, which reuses listForViewer as-is (same viewer-scoped
+  // visibility rules as GET /events) rather than re-querying Events itself.
+  exports: [EventRolesService, EventsService],
 })
 export class EventsModule {}

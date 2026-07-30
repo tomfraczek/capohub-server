@@ -6,6 +6,7 @@ import { DiscoveryModule } from './discovery/discovery.module';
 import { EventsModule } from './events/events.module';
 import { GroupsModule } from './groups/groups.module';
 import { HealthModule } from './health/health.module';
+import { HomeModule } from './home/home.module';
 import { InstrumentsModule } from './instruments/instruments.module';
 import { PlaylistsModule } from './playlists/playlists.module';
 import { RhythmsModule } from './rhythms/rhythms.module';
@@ -28,6 +29,7 @@ import { UsersModule } from './users/users.module';
     EventsModule,
     DiscoveryModule,
     HealthModule,
+    HomeModule,
   ],
 })
 export class AppModule {}

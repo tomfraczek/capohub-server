@@ -25,6 +25,7 @@ import { EventInvitationStatus } from './enums/event-invitation-status.enum';
 import { EventRole } from './enums/event-role.enum';
 import { EventRsvpStatus } from './enums/event-rsvp-status.enum';
 import { EventStatus } from './enums/event-status.enum';
+import { EventType } from './enums/event-type.enum';
 import { EventWaitlistPolicy } from './enums/event-waitlist-policy.enum';
 import { EventVisibility } from './enums/event-visibility.enum';
 import { EventRolesService } from './event-roles.service';
@@ -345,7 +346,134 @@ export class EventsService {
     query: EventListQueryInput,
   ): Promise<EventListResult> {
     const em = this.em;
+    const { visibilityAnd, rolesByEvent } = await this.resolveViewerVisibility(
+      em,
+      viewer,
+    );
 
+    const where: FilterQuery<Event> = { $and: visibilityAnd };
+    if (query.status) where.status = query.status;
+    if (query.type) where.type = query.type;
+    if (query.from) where.endsAt = { $gte: new Date(query.from) };
+    if (query.to) where.startsAt = { $lte: new Date(query.to) };
+
+    const [events, total] = await em.findAndCount(Event, where, {
+      populate: ['community'],
+      orderBy: { startsAt: 'asc' },
+      limit: query.limit,
+      offset: query.offset,
+    });
+
+    for (const event of events) {
+      await reconcileEventFinished(em, event);
+    }
+
+    const items = await Promise.all(
+      events.map((event) =>
+        this.buildResponse(em, event, viewer, rolesByEvent.get(event.id) ?? []),
+      ),
+    );
+
+    return {
+      items,
+      total,
+      hasMore: query.offset + items.length < total,
+    };
+  }
+
+  /**
+   * The single soonest upcoming Event (any type) and the single soonest
+   * upcoming OPEN_TRAINING Event visible to `viewer`, both from `from`
+   * onward - backs GET /home (see HomeService), which needs exactly these
+   * two facts and nothing else.
+   *
+   * Still runs two Event queries: an OPEN_TRAINING Event cannot be safely
+   * read off a bounded "any type, limit 1" result (the very next OPEN_
+   * TRAINING Event is very often not the very next Event of any type, and
+   * a small bounded window could miss it entirely, silently under-
+   * reporting nearestTraining as null). What *is* shared, and unlike two
+   * independent listForViewer calls, only ever resolved once here, is the
+   * expensive, query-count-heavy part: which Groups/roles/invitations make
+   * an Event visible to this viewer at all (see resolveViewerVisibility) -
+   * identical for both queries since it never depends on `type`.
+   */
+  async findNearestEventAndTraining(
+    viewer: User,
+    from: string,
+  ): Promise<{
+    nearestEvent: EventResponseDto | null;
+    nearestTraining: EventResponseDto | null;
+  }> {
+    const em = this.em;
+    const { visibilityAnd, rolesByEvent } = await this.resolveViewerVisibility(
+      em,
+      viewer,
+    );
+    const endsAtFrom = { $gte: new Date(from) };
+
+    const [[anyEvents], [trainingEvents]] = await Promise.all([
+      em.findAndCount(
+        Event,
+        { $and: visibilityAnd, endsAt: endsAtFrom },
+        { populate: ['community'], orderBy: { startsAt: 'asc' }, limit: 1 },
+      ),
+      em.findAndCount(
+        Event,
+        {
+          $and: visibilityAnd,
+          endsAt: endsAtFrom,
+          type: EventType.OPEN_TRAINING,
+        },
+        { populate: ['community'], orderBy: { startsAt: 'asc' }, limit: 1 },
+      ),
+    ]);
+
+    for (const event of [...anyEvents, ...trainingEvents]) {
+      await reconcileEventFinished(em, event);
+    }
+
+    const [nearestEvent, nearestTraining] = await Promise.all([
+      anyEvents[0]
+        ? this.buildResponse(
+            em,
+            anyEvents[0],
+            viewer,
+            rolesByEvent.get(anyEvents[0].id) ?? [],
+          )
+        : null,
+      trainingEvents[0]
+        ? this.buildResponse(
+            em,
+            trainingEvents[0],
+            viewer,
+            rolesByEvent.get(trainingEvents[0].id) ?? [],
+          )
+        : null,
+    ]);
+
+    return { nearestEvent, nearestTraining };
+  }
+
+  /**
+   * Resolves everything listForViewer/findNearestEventAndTraining need to
+   * decide which Events `viewer` may see, independent of any `type`/`from`/
+   * `to` query filter: their shared Groups (own Root Group plus every
+   * descendant - ADR-002, unlimited hierarchy depth), Event Role
+   * Assignments (always visible regardless of Community membership), and
+   * pending/accepted Event Invitations. Returns a ready-to-spread `$and`
+   * fragment (same rule both callers used to build inline: PUBLIC to
+   * anyone, COMMUNITY_MEMBERS to members of one of `viewer`'s Communities,
+   * invited-only Events to their invitee, any Event Role always included -
+   * DRAFT excluded unless a Role applies) plus the viewer's own roles per
+   * Event for buildResponse's `viewerRoles`/`capabilities`.
+   */
+  private async resolveViewerVisibility(
+    em: EntityManager,
+    viewer: User,
+  ): Promise<{
+    visibilityAnd: FilterQuery<Event>[];
+    rolesByEvent: Map<string, EventRole[]>;
+  }> {
     const memberships = await em.find(GroupMembership, {
       user: viewer.id,
       status: {
@@ -391,12 +519,6 @@ export class EventsService {
       rolesByEvent.set(assignment.event.id, list);
     }
 
-    const where: FilterQuery<Event> = {};
-    if (query.status) where.status = query.status;
-    if (query.type) where.type = query.type;
-    if (query.from) where.endsAt = { $gte: new Date(query.from) };
-    if (query.to) where.startsAt = { $lte: new Date(query.to) };
-
     const visibilityOr: FilterQuery<Event>[] = [
       { visibility: EventVisibility.PUBLIC },
     ];
@@ -410,7 +532,7 @@ export class EventsService {
       visibilityOr.push({ id: { $in: invitedEventIds } });
     }
 
-    where.$and = [
+    const visibilityAnd: FilterQuery<Event>[] = [
       {
         $or: [
           {
@@ -424,28 +546,7 @@ export class EventsService {
       },
     ];
 
-    const [events, total] = await em.findAndCount(Event, where, {
-      populate: ['community'],
-      orderBy: { startsAt: 'asc' },
-      limit: query.limit,
-      offset: query.offset,
-    });
-
-    for (const event of events) {
-      await reconcileEventFinished(em, event);
-    }
-
-    const items = await Promise.all(
-      events.map((event) =>
-        this.buildResponse(em, event, viewer, rolesByEvent.get(event.id) ?? []),
-      ),
-    );
-
-    return {
-      items,
-      total,
-      hasMore: query.offset + items.length < total,
-    };
+    return { visibilityAnd, rolesByEvent };
   }
 
   private applyFields(event: Event, input: CreateEventInput): void {
