@@ -58,6 +58,7 @@ interface MockRouting {
   // find (bulk) results - static, not a FIFO queue (no test here needs two
   // different bulk-find results for RoleAssignment within one test).
   roleAssignmentFindResults?: RoleAssignment[];
+  membershipFindResults?: GroupMembership[];
   flushError?: Error;
 }
 
@@ -98,6 +99,9 @@ function buildMockEm(routing: MockRouting = {}) {
   const find = jest.fn((entity: unknown) => {
     if (entity === RoleAssignment) {
       return Promise.resolve(routing.roleAssignmentFindResults ?? []);
+    }
+    if (entity === GroupMembership) {
+      return Promise.resolve(routing.membershipFindResults ?? []);
     }
     throw new Error(`Unexpected find entity in test mock: ${String(entity)}`);
   });
@@ -1047,6 +1051,175 @@ describe('RoleAssignmentsService', () => {
 
       expect(result).toEqual([]);
       expect(find).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('isCommunityMember', () => {
+    it('returns false when the community does not exist', async () => {
+      const { em } = buildMockEm({ groupResults: [null] });
+      const service = buildService(em);
+
+      expect(await service.isCommunityMember('missing', 'user-1')).toBe(false);
+    });
+
+    it('for a Root Group, a plain active Membership is enough - no Role required', async () => {
+      const rootGroup = buildGroup({ id: 'root-1' });
+      const membership = buildMembership({ rootGroup });
+      const { em } = buildMockEm({
+        groupResults: [rootGroup],
+        membershipResults: [membership],
+      });
+      const service = buildService(em);
+
+      expect(await service.isCommunityMember('root-1', 'user-1')).toBe(true);
+    });
+
+    it('for a Root Group, returns false when there is no active/read-only Membership', async () => {
+      const rootGroup = buildGroup({ id: 'root-1' });
+      const { em } = buildMockEm({
+        groupResults: [rootGroup],
+        membershipResults: [null],
+      });
+      const service = buildService(em);
+
+      expect(await service.isCommunityMember('root-1', 'user-1')).toBe(false);
+    });
+
+    it('for a Section, requires an actual Role Assignment for that exact Section - plain Membership alone is not enough', async () => {
+      const section = buildGroup({
+        id: 'section-1',
+        parentGroup: 'root-1' as never,
+      });
+      const membership = buildMembership();
+      const { em } = buildMockEm({
+        // First findOne(Group) is isCommunityMember's own lookup; the
+        // second is resolveAuthorization's own independent lookup.
+        groupResults: [section, section],
+        membershipResults: [membership],
+        roleAssignmentFindResults: [],
+      });
+      const service = buildService(em);
+
+      expect(await service.isCommunityMember('section-1', 'user-1')).toBe(
+        false,
+      );
+    });
+
+    it('for a Section, returns true when the user holds any Role Assignment there', async () => {
+      const section = buildGroup({
+        id: 'section-1',
+        parentGroup: 'root-1' as never,
+      });
+      const membership = buildMembership();
+      const roleAssignment = buildRoleAssignment({
+        membership,
+        group: section,
+      });
+      const { em } = buildMockEm({
+        groupResults: [section, section],
+        membershipResults: [membership],
+        roleAssignmentFindResults: [roleAssignment],
+      });
+      const service = buildService(em);
+
+      expect(await service.isCommunityMember('section-1', 'user-1')).toBe(true);
+    });
+  });
+
+  describe('listCommunityMemberUserIds', () => {
+    it('returns an empty array when the community does not exist', async () => {
+      const { em } = buildMockEm({ groupResults: [null] });
+      const service = buildService(em);
+
+      expect(await service.listCommunityMemberUserIds('missing')).toEqual([]);
+    });
+
+    it('for a Root Group, returns every distinct active/read-only member user id', async () => {
+      const rootGroup = buildGroup({ id: 'root-1' });
+      const memberOne = buildMembership({
+        id: 'membership-1',
+        rootGroup,
+        user: { id: 'user-1' } as never,
+        status: GroupMembershipStatus.ACTIVE,
+      });
+      const memberTwo = buildMembership({
+        id: 'membership-2',
+        rootGroup,
+        user: { id: 'user-2' } as never,
+        status: GroupMembershipStatus.READ_ONLY,
+      });
+      const { em } = buildMockEm({
+        groupResults: [rootGroup],
+        membershipFindResults: [memberOne, memberTwo],
+      });
+      const service = buildService(em);
+
+      const result = await service.listCommunityMemberUserIds('root-1');
+
+      expect([...result].sort()).toEqual(['user-1', 'user-2']);
+    });
+
+    it('for a Section, only counts users with an active/read-only Membership holding a Role Assignment there', async () => {
+      const section = buildGroup({
+        id: 'section-1',
+        parentGroup: 'root-1' as never,
+      });
+      const activeMembership = buildMembership({
+        id: 'membership-1',
+        user: { id: 'user-1' } as never,
+        status: GroupMembershipStatus.ACTIVE,
+      });
+      const archivedMembership = buildMembership({
+        id: 'membership-2',
+        user: { id: 'user-2' } as never,
+        status: GroupMembershipStatus.ARCHIVED,
+      });
+      const { em } = buildMockEm({
+        groupResults: [section],
+        roleAssignmentFindResults: [
+          buildRoleAssignment({ membership: activeMembership, group: section }),
+          buildRoleAssignment({
+            membership: archivedMembership,
+            group: section,
+          }),
+        ],
+      });
+      const service = buildService(em);
+
+      const result = await service.listCommunityMemberUserIds('section-1');
+
+      expect(result).toEqual(['user-1']);
+    });
+  });
+
+  describe('getCommunityIdsWithAnyRole', () => {
+    it('returns an empty array when the user has no memberships at all', async () => {
+      const { em } = buildMockEm({ membershipFindResults: [] });
+      const service = buildService(em);
+
+      expect(await service.getCommunityIdsWithAnyRole('user-1')).toEqual([]);
+    });
+
+    it('returns every distinct Group/Section id the user holds any Role Assignment for, across every Membership', async () => {
+      const membership = buildMembership({ id: 'membership-1' });
+      const { em } = buildMockEm({
+        membershipFindResults: [membership],
+        roleAssignmentFindResults: [
+          buildRoleAssignment({
+            membership,
+            group: buildGroup({ id: 'root-1' }),
+          }),
+          buildRoleAssignment({
+            membership,
+            group: buildGroup({ id: 'child-1' }),
+          }),
+        ],
+      });
+      const service = buildService(em);
+
+      const result = await service.getCommunityIdsWithAnyRole('user-1');
+
+      expect([...result].sort()).toEqual(['child-1', 'root-1']);
     });
   });
 });

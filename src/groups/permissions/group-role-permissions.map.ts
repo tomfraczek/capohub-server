@@ -25,6 +25,8 @@ const MEMBER_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.ACADEMY_VIEW,
   GroupPermission.COHORT_VIEW,
   GroupPermission.SECTION_VIEW,
+  GroupPermission.RECIPIENT_GROUP_VIEW,
+  GroupPermission.ANNOUNCEMENT_VIEW,
   // GROUP_INVITE is intentionally included here even though service-layer
   // logic additionally gates it on Group.memberInvitesAllowed.  This allows
   // the GroupPermissionsGuard to let MEMBER requests through to the service;
@@ -76,6 +78,9 @@ const ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.EVENT_CREATE,
   GroupPermission.EVENT_VIEW_ALL,
   GroupPermission.EVENT_MODERATE,
+  GroupPermission.RECIPIENT_GROUP_MANAGE,
+  GroupPermission.ANNOUNCEMENT_MANAGE,
+  GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW,
 ];
 
 // Every lifecycle-status permission (ARCHIVE, UNARCHIVE, SET_READ_ONLY,
@@ -118,6 +123,8 @@ export const READ_ONLY_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> = new Set(
     GroupPermission.ACADEMY_VIEW,
     GroupPermission.COHORT_VIEW,
     GroupPermission.SECTION_VIEW,
+    GroupPermission.RECIPIENT_GROUP_VIEW,
+    GroupPermission.ANNOUNCEMENT_VIEW,
     // Reading history poses no operational risk and matches "remains
     // visible" for READ_ONLY (see organization-entities.md#membership) -
     // deliberately added here explicitly, not because of its "_VIEW" name.

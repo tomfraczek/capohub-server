@@ -109,6 +109,123 @@ export class RoleAssignmentsService {
   }
 
   /**
+   * Whether `userId` currently counts as "a member of" `communityGroupId` -
+   * broader than resolveAuthorization, and with a deliberately different
+   * rule depending on what kind of Group `communityGroupId` is:
+   *  - a Root Group: a plain ACTIVE/READ_ONLY Membership is already enough,
+   *    no Role required (see organization-entities.md#membership - "an
+   *    ACTIVE Membership with no Role anywhere is a normal, valid state").
+   *  - a Section (Child Group): Membership alone proves nothing about one
+   *    specific Section (it is always Root-Group-scoped - ADR-004), so this
+   *    still requires an actual Role Assignment for that exact Section -
+   *    i.e. exactly what resolveAuthorization already answers.
+   * Used by RecipientGroupsService (validating a member add is in-scope)
+   * and AnnouncementsService (GROUP/SECTION recipient visibility) so
+   * neither reimplements this Root-vs-Section branch itself.
+   */
+  async isCommunityMember(
+    communityGroupId: string,
+    userId: string,
+    em: EntityManager = this.em,
+  ): Promise<boolean> {
+    const community = await em.findOne(Group, { id: communityGroupId });
+    if (!community) {
+      return false;
+    }
+    if (community.parentGroup === null) {
+      const membership = await em.findOne(GroupMembership, {
+        rootGroup: communityGroupId,
+        user: userId,
+        status: {
+          $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
+        },
+      });
+      return membership !== null;
+    }
+    const authorization = await this.resolveAuthorization(
+      communityGroupId,
+      userId,
+      em,
+    );
+    return authorization !== null;
+  }
+
+  /**
+   * Every distinct user id currently counting as "a member of"
+   * `communityGroupId`, same Root-vs-Section rule as isCommunityMember -
+   * used to resolve the actual recipient list for a push notification
+   * (AnnouncementsService), never for a per-viewer visibility check (that
+   * stays the single-user isCommunityMember, to avoid loading a whole
+   * community's membership just to answer one user's "can I see this").
+   * Bounded by the community's real member count, not by anything larger.
+   */
+  async listCommunityMemberUserIds(
+    communityGroupId: string,
+    em: EntityManager = this.em,
+  ): Promise<string[]> {
+    const community = await em.findOne(Group, { id: communityGroupId });
+    if (!community) {
+      return [];
+    }
+    if (community.parentGroup === null) {
+      const memberships = await em.find(GroupMembership, {
+        rootGroup: communityGroupId,
+        status: {
+          $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
+        },
+      });
+      return [...new Set(memberships.map((m) => m.user.id))];
+    }
+
+    // A Role Assignment for this exact Section can only ever have been
+    // granted to a Membership whose rootGroup is already this Section's
+    // Root Group (see grantRole's own ROLE_ROOT_GROUP_MISMATCH check) - so
+    // filtering by Membership status here is the only extra condition
+    // needed, no separate Root Group lookup/filter required.
+    const assignments = await em.find(
+      RoleAssignment,
+      { group: communityGroupId },
+      { populate: ['membership', 'membership.user'] },
+    );
+    const eligible = assignments.filter(
+      (assignment) =>
+        assignment.membership.status === GroupMembershipStatus.ACTIVE ||
+        assignment.membership.status === GroupMembershipStatus.READ_ONLY,
+    );
+    return [...new Set(eligible.map((a) => a.membership.user.id))];
+  }
+
+  /**
+   * Every Group-kind entity id (Root Group or Section, at any depth) where
+   * `userId` currently holds *any* Role Assignment at all, across every
+   * ACTIVE/READ_ONLY root Membership they have. Holding any Role there
+   * (even the base MEMBER role every Membership is granted on join)
+   * already satisfies every MEMBER-tier GroupPermission, including
+   * ANNOUNCEMENT_VIEW/RECIPIENT_GROUP_VIEW (see
+   * group-role-permissions.map.ts) - so this is exactly "every community
+   * whose Announcements this user's cross-community feed may include" (see
+   * AnnouncementsService.listForViewer), without re-deriving that rule
+   * itself. Reuses getGroupParticipationForMemberships - the same batched
+   * lookup CommunityHomeService already relies on for "every community I
+   * participate in" - rather than re-querying Role Assignments here.
+   */
+  async getCommunityIdsWithAnyRole(userId: string): Promise<string[]> {
+    const memberships = await this.em.find(GroupMembership, {
+      user: userId,
+      status: {
+        $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
+      },
+    });
+    if (memberships.length === 0) {
+      return [];
+    }
+    const participation = await this.getGroupParticipationForMemberships(
+      memberships.map((membership) => membership.id),
+    );
+    return [...new Set(participation.map((row) => row.groupId))];
+  }
+
+  /**
    * Lazily expires a time-bound suspension (see MembershipSuspension) -
    * this codebase has no scheduler/cron infrastructure, so instead of a
    * background job flipping `status` back to ACTIVE at `until`, the next

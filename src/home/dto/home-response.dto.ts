@@ -1,3 +1,4 @@
+import { AnnouncementResponseDto } from '../../announcements/dto/announcement-response.dto';
 import { EventResponseDto } from '../../events/dto/event-response.dto';
 import { LearningSongListItemDto } from '../../song-library/dto/learning-songs-list-response.dto';
 
@@ -16,6 +17,17 @@ export interface HomeContinueLearningDto {
   toReview: HomeBoundedSectionDto<LearningSongListItemDto>;
 }
 
+// Deliberately not the generic HomeBoundedSectionDto<T> (no `total`/
+// `hasMore`) - `items` is always capped at 3 (see HomeService), and
+// `unreadCount` describes the caller's *entire* cross-community unread
+// count, not just how many of these 3 items are unread, so it would be
+// misleading to overload `total`/`hasMore` (which the rest of this DTO
+// uses for "the full matching set") for a different, broader count.
+export interface HomeAnnouncementsDto {
+  items: AnnouncementResponseDto[];
+  unreadCount: number;
+}
+
 export interface HomeResponseDto {
   // The one name to greet the caller with - see HomeService for why this
   // is simply User.displayName (there is no separate "imię"/"login" field
@@ -31,4 +43,5 @@ export interface HomeResponseDto {
   // `null` if none.
   nearestTraining: EventResponseDto | null;
   continueLearning: HomeContinueLearningDto;
+  announcements: HomeAnnouncementsDto;
 }

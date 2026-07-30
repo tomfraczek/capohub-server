@@ -9,7 +9,9 @@
  *     soonest upcoming OPEN_TRAINING Event becomes nearestTraining, even
  *     when it is a later, different Event
  *  4. continueLearning.toReview only ever contains TO_REVIEW rows
- *  5. The response never carries an `announcements`, `birthdays`, or
+ *  5. announcements.items reuses AnnouncementsService's own visibility/
+ *     sorting rule, capped at 3, with a correct cross-community
+ *     unreadCount; the response never carries a `birthdays` or
  *     `continueLearning.lastActive` field - neither has a real backing
  *     module in this codebase (see home-response.dto.ts)
  */
@@ -50,6 +52,8 @@ import { SongDetailsResponseDto } from '../src/songs/dto/song-details-response.d
 import { Song } from '../src/songs/entities/song.entity';
 import { SongCategory } from '../src/songs/entities/song-category.entity';
 import { User } from '../src/users/entities/user.entity';
+import { Announcement } from '../src/announcements/entities/announcement.entity';
+import { AnnouncementRead } from '../src/announcements/entities/announcement-read.entity';
 
 const OWNER_TOKEN = 'valid-home-owner-token';
 const MEMBER_TOKEN = 'valid-home-member-token';
@@ -191,6 +195,12 @@ describe('Home (e2e)', () => {
       event: { community: { $in: createdGroupIds } },
     });
     await cleanup.nativeDelete(Event, { community: { $in: createdGroupIds } });
+    await cleanup.nativeDelete(AnnouncementRead, {
+      announcement: { community: { $in: createdGroupIds } },
+    });
+    await cleanup.nativeDelete(Announcement, {
+      community: { $in: createdGroupIds },
+    });
     await cleanup.nativeDelete(RoleAssignment, {
       group: { $in: createdGroupIds },
     });
@@ -387,7 +397,7 @@ describe('Home (e2e)', () => {
     expect(home.continueLearning).toEqual({
       toReview: { items: [], total: 0, hasMore: false },
     });
-    expect(home).not.toHaveProperty('announcements');
+    expect(home.announcements).toEqual({ items: [], unreadCount: 0 });
     expect(home).not.toHaveProperty('birthdays');
   });
 
@@ -440,6 +450,81 @@ describe('Home (e2e)', () => {
           (item) => item.id === learningSong.id,
         ),
       ).toBe(false);
+    });
+  });
+
+  describe('announcements', () => {
+    function announcementPayload(
+      overrides: Record<string, unknown> = {},
+    ): Record<string, unknown> {
+      return {
+        title: 'Home test announcement',
+        body: 'Body',
+        isPinned: false,
+        expiresAt: '2031-01-01T00:00:00.000Z',
+        sendPushNotification: false,
+        ...overrides,
+      };
+    }
+
+    async function createAnnouncement(
+      token: string,
+      groupId: string,
+      overrides: Record<string, unknown> = {},
+    ) {
+      return bodyOf<{ id: string }>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${groupId}/announcements`)
+          .set('Authorization', `Bearer ${token}`)
+          .send(announcementPayload(overrides))
+          .expect(201),
+      );
+    }
+
+    it('reuses AnnouncementsService visibility/sorting: at most 3 active items, newest/pinned first, with a correct unreadCount', async () => {
+      const group = await createGroup(OWNER_TOKEN, {
+        name: 'Home Announcements Org',
+      });
+      await addMember(OWNER_TOKEN, group.id, MEMBER_TOKEN);
+
+      // Oldest unpinned - must fall out of the capped (limit 3) preview,
+      // even though it is still an active, visible Announcement.
+      const oldest = await createAnnouncement(OWNER_TOKEN, group.id, {
+        title: 'Oldest',
+      });
+      const pinned = await createAnnouncement(OWNER_TOKEN, group.id, {
+        title: 'Pinned',
+        isPinned: true,
+      });
+      const newer = await createAnnouncement(OWNER_TOKEN, group.id, {
+        title: 'Newer',
+      });
+      const newest = await createAnnouncement(OWNER_TOKEN, group.id, {
+        title: 'Newest',
+      });
+
+      const home = await getHome(MEMBER_TOKEN);
+
+      expect(home.announcements.items).toHaveLength(3);
+      expect(home.announcements.items.map((item) => item.id)).toEqual([
+        pinned.id,
+        newest.id,
+        newer.id,
+      ]);
+      expect(
+        home.announcements.items.some((item) => item.id === oldest.id),
+      ).toBe(false);
+      expect(home.announcements.unreadCount).toBeGreaterThanOrEqual(4);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${group.id}/announcements/${oldest.id}/read`)
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .expect(204);
+
+      const homeAfterRead = await getHome(MEMBER_TOKEN);
+      expect(homeAfterRead.announcements.unreadCount).toBe(
+        home.announcements.unreadCount - 1,
+      );
     });
   });
 });

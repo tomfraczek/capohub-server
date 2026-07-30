@@ -128,4 +128,29 @@ export enum GroupPermission {
   // so a community is never held hostage by an unresponsive/departed Event
   // Owner - see docs/api/events-api.md "Architectural decisions".
   EVENT_MODERATE = 'EVENT_MODERATE',
+
+  // Recipient Group - a manually-managed, named subset of this community's
+  // members used to target Announcements (see RecipientGroup). One
+  // combined _MANAGE permission (create, rename, change members, activate,
+  // deactivate) rather than Academy/Cohort's separate CREATE/EDIT/ARCHIVE
+  // split - unlike Group's lifecycle, every one of these actions sits at
+  // the exact same OWNER-and-ADMIN trust tier, so splitting them would add
+  // permissions without expressing any real distinction.
+  RECIPIENT_GROUP_VIEW = 'RECIPIENT_GROUP_VIEW',
+  RECIPIENT_GROUP_MANAGE = 'RECIPIENT_GROUP_MANAGE',
+
+  // Announcement - an official, no-comments/no-reactions community
+  // message (see Announcement). ANNOUNCEMENT_VIEW gates the active list/
+  // detail endpoints only; a further, recipient-specific visibility check
+  // (Group/Section membership, or Recipient Group snapshot membership -
+  // see AnnouncementsService) narrows *which* Announcements a member with
+  // this permission actually sees, same split as EVENT_CREATE vs Event's
+  // own visibility rule. ANNOUNCEMENT_ARCHIVE_VIEW is deliberately its own
+  // permission, not folded into _MANAGE: every Owner/Admin action here
+  // happens to sit at the same trust tier, but "read the expired-Announcement
+  // archive" is a distinct capability from "create/edit/pin/delete", mirroring
+  // AUDIT_LOG_VIEW's own separation from GROUP_EDIT above.
+  ANNOUNCEMENT_VIEW = 'ANNOUNCEMENT_VIEW',
+  ANNOUNCEMENT_MANAGE = 'ANNOUNCEMENT_MANAGE',
+  ANNOUNCEMENT_ARCHIVE_VIEW = 'ANNOUNCEMENT_ARCHIVE_VIEW',
 }

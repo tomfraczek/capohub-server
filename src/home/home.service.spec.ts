@@ -9,11 +9,16 @@
  *  - continueLearning.toReview only contains TO_REVIEW rows, with
  *    total/hasMore describing the full matching set, not just the capped
  *    preview
- *  - there is no `announcements`/`birthdays`/`continueLearning.lastActive`
- *    field anywhere in the response (see home-response.dto.ts - neither
- *    has a real backing module in this codebase)
+ *  - announcements is read as-is from AnnouncementsService.listForViewer,
+ *    called with a limit of 3 (task requirement)
+ *  - there is no `birthdays`/`continueLearning.lastActive` field anywhere
+ *    in the response (see home-response.dto.ts - no real backing module in
+ *    this codebase)
  */
 
+import { AnnouncementResponseDto } from '../announcements/dto/announcement-response.dto';
+import { AnnouncementsService } from '../announcements/announcements.service';
+import { AnnouncementRecipientType } from '../announcements/enums/announcement-recipient-type.enum';
 import { EventResponseDto } from '../events/dto/event-response.dto';
 import { EventType } from '../events/enums/event-type.enum';
 import { EventsService } from '../events/events.service';
@@ -92,10 +97,36 @@ function buildLearningSong(
   };
 }
 
+function buildAnnouncement(
+  overrides: Partial<AnnouncementResponseDto> = {},
+): AnnouncementResponseDto {
+  return {
+    id: 'announcement-1',
+    communityGroupId: 'group-1',
+    title: 'Announcement',
+    body: 'Body',
+    author: { id: 'user-2', displayName: 'Author' },
+    recipientType: AnnouncementRecipientType.GROUP,
+    recipientGroupId: null,
+    isPinned: false,
+    isActive: true,
+    expiresAt: '2026-09-01T00:00:00.000Z',
+    publishedAt: '2026-07-01T00:00:00.000Z',
+    editedAt: null,
+    isRead: false,
+    readAt: null,
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
 function buildService(options: {
   nearestEvent?: EventResponseDto | null;
   nearestTraining?: EventResponseDto | null;
   learningSongs?: LearningSongListItemDto[];
+  announcements?: AnnouncementResponseDto[];
+  unreadCount?: number;
 }) {
   const findNearestEventAndTraining = jest.fn().mockResolvedValue({
     nearestEvent: options.nearestEvent ?? null,
@@ -104,6 +135,10 @@ function buildService(options: {
   const listLearningSongs = jest
     .fn()
     .mockResolvedValue(options.learningSongs ?? []);
+  const listForViewer = jest.fn().mockResolvedValue({
+    items: options.announcements ?? [],
+    unreadCount: options.unreadCount ?? 0,
+  });
 
   const eventsService = {
     findNearestEventAndTraining,
@@ -111,11 +146,19 @@ function buildService(options: {
   const learningStatusService = {
     listLearningSongs,
   } as unknown as LearningStatusService;
+  const announcementsService = {
+    listForViewer,
+  } as unknown as AnnouncementsService;
 
   return {
-    service: new HomeService(eventsService, learningStatusService),
+    service: new HomeService(
+      eventsService,
+      learningStatusService,
+      announcementsService,
+    ),
     findNearestEventAndTraining,
     listLearningSongs,
+    listForViewer,
   };
 }
 
@@ -215,11 +258,35 @@ describe('HomeService', () => {
     expect(home.continueLearning.toReview.hasMore).toBe(true);
   });
 
-  it('returns no announcements, birthdays, or continueLearning.lastActive field', async () => {
+  it('returns announcements.items/unreadCount exactly as AnnouncementsService.listForViewer resolves them, requesting at most 3', async () => {
+    const announcement = buildAnnouncement({ id: 'announcement-1' });
+    const { service, listForViewer } = buildService({
+      announcements: [announcement],
+      unreadCount: 5,
+    });
+    const user = buildUser();
+
+    const home = await service.getHome(user);
+
+    expect(home.announcements).toEqual({
+      items: [announcement],
+      unreadCount: 5,
+    });
+    expect(listForViewer).toHaveBeenCalledTimes(1);
+    expect(listForViewer).toHaveBeenCalledWith(user, 3);
+  });
+
+  it('returns an empty announcements section when nothing is visible', async () => {
     const { service } = buildService({});
     const home = await service.getHome(buildUser());
 
-    expect(home).not.toHaveProperty('announcements');
+    expect(home.announcements).toEqual({ items: [], unreadCount: 0 });
+  });
+
+  it('returns no birthdays or continueLearning.lastActive field', async () => {
+    const { service } = buildService({});
+    const home = await service.getHome(buildUser());
+
     expect(home).not.toHaveProperty('birthdays');
     expect(home.continueLearning).not.toHaveProperty('lastActive');
   });

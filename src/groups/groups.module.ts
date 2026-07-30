@@ -18,6 +18,8 @@ import { GroupPermissionService } from './permissions/group-permission.service';
 import { InvitationsController } from './invitations.controller';
 import { MembershipRequestsController } from './membership-requests.controller';
 import { MembershipRequestsService } from './membership-requests.service';
+import { RecipientGroupsController } from './recipient-groups.controller';
+import { RecipientGroupsService } from './recipient-groups.service';
 import { RoleAssignmentsController } from './role-assignments.controller';
 import { RoleAssignmentsService } from './role-assignments.service';
 import { SectionController } from './section.controller';
@@ -42,6 +44,7 @@ import { SectionsService } from './sections.service';
     CommunityHomeController,
     AuditLogController,
     CommunityNotificationSettingsController,
+    RecipientGroupsController,
   ],
   providers: [
     GroupsService,
@@ -57,6 +60,7 @@ import { SectionsService } from './sections.service';
     CommunityHomeService,
     AuditLogService,
     CommunityNotificationSettingsService,
+    RecipientGroupsService,
   ],
   // RoleAssignmentsService is exported for UsersModule - DELETE /users/me
   // must not hard-delete a User who still owns a Group (see
@@ -66,13 +70,18 @@ import { SectionsService } from './sections.service';
   // Role/permissions (for the GroupPermission.EVENT_CREATE gate on
   // POST .../events and the EVENT_MODERATE oversight override - see
   // events/guards/event-permissions.guard.ts) reuses this exact machinery
-  // rather than duplicating it. One-directional: GroupsModule never
-  // imports UsersModule or EventsModule back.
+  // rather than duplicating it. RecipientGroupsService is additionally
+  // exported for AnnouncementsModule - resolving/snapshotting a Recipient
+  // Group's members at publish time reuses this exact service rather than
+  // AnnouncementsService re-querying RecipientGroupMember itself.
+  // One-directional: GroupsModule never imports UsersModule, EventsModule,
+  // or AnnouncementsModule back.
   exports: [
     RoleAssignmentsService,
     GroupPermissionService,
     GroupHierarchyService,
     GroupPermissionsGuard,
+    RecipientGroupsService,
   ],
 })
 export class GroupsModule {}
