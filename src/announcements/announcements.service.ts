@@ -1,5 +1,7 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
+import { GroupPermission } from '../groups/permissions/group-permission.enum';
+import { GroupPermissionService } from '../groups/permissions/group-permission.service';
 import { Group } from '../groups/entities/group.entity';
 import { RecipientGroupsService } from '../groups/recipient-groups.service';
 import { RoleAssignmentsService } from '../groups/role-assignments.service';
@@ -12,9 +14,10 @@ import { AnnouncementRecipient } from './entities/announcement-recipient.entity'
 import { AnnouncementRead } from './entities/announcement-read.entity';
 import { Announcement } from './entities/announcement.entity';
 import { AnnouncementRecipientType } from './enums/announcement-recipient-type.enum';
-import { PUSH_NOTIFICATION_PORT } from './integration/push-notification.port';
-import type { PushNotificationPort } from './integration/push-notification.port';
-import { toAnnouncementResponseDto } from './mappers/announcement.mapper';
+import {
+  isAnnouncementActive,
+  toAnnouncementResponseDto,
+} from './mappers/announcement.mapper';
 
 export interface AnnouncementListResult {
   items: AnnouncementResponseDto[];
@@ -22,7 +25,7 @@ export interface AnnouncementListResult {
   hasMore: boolean;
 }
 
-// A concrete (spreadable) object type for buildViewerFilter's community
+// A concrete (spreadable) object type for buildVisibilityFilter's community
 // scope - one exact community, or a set of them for the cross-community
 // Home feed (see listForViewer).
 type CommunityScope = { community: string } | { community: { $in: string[] } };
@@ -31,16 +34,26 @@ type CommunityScope = { community: string } | { community: { $in: string[] } };
 // GroupPermissionsGuard (via :groupId/:sectionId) before any handler here
 // runs, same convention as RecipientGroupsService/AcademiesService. This
 // service additionally resolves: which of the three recipient shapes an
-// Announcement targets, the immutable Recipient Group snapshot, and every
-// viewer's isRead/readAt - none of which the guard has any visibility into.
+// Announcement targets, the immutable Recipient Group snapshot, every
+// viewer's isRead/readAt, and its own lifecycle (natural expiry vs
+// deliberate deletion - see announcement.entity.ts) - none of which the
+// guard has any visibility into.
+//
+// buildVisibilityFilter() is the single shared source of truth for "which
+// Announcements can this query even consider" - every read path (list,
+// archive, the cross-community Home feed) builds its WHERE clause through
+// it, so `deletedAt IS NULL`, the active/expired split, and the Recipient
+// Group snapshot restriction are each expressed exactly once, never
+// hand-copied. The two single-row paths (getById, markRead) instead load
+// by id then run assertReadable() - the same underlying rules, applied to
+// one already-loaded row instead of a query filter.
 @Injectable()
 export class AnnouncementsService {
   constructor(
     private readonly em: EntityManager,
     private readonly recipientGroupsService: RecipientGroupsService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
-    @Inject(PUSH_NOTIFICATION_PORT)
-    private readonly pushNotificationPort: PushNotificationPort,
+    private readonly groupPermissionService: GroupPermissionService,
   ) {}
 
   async create(
@@ -96,20 +109,19 @@ export class AnnouncementsService {
       return created;
     });
 
-    // Push is deliberately sent after the transaction above has already
-    // committed - a send failure (or the current NullPushNotificationService
-    // sending nothing at all - see push-notification.port.ts) must never
-    // roll back an otherwise-successful publish (task requirement).
-    if (input.sendPushNotification) {
-      await this.sendPushForAnnouncement(announcement, author.id);
-    }
-
     return toAnnouncementResponseDto(announcement, {
       isRead: false,
       readAt: null,
     });
   }
 
+  /**
+   * A no-op PATCH (every field sent equals the current value) never
+   * touches the row at all - no write, no `updatedAt` bump, and certainly
+   * no `editedAt` (task requirement). `editedAt` is set only when at least
+   * one of title/body/isPinned/expiresAt actually changes - never derived
+   * from `updatedAt` (see announcement.entity.ts).
+   */
   async update(
     communityGroupId: string,
     announcementId: string,
@@ -121,11 +133,22 @@ export class AnnouncementsService {
       communityGroupId,
       announcementId,
     );
-    announcement.title = input.title;
-    announcement.body = input.body;
-    announcement.isPinned = input.isPinned;
-    announcement.expiresAt = new Date(input.expiresAt);
-    await this.em.flush();
+
+    const newExpiresAt = new Date(input.expiresAt);
+    const changed =
+      announcement.title !== input.title ||
+      announcement.body !== input.body ||
+      announcement.isPinned !== input.isPinned ||
+      announcement.expiresAt.getTime() !== newExpiresAt.getTime();
+
+    if (changed) {
+      announcement.title = input.title;
+      announcement.body = input.body;
+      announcement.isPinned = input.isPinned;
+      announcement.expiresAt = newExpiresAt;
+      announcement.editedAt = new Date();
+      await this.em.flush();
+    }
 
     const readInfo = await this.resolveReadInfo(
       this.em,
@@ -136,27 +159,29 @@ export class AnnouncementsService {
   }
 
   /**
-   * Soft delete - never a physical row removal (this codebase has no
-   * physical-delete convention for any similar resource - Group/Academy/
-   * Cohort/Event are all archived, never dropped - ADR-007). Reuses the
-   * exact same "active iff expiresAt is in the future" rule already built
-   * for natural expiry (see announcement.mapper.ts) rather than adding a
-   * second, parallel "deleted" flag/column: forcing `expiresAt` into the
-   * past immediately and irreversibly retires the Announcement from every
-   * active list while leaving it fully intact in the archive, which is
-   * exactly the required behavior (see task's "Wygasanie i archiwum").
+   * Soft delete via a dedicated `deletedAt` marker - a deliberate,
+   * immediate withdrawal, never expressed by touching `expiresAt` (that
+   * field governs *only* natural expiry - see announcement.entity.ts).
+   * Idempotent: this intentionally loads *without* the shared
+   * deletedAt-excluding filter (see loadOrFail/buildVisibilityFilter), so
+   * a second DELETE call finds the already-deleted row and simply no-ops
+   * (204 either way) rather than 404ing or double-stamping `deletedAt`.
+   * Pinning has no bearing here (task requirement - pinning never affects
+   * deletion, exactly as it never affects expiry).
    */
   async remove(
     communityGroupId: string,
     announcementId: string,
   ): Promise<void> {
-    const announcement = await this.loadOrFail(
-      this.em,
-      communityGroupId,
-      announcementId,
-    );
-    if (announcement.expiresAt.getTime() > Date.now()) {
-      announcement.expiresAt = new Date(Date.now() - 1000);
+    const announcement = await this.em.findOne(Announcement, {
+      id: announcementId,
+      community: communityGroupId,
+    });
+    if (!announcement) {
+      throw this.announcementNotFound();
+    }
+    if (announcement.deletedAt === null) {
+      announcement.deletedAt = new Date();
       await this.em.flush();
     }
   }
@@ -166,33 +191,39 @@ export class AnnouncementsService {
     viewer: User,
     query: AnnouncementListQueryInput,
   ): Promise<AnnouncementListResult> {
-    const where = await this.buildViewerFilter(
+    const where = await this.buildVisibilityFilter(
       this.em,
       viewer.id,
       { community: communityGroupId },
-      { activeOnly: true },
+      { expiry: 'active', restrictToRecipientSnapshot: true },
     );
 
     return this.runList(communityGroupId, viewer, where, query);
   }
 
   /**
-   * OWNER/ADMIN-only oversight view of every expired Announcement under
-   * this community - deliberately *not* filtered by Recipient Group
-   * snapshot the way list()/getById() are: an administrator reviewing the
-   * community's own history is not "a recipient" looking something up for
-   * themselves, the same oversight-vs-recipient split already established
-   * by EVENT_VIEW_ALL/EVENT_MODERATE over Event's own Owner/Organizer tier.
+   * OWNER/ADMIN-only oversight view of every expired (but not deleted)
+   * Announcement under this community - deliberately *not* filtered by
+   * Recipient Group snapshot the way list()/getById() are: an
+   * administrator reviewing the community's own history is not "a
+   * recipient" looking something up for themselves, the same
+   * oversight-vs-recipient split already established by
+   * EVENT_VIEW_ALL/EVENT_MODERATE over Event's own Owner/Organizer tier.
+   * A deleted Announcement never appears here either (task requirement) -
+   * this is the *expired* archive, not an undelete tool.
    */
   async archive(
     communityGroupId: string,
     viewer: User,
     query: AnnouncementListQueryInput,
   ): Promise<AnnouncementListResult> {
-    const where: FilterQuery<Announcement> = {
-      community: communityGroupId,
-      expiresAt: { $lte: new Date() },
-    };
+    const where = await this.buildVisibilityFilter(
+      this.em,
+      viewer.id,
+      { community: communityGroupId },
+      { expiry: 'archived', restrictToRecipientSnapshot: false },
+    );
+
     return this.runList(communityGroupId, viewer, where, query);
   }
 
@@ -206,17 +237,7 @@ export class AnnouncementsService {
       communityGroupId,
       announcementId,
     );
-    if (
-      announcement.recipientType === AnnouncementRecipientType.RECIPIENT_GROUP
-    ) {
-      const inSnapshot = await this.em.findOne(AnnouncementRecipient, {
-        announcement: announcementId,
-        user: viewer.id,
-      });
-      if (!inSnapshot) {
-        throw this.announcementNotFound();
-      }
-    }
+    await this.assertReadable(communityGroupId, announcement, viewer);
 
     const readInfo = await this.resolveReadInfo(
       this.em,
@@ -227,10 +248,11 @@ export class AnnouncementsService {
   }
 
   /**
-   * Idempotent - see AnnouncementRead's own comment. Re-verifies the same
-   * Recipient Group snapshot rule as getById first, so marking-as-read can
-   * never confirm an Announcement's existence to someone who isn't
-   * actually one of its recipients.
+   * Idempotent - see AnnouncementRead's own comment. Runs the exact same
+   * assertReadable() check as getById first, so marking-as-read can never
+   * confirm a deleted/inaccessible Announcement's existence, and a
+   * naturally-expired one can only be marked read by a viewer who already
+   * holds archive access to it (task requirement).
    */
   async markRead(
     communityGroupId: string,
@@ -242,17 +264,7 @@ export class AnnouncementsService {
       communityGroupId,
       announcementId,
     );
-    if (
-      announcement.recipientType === AnnouncementRecipientType.RECIPIENT_GROUP
-    ) {
-      const inSnapshot = await this.em.findOne(AnnouncementRecipient, {
-        announcement: announcementId,
-        user: viewer.id,
-      });
-      if (!inSnapshot) {
-        throw this.announcementNotFound();
-      }
-    }
+    await this.assertReadable(communityGroupId, announcement, viewer);
 
     const existing = await this.em.findOne(AnnouncementRead, {
       announcement: announcementId,
@@ -265,6 +277,7 @@ export class AnnouncementsService {
     const read = new AnnouncementRead();
     read.announcement = this.em.getReference(Announcement, announcementId);
     read.user = viewer;
+    read.readAt = new Date();
     try {
       await this.em.persist(read).flush();
     } catch (error) {
@@ -284,10 +297,12 @@ export class AnnouncementsService {
    * Cross-community "everything I can see" feed - backs GET /home (see
    * HomeService), never its own HTTP endpoint (Home is its only caller).
    * Reuses exactly the same per-Announcement visibility rule as list()
-   * (active-only, Recipient Group snapshot filter) resolved across every
-   * Group/Section the viewer currently holds any Role Assignment for -
-   * mirrors EventsService.listForViewer's own "one shared viewer-scope
-   * resolution, reused instead of duplicated" approach.
+   * (deletedAt IS NULL, active-only, Recipient Group snapshot filter)
+   * resolved across every Group/Section the viewer currently holds any
+   * Role Assignment for - mirrors EventsService.listForViewer's own "one
+   * shared viewer-scope resolution, reused instead of duplicated"
+   * approach. `unreadCount` counts only Announcements this same query
+   * would return - a deleted or expired one never contributes to it.
    */
   async listForViewer(
     viewer: User,
@@ -299,11 +314,11 @@ export class AnnouncementsService {
       return { items: [], unreadCount: 0 };
     }
 
-    const where = await this.buildViewerFilter(
+    const where = await this.buildVisibilityFilter(
       this.em,
       viewer.id,
       { community: { $in: communityIds } },
-      { activeOnly: true },
+      { expiry: 'active', restrictToRecipientSnapshot: true },
     );
 
     const [matching, page] = await Promise.all([
@@ -395,17 +410,44 @@ export class AnnouncementsService {
   }
 
   /**
-   * The shared active-Announcement, viewer-visible filter used by list()
-   * and listForViewer(): always excludes RECIPIENT_GROUP-type rows the
-   * viewer's own snapshot doesn't include, scoped to `communityFilter`
-   * (one exact community, or a set of them for the cross-community feed).
+   * The single shared source of truth for "which Announcements can this
+   * query even consider" - every list-shaped read path (list, archive, the
+   * cross-community Home feed) builds its WHERE clause through this, so
+   * none of them can drift from one another:
+   *  - `deletedAt IS NULL` always, unconditionally - a deleted Announcement
+   *    is invisible to every caller, including archive/oversight (task
+   *    requirement).
+   *  - `expiry: 'active'` (expiresAt > now) or `'archived'` (expiresAt <=
+   *    now) - the two are mutually exclusive by construction, so an
+   *    Announcement is always in exactly one of the two views.
+   *  - `restrictToRecipientSnapshot` - true for a recipient's own view
+   *    (list/Home: only RECIPIENT_GROUP-type rows this viewer's snapshot
+   *    includes), false for the OWNER/ADMIN archive oversight view (every
+   *    RECIPIENT_GROUP-type row is visible regardless of snapshot - see
+   *    archive()'s own comment).
    */
-  private async buildViewerFilter(
+  private async buildVisibilityFilter(
     em: EntityManager,
     viewerId: string,
     communityFilter: CommunityScope,
-    options: { activeOnly: boolean },
+    options: {
+      expiry: 'active' | 'archived';
+      restrictToRecipientSnapshot: boolean;
+    },
   ): Promise<FilterQuery<Announcement>> {
+    const base: FilterQuery<Announcement> = {
+      ...communityFilter,
+      deletedAt: null,
+      expiresAt:
+        options.expiry === 'active'
+          ? { $gt: new Date() }
+          : { $lte: new Date() },
+    };
+
+    if (!options.restrictToRecipientSnapshot) {
+      return base;
+    }
+
     const recipientRows = await em.find(AnnouncementRecipient, {
       user: viewerId,
       announcement: communityFilter,
@@ -424,11 +466,66 @@ export class AnnouncementsService {
       });
     }
 
-    return {
-      ...communityFilter,
-      ...(options.activeOnly ? { expiresAt: { $gt: new Date() } } : {}),
-      $or: recipientOr,
-    };
+    return { ...base, $or: recipientOr };
+  }
+
+  /**
+   * Whether `viewer` may read this already-loaded (and already
+   * not-deleted - see loadOrFail) Announcement, given its recipient scope
+   * and current active/expired state:
+   *  - Expired: viewer must hold ANNOUNCEMENT_ARCHIVE_VIEW for this exact
+   *    community (task requirement - a plain member can never open an
+   *    expired Announcement through the regular detail/mark-as-read
+   *    endpoints, only through the OWNER/ADMIN archive). Holding it grants
+   *    full oversight of *every* expired Announcement regardless of
+   *    recipient type - the Recipient Group snapshot check below is
+   *    skipped entirely, mirroring archive()'s own
+   *    restrictToRecipientSnapshot: false (an administrator reviewing the
+   *    community's history is not "a recipient" looking something up for
+   *    themselves, so they must never be blocked from opening one just
+   *    because they personally were never in its snapshot).
+   *  - Active RECIPIENT_GROUP-type: viewer must be in the immutable
+   *    snapshot - this is the normal, recipient-based visibility rule and
+   *    is unaffected by archive access.
+   * Throws 404 (never 403) on failure - consistent with
+   * GroupPermissionsGuard's own "never confirm existence" convention.
+   */
+  private async assertReadable(
+    communityGroupId: string,
+    announcement: Announcement,
+    viewer: User,
+  ): Promise<void> {
+    if (!isAnnouncementActive(announcement)) {
+      const authorization =
+        await this.roleAssignmentsService.resolveAuthorization(
+          communityGroupId,
+          viewer.id,
+        );
+      const roles = authorization?.roleAssignments.map((a) => a.role) ?? [];
+      const hasArchiveAccess =
+        authorization !== null &&
+        this.groupPermissionService.hasAllPermissionsForRoles(
+          roles,
+          [GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW],
+          authorization.membership.status,
+        );
+      if (!hasArchiveAccess) {
+        throw this.announcementNotFound();
+      }
+      return;
+    }
+
+    if (
+      announcement.recipientType === AnnouncementRecipientType.RECIPIENT_GROUP
+    ) {
+      const inSnapshot = await this.em.findOne(AnnouncementRecipient, {
+        announcement: announcement.id,
+        user: viewer.id,
+      });
+      if (!inSnapshot) {
+        throw this.announcementNotFound();
+      }
+    }
   }
 
   private async readAnnouncementIdsForCommunity(
@@ -452,7 +549,7 @@ export class AnnouncementsService {
       user: viewerId,
       announcement: announcementId,
     });
-    return { isRead: read !== null, readAt: read?.createdAt ?? null };
+    return { isRead: read !== null, readAt: read?.readAt ?? null };
   }
 
   private async resolveReadInfoBatch(
@@ -471,63 +568,19 @@ export class AnnouncementsService {
     for (const read of reads) {
       result.set(read.announcement.id, {
         isRead: true,
-        readAt: read.createdAt,
+        readAt: read.readAt,
       });
     }
     return result;
   }
 
   /**
-   * Resolves every user this specific, just-published Announcement should
-   * push to right now (task requirement - never the author, never a user
-   * who no longer has access), deduplicated. For RECIPIENT_GROUP, re-checks
-   * each snapshotted user's *current* community access - unlike the
-   * snapshot-based read-path check above, push proactively reaches out to
-   * many users at once, none of whom have had their own access freshly
-   * proven by a guard the way a single request's viewer has.
+   * Loads a not-deleted Announcement for this exact community - used by
+   * every path except remove() (which must still find an already-deleted
+   * row too, to stay idempotent - see its own comment). `deletedAt: null`
+   * here is what makes a deleted Announcement 404 from getById/update/
+   * markRead exactly like a truly nonexistent one (task requirement).
    */
-  private async sendPushForAnnouncement(
-    announcement: Announcement,
-    authorId: string,
-  ): Promise<void> {
-    let recipientUserIds: string[];
-    if (
-      announcement.recipientType === AnnouncementRecipientType.RECIPIENT_GROUP
-    ) {
-      const snapshotRows = await this.em.find(AnnouncementRecipient, {
-        announcement: announcement.id,
-      });
-      const stillMember = await Promise.all(
-        snapshotRows.map((row) =>
-          this.roleAssignmentsService.isCommunityMember(
-            announcement.community.id,
-            row.user.id,
-          ),
-        ),
-      );
-      recipientUserIds = snapshotRows
-        .filter((_, index) => stillMember[index])
-        .map((row) => row.user.id);
-    } else {
-      recipientUserIds =
-        await this.roleAssignmentsService.listCommunityMemberUserIds(
-          announcement.community.id,
-        );
-    }
-
-    const dedupedRecipients = [...new Set(recipientUserIds)].filter(
-      (userId) => userId !== authorId,
-    );
-    if (dedupedRecipients.length === 0) {
-      return;
-    }
-
-    await this.pushNotificationPort.sendToUsers(dedupedRecipients, {
-      title: announcement.title,
-      body: announcement.body,
-    });
-  }
-
   private async loadOrFail(
     em: EntityManager,
     communityGroupId: string,
@@ -535,7 +588,7 @@ export class AnnouncementsService {
   ): Promise<Announcement> {
     const announcement = await em.findOne(
       Announcement,
-      { id: announcementId, community: communityGroupId },
+      { id: announcementId, community: communityGroupId, deletedAt: null },
       { populate: ['community', 'author', 'recipientGroup'] },
     );
     if (!announcement) {

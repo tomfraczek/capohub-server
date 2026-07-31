@@ -11,9 +11,11 @@
  *  4. continueLearning.toReview only ever contains TO_REVIEW rows
  *  5. announcements.items reuses AnnouncementsService's own visibility/
  *     sorting rule, capped at 3, with a correct cross-community
- *     unreadCount; the response never carries a `birthdays` or
- *     `continueLearning.lastActive` field - neither has a real backing
- *     module in this codebase (see home-response.dto.ts)
+ *     unreadCount; a deleted or naturally-expired Announcement never
+ *     appears and never contributes to unreadCount; the response never
+ *     carries a `birthdays` or `continueLearning.lastActive` field -
+ *     neither has a real backing module in this codebase (see
+ *     home-response.dto.ts)
  */
 
 import {
@@ -462,7 +464,6 @@ describe('Home (e2e)', () => {
         body: 'Body',
         isPinned: false,
         expiresAt: '2031-01-01T00:00:00.000Z',
-        sendPushNotification: false,
         ...overrides,
       };
     }
@@ -524,6 +525,41 @@ describe('Home (e2e)', () => {
       const homeAfterRead = await getHome(MEMBER_TOKEN);
       expect(homeAfterRead.announcements.unreadCount).toBe(
         home.announcements.unreadCount - 1,
+      );
+    });
+
+    it('never includes a deleted or naturally-expired Announcement, and neither contributes to unreadCount', async () => {
+      const group = await createGroup(OWNER_TOKEN, {
+        name: 'Home Announcements Lifecycle Org',
+      });
+      await addMember(OWNER_TOKEN, group.id, MEMBER_TOKEN);
+
+      const baseline = await getHome(MEMBER_TOKEN);
+
+      const toDelete = await createAnnouncement(OWNER_TOKEN, group.id, {
+        title: 'Will be deleted',
+      });
+      await request(app.getHttpServer())
+        .delete(`/api/v1/groups/${group.id}/announcements/${toDelete.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+
+      const toExpire = await createAnnouncement(OWNER_TOKEN, group.id, {
+        title: 'Will expire',
+        expiresAt: new Date(Date.now() + 1000).toISOString(),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      const home = await getHome(MEMBER_TOKEN);
+
+      expect(
+        home.announcements.items.some((item) => item.id === toDelete.id),
+      ).toBe(false);
+      expect(
+        home.announcements.items.some((item) => item.id === toExpire.id),
+      ).toBe(false);
+      expect(home.announcements.unreadCount).toBe(
+        baseline.announcements.unreadCount,
       );
     });
   });

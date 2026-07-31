@@ -204,7 +204,7 @@ export class MembershipRequestsController {
     @Param('invitationId', ParseUUIDPipe) invitationId: string,
     @CurrentUser() user: User,
   ): Promise<MembershipRequestResponseDto> {
-    const { roles, membershipStatus } = await this.resolveCallerContext(
+    const { roles } = await this.resolveCallerContext(
       groupId ?? sectionId,
       user.id,
     );
@@ -212,7 +212,6 @@ export class MembershipRequestsController {
       invitationId,
       user,
       roles,
-      membershipStatus,
     );
   }
 

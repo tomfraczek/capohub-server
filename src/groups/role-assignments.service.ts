@@ -151,51 +151,6 @@ export class RoleAssignmentsService {
   }
 
   /**
-   * Every distinct user id currently counting as "a member of"
-   * `communityGroupId`, same Root-vs-Section rule as isCommunityMember -
-   * used to resolve the actual recipient list for a push notification
-   * (AnnouncementsService), never for a per-viewer visibility check (that
-   * stays the single-user isCommunityMember, to avoid loading a whole
-   * community's membership just to answer one user's "can I see this").
-   * Bounded by the community's real member count, not by anything larger.
-   */
-  async listCommunityMemberUserIds(
-    communityGroupId: string,
-    em: EntityManager = this.em,
-  ): Promise<string[]> {
-    const community = await em.findOne(Group, { id: communityGroupId });
-    if (!community) {
-      return [];
-    }
-    if (community.parentGroup === null) {
-      const memberships = await em.find(GroupMembership, {
-        rootGroup: communityGroupId,
-        status: {
-          $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
-        },
-      });
-      return [...new Set(memberships.map((m) => m.user.id))];
-    }
-
-    // A Role Assignment for this exact Section can only ever have been
-    // granted to a Membership whose rootGroup is already this Section's
-    // Root Group (see grantRole's own ROLE_ROOT_GROUP_MISMATCH check) - so
-    // filtering by Membership status here is the only extra condition
-    // needed, no separate Root Group lookup/filter required.
-    const assignments = await em.find(
-      RoleAssignment,
-      { group: communityGroupId },
-      { populate: ['membership', 'membership.user'] },
-    );
-    const eligible = assignments.filter(
-      (assignment) =>
-        assignment.membership.status === GroupMembershipStatus.ACTIVE ||
-        assignment.membership.status === GroupMembershipStatus.READ_ONLY,
-    );
-    return [...new Set(eligible.map((a) => a.membership.user.id))];
-  }
-
-  /**
    * Every Group-kind entity id (Root Group or Section, at any depth) where
    * `userId` currently holds *any* Role Assignment at all, across every
    * ACTIVE/READ_ONLY root Membership they have. Holding any Role there

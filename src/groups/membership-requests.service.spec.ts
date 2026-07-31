@@ -11,12 +11,7 @@
  *    ADMIN/OWNER always allowed
  */
 
-import {
-  ConflictException,
-  ForbiddenException,
-  NotFoundException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
 import { GroupBan } from './entities/group-ban.entity';
@@ -108,20 +103,18 @@ function buildMockEm(routing: MockRouting = {}) {
     ? jest.fn().mockRejectedValue(routing.flushError)
     : jest.fn().mockResolvedValue(undefined);
 
-  const persist = jest.fn();
+  const persist = jest.fn<void, [unknown]>();
 
-  const findOne = jest.fn(
-    (entity: unknown, _filter?: unknown, _options?: unknown) => {
-      if (entity === Group) return Promise.resolve(groupQueue.shift() ?? null);
-      if (entity === GroupMembership)
-        return Promise.resolve(membershipQueue.shift() ?? null);
-      if (entity === MembershipRequest)
-        return Promise.resolve(requestQueue.shift() ?? null);
-      if (entity === RoleAssignment)
-        return Promise.resolve(roleAssignmentQueue.shift() ?? null);
-      return Promise.resolve(null);
-    },
-  );
+  const findOne = jest.fn((entity: unknown) => {
+    if (entity === Group) return Promise.resolve(groupQueue.shift() ?? null);
+    if (entity === GroupMembership)
+      return Promise.resolve(membershipQueue.shift() ?? null);
+    if (entity === MembershipRequest)
+      return Promise.resolve(requestQueue.shift() ?? null);
+    if (entity === RoleAssignment)
+      return Promise.resolve(roleAssignmentQueue.shift() ?? null);
+    return Promise.resolve(null);
+  });
 
   const find = jest.fn((entity: unknown) => {
     if (entity === MembershipRequest) {
@@ -152,8 +145,9 @@ function buildService(em: EntityManager) {
     getRootGroup: jest.fn().mockResolvedValue(buildGroup()),
   } as unknown as GroupHierarchyService;
 
+  const ensureMemberRole = jest.fn().mockResolvedValue(undefined);
   const roleAssignmentsService = {
-    ensureMemberRole: jest.fn().mockResolvedValue(undefined),
+    ensureMemberRole,
     resolveAuthorization: jest.fn().mockResolvedValue(null),
   } as unknown as RoleAssignmentsService;
 
@@ -172,6 +166,7 @@ function buildService(em: EntityManager) {
     service,
     groupHierarchyService,
     roleAssignmentsService,
+    ensureMemberRole,
     auditLogService,
   };
 }
@@ -189,7 +184,7 @@ describe('MembershipRequestsService', () => {
         membershipResults: [null], // assertNotAlreadyJoined: no membership
         // fulfillJoin reads existing membership to avoid duplicate
       });
-      const { service, roleAssignmentsService } = buildService(em);
+      const { service, ensureMemberRole } = buildService(em);
       const user = buildUser();
 
       const result = await service.join(
@@ -201,7 +196,7 @@ describe('MembershipRequestsService', () => {
       expect(result).toEqual({ joined: true });
       expect(persist).toHaveBeenCalled();
       // GROUP target: only creates a Membership, never a Role (ADR-004).
-      expect(roleAssignmentsService.ensureMemberRole).not.toHaveBeenCalled();
+      expect(ensureMemberRole).not.toHaveBeenCalled();
     });
 
     it('auto-joins a public Section immediately and grants the MEMBER Role for a SECTION target', async () => {
@@ -211,7 +206,7 @@ describe('MembershipRequestsService', () => {
         membershipResults: [null], // assertNotAlreadyJoined: no membership
         // fulfillJoin reads existing membership to avoid duplicate
       });
-      const { service, roleAssignmentsService } = buildService(em);
+      const { service, ensureMemberRole } = buildService(em);
       const user = buildUser();
 
       const result = await service.join(
@@ -222,7 +217,7 @@ describe('MembershipRequestsService', () => {
 
       expect(result).toEqual({ joined: true });
       expect(persist).toHaveBeenCalled();
-      expect(roleAssignmentsService.ensureMemberRole).toHaveBeenCalled();
+      expect(ensureMemberRole).toHaveBeenCalled();
     });
 
     it('creates a PENDING JOIN_REQUEST for a private (isPublic=false) Group', async () => {
@@ -498,23 +493,14 @@ describe('MembershipRequestsService', () => {
         id: 'invitee-1',
         email: 'invitee@example.com',
       });
-      const { em } = buildMockEm({
-        groupResults: [group],
-        // findOne(User) for the invitedUserId lookup
-        membershipResults: [null],
-      });
       // override findOne to return the invitee for User lookup
-      const {
-        em: emWithUser,
-        persist,
-        flush,
-      } = buildMockEm({
+      const { em: emWithUser } = buildMockEm({
         groupResults: [group],
         membershipResults: [null], // assertNotAlreadyJoined
       });
       (
         emWithUser as never as { findOne: jest.Mock }
-      ).findOne.mockImplementation((entity: unknown, filter?: unknown) => {
+      ).findOne.mockImplementation((entity: unknown) => {
         if (entity === Group) return Promise.resolve(group);
         if (entity === GroupMembership) return Promise.resolve(null);
         if (entity === MembershipRequest) return Promise.resolve(null);

@@ -28,7 +28,6 @@ export const createAnnouncementSchema = z.object({
     (value) => new Date(value).getTime() > Date.now(),
     'expiresAt must be in the future',
   ),
-  sendPushNotification: z.boolean().default(false),
 });
 
 export class CreateAnnouncementDto extends createZodDto(

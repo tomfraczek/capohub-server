@@ -122,13 +122,6 @@ const fixtureClerkClient = {
   },
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-async function bodyOf<T>(req: request.Test): Promise<T> {
-  const res = await req;
-  return res.body as T;
-}
-
 // ─── Suite ───────────────────────────────────────────────────────────────────
 
 describe('MembershipRequests + Discovery (e2e)', () => {
@@ -338,8 +331,9 @@ describe('MembershipRequests + Discovery (e2e)', () => {
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .expect(200);
 
-      expect(res.body.group.id).toBe(hidden.id);
-      expect(res.body.group.isHidden).toBe(true);
+      const body = res.body as { group: { id: string; isHidden: boolean } };
+      expect(body.group.id).toBe(hidden.id);
+      expect(body.group.isHidden).toBe(true);
     });
 
     it('returns 404 for an unknown publicCode', async () => {
@@ -357,7 +351,8 @@ describe('MembershipRequests + Discovery (e2e)', () => {
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .expect(200);
 
-      expect(res.body.group.id).toBe(group.id);
+      const body = res.body as { group: { id: string } };
+      expect(body.group.id).toBe(group.id);
     });
   });
 

@@ -13,11 +13,6 @@ export function toAnnouncementResponseDto(
   readInfo: { isRead: boolean; readAt: Date | null },
   now: Date = new Date(),
 ): AnnouncementResponseDto {
-  const editedAt =
-    announcement.updatedAt.getTime() !== announcement.createdAt.getTime()
-      ? announcement.updatedAt.toISOString()
-      : null;
-
   return {
     id: announcement.id,
     communityGroupId: announcement.community.id,
@@ -35,7 +30,9 @@ export function toAnnouncementResponseDto(
     isActive: isAnnouncementActive(announcement, now),
     expiresAt: announcement.expiresAt.toISOString(),
     publishedAt: announcement.createdAt.toISOString(),
-    editedAt,
+    editedAt: announcement.editedAt
+      ? announcement.editedAt.toISOString()
+      : null,
     isRead: readInfo.isRead,
     readAt: readInfo.readAt ? readInfo.readAt.toISOString() : null,
     createdAt: announcement.createdAt.toISOString(),

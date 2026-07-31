@@ -22,9 +22,11 @@ export interface AnnouncementResponseDto {
   // = createdAt (see announcement.entity.ts - there is no separate draft
   // state, so creation and publication are the same moment).
   publishedAt: string;
-  // = updatedAt, but only when it actually differs from createdAt - `null`
-  // means "never edited since publish". Named explicitly rather than
-  // leaving the frontend to compare createdAt/updatedAt itself.
+  // Set only by a real content edit through PATCH (title/body/isPinned/
+  // expiresAt) - `null` means "never edited since publish". A stored
+  // field on the entity, not derived from createdAt/updatedAt (updatedAt
+  // is a generic technical timestamp bumped by any change for any reason,
+  // including ones that aren't a content edit - see announcement.entity.ts).
   editedAt: string | null;
   isRead: boolean;
   readAt: string | null;

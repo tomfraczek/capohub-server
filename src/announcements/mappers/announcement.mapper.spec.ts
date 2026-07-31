@@ -18,6 +18,8 @@ function buildAnnouncement(
   announcement.recipientGroup = null;
   announcement.isPinned = false;
   announcement.expiresAt = new Date('2026-08-01T00:00:00.000Z');
+  announcement.deletedAt = null;
+  announcement.editedAt = null;
   announcement.createdAt = new Date('2026-07-01T00:00:00.000Z');
   announcement.updatedAt = new Date('2026-07-01T00:00:00.000Z');
   return Object.assign(announcement, overrides);
@@ -44,7 +46,7 @@ describe('isAnnouncementActive', () => {
 });
 
 describe('toAnnouncementResponseDto', () => {
-  it('sets publishedAt from createdAt and editedAt to null when never edited', () => {
+  it('sets publishedAt from createdAt, regardless of editedAt', () => {
     const announcement = buildAnnouncement({
       createdAt: new Date('2026-07-01T00:00:00.000Z'),
       updatedAt: new Date('2026-07-01T00:00:00.000Z'),
@@ -55,13 +57,26 @@ describe('toAnnouncementResponseDto', () => {
     });
 
     expect(dto.publishedAt).toBe('2026-07-01T00:00:00.000Z');
+  });
+
+  it('reads editedAt straight from the entity field - null when never edited', () => {
+    const announcement = buildAnnouncement({ editedAt: null });
+    const dto = toAnnouncementResponseDto(announcement, {
+      isRead: false,
+      readAt: null,
+    });
+
     expect(dto.editedAt).toBeNull();
   });
 
-  it('sets editedAt to updatedAt once it differs from createdAt', () => {
+  it('reads editedAt straight from the entity field once set - never derived from updatedAt', () => {
     const announcement = buildAnnouncement({
+      // updatedAt intentionally left equal to createdAt (e.g. a technical
+      // touch that isn't a real content edit) - editedAt must still come
+      // from its own field, not from comparing these two.
       createdAt: new Date('2026-07-01T00:00:00.000Z'),
-      updatedAt: new Date('2026-07-05T00:00:00.000Z'),
+      updatedAt: new Date('2026-07-01T00:00:00.000Z'),
+      editedAt: new Date('2026-07-05T00:00:00.000Z'),
     });
     const dto = toAnnouncementResponseDto(announcement, {
       isRead: false,

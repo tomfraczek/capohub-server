@@ -7,9 +7,11 @@ const BODY_MAX_LENGTH = 5000;
 
 // Deliberately its own shape, not createAnnouncementSchema reused - the
 // recipient (`recipientGroupId`) is immutable after publish (task
-// requirement) and `sendPushNotification` has no meaning on an edit (task
-// requirement: no re-send on a plain edit), so neither field exists here at
-// all rather than being accepted-and-ignored.
+// requirement), so it does not exist here at all rather than being
+// accepted-and-ignored. `title`/`body`/`isPinned`/`expiresAt` are exactly
+// the fields AnnouncementsService.update() compares against the current
+// row to decide whether this PATCH is a real edit (sets `editedAt`) or a
+// no-op (leaves everything untouched, including `updatedAt`).
 export const updateAnnouncementSchema = z.object({
   title: z.string().trim().min(1).max(TITLE_MAX_LENGTH),
   body: z.string().trim().min(1).max(BODY_MAX_LENGTH),

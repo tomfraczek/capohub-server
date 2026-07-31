@@ -12,13 +12,21 @@
  *     must reference an active Recipient Group
  *  5. Any number of Announcements may be pinned; sort order is
  *     pinned-first, newest-first within each group
- *  6. Expired Announcements disappear from the active list and are only
- *     reachable through the OWNER/ADMIN-only archive
- *  7. Editing sets `editedAt` and never re-sends a push
- *  8. Deleting is a soft delete - the row survives in the archive
- *  9. Read tracking is persistent, idempotent, and drives unreadCount
- * 10. Push notifications: only sent when requested, only to current
- *     recipients, deduplicated, never to the author, never resent on edit
+ *  6. Expired Announcements disappear from the active list and can only be
+ *     opened directly (detail, mark-as-read) by a viewer with archive
+ *     access - never a plain member, even via a direct URL
+ *  7. Editing sets `editedAt` only on a real content change; a no-op PATCH
+ *     touches nothing
+ *  8. Deleting sets a dedicated `deletedAt` marker, distinct from natural
+ *     expiry - idempotent, and excludes the Announcement from every read
+ *     path (active list, archive, detail, mark-as-read) rather than just
+ *     downgrading it to "archived"
+ *  9. Read tracking is persistent, idempotent, has its own `readAt`, and
+ *     drives unreadCount - deleted Announcements never count
+ * 10. Archive oversight overrides the Recipient Group snapshot rule - an
+ *     OWNER/ADMIN with archive access can open/mark-read *any* expired
+ *     Announcement in their community, even a RECIPIENT_GROUP one they were
+ *     never a snapshot member of
  */
 
 import {
@@ -41,7 +49,6 @@ import { AnnouncementListResult } from '../src/announcements/announcements.servi
 import { Announcement } from '../src/announcements/entities/announcement.entity';
 import { AnnouncementRecipient } from '../src/announcements/entities/announcement-recipient.entity';
 import { AnnouncementRead } from '../src/announcements/entities/announcement-read.entity';
-import { PUSH_NOTIFICATION_PORT } from '../src/announcements/integration/push-notification.port';
 import { RecipientGroupResponseDto } from '../src/groups/dto/recipient-group-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
@@ -122,15 +129,10 @@ async function bodyOf<T>(req: request.Test): Promise<T> {
 
 describe('Announcements (e2e)', () => {
   let app: INestApplication<App>;
-  let sendToUsers: jest.Mock;
   const createdGroupIds: string[] = [];
   const localUserIdByToken = new Map<string, string>();
 
   beforeAll(async () => {
-    sendToUsers = jest
-      .fn()
-      .mockResolvedValue({ attempted: 0, sent: 0, failed: 0 });
-
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
@@ -138,8 +140,6 @@ describe('Announcements (e2e)', () => {
       .useValue(fixtureClerkAuthService)
       .overrideProvider(CLERK_CLIENT)
       .useValue(fixtureClerkClient)
-      .overrideProvider(PUSH_NOTIFICATION_PORT)
-      .useValue({ sendToUsers })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -165,10 +165,6 @@ describe('Announcements (e2e)', () => {
       });
       localUserIdByToken.set(token, user.id);
     }
-  });
-
-  afterEach(() => {
-    sendToUsers.mockClear();
   });
 
   afterAll(async () => {
@@ -360,7 +356,6 @@ describe('Announcements (e2e)', () => {
       body: 'Treść ogłoszenia',
       isPinned: false,
       expiresAt: futureIso(),
-      sendPushNotification: false,
       ...overrides,
     };
   }
@@ -521,6 +516,43 @@ describe('Announcements (e2e)', () => {
         recipientGroupId: recipientGroup.id,
       }).expect(409);
     });
+
+    it('an OWNER/ADMIN with archive access can open and mark-read an expired RECIPIENT_GROUP Announcement even when they were never in its snapshot', async () => {
+      const { org } = await createOrgWithSection();
+      // OWNER_TOKEN is deliberately excluded from the Recipient Group -
+      // regression test for the archive oversight rule: archive access
+      // must never require snapshot membership too (see assertReadable).
+      const recipientGroup = await createRecipientGroupWith(org, [
+        RECIPIENT_TOKEN,
+      ]);
+      const created = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, {
+          title: 'Owner never a recipient',
+          recipientGroupId: recipientGroup.id,
+          expiresAt: futureIso(1 / 86400),
+        }).expect(201),
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      const archive = await bodyOf<AnnouncementListResult>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${org.id}/announcements/archive`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(archive.items.some((item) => item.id === created.id)).toBe(true);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/groups/${org.id}/announcements/${created.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${org.id}/announcements/${created.id}/read`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+    });
   });
 
   describe('validation', () => {
@@ -542,6 +574,16 @@ describe('Announcements (e2e)', () => {
       const { org } = await createOrgWithSection();
       await createAnnouncement(MEMBER_TOKEN, org.id).expect(403);
       await createAnnouncement(ADMIN_TOKEN, org.id).expect(201);
+    });
+
+    it('sendPushNotification is not part of the public contract - sending it has no visible effect and the response never echoes it', async () => {
+      const { org } = await createOrgWithSection();
+      const created = await bodyOf<Record<string, unknown>>(
+        createAnnouncement(OWNER_TOKEN, org.id, {
+          sendPushNotification: true,
+        }).expect(201),
+      );
+      expect(created).not.toHaveProperty('sendPushNotification');
     });
   });
 
@@ -588,7 +630,7 @@ describe('Announcements (e2e)', () => {
   });
 
   describe('expiry and archive', () => {
-    it('an expired Announcement disappears from the active list and is only reachable through the OWNER/ADMIN archive', async () => {
+    it('an expired Announcement disappears from the active list, cannot be opened directly by a plain member, but is reachable via detail and the archive by an OWNER/ADMIN', async () => {
       const { org } = await createOrgWithSection();
       const soonToExpire = await bodyOf<AnnouncementResponseDto>(
         createAnnouncement(OWNER_TOKEN, org.id, {
@@ -609,10 +651,17 @@ describe('Announcements (e2e)', () => {
         false,
       );
 
+      // A plain member cannot open an expired Announcement directly, even
+      // by URL - only archive-permitted OWNER/ADMIN can (task requirement).
       await request(app.getHttpServer())
         .get(`/api/v1/groups/${org.id}/announcements/${soonToExpire.id}`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-        .expect(200); // detail is not scoped to active-only, see getById
+        .expect(404);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/groups/${org.id}/announcements/${soonToExpire.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(200);
 
       await request(app.getHttpServer())
         .get(`/api/v1/groups/${org.id}/announcements/archive`)
@@ -629,18 +678,44 @@ describe('Announcements (e2e)', () => {
         true,
       );
     });
+
+    it('a plain member cannot mark an expired Announcement as read, but an OWNER/ADMIN with archive access can', async () => {
+      const { org } = await createOrgWithSection();
+      const soonToExpire = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, {
+          title: 'Expiring soon for read test',
+          expiresAt: futureIso(1 / 86400),
+        }).expect(201),
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${org.id}/announcements/${soonToExpire.id}/read`)
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .expect(404);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${org.id}/announcements/${soonToExpire.id}/read`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+    });
   });
 
   describe('edit', () => {
-    it('updates title/body/pin/expiresAt, sets editedAt, and never re-sends a push', async () => {
+    it('a new Announcement has editedAt: null', async () => {
       const { org } = await createOrgWithSection();
       const created = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
-          sendPushNotification: true,
-        }).expect(201),
+        createAnnouncement(OWNER_TOKEN, org.id).expect(201),
       );
       expect(created.editedAt).toBeNull();
-      sendToUsers.mockClear();
+    });
+
+    it('a real content change updates title/body/pin/expiresAt and sets editedAt', async () => {
+      const { org } = await createOrgWithSection();
+      const created = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id).expect(201),
+      );
 
       const updated = await bodyOf<AnnouncementResponseDto>(
         request(app.getHttpServer())
@@ -658,12 +733,106 @@ describe('Announcements (e2e)', () => {
       expect(updated.title).toBe('Updated title');
       expect(updated.isPinned).toBe(true);
       expect(updated.editedAt).not.toBeNull();
-      expect(sendToUsers).not.toHaveBeenCalled();
+    });
+
+    it('a no-op PATCH (identical values) leaves editedAt untouched', async () => {
+      const { org } = await createOrgWithSection();
+      const payload = announcementPayload({ title: 'Stable title' });
+      const created = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, payload).expect(201),
+      );
+      expect(created.editedAt).toBeNull();
+
+      const patched = await bodyOf<AnnouncementResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/groups/${org.id}/announcements/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({
+            title: payload.title,
+            body: payload.body,
+            isPinned: payload.isPinned,
+            expiresAt: created.expiresAt,
+          })
+          .expect(200),
+      );
+
+      expect(patched.editedAt).toBeNull();
+      expect(patched.updatedAt).toBe(created.updatedAt);
+    });
+
+    it('marking as read does not set editedAt', async () => {
+      const { org } = await createOrgWithSection();
+      const created = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id).expect(201),
+      );
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${org.id}/announcements/${created.id}/read`)
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .expect(204);
+
+      const afterRead = await bodyOf<AnnouncementResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${org.id}/announcements/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(afterRead.editedAt).toBeNull();
+    });
+
+    it('cannot change the recipient - PATCH accepts no recipient-related field', async () => {
+      const { org } = await createOrgWithSection();
+      const recipientGroup = await bodyOf<RecipientGroupResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${org.id}/recipient-groups`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({
+            name: `Edit Recipient Test ${Date.now()}`,
+            memberUserIds: [localUserIdByToken.get(RECIPIENT_TOKEN)],
+          })
+          .expect(201),
+      );
+      const created = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, {
+          recipientGroupId: recipientGroup.id,
+        }).expect(201),
+      );
+
+      const updated = await bodyOf<AnnouncementResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/groups/${org.id}/announcements/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({
+            title: 'Still trainers only',
+            body: created.body,
+            isPinned: created.isPinned,
+            expiresAt: created.expiresAt,
+            // Extra fields a malicious/confused client might try to send -
+            // the schema has no such fields at all, so these are silently
+            // stripped rather than applied.
+            recipientType: 'GROUP',
+            recipientGroupId: null,
+          })
+          .expect(200),
+      );
+
+      expect(updated.recipientType).toBe('RECIPIENT_GROUP');
+      expect(updated.recipientGroupId).toBe(recipientGroup.id);
+
+      // The snapshot itself is untouched - still only the original recipient.
+      await request(app.getHttpServer())
+        .get(`/api/v1/groups/${org.id}/announcements/${created.id}`)
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .expect(404);
+      await request(app.getHttpServer())
+        .get(`/api/v1/groups/${org.id}/announcements/${created.id}`)
+        .set('Authorization', `Bearer ${RECIPIENT_TOKEN}`)
+        .expect(200);
     });
   });
 
   describe('delete', () => {
-    it('is a soft delete - the Announcement disappears from the active list but survives in the archive', async () => {
+    it('sets a dedicated deleted state - distinct from expiry, and excluded from every standard read path', async () => {
       const { org } = await createOrgWithSection();
       const created = await bodyOf<AnnouncementResponseDto>(
         createAnnouncement(OWNER_TOKEN, org.id).expect(201),
@@ -684,13 +853,67 @@ describe('Announcements (e2e)', () => {
         false,
       );
 
+      // Deleted is not "archived" - it must not appear in the expired
+      // archive either, even for an OWNER/ADMIN (task requirement: a
+      // deleted Announcement is not the same thing as a naturally-expired
+      // one, and must never surface through the archive as if it were).
       const archive = await bodyOf<AnnouncementListResult>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${org.id}/announcements/archive`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(200),
       );
-      expect(archive.items.some((item) => item.id === created.id)).toBe(true);
+      expect(archive.items.some((item) => item.id === created.id)).toBe(false);
+
+      // Not even the OWNER can open it directly anymore.
+      await request(app.getHttpServer())
+        .get(`/api/v1/groups/${org.id}/announcements/${created.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(404);
+
+      // Cannot be marked as read once deleted.
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${org.id}/announcements/${created.id}/read`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(404);
+    });
+
+    it('is idempotent - deleting an already-deleted Announcement is a no-op success', async () => {
+      const { org } = await createOrgWithSection();
+      const created = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id).expect(201),
+      );
+
+      await request(app.getHttpServer())
+        .delete(`/api/v1/groups/${org.id}/announcements/${created.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+      await request(app.getHttpServer())
+        .delete(`/api/v1/groups/${org.id}/announcements/${created.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+    });
+
+    it('cannot be un-deleted by changing expiresAt - PATCH on a deleted Announcement 404s, exactly like a nonexistent one', async () => {
+      const { org } = await createOrgWithSection();
+      const created = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id).expect(201),
+      );
+      await request(app.getHttpServer())
+        .delete(`/api/v1/groups/${org.id}/announcements/${created.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/groups/${org.id}/announcements/${created.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({
+          title: created.title,
+          body: created.body,
+          isPinned: created.isPinned,
+          expiresAt: futureIso(90),
+        })
+        .expect(404);
     });
   });
 
@@ -749,58 +972,6 @@ describe('Announcements (e2e)', () => {
         (item) => item.id === created.id,
       );
       expect(otherMemberItem?.isRead).toBe(false);
-    });
-  });
-
-  describe('push notifications', () => {
-    it('does not send when sendPushNotification is false', async () => {
-      const { org } = await createOrgWithSection();
-      await createAnnouncement(OWNER_TOKEN, org.id, {
-        sendPushNotification: false,
-      }).expect(201);
-
-      expect(sendToUsers).not.toHaveBeenCalled();
-    });
-
-    it('sends to every current member except the author, deduplicated, when true', async () => {
-      const { org } = await createOrgWithSection();
-      await createAnnouncement(OWNER_TOKEN, org.id, {
-        sendPushNotification: true,
-      }).expect(201);
-
-      expect(sendToUsers).toHaveBeenCalledTimes(1);
-      const [recipientIds] = sendToUsers.mock.calls[0] as [string[], unknown];
-      expect(new Set(recipientIds).size).toBe(recipientIds.length);
-      expect(recipientIds).not.toContain(localUserIdByToken.get(OWNER_TOKEN));
-      expect(recipientIds).toEqual(
-        expect.arrayContaining([
-          localUserIdByToken.get(ADMIN_TOKEN),
-          localUserIdByToken.get(MEMBER_TOKEN),
-        ]),
-      );
-    });
-
-    it('sends only to the Recipient Group snapshot, never the whole community, for a RECIPIENT_GROUP Announcement', async () => {
-      const { org } = await createOrgWithSection();
-      const recipientGroup = await bodyOf<RecipientGroupResponseDto>(
-        request(app.getHttpServer())
-          .post(`/api/v1/groups/${org.id}/recipient-groups`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .send({
-            name: `Push Test RG ${Date.now()}`,
-            memberUserIds: [localUserIdByToken.get(RECIPIENT_TOKEN)],
-          })
-          .expect(201),
-      );
-
-      await createAnnouncement(OWNER_TOKEN, org.id, {
-        recipientGroupId: recipientGroup.id,
-        sendPushNotification: true,
-      }).expect(201);
-
-      expect(sendToUsers).toHaveBeenCalledTimes(1);
-      const [recipientIds] = sendToUsers.mock.calls[0] as [string[], unknown];
-      expect(recipientIds).toEqual([localUserIdByToken.get(RECIPIENT_TOKEN)]);
     });
   });
 });

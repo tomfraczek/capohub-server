@@ -408,12 +408,15 @@ export class MembershipRequestsService {
   /**
    * Resend: cancel the existing PENDING Invitation and create a fresh one.
    * Returns the new invitation.
+   *
+   * Same authorization rule as cancelInvitation(), since resending always
+   * cancels the existing invitation as part of the operation: only the
+   * original inviter, ADMIN, or OWNER may resend.
    */
   async resendInvitation(
     requestId: string,
     actor: User,
     callerRoles: GroupRole[],
-    callerMembershipStatus: GroupMembershipStatus,
   ): Promise<MembershipRequestResponseDto> {
     return this.em.transactional(async (em) => {
       const existing = await this.loadRequestByIdOrFail(em, requestId);
@@ -424,6 +427,18 @@ export class MembershipRequestsService {
         });
       }
       this.assertPending(existing);
+
+      const isInviter = existing.initiatedBy.id === actor.id;
+      const isAdminOrOwner = callerRoles.some(
+        (r) => r === GroupRole.ADMIN || r === GroupRole.OWNER,
+      );
+      if (!isInviter && !isAdminOrOwner) {
+        throw new ForbiddenException({
+          code: 'INSUFFICIENT_PERMISSIONS_TO_RESEND_INVITATION',
+          message:
+            'Only the original inviter, ADMIN, or OWNER may resend an invitation',
+        });
+      }
 
       // Cancel old
       existing.status = MembershipRequestStatus.CANCELLED;

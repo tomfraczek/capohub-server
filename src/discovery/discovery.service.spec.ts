@@ -14,11 +14,8 @@
 import { NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { Group } from '../groups/entities/group.entity';
-import { GroupMembership } from '../groups/entities/group-membership.entity';
-import { MembershipRequest } from '../groups/entities/membership-request.entity';
 import { User } from '../users/entities/user.entity';
 import { GroupStatus } from '../groups/enums/group-status.enum';
-import { GroupMembershipStatus } from '../groups/enums/group-membership-status.enum';
 import { DiscoveryService } from './discovery.service';
 import { DiscoverySearchQuery } from './dto/discovery-search-query.schema';
 
@@ -72,11 +69,15 @@ interface MockRouting {
 }
 
 function buildMockEm(routing: MockRouting = {}) {
-  const findOne = jest.fn().mockResolvedValue(routing.findOneResult ?? null);
+  const findOne = jest
+    .fn<Promise<Group | User | null>, unknown[]>()
+    .mockResolvedValue(routing.findOneResult ?? null);
   const findAndCount = jest
-    .fn()
+    .fn<Promise<[Group[], number]>, unknown[]>()
     .mockResolvedValue(routing.findAndCountResult ?? [[], 0]);
-  const execute = jest.fn().mockResolvedValue(routing.sectionCountRows ?? []);
+  const execute = jest
+    .fn<Promise<{ parent_group_id: string; count: string }[]>, unknown[]>()
+    .mockResolvedValue(routing.sectionCountRows ?? []);
   const getConnection = jest.fn().mockReturnValue({ execute });
 
   const em = {

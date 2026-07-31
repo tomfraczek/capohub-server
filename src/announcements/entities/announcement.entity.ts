@@ -17,17 +17,28 @@ import { AnnouncementRecipientType } from '../enums/announcement-recipient-type.
 //
 // No separate `publishedAt`/draft state: there is no draft concept here
 // (task scope), so publication always happens at creation - `createdAt`
-// *is* the publish timestamp (see announcement.mapper.ts). Likewise no
-// separate `editedAt` column - `updatedAt` (inherited from BaseEntity,
-// bumped on every field change) already answers "was this ever edited"
-// exactly (updatedAt !== createdAt), so the mapper derives `editedAt` from
-// it rather than storing a redundant timestamp.
+// *is* the publish timestamp (see announcement.mapper.ts).
 //
 // No stored "active"/"archived" status either - task explicitly forbids a
 // cron job just to flip a status once `expiresAt` passes; active-vs-
 // archived is always computed from `expiresAt` at query/read time (see
-// AnnouncementsService).
+// AnnouncementsService). `deletedAt`, below, is a separate, orthogonal
+// concept from both of these - see its own comment.
+//
+// The composite index below matches the one and only sort order every
+// list-shaped query uses (isPinned desc, createdAt desc - see
+// AnnouncementsService.runList/listForViewer) - declared here, as an
+// entity-level index, rather than only as a hand-written migration
+// statement, so MikroORM's own schema diffing always agrees this index is
+// supposed to exist (a raw-SQL-only index with no matching decorator gets
+// silently dropped by the next `migration:create` run). Its leading column
+// (isPinned) already serves any query that would otherwise want a
+// standalone index on `isPinned` alone (confirmed via EXPLAIN ANALYZE
+// against a 125k-row synthetic dataset: `isPinned` is never filtered
+// without either this same order or a `community`/cross-community scope
+// already driving the plan) - see isPinned's own comment below.
 @Entity({ tableName: 'announcements' })
+@Index({ properties: ['isPinned', 'createdAt'] })
 export class Announcement extends BaseEntity {
   @Index()
   @ManyToOne(() => Group)
@@ -51,8 +62,12 @@ export class Announcement extends BaseEntity {
   // Immutable after creation (task requirement: "odbiorca po publikacji
   // jest niezmienny") - resolved once at create time from the route's
   // community (GROUP/SECTION) or the caller's chosen, then-active
-  // Recipient Group (RECIPIENT_GROUP), never changed by update().
-  @Index()
+  // Recipient Group (RECIPIENT_GROUP), never changed by update(). No index
+  // here - only ever queried via `!= 'RECIPIENT_GROUP'` (an inequality a
+  // btree index cannot use) or, in the RECIPIENT_GROUP branch, alongside an
+  // `id IN (...)` list that already dominates the plan; confirmed via
+  // EXPLAIN ANALYZE (125k rows, 200-id realistic snapshot) that
+  // `announcements_recipient_type_index` was never chosen (0 idx_scan).
   @Enum({ items: () => Object.values(AnnouncementRecipientType) })
   recipientType!: AnnouncementRecipientType;
 
@@ -65,15 +80,56 @@ export class Announcement extends BaseEntity {
   recipientGroup: RecipientGroup | null = null;
 
   // Any number of Announcements may be pinned at once (task requirement) -
-  // a plain boolean, not a position/order.
-  @Index()
+  // a plain boolean, not a position/order. No standalone index here - the
+  // class-level composite index above (isPinned, createdAt) already covers
+  // `isPinned` alone as its leading column, so a second, single-column
+  // index would only duplicate storage/write cost with zero query benefit.
   @Property()
   isPinned: boolean = false;
 
   // Required, always in the future at creation (see
   // create-announcement.schema.ts) - pinning does not exempt an
-  // Announcement from expiring (task requirement).
-  @Index()
+  // Announcement from expiring (task requirement). Governs *only* natural
+  // expiry - never touched by delete (see `deletedAt` below) and never
+  // "revived" by it either. No index - every real query already filters by
+  // `community` (or a small cross-community id set) or is ordered by the
+  // (isPinned, createdAt) composite above, either of which dominates the
+  // plan before `expiresAt` would matter; confirmed via EXPLAIN ANALYZE
+  // (125k rows) that `announcements_expires_at_index` was never chosen (0
+  // idx_scan) across list/archive/Home/single-row lookups. No maintenance
+  // job scans purely by `expiresAt` either (task explicitly forbids a
+  // cron/background scan - see the comment above).
   @Property({ type: 'timestamptz' })
   expiresAt!: Date;
+
+  // Soft-delete marker - `null` until DELETE .../announcements/:id is
+  // called (see AnnouncementsService.remove), then set once and never
+  // cleared (no undelete/restore endpoint - task scope). Deliberately a
+  // separate concept from `expiresAt`: expiry is a passive, natural
+  // end-of-life every Announcement eventually reaches on its own;
+  // deletion is a deliberate, immediate withdrawal an Owner/Admin chooses.
+  // A deleted Announcement is excluded from *every* read path - active
+  // list, archive, GET /home, unreadCount, direct detail, mark-as-read -
+  // never just downgraded to "archived" (see
+  // AnnouncementsService.buildVisibilityFilter, the one shared place this
+  // is enforced). No index - every real query filters `deletedAt IS NULL`,
+  // the overwhelming-majority case (deletion is meant to stay the rare
+  // exception, never the common state), which a btree index cannot help
+  // exclude cheaply and Postgres correctly never chooses to use for it (0
+  // idx_scan confirmed via EXPLAIN ANALYZE, 125k rows, ~5% deleted). There
+  // is also no "list deleted Announcements" admin/trash view querying
+  // `deletedAt IS NOT NULL` that would benefit from it (task scope - no
+  // restore endpoint exists).
+  @Property({ type: 'timestamptz', nullable: true })
+  deletedAt: Date | null = null;
+
+  // Set only by a real content edit through PATCH (see
+  // AnnouncementsService.update) - `null` on a freshly published
+  // Announcement, and left untouched by every other mutation this entity
+  // goes through (marking read, deleting). Deliberately not derived from
+  // `updatedAt` (a technical bookkeeping field BaseEntity already bumps on
+  // *any* change for *any* reason) - see update()'s own comment for the
+  // no-op-PATCH rule this enables.
+  @Property({ type: 'timestamptz', nullable: true })
+  editedAt: Date | null = null;
 }
