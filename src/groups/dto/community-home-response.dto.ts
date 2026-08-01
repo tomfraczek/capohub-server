@@ -153,6 +153,18 @@ export interface CommunityHomeCapabilitiesDto {
   // (@AllowGroupStatuses(...ANY_STATUS), same reasoning as
   // canViewAuditLogInCommunityIds above).
   canViewAnnouncementArchiveInCommunityIds: string[];
+  // Read this community's Recipient Groups (GroupPermission.RECIPIENT_GROUP_VIEW,
+  // Member tier and up) - works in any Group status, mirroring
+  // RecipientGroupsController's list/get routes
+  // (@AllowGroupStatuses(...ANY_STATUS)), same reasoning as
+  // canViewAuditLogInCommunityIds above.
+  canViewRecipientGroupsInCommunityIds: string[];
+  // Create/edit/activate/deactivate a Recipient Group under this community
+  // (GroupPermission.RECIPIENT_GROUP_MANAGE, Admin/Owner tier) - requires
+  // ACTIVE, mirroring RecipientGroupsController's
+  // create/update/activate/deactivate routes (no @AllowGroupStatuses
+  // override there, so the default ACTIVE-only policy applies).
+  canManageRecipientGroupsInCommunityIds: string[];
   // True iff canCreateSectionInCommunityIds is non-empty - i.e. the user
   // holds GROUP_EDIT (Admin/Owner) in at least one community, Group or
   // Section. A convenience aggregate, not an independent business rule.

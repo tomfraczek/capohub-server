@@ -321,6 +321,8 @@ describe('Community Home (e2e)', () => {
       canSuspendMembersInCommunityIds: [],
       canManageAnnouncementsInCommunityIds: [],
       canViewAnnouncementArchiveInCommunityIds: [],
+      canViewRecipientGroupsInCommunityIds: [],
+      canManageRecipientGroupsInCommunityIds: [],
       canManageAnyCommunity: false,
     });
   });
