@@ -241,6 +241,8 @@ export class CommunityHomeService {
       canManageNotificationsInCommunityIds: [],
       canBanMembersInCommunityIds: [],
       canSuspendMembersInCommunityIds: [],
+      canManageAnnouncementsInCommunityIds: [],
+      canViewAnnouncementArchiveInCommunityIds: [],
     };
 
     for (const membership of memberships) {
@@ -361,6 +363,17 @@ export class CommunityHomeService {
           has(GroupPermission.MEMBERSHIP_SUSPEND)
         ) {
           capabilityLists.canSuspendMembersInCommunityIds.push(groupId);
+        }
+        if (
+          group.status === GroupStatus.ACTIVE &&
+          has(GroupPermission.ANNOUNCEMENT_MANAGE)
+        ) {
+          capabilityLists.canManageAnnouncementsInCommunityIds.push(groupId);
+        }
+        if (has(GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW)) {
+          capabilityLists.canViewAnnouncementArchiveInCommunityIds.push(
+            groupId,
+          );
         }
       }
     }

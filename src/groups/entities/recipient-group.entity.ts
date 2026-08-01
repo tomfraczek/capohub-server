@@ -3,8 +3,8 @@ import { BaseEntity } from '../../database/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { Group } from './group.entity';
 
-export const RECIPIENT_GROUPS_NAME_UNIQUE_INDEX =
-  'recipient_groups_group_id_name_unique';
+export const RECIPIENT_GROUPS_ACTIVE_NAME_UNIQUE_INDEX =
+  'recipient_groups_group_id_name_active_unique';
 
 // A manually-managed, named subset of one Group-or-Section's members, used
 // only to target Announcements (see Announcement.recipientGroup) - never a
@@ -23,15 +23,21 @@ export const RECIPIENT_GROUPS_NAME_UNIQUE_INDEX =
 // a *new* Announcement (see AnnouncementsService.create).
 @Entity({ tableName: 'recipient_groups' })
 @Unique({
-  name: RECIPIENT_GROUPS_NAME_UNIQUE_INDEX,
+  name: RECIPIENT_GROUPS_ACTIVE_NAME_UNIQUE_INDEX,
   properties: ['group', 'name'],
-  // Case-insensitive per-Group uniqueness ("Trenerzy" and "trenerzy" in the
-  // same Group must collide) - a plain @Unique() only compares raw column
-  // values, so this needs the same `expression` escape hatch used by
-  // RoleAssignment's partial OWNER index (see role-assignment.entity.ts):
-  // an index on lower(name) instead of name itself.
+  // Case-insensitive per-Group uniqueness among *active* Recipient Groups
+  // only ("Trenerzy" and "trenerzy" in the same Group must collide, but
+  // only while both are active) - partial on `is_active = true`, same
+  // `expression` escape hatch as RoleAssignment's partial OWNER index (see
+  // role-assignment.entity.ts): a plain @Unique() can express neither the
+  // lower(name) comparison nor a WHERE predicate. Deliberately does NOT
+  // constrain inactive rows at all - a deactivated Recipient Group is this
+  // entity's only "removal" state (see the comment above), so a name it
+  // once held must become free again for a brand new Recipient Group the
+  // moment it's deactivated, without deleting or renaming the old,
+  // historical row (task requirement).
   expression: (table, columns, indexName) =>
-    `create unique index "${indexName}" on ${table.toString()} ("${columns.group}", lower("${columns.name}"))`,
+    `create unique index "${indexName}" on ${table.toString()} ("${columns.group}", lower("${columns.name}")) where ("${columns.isActive}" = true)`,
 })
 export class RecipientGroup extends BaseEntity {
   // No delete cascade - Group/Section rows are archived, never physically

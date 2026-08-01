@@ -1,3 +1,4 @@
+import { MembershipRequestTarget } from '../../groups/enums/membership-request-target.enum';
 import { Announcement } from '../entities/announcement.entity';
 import { AnnouncementRecipientType } from '../enums/announcement-recipient-type.enum';
 import {
@@ -10,7 +11,10 @@ function buildAnnouncement(
 ): Announcement {
   const announcement = new Announcement();
   announcement.id = 'announcement-1';
-  announcement.community = { id: 'group-1' } as never;
+  // Root Group by default (parentGroup: null) - tests that need a Section
+  // pass a non-null parentGroup explicitly (see communityResourceType
+  // tests below).
+  announcement.community = { id: 'group-1', parentGroup: null } as never;
   announcement.author = { id: 'user-1', displayName: 'Author' } as never;
   announcement.title = 'Title';
   announcement.body = 'Body';
@@ -113,6 +117,33 @@ describe('toAnnouncementResponseDto', () => {
       toAnnouncementResponseDto(withGroup, { isRead: false, readAt: null })
         .recipientGroupId,
     ).toBe('recipient-group-1');
+  });
+
+  it('sets communityResourceType to GROUP when the community is a root Group (parentGroup: null)', () => {
+    const announcement = buildAnnouncement({
+      community: { id: 'group-1', parentGroup: null } as never,
+    });
+    const dto = toAnnouncementResponseDto(announcement, {
+      isRead: false,
+      readAt: null,
+    });
+
+    expect(dto.communityResourceType).toBe(MembershipRequestTarget.GROUP);
+  });
+
+  it('sets communityResourceType to SECTION when the community has a non-null parentGroup', () => {
+    const announcement = buildAnnouncement({
+      community: {
+        id: 'section-1',
+        parentGroup: { id: 'group-1' },
+      } as never,
+    });
+    const dto = toAnnouncementResponseDto(announcement, {
+      isRead: false,
+      readAt: null,
+    });
+
+    expect(dto.communityResourceType).toBe(MembershipRequestTarget.SECTION);
   });
 
   it('maps author to a minimal ref, or null when the author account is gone', () => {

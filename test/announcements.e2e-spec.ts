@@ -67,6 +67,19 @@ const SECTION_MEMBER_TOKEN = 'valid-ann-section-member-token';
 const RECIPIENT_TOKEN = 'valid-ann-recipient-token';
 const OUTSIDER_TOKEN = 'valid-ann-outsider-token';
 
+// Dedicated to the GET /announcements (global feed) describe block below -
+// never touched by any other describe block in this file, so exact
+// total/hasMore/ordering assertions there can't be polluted by
+// Announcements created for unrelated tests earlier in the same run (this
+// file's cleanup only runs once, in afterAll).
+const GLOBAL_MEMBER_TOKEN = 'valid-ann-global-member-token';
+const GLOBAL_SECTION_TOKEN = 'valid-ann-global-section-token';
+const GLOBAL_RECIPIENT_TOKEN = 'valid-ann-global-recipient-token';
+const GLOBAL_NONRECIPIENT_TOKEN = 'valid-ann-global-nonrecipient-token';
+const GLOBAL_OUTSIDER_TOKEN = 'valid-ann-global-outsider-token';
+const GLOBAL_PAGINATION_TOKEN = 'valid-ann-global-pagination-token';
+const GLOBAL_TIEBREAK_TOKEN = 'valid-ann-global-tiebreak-token';
+
 const TOKENS = [
   OWNER_TOKEN,
   ADMIN_TOKEN,
@@ -74,6 +87,13 @@ const TOKENS = [
   SECTION_MEMBER_TOKEN,
   RECIPIENT_TOKEN,
   OUTSIDER_TOKEN,
+  GLOBAL_MEMBER_TOKEN,
+  GLOBAL_SECTION_TOKEN,
+  GLOBAL_RECIPIENT_TOKEN,
+  GLOBAL_NONRECIPIENT_TOKEN,
+  GLOBAL_OUTSIDER_TOKEN,
+  GLOBAL_PAGINATION_TOKEN,
+  GLOBAL_TIEBREAK_TOKEN,
 ] as const;
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {};
@@ -972,6 +992,328 @@ describe('Announcements (e2e)', () => {
         (item) => item.id === created.id,
       );
       expect(otherMemberItem?.isRead).toBe(false);
+    });
+  });
+
+  describe('GET /announcements (global feed)', () => {
+    async function createRecipientGroup(
+      orgId: string,
+      memberTokens: string[],
+    ): Promise<RecipientGroupResponseDto> {
+      return bodyOf<RecipientGroupResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${orgId}/recipient-groups`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({
+            name: `Global feed recipients ${Date.now()}-${Math.random()}`,
+            memberUserIds: memberTokens.map((t) => localUserIdByToken.get(t)),
+          })
+          .expect(201),
+      );
+    }
+
+    function getGlobalFeed(token: string, qs = ''): request.Test {
+      return request(app.getHttpServer())
+        .get(`/api/v1/announcements${qs}`)
+        .set('Authorization', `Bearer ${token}`);
+    }
+
+    it('returns 401 without a session', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/announcements')
+        .expect(401);
+    });
+
+    it('aggregates active Announcements from every Group/Section the caller belongs to, excluding communities they do not', async () => {
+      const orgA = await createGroup(OWNER_TOKEN);
+      await addMember(OWNER_TOKEN, orgA.id, GLOBAL_MEMBER_TOKEN);
+      const sectionA = await createSection(OWNER_TOKEN, orgA.id);
+      // GLOBAL_MEMBER_TOKEN is a root-org member of orgA only - never added
+      // to sectionA, so a Section-scoped Announcement there must not leak
+      // into their global feed.
+
+      const orgB = await createGroup(OWNER_TOKEN);
+      await addMember(OWNER_TOKEN, orgB.id, GLOBAL_MEMBER_TOKEN);
+
+      const annA = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, orgA.id, {
+          title: 'Global feed - org A',
+        }).expect(201),
+      );
+      const annSectionA = await bodyOf<AnnouncementResponseDto>(
+        createSectionAnnouncement(OWNER_TOKEN, sectionA.id, {
+          title: 'Global feed - section A (not a member)',
+        }).expect(201),
+      );
+      const annB = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, orgB.id, {
+          title: 'Global feed - org B',
+        }).expect(201),
+      );
+
+      const memberFeed = await bodyOf<AnnouncementListResult>(
+        getGlobalFeed(GLOBAL_MEMBER_TOKEN).expect(200),
+      );
+      const memberIds = memberFeed.items.map((item) => item.id);
+      expect(memberIds).toEqual(expect.arrayContaining([annA.id, annB.id]));
+      expect(memberIds).not.toContain(annSectionA.id);
+      expect(memberFeed.total).toBe(2);
+      expect(memberFeed.hasMore).toBe(false);
+
+      // A Section member sees the root org's Announcement *and* their own
+      // Section's, but not the unrelated org B they were never added to.
+      await addMember(OWNER_TOKEN, orgA.id, GLOBAL_SECTION_TOKEN);
+      const sectionMembershipId = await findMembershipId(
+        OWNER_TOKEN,
+        orgA.id,
+        localUserIdByToken.get(GLOBAL_SECTION_TOKEN),
+      );
+      await grantRole(
+        OWNER_TOKEN,
+        sectionA.id,
+        sectionMembershipId,
+        GroupRole.MEMBER,
+      );
+      const sectionFeed = await bodyOf<AnnouncementListResult>(
+        getGlobalFeed(GLOBAL_SECTION_TOKEN).expect(200),
+      );
+      const sectionIds = sectionFeed.items.map((item) => item.id);
+      expect(sectionIds).toEqual(
+        expect.arrayContaining([annA.id, annSectionA.id]),
+      );
+      expect(sectionIds).not.toContain(annB.id);
+
+      // An outsider with no membership anywhere sees nothing.
+      const outsiderFeed = await bodyOf<AnnouncementListResult>(
+        getGlobalFeed(GLOBAL_OUTSIDER_TOKEN).expect(200),
+      );
+      expect(outsiderFeed.items).toHaveLength(0);
+      expect(outsiderFeed.total).toBe(0);
+      expect(outsiderFeed.hasMore).toBe(false);
+    });
+
+    it('applies the exact same Recipient Group snapshot rule as the per-community list', async () => {
+      const org = await createGroup(OWNER_TOKEN);
+      await addMember(OWNER_TOKEN, org.id, GLOBAL_RECIPIENT_TOKEN);
+      await addMember(OWNER_TOKEN, org.id, GLOBAL_NONRECIPIENT_TOKEN);
+      const recipientGroup = await createRecipientGroup(org.id, [
+        GLOBAL_RECIPIENT_TOKEN,
+      ]);
+
+      const announcement = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, {
+          title: 'Global feed - recipient group only',
+          recipientGroupId: recipientGroup.id,
+        }).expect(201),
+      );
+
+      const recipientFeed = await bodyOf<AnnouncementListResult>(
+        getGlobalFeed(GLOBAL_RECIPIENT_TOKEN).expect(200),
+      );
+      expect(recipientFeed.items.map((item) => item.id)).toContain(
+        announcement.id,
+      );
+
+      const nonRecipientFeed = await bodyOf<AnnouncementListResult>(
+        getGlobalFeed(GLOBAL_NONRECIPIENT_TOKEN).expect(200),
+      );
+      expect(nonRecipientFeed.items.map((item) => item.id)).not.toContain(
+        announcement.id,
+      );
+    });
+
+    it('never includes an expired or soft-deleted Announcement', async () => {
+      const org = await createGroup(OWNER_TOKEN);
+      await addMember(OWNER_TOKEN, org.id, GLOBAL_RECIPIENT_TOKEN);
+
+      const toExpire = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, {
+          title: 'Global feed - will expire',
+          expiresAt: futureIso(1 / 86400),
+        }).expect(201),
+      );
+      const toDelete = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, {
+          title: 'Global feed - will be deleted',
+        }).expect(201),
+      );
+      await request(app.getHttpServer())
+        .delete(`/api/v1/groups/${org.id}/announcements/${toDelete.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(204);
+
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      const feed = await bodyOf<AnnouncementListResult>(
+        getGlobalFeed(GLOBAL_RECIPIENT_TOKEN).expect(200),
+      );
+      const ids = feed.items.map((item) => item.id);
+      expect(ids).not.toContain(toExpire.id);
+      expect(ids).not.toContain(toDelete.id);
+    });
+
+    it('sets communityResourceType to GROUP for a root-Group Announcement and SECTION for a Section Announcement', async () => {
+      const org = await createGroup(OWNER_TOKEN);
+      await addMember(OWNER_TOKEN, org.id, GLOBAL_SECTION_TOKEN);
+      const section = await createSection(OWNER_TOKEN, org.id);
+      const membershipId = await findMembershipId(
+        OWNER_TOKEN,
+        org.id,
+        localUserIdByToken.get(GLOBAL_SECTION_TOKEN),
+      );
+      await grantRole(OWNER_TOKEN, section.id, membershipId, GroupRole.MEMBER);
+
+      const groupAnnouncement = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, {
+          title: 'Global feed - resource type GROUP',
+        }).expect(201),
+      );
+      const sectionAnnouncement = await bodyOf<AnnouncementResponseDto>(
+        createSectionAnnouncement(OWNER_TOKEN, section.id, {
+          title: 'Global feed - resource type SECTION',
+        }).expect(201),
+      );
+
+      const feed = await bodyOf<AnnouncementListResult>(
+        getGlobalFeed(GLOBAL_SECTION_TOKEN).expect(200),
+      );
+      const byId = new Map(feed.items.map((item) => [item.id, item]));
+      expect(byId.get(groupAnnouncement.id)?.communityResourceType).toBe(
+        'GROUP',
+      );
+      expect(byId.get(sectionAnnouncement.id)?.communityResourceType).toBe(
+        'SECTION',
+      );
+    });
+
+    it('sorts pinned-first then newest-first, supports unreadOnly, and paginates with a correct total/hasMore', async () => {
+      const org = await createGroup(OWNER_TOKEN);
+      await addMember(OWNER_TOKEN, org.id, GLOBAL_PAGINATION_TOKEN);
+
+      const oldest = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, { title: 'Oldest' }).expect(
+          201,
+        ),
+      );
+      const older = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, { title: 'Older' }).expect(201),
+      );
+      const pinned = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, {
+          title: 'Pinned',
+          isPinned: true,
+        }).expect(201),
+      );
+      const newest = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, { title: 'Newest' }).expect(
+          201,
+        ),
+      );
+
+      // Default sort: pinned first, then newest-first among the rest.
+      const fullFeed = await bodyOf<AnnouncementListResult>(
+        getGlobalFeed(GLOBAL_PAGINATION_TOKEN, '?limit=100').expect(200),
+      );
+      expect(fullFeed.items.map((item) => item.id)).toEqual([
+        pinned.id,
+        newest.id,
+        older.id,
+        oldest.id,
+      ]);
+      expect(fullFeed.total).toBe(4);
+      expect(fullFeed.hasMore).toBe(false);
+
+      // Pagination: limit=2/offset=0 is a page with more after it;
+      // limit=2/offset=2 is the last page.
+      const page1 = await bodyOf<AnnouncementListResult>(
+        getGlobalFeed(GLOBAL_PAGINATION_TOKEN, '?limit=2&offset=0').expect(200),
+      );
+      expect(page1.items.map((item) => item.id)).toEqual([
+        pinned.id,
+        newest.id,
+      ]);
+      expect(page1.total).toBe(4);
+      expect(page1.hasMore).toBe(true);
+
+      const page2 = await bodyOf<AnnouncementListResult>(
+        getGlobalFeed(GLOBAL_PAGINATION_TOKEN, '?limit=2&offset=2').expect(200),
+      );
+      expect(page2.items.map((item) => item.id)).toEqual([older.id, oldest.id]);
+      expect(page2.total).toBe(4);
+      expect(page2.hasMore).toBe(false);
+
+      // unreadOnly: mark two as read, expect the other two back, with a
+      // total that reflects only the still-unread set.
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${org.id}/announcements/${pinned.id}/read`)
+        .set('Authorization', `Bearer ${GLOBAL_PAGINATION_TOKEN}`)
+        .expect(204);
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${org.id}/announcements/${newest.id}/read`)
+        .set('Authorization', `Bearer ${GLOBAL_PAGINATION_TOKEN}`)
+        .expect(204);
+
+      const unreadFeed = await bodyOf<AnnouncementListResult>(
+        getGlobalFeed(GLOBAL_PAGINATION_TOKEN, '?unreadOnly=true').expect(200),
+      );
+      expect(unreadFeed.items.map((item) => item.id)).toEqual([
+        older.id,
+        oldest.id,
+      ]);
+      expect(unreadFeed.total).toBe(2);
+      expect(unreadFeed.hasMore).toBe(false);
+    });
+
+    it('rejects limit > 100 and a negative offset', async () => {
+      await getGlobalFeed(GLOBAL_PAGINATION_TOKEN, '?limit=101').expect(400);
+      await getGlobalFeed(GLOBAL_PAGINATION_TOKEN, '?offset=-1').expect(400);
+    });
+
+    it('breaks a createdAt tie deterministically by id DESC', async () => {
+      const org = await createGroup(OWNER_TOKEN);
+      await addMember(OWNER_TOKEN, org.id, GLOBAL_TIEBREAK_TOKEN);
+
+      const first = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, {
+          title: 'Tiebreak A',
+        }).expect(201),
+      );
+      const second = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(OWNER_TOKEN, org.id, {
+          title: 'Tiebreak B',
+        }).expect(201),
+      );
+
+      // Force an exact createdAt tie - without a deterministic tie-breaker,
+      // Postgres could return these two in either order, or in a different
+      // order across two otherwise-identical requests.
+      const em = app.get(EntityManager).fork();
+      const tiedCreatedAt = new Date();
+      await em.nativeUpdate(
+        Announcement,
+        { id: { $in: [first.id, second.id] } },
+        { createdAt: tiedCreatedAt },
+      );
+
+      const expectedFirst = first.id > second.id ? first.id : second.id;
+      const expectedSecond = first.id > second.id ? second.id : first.id;
+
+      const feed = await bodyOf<AnnouncementListResult>(
+        getGlobalFeed(GLOBAL_TIEBREAK_TOKEN).expect(200),
+      );
+      expect(feed.items.map((item) => item.id)).toEqual([
+        expectedFirst,
+        expectedSecond,
+      ]);
+
+      // Deterministic across repeated calls, not just accidentally stable.
+      const feedAgain = await bodyOf<AnnouncementListResult>(
+        getGlobalFeed(GLOBAL_TIEBREAK_TOKEN).expect(200),
+      );
+      expect(feedAgain.items.map((item) => item.id)).toEqual([
+        expectedFirst,
+        expectedSecond,
+      ]);
     });
   });
 });

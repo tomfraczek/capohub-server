@@ -19,6 +19,7 @@
 import { AnnouncementResponseDto } from '../announcements/dto/announcement-response.dto';
 import { AnnouncementsService } from '../announcements/announcements.service';
 import { AnnouncementRecipientType } from '../announcements/enums/announcement-recipient-type.enum';
+import { MembershipRequestTarget } from '../groups/enums/membership-request-target.enum';
 import { EventResponseDto } from '../events/dto/event-response.dto';
 import { EventType } from '../events/enums/event-type.enum';
 import { EventsService } from '../events/events.service';
@@ -103,6 +104,7 @@ function buildAnnouncement(
   return {
     id: 'announcement-1',
     communityGroupId: 'group-1',
+    communityResourceType: MembershipRequestTarget.GROUP,
     title: 'Announcement',
     body: 'Body',
     author: { id: 'user-2', displayName: 'Author' },
@@ -273,7 +275,10 @@ describe('HomeService', () => {
       unreadCount: 5,
     });
     expect(listForViewer).toHaveBeenCalledTimes(1);
-    expect(listForViewer).toHaveBeenCalledWith(user, 3);
+    expect(listForViewer).toHaveBeenCalledWith(user, {
+      limit: 3,
+      includeUnreadCount: true,
+    });
   });
 
   it('returns an empty announcements section when nothing is visible', async () => {

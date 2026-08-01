@@ -1,4 +1,5 @@
 import { GroupUserRefDto } from '../../groups/dto/group-user-ref.dto';
+import { MembershipRequestTarget } from '../../groups/enums/membership-request-target.enum';
 import { AnnouncementRecipientType } from '../enums/announcement-recipient-type.enum';
 
 // Used for both the list and the detail endpoint - Announcements carry no
@@ -8,6 +9,13 @@ import { AnnouncementRecipientType } from '../enums/announcement-recipient-type.
 export interface AnnouncementResponseDto {
   id: string;
   communityGroupId: string;
+  // Whether communityGroupId is a root Group or a Section - reused from
+  // MembershipRequestTarget rather than a new enum (same GROUP/SECTION
+  // distinction that type already carries). Lets a caller build the
+  // correct /groups/:id/... vs /sections/:id/... route without depending
+  // on recipientType, which can legitimately be RECIPIENT_GROUP and so
+  // cannot answer this question by itself.
+  communityResourceType: MembershipRequestTarget;
   title: string;
   body: string;
   author: GroupUserRefDto | null;

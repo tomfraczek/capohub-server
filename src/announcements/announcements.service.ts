@@ -294,24 +294,46 @@ export class AnnouncementsService {
   }
 
   /**
-   * Cross-community "everything I can see" feed - backs GET /home (see
-   * HomeService), never its own HTTP endpoint (Home is its only caller).
-   * Reuses exactly the same per-Announcement visibility rule as list()
-   * (deletedAt IS NULL, active-only, Recipient Group snapshot filter)
-   * resolved across every Group/Section the viewer currently holds any
-   * Role Assignment for - mirrors EventsService.listForViewer's own "one
-   * shared viewer-scope resolution, reused instead of duplicated"
-   * approach. `unreadCount` counts only Announcements this same query
-   * would return - a deleted or expired one never contributes to it.
+   * Cross-community "everything I can see" feed - backs both GET /home's
+   * capped 3-item preview (HomeService) and GET /announcements, the
+   * paginated "see all" screen the preview's "See all" affordance opens
+   * (AnnouncementsGlobalController). One shared method rather than two
+   * parallel implementations, so both keep exactly the same visibility
+   * rule as list() (deletedAt IS NULL, active-only, Recipient Group
+   * snapshot filter) resolved across every Group/Section the viewer
+   * currently holds any Role Assignment for - mirrors
+   * EventsService.listForViewer's own "one shared viewer-scope resolution"
+   * approach.
+   *
+   * `total`/`hasMore` always describe the *entire* matching set (subject to
+   * `unreadOnly`), never just the returned page - Home ignores them (its
+   * own contract has no such fields) and the global endpoint relies on
+   * them for pagination, same convention as runList().
+   *
+   * `includeUnreadCount` is opt-in: only Home needs the full unread count
+   * alongside its 3-item page, and computing it costs an extra query, so
+   * the global endpoint (which has no such field in its response) skips
+   * it entirely rather than paying for a number nobody reads.
    */
   async listForViewer(
     viewer: User,
-    limit: number,
-  ): Promise<{ items: AnnouncementResponseDto[]; unreadCount: number }> {
+    options: {
+      limit: number;
+      offset?: number;
+      unreadOnly?: boolean;
+      includeUnreadCount?: boolean;
+    },
+  ): Promise<{
+    items: AnnouncementResponseDto[];
+    total: number;
+    hasMore: boolean;
+    unreadCount: number;
+  }> {
+    const offset = options.offset ?? 0;
     const communityIds =
       await this.roleAssignmentsService.getCommunityIdsWithAnyRole(viewer.id);
     if (communityIds.length === 0) {
-      return { items: [], unreadCount: 0 };
+      return { items: [], total: 0, hasMore: false, unreadCount: 0 };
     }
 
     const where = await this.buildVisibilityFilter(
@@ -321,30 +343,42 @@ export class AnnouncementsService {
       { expiry: 'active', restrictToRecipientSnapshot: true },
     );
 
-    const [matching, page] = await Promise.all([
-      this.em.find(Announcement, where, { fields: ['id'] }),
-      this.em.find(Announcement, where, {
-        populate: ['community', 'author', 'recipientGroup'],
-        orderBy: { isPinned: 'desc', createdAt: 'desc' },
-        limit,
-      }),
-    ]);
+    const needsReadIds = options.unreadOnly || options.includeUnreadCount;
+    const readIds = needsReadIds
+      ? await this.readAnnouncementIds(this.em, viewer.id, communityIds)
+      : [];
 
-    const matchingIds = matching.map((row) => row.id);
-    const readCount =
-      matchingIds.length === 0
-        ? 0
-        : await this.em.count(AnnouncementRead, {
-            user: viewer.id,
-            announcement: { $in: matchingIds },
-          });
+    const unreadCount = options.includeUnreadCount
+      ? await this.em.count(
+          Announcement,
+          readIds.length > 0
+            ? { $and: [where, { id: { $nin: readIds } }] }
+            : where,
+        )
+      : 0;
+
+    const finalWhere =
+      options.unreadOnly && readIds.length > 0
+        ? { $and: [where, { id: { $nin: readIds } }] }
+        : where;
+
+    const [rows, total] = await this.em.findAndCount(Announcement, finalWhere, {
+      populate: ['community', 'author', 'recipientGroup'],
+      // `id` is a deterministic tie-breaker for rows sharing the same
+      // isPinned/createdAt (e.g. bulk-created in the same transaction) -
+      // without it, LIMIT/OFFSET pagination across two requests could
+      // reorder or skip/duplicate a row when ties are broken arbitrarily.
+      orderBy: { isPinned: 'desc', createdAt: 'desc', id: 'desc' },
+      limit: options.limit,
+      offset,
+    });
 
     const readInfoByAnnouncementId = await this.resolveReadInfoBatch(
       this.em,
       viewer.id,
-      page.map((row) => row.id),
+      rows.map((row) => row.id),
     );
-    const items = page.map((row) =>
+    const items = rows.map((row) =>
       toAnnouncementResponseDto(
         row,
         readInfoByAnnouncementId.get(row.id) ?? { isRead: false, readAt: null },
@@ -353,7 +387,9 @@ export class AnnouncementsService {
 
     return {
       items,
-      unreadCount: matchingIds.length - readCount,
+      total,
+      hasMore: offset + items.length < total,
+      unreadCount,
     };
   }
 
@@ -366,7 +402,7 @@ export class AnnouncementsService {
     let finalWhere = where;
 
     if (query.unreadOnly) {
-      const readIds = await this.readAnnouncementIdsForCommunity(
+      const readIds = await this.readAnnouncementIds(
         this.em,
         viewer.id,
         communityGroupId,
@@ -528,14 +564,27 @@ export class AnnouncementsService {
     }
   }
 
-  private async readAnnouncementIdsForCommunity(
+  /**
+   * `communityScope` is a single community (the per-community list/archive)
+   * or every community a viewer holds a Role in (the cross-community feed -
+   * see listForViewer) - both call sites need the same thing: which
+   * Announcements *this* viewer has already read, to drive `unreadOnly`/
+   * `unreadCount`. Bounded by how much this one viewer has actually read,
+   * not by the full Announcement table, so this stays cheap even across
+   * many communities.
+   */
+  private async readAnnouncementIds(
     em: EntityManager,
     viewerId: string,
-    communityGroupId: string,
+    communityScope: string | string[],
   ): Promise<string[]> {
     const rows = await em.find(AnnouncementRead, {
       user: viewerId,
-      announcement: { community: communityGroupId },
+      announcement: {
+        community: Array.isArray(communityScope)
+          ? { $in: communityScope }
+          : communityScope,
+      },
     });
     return rows.map((row) => row.announcement.id);
   }

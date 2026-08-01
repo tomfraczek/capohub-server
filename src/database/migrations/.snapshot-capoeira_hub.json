@@ -6736,10 +6736,10 @@
           ],
           "composite": true,
           "constraint": false,
-          "keyName": "recipient_groups_group_id_name_unique",
+          "keyName": "recipient_groups_group_id_name_active_unique",
           "unique": true,
           "primary": false,
-          "expression": "CREATE UNIQUE INDEX recipient_groups_group_id_name_unique ON public.recipient_groups USING btree (group_id, lower((name)::text))"
+          "expression": "CREATE UNIQUE INDEX recipient_groups_group_id_name_active_unique ON public.recipient_groups USING btree (group_id, lower((name)::text)) WHERE (is_active = true)"
         },
         {
           "columnNames": [

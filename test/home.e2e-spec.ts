@@ -60,10 +60,17 @@ import { AnnouncementRead } from '../src/announcements/entities/announcement-rea
 const OWNER_TOKEN = 'valid-home-owner-token';
 const MEMBER_TOKEN = 'valid-home-member-token';
 const NEWUSER_TOKEN = 'valid-home-newuser-token';
+// Dedicated to the cross-community unreadCount test below - never added to
+// any other group in this file, so its unreadCount can be asserted exactly
+// rather than with a loose lower bound (see MEMBER_TOKEN's own
+// toBeGreaterThanOrEqual, needed because it accumulates memberships across
+// every other test in the 'announcements' describe block).
+const MULTI_ORG_TOKEN = 'valid-home-multi-org-token';
 
 const OWNER_CLERK_ID = 'user_test_home_owner';
 const MEMBER_CLERK_ID = 'user_test_home_member';
 const NEWUSER_CLERK_ID = 'user_test_home_newuser';
+const MULTI_ORG_CLERK_ID = 'user_test_home_multi_org';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
   [OWNER_TOKEN]: {
@@ -84,6 +91,12 @@ const TOKEN_TO_AUTH: Record<string, AuthContext> = {
     tokenType: 'session_token',
     claims: { sub: NEWUSER_CLERK_ID, sid: 'sess_home_newuser' },
   },
+  [MULTI_ORG_TOKEN]: {
+    userId: MULTI_ORG_CLERK_ID,
+    sessionId: 'sess_home_multi_org',
+    tokenType: 'session_token',
+    claims: { sub: MULTI_ORG_CLERK_ID, sid: 'sess_home_multi_org' },
+  },
 };
 
 const FIXTURE_CLERK_PROFILES: Record<
@@ -101,6 +114,10 @@ const FIXTURE_CLERK_PROFILES: Record<
   [NEWUSER_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/home-newuser.png',
     primaryEmailAddress: { emailAddress: 'home.newuser@example.com' },
+  },
+  [MULTI_ORG_CLERK_ID]: {
+    imageUrl: 'https://img.clerk.com/home-multi-org.png',
+    primaryEmailAddress: { emailAddress: 'home.multi.org@example.com' },
   },
 };
 
@@ -516,6 +533,7 @@ describe('Home (e2e)', () => {
         home.announcements.items.some((item) => item.id === oldest.id),
       ).toBe(false);
       expect(home.announcements.unreadCount).toBeGreaterThanOrEqual(4);
+      expect(home.announcements.items[0].communityResourceType).toBe('GROUP');
 
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/announcements/${oldest.id}/read`)
@@ -526,6 +544,29 @@ describe('Home (e2e)', () => {
       expect(homeAfterRead.announcements.unreadCount).toBe(
         home.announcements.unreadCount - 1,
       );
+    });
+
+    it('unreadCount reflects the full cross-community visible set, not just the capped 3-item preview', async () => {
+      const orgA = await createGroup(OWNER_TOKEN, {
+        name: 'Home Multi-Org A',
+      });
+      const orgB = await createGroup(OWNER_TOKEN, {
+        name: 'Home Multi-Org B',
+      });
+      await addMember(OWNER_TOKEN, orgA.id, MULTI_ORG_TOKEN);
+      await addMember(OWNER_TOKEN, orgB.id, MULTI_ORG_TOKEN);
+
+      // 3 in org A, 2 in org B - 5 total visible, but the preview caps at 3.
+      await createAnnouncement(OWNER_TOKEN, orgA.id, { title: 'A1' });
+      await createAnnouncement(OWNER_TOKEN, orgA.id, { title: 'A2' });
+      await createAnnouncement(OWNER_TOKEN, orgA.id, { title: 'A3' });
+      await createAnnouncement(OWNER_TOKEN, orgB.id, { title: 'B1' });
+      await createAnnouncement(OWNER_TOKEN, orgB.id, { title: 'B2' });
+
+      const home = await getHome(MULTI_ORG_TOKEN);
+
+      expect(home.announcements.items).toHaveLength(3);
+      expect(home.announcements.unreadCount).toBe(5);
     });
 
     it('never includes a deleted or naturally-expired Announcement, and neither contributes to unreadCount', async () => {

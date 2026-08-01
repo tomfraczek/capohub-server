@@ -1,3 +1,4 @@
+import { MembershipRequestTarget } from '../../groups/enums/membership-request-target.enum';
 import { Announcement } from '../entities/announcement.entity';
 import { AnnouncementResponseDto } from '../dto/announcement-response.dto';
 
@@ -16,6 +17,10 @@ export function toAnnouncementResponseDto(
   return {
     id: announcement.id,
     communityGroupId: announcement.community.id,
+    communityResourceType:
+      announcement.community.parentGroup === null
+        ? MembershipRequestTarget.GROUP
+        : MembershipRequestTarget.SECTION,
     title: announcement.title,
     body: announcement.body,
     author: announcement.author

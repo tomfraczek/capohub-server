@@ -140,6 +140,19 @@ export interface CommunityHomeCapabilitiesDto {
   // Suspend/unsuspend a member (MEMBERSHIP_SUSPEND/MEMBERSHIP_UNSUSPEND
   // tier) - requires ACTIVE.
   canSuspendMembersInCommunityIds: string[];
+  // Create/edit/pin/delete an Announcement under this community
+  // (GroupPermission.ANNOUNCEMENT_MANAGE, Admin/Owner tier) - requires
+  // ACTIVE, mirroring AnnouncementsController's Create/Update/Delete routes
+  // (no @AllowGroupStatuses override there, so the default ACTIVE-only
+  // policy applies). Lets the frontend gate the whole Announcements admin
+  // panel without deriving it from `myRoles` itself.
+  canManageAnnouncementsInCommunityIds: string[];
+  // Read this community's expired-Announcement archive
+  // (GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW) - works in any Group
+  // status, mirroring AnnouncementsController's archive route
+  // (@AllowGroupStatuses(...ANY_STATUS), same reasoning as
+  // canViewAuditLogInCommunityIds above).
+  canViewAnnouncementArchiveInCommunityIds: string[];
   // True iff canCreateSectionInCommunityIds is non-empty - i.e. the user
   // holds GROUP_EDIT (Admin/Owner) in at least one community, Group or
   // Section. A convenience aggregate, not an independent business rule.

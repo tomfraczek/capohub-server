@@ -53,10 +53,10 @@ export class HomeService {
       await Promise.all([
         this.eventsService.findNearestEventAndTraining(user, now),
         this.learningStatusService.listLearningSongs(user.id),
-        this.announcementsService.listForViewer(
-          user,
-          ANNOUNCEMENTS_PREVIEW_LIMIT,
-        ),
+        this.announcementsService.listForViewer(user, {
+          limit: ANNOUNCEMENTS_PREVIEW_LIMIT,
+          includeUnreadCount: true,
+        }),
       ]);
 
     const toReviewItems = learningSongs.filter(

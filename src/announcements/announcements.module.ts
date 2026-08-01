@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { GroupsModule } from '../groups/groups.module';
 import { AnnouncementsController } from './announcements.controller';
+import { GlobalAnnouncementsController } from './global-announcements.controller';
 import { AnnouncementsService } from './announcements.service';
 
 // Imports GroupsModule for GroupPermissionsGuard (route authorization) and
@@ -20,7 +21,7 @@ import { AnnouncementsService } from './announcements.service';
 // exists to back it.
 @Module({
   imports: [GroupsModule],
-  controllers: [AnnouncementsController],
+  controllers: [AnnouncementsController, GlobalAnnouncementsController],
   providers: [AnnouncementsService],
   // Exported for HomeModule - HomeService aggregates the announcements
   // section of GET /home by calling AnnouncementsService.listForViewer

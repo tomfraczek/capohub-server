@@ -12,7 +12,7 @@ import { RecipientGroupResponseDto } from './dto/recipient-group-response.dto';
 import { UpdateRecipientGroupInput } from './dto/update-recipient-group.schema';
 import { Group } from './entities/group.entity';
 import {
-  RECIPIENT_GROUPS_NAME_UNIQUE_INDEX,
+  RECIPIENT_GROUPS_ACTIVE_NAME_UNIQUE_INDEX,
   RecipientGroup,
 } from './entities/recipient-group.entity';
 import { RecipientGroupMember } from './entities/recipient-group-member.entity';
@@ -52,7 +52,9 @@ export class RecipientGroupsService {
       try {
         await em.persist(recipientGroup).flush();
       } catch (error) {
-        if (isUniqueViolationOn(error, RECIPIENT_GROUPS_NAME_UNIQUE_INDEX)) {
+        if (
+          isUniqueViolationOn(error, RECIPIENT_GROUPS_ACTIVE_NAME_UNIQUE_INDEX)
+        ) {
           throw this.nameTaken();
         }
         throw error;
@@ -116,7 +118,9 @@ export class RecipientGroupsService {
       try {
         await em.flush();
       } catch (error) {
-        if (isUniqueViolationOn(error, RECIPIENT_GROUPS_NAME_UNIQUE_INDEX)) {
+        if (
+          isUniqueViolationOn(error, RECIPIENT_GROUPS_ACTIVE_NAME_UNIQUE_INDEX)
+        ) {
           throw this.nameTaken();
         }
         throw error;
@@ -131,6 +135,14 @@ export class RecipientGroupsService {
     });
   }
 
+  /**
+   * Reactivating can now collide: since the active-name uniqueness index
+   * only constrains active rows (see recipient-group.entity.ts), a new
+   * Recipient Group may already have been created reusing this exact
+   * (now-inactive) name in the meantime - the same conflict create()/
+   * update() already guard against, just reached by flipping `isActive`
+   * instead of writing `name`.
+   */
   async activate(
     communityGroupId: string,
     recipientGroupId: string,
@@ -141,7 +153,16 @@ export class RecipientGroupsService {
       recipientGroupId,
     );
     recipientGroup.isActive = true;
-    await this.em.flush();
+    try {
+      await this.em.flush();
+    } catch (error) {
+      if (
+        isUniqueViolationOn(error, RECIPIENT_GROUPS_ACTIVE_NAME_UNIQUE_INDEX)
+      ) {
+        throw this.nameTaken();
+      }
+      throw error;
+    }
     const members = await this.loadMembers(this.em, recipientGroupId);
     return toRecipientGroupResponseDto(recipientGroup, members);
   }
