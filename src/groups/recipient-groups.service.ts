@@ -8,6 +8,8 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
 import { User } from '../users/entities/user.entity';
 import { CreateRecipientGroupInput } from './dto/create-recipient-group.schema';
+import { RecipientGroupEligibleMembersResponseDto } from './dto/recipient-group-eligible-member.dto';
+import { RecipientGroupEligibleMembersQueryInput } from './dto/recipient-group-eligible-members-query.schema';
 import { RecipientGroupResponseDto } from './dto/recipient-group-response.dto';
 import { UpdateRecipientGroupInput } from './dto/update-recipient-group.schema';
 import { Group } from './entities/group.entity';
@@ -82,6 +84,37 @@ export class RecipientGroupsService {
     return recipientGroups.map((rg) =>
       toRecipientGroupResponseDto(rg, membersByGroup.get(rg.id) ?? []),
     );
+  }
+
+  /**
+   * Every User this community's Recipient Groups can accept as a member -
+   * exactly the set create()/update() would accept via
+   * assertMembersInScope() below, both built on
+   * RoleAssignmentsService.findEligibleMembers() so the two can never
+   * answer "is this user in scope" differently (task requirement). Backs
+   * the frontend's "add member" picker, replacing its previous per-kind
+   * approximation (Group members list vs Section role assignments) with
+   * the exact set the write path will accept.
+   */
+  async listEligibleMembers(
+    communityGroupId: string,
+    query: RecipientGroupEligibleMembersQueryInput,
+  ): Promise<RecipientGroupEligibleMembersResponseDto> {
+    const { items, total } =
+      await this.roleAssignmentsService.findEligibleMembers(communityGroupId, {
+        search: query.search,
+        limit: query.limit,
+        offset: query.offset,
+      });
+    return {
+      items: items.map((user) => ({
+        id: user.id,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+      })),
+      total,
+      hasMore: query.offset + items.length < total,
+    };
   }
 
   async getById(
@@ -221,23 +254,31 @@ export class RecipientGroupsService {
     return members.map((member) => member.user.id);
   }
 
+  /**
+   * Single bulk query via RoleAssignmentsService.findEligibleMemberIds()
+   * rather than one isCommunityMember() call per id - same source of truth
+   * listEligibleMembers() (the picker endpoint) reads from, so a user this
+   * validation accepts can never be missing from that list, and vice versa.
+   */
   private async assertMembersInScope(
     em: EntityManager,
     communityGroupId: string,
     memberUserIds: string[],
   ): Promise<void> {
-    for (const userId of memberUserIds) {
-      const inScope = await this.roleAssignmentsService.isCommunityMember(
-        communityGroupId,
-        userId,
-        em,
-      );
-      if (!inScope) {
-        throw new BadRequestException({
-          code: 'RECIPIENT_GROUP_MEMBER_OUT_OF_SCOPE',
-          message: `User ${userId} is not a member of this group/section`,
-        });
-      }
+    if (memberUserIds.length === 0) {
+      return;
+    }
+    const eligibleIds = await this.roleAssignmentsService.findEligibleMemberIds(
+      communityGroupId,
+      memberUserIds,
+      em,
+    );
+    const outOfScope = memberUserIds.find((id) => !eligibleIds.has(id));
+    if (outOfScope) {
+      throw new BadRequestException({
+        code: 'RECIPIENT_GROUP_MEMBER_OUT_OF_SCOPE',
+        message: `User ${outOfScope} is not a member of this group/section`,
+      });
     }
   }
 

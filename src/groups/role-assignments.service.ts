@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/postgresql';
+import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
@@ -148,6 +148,133 @@ export class RoleAssignmentsService {
       em,
     );
     return authorization !== null;
+  }
+
+  /**
+   * The GroupMembership `where` clause behind "counts as a member of
+   * `communityGroupId`" - the exact same Root-vs-Section rule
+   * isCommunityMember() checks one user at a time (see its own comment),
+   * expressed instead as a set so it can be paginated/searched
+   * (findEligibleMembers) or checked in bulk (findEligibleMemberIds)
+   * without an N+1 loop of isCommunityMember() calls. The two must never
+   * drift apart - if this rule ever changes, isCommunityMember() has to
+   * change with it.
+   *
+   * Root Group: any ACTIVE/READ_ONLY Membership there already qualifies -
+   * no Role required. Section: Membership alone proves nothing about one
+   * specific Section (ADR-004), so this also requires an actual Role
+   * Assignment for that exact Section - never inherited from the Root
+   * Group or any ancestor Section.
+   *
+   * Returns `null` when `communityGroupId` does not exist - callers treat
+   * that as "no one is eligible" (mirrors isCommunityMember() returning
+   * `false` for the same case).
+   */
+  private async buildEligibleMembershipWhere(
+    communityGroupId: string,
+    em: EntityManager,
+  ): Promise<FilterQuery<GroupMembership> | null> {
+    const community = await em.findOne(Group, { id: communityGroupId });
+    if (!community) {
+      return null;
+    }
+
+    const activeOrReadOnly = {
+      $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
+    };
+
+    if (community.parentGroup === null) {
+      return { rootGroup: communityGroupId, status: activeOrReadOnly };
+    }
+
+    const rootGroup = await this.groupHierarchyService.getRootGroup(
+      community.id,
+      em,
+    );
+    const roleAssignments = await em.find(
+      RoleAssignment,
+      { group: communityGroupId },
+      { fields: ['membership'] },
+    );
+    const membershipIds = [
+      ...new Set(roleAssignments.map((ra) => ra.membership.id)),
+    ];
+    // No one holds a Role Assignment for this exact Section yet - `id: {
+    // $in: [] }` deterministically matches nothing, same as returning early
+    // with an empty result, but keeps one return shape for the caller.
+    return {
+      rootGroup: rootGroup.id,
+      status: activeOrReadOnly,
+      id: { $in: membershipIds },
+    };
+  }
+
+  /**
+   * Bulk version of isCommunityMember() - which of `userIds` currently
+   * count as a member of `communityGroupId`, in one query instead of N.
+   * Used by RecipientGroupsService.assertMembersInScope() so create/update
+   * validation and findEligibleMembers() (the candidate-listing endpoint)
+   * can never answer this question differently for the same input.
+   */
+  async findEligibleMemberIds(
+    communityGroupId: string,
+    userIds: string[],
+    em: EntityManager = this.em,
+  ): Promise<Set<string>> {
+    if (userIds.length === 0) {
+      return new Set();
+    }
+    const where = await this.buildEligibleMembershipWhere(communityGroupId, em);
+    if (!where) {
+      return new Set();
+    }
+    const memberships = await em.find(
+      GroupMembership,
+      { $and: [where, { user: { $in: userIds } }] },
+      { fields: ['user'] },
+    );
+    return new Set(memberships.map((m) => m.user.id));
+  }
+
+  /**
+   * Every User eligible to be added to a Recipient Group of
+   * `communityGroupId` - i.e. exactly the set create()/update() there would
+   * accept (see buildEligibleMembershipWhere's own comment) - searchable by
+   * `displayName` and paginated, sorted deterministically (displayName ASC,
+   * id ASC, no configurable sort - see RecipientGroupsController). Backs
+   * GET .../recipient-groups/eligible-members.
+   */
+  async findEligibleMembers(
+    communityGroupId: string,
+    options: { search?: string; limit: number; offset: number },
+    em: EntityManager = this.em,
+  ): Promise<{ items: User[]; total: number }> {
+    const where = await this.buildEligibleMembershipWhere(communityGroupId, em);
+    if (!where) {
+      return { items: [], total: 0 };
+    }
+
+    const finalWhere: FilterQuery<GroupMembership> = options.search
+      ? {
+          $and: [
+            where,
+            { user: { displayName: { $ilike: `%${options.search}%` } } },
+          ],
+        }
+      : where;
+
+    const [memberships, total] = await em.findAndCount(
+      GroupMembership,
+      finalWhere,
+      {
+        populate: ['user'],
+        orderBy: { user: { displayName: 'asc', id: 'asc' } } as never,
+        limit: options.limit,
+        offset: options.offset,
+      },
+    );
+
+    return { items: memberships.map((m) => m.user), total };
   }
 
   /**

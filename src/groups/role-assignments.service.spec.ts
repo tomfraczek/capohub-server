@@ -59,6 +59,7 @@ interface MockRouting {
   // different bulk-find results for RoleAssignment within one test).
   roleAssignmentFindResults?: RoleAssignment[];
   membershipFindResults?: GroupMembership[];
+  membershipFindAndCountResult?: [GroupMembership[], number];
   flushError?: Error;
 }
 
@@ -106,9 +107,19 @@ function buildMockEm(routing: MockRouting = {}) {
     throw new Error(`Unexpected find entity in test mock: ${String(entity)}`);
   });
 
+  const findAndCount = jest.fn((entity: unknown) => {
+    if (entity === GroupMembership) {
+      return Promise.resolve(routing.membershipFindAndCountResult ?? [[], 0]);
+    }
+    throw new Error(
+      `Unexpected findAndCount entity in test mock: ${String(entity)}`,
+    );
+  });
+
   const raw = {
     findOne,
     find,
+    findAndCount,
     persist,
     remove,
     flush,
@@ -125,6 +136,7 @@ function buildMockEm(routing: MockRouting = {}) {
     remove,
     findOne,
     find,
+    findAndCount,
   };
 }
 
@@ -1123,6 +1135,156 @@ describe('RoleAssignmentsService', () => {
       const service = buildService(em);
 
       expect(await service.isCommunityMember('section-1', 'user-1')).toBe(true);
+    });
+  });
+
+  describe('findEligibleMemberIds', () => {
+    it('returns an empty set immediately when given no userIds, without querying', async () => {
+      const { em, findOne, find } = buildMockEm();
+      const service = buildService(em);
+
+      const result = await service.findEligibleMemberIds('root-1', []);
+
+      expect(result.size).toBe(0);
+      expect(findOne).not.toHaveBeenCalled();
+      expect(find).not.toHaveBeenCalled();
+    });
+
+    it('returns an empty set when the community does not exist', async () => {
+      const { em } = buildMockEm({ groupResults: [null] });
+      const service = buildService(em);
+
+      const result = await service.findEligibleMemberIds('missing', ['user-1']);
+
+      expect(result.size).toBe(0);
+    });
+
+    it('for a Root Group, returns exactly the user ids the bulk Membership lookup resolves', async () => {
+      const rootGroup = buildGroup({ id: 'root-1' });
+      const membershipA = buildMembership({
+        user: { id: 'user-1', displayName: 'A' } as never,
+      });
+      const membershipB = buildMembership({
+        user: { id: 'user-2', displayName: 'B' } as never,
+      });
+      const { em } = buildMockEm({
+        groupResults: [rootGroup],
+        membershipFindResults: [membershipA, membershipB],
+      });
+      const service = buildService(em);
+
+      const result = await service.findEligibleMemberIds('root-1', [
+        'user-1',
+        'user-2',
+        'user-3',
+      ]);
+
+      expect(result).toEqual(new Set(['user-1', 'user-2']));
+    });
+
+    it('for a Section, only counts users with a Role Assignment for that exact Section', async () => {
+      const section = buildGroup({
+        id: 'section-1',
+        parentGroup: 'root-1' as never,
+      });
+      const membership = buildMembership({
+        user: { id: 'user-1', displayName: 'A' } as never,
+      });
+      const roleAssignment = buildRoleAssignment({
+        membership,
+        group: section,
+      });
+      const { em } = buildMockEm({
+        groupResults: [section],
+        roleAssignmentFindResults: [roleAssignment],
+        membershipFindResults: [membership],
+      });
+      const service = buildService(em);
+
+      const result = await service.findEligibleMemberIds('section-1', [
+        'user-1',
+      ]);
+
+      expect(result).toEqual(new Set(['user-1']));
+    });
+  });
+
+  describe('findEligibleMembers', () => {
+    it('returns an empty page when the community does not exist', async () => {
+      const { em } = buildMockEm({ groupResults: [null] });
+      const service = buildService(em);
+
+      const result = await service.findEligibleMembers('missing', {
+        limit: 50,
+        offset: 0,
+      });
+
+      expect(result).toEqual({ items: [], total: 0 });
+    });
+
+    it('for a Root Group, returns items/total exactly as the paginated Membership query resolves', async () => {
+      const rootGroup = buildGroup({ id: 'root-1' });
+      const memberA = { id: 'user-1', displayName: 'Ana' } as never;
+      const memberB = { id: 'user-2', displayName: 'Beto' } as never;
+      const membershipA = buildMembership({ user: memberA });
+      const membershipB = buildMembership({ user: memberB });
+      const { em, findAndCount } = buildMockEm({
+        groupResults: [rootGroup],
+        membershipFindAndCountResult: [[membershipA, membershipB], 2],
+      });
+      const service = buildService(em);
+
+      const result = await service.findEligibleMembers('root-1', {
+        limit: 50,
+        offset: 0,
+      });
+
+      expect(result).toEqual({ items: [memberA, memberB], total: 2 });
+      expect(findAndCount).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes limit/offset straight through to the paginated query', async () => {
+      const rootGroup = buildGroup({ id: 'root-1' });
+      const { em, findAndCount } = buildMockEm({
+        groupResults: [rootGroup],
+        membershipFindAndCountResult: [[], 0],
+      });
+      const service = buildService(em);
+
+      await service.findEligibleMembers('root-1', { limit: 10, offset: 20 });
+
+      expect(findAndCount).toHaveBeenCalledWith(
+        GroupMembership,
+        expect.anything(),
+        expect.objectContaining({ limit: 10, offset: 20 }),
+      );
+    });
+
+    it('for a Section, resolves eligible members from the Role Assignment id set, not every Root Group member', async () => {
+      const section = buildGroup({
+        id: 'section-1',
+        parentGroup: 'root-1' as never,
+      });
+      const member = { id: 'user-1', displayName: 'Ana' } as never;
+      const membership = buildMembership({ user: member });
+      const roleAssignment = buildRoleAssignment({
+        membership,
+        group: section,
+      });
+      const { em, findAndCount } = buildMockEm({
+        groupResults: [section],
+        roleAssignmentFindResults: [roleAssignment],
+        membershipFindAndCountResult: [[membership], 1],
+      });
+      const service = buildService(em);
+
+      const result = await service.findEligibleMembers('section-1', {
+        limit: 50,
+        offset: 0,
+      });
+
+      expect(result).toEqual({ items: [member], total: 1 });
+      expect(findAndCount).toHaveBeenCalledTimes(1);
     });
   });
 

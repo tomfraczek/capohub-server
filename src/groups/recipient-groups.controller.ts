@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -16,6 +17,11 @@ import {
   CreateRecipientGroupDto,
   createRecipientGroupSchema,
 } from './dto/create-recipient-group.schema';
+import { RecipientGroupEligibleMembersResponseDto } from './dto/recipient-group-eligible-member.dto';
+import {
+  RecipientGroupEligibleMembersQueryDto,
+  recipientGroupEligibleMembersQuerySchema,
+} from './dto/recipient-group-eligible-members-query.schema';
 import { RecipientGroupResponseDto } from './dto/recipient-group-response.dto';
 import {
   UpdateRecipientGroupDto,
@@ -70,6 +76,25 @@ export class RecipientGroupsController {
     @Param('sectionId') sectionId: string,
   ): Promise<RecipientGroupResponseDto[]> {
     return this.recipientGroupsService.list(groupId ?? sectionId);
+  }
+
+  // Must be declared before the ':recipientGroupId' route below - otherwise
+  // "eligible-members" would be matched as a recipientGroupId (Nest/Express
+  // resolve routes in registration order, not by specificity - same
+  // precedent as AnnouncementsController's 'archive' route).
+  @Get('eligible-members')
+  @RequireGroupPermission(GroupPermission.RECIPIENT_GROUP_VIEW)
+  @AllowGroupStatuses(...ANY_STATUS)
+  listEligibleMembers(
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
+    @Query(new ZodValidationPipe(recipientGroupEligibleMembersQuerySchema))
+    query: RecipientGroupEligibleMembersQueryDto,
+  ): Promise<RecipientGroupEligibleMembersResponseDto> {
+    return this.recipientGroupsService.listEligibleMembers(
+      groupId ?? sectionId,
+      query,
+    );
   }
 
   @Get(':recipientGroupId')

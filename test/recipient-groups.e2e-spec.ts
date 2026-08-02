@@ -14,6 +14,11 @@
  *  7. Two simultaneously *active* Recipient Groups still cannot share a
  *     name, including when reactivating one whose name was reused by a
  *     newer, still-active Recipient Group in the meantime
+ *  8. GET .../recipient-groups/eligible-members returns exactly the set
+ *     create()/update() would accept - for a Group, its members; for a
+ *     Section, only those holding a Role Assignment for that exact
+ *     Section (no inheritance) - searchable, paginated, sorted
+ *     deterministically, with no cross-resource leakage
  */
 
 import {
@@ -31,6 +36,7 @@ import { CLERK_CLIENT } from '../src/auth/clerk/clerk-client.provider';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { RecipientGroupEligibleMembersResponseDto } from '../src/groups/dto/recipient-group-eligible-member.dto';
 import { RecipientGroupResponseDto } from '../src/groups/dto/recipient-group-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
@@ -270,6 +276,78 @@ describe('Recipient Groups (e2e)', () => {
     await addMember(OWNER_TOKEN, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
     await addMember(OWNER_TOKEN, org.id, MEMBER_TOKEN, GroupRole.MEMBER);
     return org;
+  }
+
+  async function createSection(
+    token: string,
+    parentGroupId: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<GroupResponseDto> {
+    const created = await bodyOf<GroupResponseDto>(
+      request(app.getHttpServer())
+        .post(`/api/v1/groups/${parentGroupId}/sections`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(
+          groupPayload({
+            name: `Recipient Groups Test Section ${Date.now()}-${Math.random()}`,
+            ...overrides,
+          }),
+        )
+        .expect(201),
+    );
+    createdGroupIds.push(created.id);
+    return created;
+  }
+
+  async function findMembershipId(
+    ownerToken: string,
+    rootGroupId: string,
+    userId: string | undefined,
+  ): Promise<string> {
+    const members = await bodyOf<{ id: string; user: { id: string } }[]>(
+      request(app.getHttpServer())
+        .get(`/api/v1/groups/${rootGroupId}/members`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200),
+    );
+    const membership = members.find((m) => m.user.id === userId);
+    if (!membership) {
+      throw new Error(`No membership found for user ${userId}`);
+    }
+    return membership.id;
+  }
+
+  async function grantRole(
+    granterToken: string,
+    groupId: string,
+    membershipId: string,
+    role: GroupRole = GroupRole.MEMBER,
+  ): Promise<void> {
+    await request(app.getHttpServer())
+      .post(`/api/v1/groups/${groupId}/role-assignments`)
+      .set('Authorization', `Bearer ${granterToken}`)
+      .send({ membershipId, role })
+      .expect(201);
+  }
+
+  async function getDisplayName(token: string): Promise<string> {
+    const me = await bodyOf<{ displayName: string }>(
+      request(app.getHttpServer())
+        .get('/api/v1/users/me')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200),
+    );
+    return me.displayName;
+  }
+
+  function getEligibleMembers(
+    token: string,
+    resourcePathPrefix: string,
+    qs = '',
+  ): request.Test {
+    return request(app.getHttpServer())
+      .get(`${resourcePathPrefix}/recipient-groups/eligible-members${qs}`)
+      .set('Authorization', `Bearer ${token}`);
   }
 
   function createRecipientGroup(
@@ -726,5 +804,244 @@ describe('Recipient Groups (e2e)', () => {
     await createAnnouncement(OWNER_TOKEN, org.id, recipientGroup.id).expect(
       409,
     );
+  });
+
+  describe('GET .../recipient-groups/eligible-members', () => {
+    it('returns every eligible member of a root Group, minimally shaped, sorted deterministically, with no sensitive fields', async () => {
+      const org = await createOrgWithMembers();
+      const ownerUserId = localUserIdByToken.get(OWNER_TOKEN);
+      const adminUserId = localUserIdByToken.get(ADMIN_TOKEN);
+      const memberUserId = localUserIdByToken.get(MEMBER_TOKEN);
+
+      const result = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
+        getEligibleMembers(OWNER_TOKEN, `/api/v1/groups/${org.id}`).expect(200),
+      );
+
+      expect(result.total).toBe(3);
+      expect(result.hasMore).toBe(false);
+      expect(result.items.map((i) => i.id).sort()).toEqual(
+        [ownerUserId, adminUserId, memberUserId].sort(),
+      );
+
+      for (const item of result.items) {
+        expect(Object.keys(item).sort()).toEqual([
+          'avatarUrl',
+          'displayName',
+          'id',
+        ]);
+        expect(item).not.toHaveProperty('email');
+      }
+
+      const sorted = [...result.items].sort(
+        (a, b) =>
+          a.displayName.localeCompare(b.displayName) ||
+          a.id.localeCompare(b.id),
+      );
+      expect(result.items.map((i) => i.id)).toEqual(sorted.map((i) => i.id));
+    });
+
+    it('for a Section, returns only members with a Role Assignment for that exact Section - a root-only Group member is excluded', async () => {
+      const org = await createOrgWithMembers();
+      const section = await createSection(OWNER_TOKEN, org.id);
+      const memberMembershipId = await findMembershipId(
+        OWNER_TOKEN,
+        org.id,
+        localUserIdByToken.get(MEMBER_TOKEN),
+      );
+      await grantRole(
+        OWNER_TOKEN,
+        section.id,
+        memberMembershipId,
+        GroupRole.MEMBER,
+      );
+
+      const result = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
+        getEligibleMembers(
+          OWNER_TOKEN,
+          `/api/v1/sections/${section.id}`,
+        ).expect(200),
+      );
+
+      const ids = result.items.map((i) => i.id);
+      // OWNER created the Section, so they hold OWNER there automatically;
+      // MEMBER was just granted a Role there explicitly.
+      expect(ids.sort()).toEqual(
+        [
+          localUserIdByToken.get(OWNER_TOKEN),
+          localUserIdByToken.get(MEMBER_TOKEN),
+        ].sort(),
+      );
+      // ADMIN is a root-org member but was never granted any Role for this
+      // exact Section - membership alone must not be enough (ADR-004).
+      expect(ids).not.toContain(localUserIdByToken.get(ADMIN_TOKEN));
+      expect(result.total).toBe(2);
+    });
+
+    it('excludes a user outside the community, and returns 404 (not the candidate list) for a caller with no access at all', async () => {
+      const org = await createOrgWithMembers();
+
+      const result = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
+        getEligibleMembers(OWNER_TOKEN, `/api/v1/groups/${org.id}`).expect(200),
+      );
+      expect(result.items.map((i) => i.id)).not.toContain(
+        localUserIdByToken.get(OUTSIDER_TOKEN),
+      );
+
+      await getEligibleMembers(
+        OUTSIDER_TOKEN,
+        `/api/v1/groups/${org.id}`,
+      ).expect(404);
+    });
+
+    it('supports search by displayName', async () => {
+      const org = await createOrgWithMembers();
+      const memberDisplayName = await getDisplayName(MEMBER_TOKEN);
+      const distinctiveFragment = memberDisplayName.slice(-4);
+
+      const result = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
+        getEligibleMembers(
+          OWNER_TOKEN,
+          `/api/v1/groups/${org.id}`,
+          `?search=${encodeURIComponent(distinctiveFragment)}`,
+        ).expect(200),
+      );
+
+      expect(
+        result.items.every((item) =>
+          item.displayName
+            .toLowerCase()
+            .includes(distinctiveFragment.toLowerCase()),
+        ),
+      ).toBe(true);
+      expect(result.items.map((i) => i.id)).toContain(
+        localUserIdByToken.get(MEMBER_TOKEN),
+      );
+    });
+
+    it('paginates with a correct total/hasMore', async () => {
+      const org = await createOrgWithMembers();
+
+      const page1 = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
+        getEligibleMembers(
+          OWNER_TOKEN,
+          `/api/v1/groups/${org.id}`,
+          '?limit=2&offset=0',
+        ).expect(200),
+      );
+      expect(page1.items).toHaveLength(2);
+      expect(page1.total).toBe(3);
+      expect(page1.hasMore).toBe(true);
+
+      const page2 = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
+        getEligibleMembers(
+          OWNER_TOKEN,
+          `/api/v1/groups/${org.id}`,
+          '?limit=2&offset=2',
+        ).expect(200),
+      );
+      expect(page2.items).toHaveLength(1);
+      expect(page2.total).toBe(3);
+      expect(page2.hasMore).toBe(false);
+
+      const ids = [...page1.items, ...page2.items].map((i) => i.id);
+      expect(new Set(ids).size).toBe(3);
+    });
+
+    it('rejects limit > 100 and a negative offset', async () => {
+      const org = await createOrgWithMembers();
+
+      await getEligibleMembers(
+        OWNER_TOKEN,
+        `/api/v1/groups/${org.id}`,
+        '?limit=101',
+      ).expect(400);
+      await getEligibleMembers(
+        OWNER_TOKEN,
+        `/api/v1/groups/${org.id}`,
+        '?offset=-1',
+      ).expect(400);
+    });
+
+    it('prevents cross-resource access - a member of one Group/Section cannot read another Group/Section eligible-members list', async () => {
+      const orgA = await createOrgWithMembers();
+      // orgB deliberately does NOT add ADMIN_TOKEN/MEMBER_TOKEN - they only
+      // belong to orgA.
+      const orgB = await createGroup(OWNER_TOKEN, {
+        name: `Recipient Groups Test Org B ${Date.now()}`,
+      });
+
+      await getEligibleMembers(
+        MEMBER_TOKEN,
+        `/api/v1/groups/${orgB.id}`,
+      ).expect(404);
+
+      const sectionA = await createSection(OWNER_TOKEN, orgA.id);
+      const sectionB = await createSection(OWNER_TOKEN, orgB.id);
+      const memberMembershipIdInA = await findMembershipId(
+        OWNER_TOKEN,
+        orgA.id,
+        localUserIdByToken.get(MEMBER_TOKEN),
+      );
+      await grantRole(
+        OWNER_TOKEN,
+        sectionA.id,
+        memberMembershipIdInA,
+        GroupRole.MEMBER,
+      );
+
+      // MEMBER_TOKEN holds a Role in sectionA but has no access to orgB or
+      // sectionB at all.
+      await getEligibleMembers(
+        MEMBER_TOKEN,
+        `/api/v1/sections/${sectionB.id}`,
+      ).expect(404);
+    });
+
+    it('contract parity: every returned candidate is accepted by create/update, and a user missing from the list is still rejected', async () => {
+      const org = await createOrgWithMembers();
+
+      const eligible = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
+        getEligibleMembers(OWNER_TOKEN, `/api/v1/groups/${org.id}`).expect(200),
+      );
+      const eligibleIds = eligible.items.map((i) => i.id);
+      expect(eligibleIds.length).toBeGreaterThan(0);
+
+      const created = await bodyOf<RecipientGroupResponseDto>(
+        createRecipientGroup(OWNER_TOKEN, org.id, {
+          name: 'Parity Check',
+          memberUserIds: eligibleIds,
+        }).expect(201),
+      );
+      expect(created.members.map((m) => m.id).sort()).toEqual(
+        [...eligibleIds].sort(),
+      );
+
+      const updated = await bodyOf<RecipientGroupResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/groups/${org.id}/recipient-groups/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ name: 'Parity Check', memberUserIds: eligibleIds })
+          .expect(200),
+      );
+      expect(updated.members.map((m) => m.id).sort()).toEqual(
+        [...eligibleIds].sort(),
+      );
+
+      // A user absent from the eligible-members list is still rejected by
+      // both create and update - the two paths cannot disagree.
+      const outsiderId = localUserIdByToken.get(OUTSIDER_TOKEN);
+      expect(eligibleIds).not.toContain(outsiderId);
+
+      await createRecipientGroup(OWNER_TOKEN, org.id, {
+        name: 'Should Fail',
+        memberUserIds: [outsiderId],
+      }).expect(400);
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/groups/${org.id}/recipient-groups/${created.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ name: 'Parity Check', memberUserIds: [outsiderId] })
+        .expect(400);
+    });
   });
 });
