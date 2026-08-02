@@ -4,7 +4,10 @@ import { AcademyResponseDto } from '../dto/academy-response.dto';
 export function toAcademyResponseDto(academy: Academy): AcademyResponseDto {
   return {
     id: academy.id,
-    groupId: academy.group.id,
+    // `group`/`section` are the two nullable halves of Academy's
+    // Group-or-Section reference (see academy.entity.ts) - exactly one is
+    // ever set.
+    groupId: (academy.group ?? academy.section)!.id,
     name: academy.name,
     address: academy.address,
     latitude: academy.latitude,

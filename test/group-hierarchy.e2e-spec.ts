@@ -23,6 +23,7 @@ import { Academy } from '../src/groups/entities/academy.entity';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
+import { Section } from '../src/groups/entities/section.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { Cohort } from '../src/groups/entities/cohort.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
@@ -160,16 +161,32 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
 
   afterAll(async () => {
     const cleanup = app.get(EntityManager).fork();
-    await cleanup.nativeDelete(Academy, { group: { $in: createdGroupIds } });
-    await cleanup.nativeDelete(Cohort, { group: { $in: createdGroupIds } });
+    await cleanup.nativeDelete(Academy, {
+      $or: [
+        { group: { $in: createdGroupIds } },
+        { section: { $in: createdGroupIds } },
+      ],
+    });
+    await cleanup.nativeDelete(Cohort, {
+      $or: [
+        { group: { $in: createdGroupIds } },
+        { section: { $in: createdGroupIds } },
+      ],
+    });
     await cleanup.nativeDelete(RoleAssignment, {
-      group: { $in: createdGroupIds },
+      $or: [
+        { group: { $in: createdGroupIds } },
+        { section: { $in: createdGroupIds } },
+      ],
     });
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
     });
-    // Children must be nulled/removed before their parents to satisfy the
-    // parent_group_id foreign key (no cascade - see group.entity.ts).
+    // Sections must be removed before their parent Groups to satisfy the
+    // parent_group_id foreign key (no cascade - see section.entity.ts).
+    await cleanup.nativeDelete(Section, { id: { $in: createdGroupIds } });
+    // Children Groups must be nulled/removed before their parents to
+    // satisfy the parent_group_id self-FK (no cascade - see group.entity.ts).
     await cleanup.nativeUpdate(
       Group,
       { id: { $in: createdGroupIds } },
@@ -204,10 +221,6 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
       memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
-      country: 'PL',
-      city: 'Poznań',
-      region: 'Greater Poland',
-      geonameId: 3088171,
       ...overrides,
     };
   }
@@ -255,20 +268,18 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
     };
   }
 
-  // A Section can be created under a Group (`parentKind: 'groups'`) or
-  // under another Section (`parentKind: 'sections'`) - the two routes are
-  // dual-mounted onto the same SectionsController (see
-  // sections.controller.ts). `parentId` is always the URL param, never a
-  // body field.
+  // A Section can only ever be created under a Group (never under another
+  // Section - a Section can never have children, see the
+  // organizational-domain rebuild, stage 1). `parentId` (the URL param) is
+  // always a Group id, never a body field.
   async function createSection(
     token: string,
-    parentKind: 'groups' | 'sections',
-    parentId: string,
+    parentGroupId: string,
     overrides: Record<string, unknown> = {},
   ): Promise<SectionResponseDto> {
     const created = await bodyOf<SectionResponseDto>(
       request(app.getHttpServer())
-        .post(`/api/v1/${parentKind}/${parentId}/sections`)
+        .post(`/api/v1/groups/${parentGroupId}/sections`)
         .set('Authorization', `Bearer ${token}`)
         .send(sectionPayload(overrides))
         .expect(201),
@@ -294,52 +305,60 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
     it('creates a Group as a root-level entity', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'World HQ' });
 
-      // GroupResponseDto has no parent field at all any more - a Group is
-      // always root-level by construction (see create-group.schema.ts).
-      expect(root).not.toHaveProperty('parentGroupId');
+      // A Group may itself have a parent Group (organizational-domain
+      // rebuild, stage 1) - `parentGroupId` reflects its actual position
+      // in the hierarchy, null here since nothing attached it to a parent.
+      expect(root.parentGroupId).toBeNull();
       expect(root).not.toHaveProperty('parentId');
     });
 
-    it('creates a Section under a Group with parentId set', async () => {
+    it('creates a Section under a Group with parentGroupId set', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Capoeira Brasil' });
 
-      const section = await createSection(OWNER_TOKEN, 'groups', root.id, {
+      const section = await createSection(OWNER_TOKEN, root.id, {
         name: 'Capoeira Brasil Poland',
       });
 
-      expect(section.parentId).toBe(root.id);
+      expect(section.parentGroupId).toBe(root.id);
     });
 
-    it('supports multi-level hierarchy via nested Sections and lists direct children only', async () => {
+    // Groups may nest arbitrarily deep (Group -> Group -> ...) and each
+    // Group may hold any number of direct Sections - but a Section can
+    // never have children of its own (organizational-domain rebuild, stage
+    // 1). This supersedes the old "Sections nest under Sections"
+    // behavior.
+    it('supports multi-level Group hierarchy and lists direct child Groups/Sections separately', async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Brasil' });
-      const poland = await createSection(OWNER_TOKEN, 'groups', root.id, {
+      const poland = await createSection(OWNER_TOKEN, root.id, {
         name: 'Poland',
       });
-      const poznan = await createSection(OWNER_TOKEN, 'sections', poland.id, {
-        name: 'Poznan',
-      });
 
-      expect(poland.parentId).toBe(root.id);
-      expect(poznan.parentId).toBe(poland.id);
+      expect(poland.parentGroupId).toBe(root.id);
 
-      const rootChildren = await bodyOf<SectionResponseDto[]>(
+      const rootSections = await bodyOf<SectionResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${root.id}/sections`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(200),
       );
-      expect(rootChildren.map((section) => section.id)).toEqual([poland.id]);
-      expect(rootChildren.map((section) => section.id)).not.toContain(
-        poznan.id,
-      );
+      expect(rootSections.map((section) => section.id)).toEqual([poland.id]);
+    });
 
-      const polandChildren = await bodyOf<SectionResponseDto[]>(
-        request(app.getHttpServer())
-          .get(`/api/v1/sections/${poland.id}/sections`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .expect(200),
-      );
-      expect(polandChildren.map((section) => section.id)).toEqual([poznan.id]);
+    it('rejects creating a Section under another Section - a Section can never have children', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'No Nested Sections Root',
+      });
+      const section = await createSection(OWNER_TOKEN, root.id, {
+        name: 'Leaf Section',
+      });
+
+      // The old dual-mounted 'sections/:sectionId/sections' route no
+      // longer exists at all - this path simply doesn't match any route.
+      await request(app.getHttpServer())
+        .post(`/api/v1/sections/${section.id}/sections`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(sectionPayload({ name: 'Would-be grandchild' }))
+        .expect(404);
     });
 
     it('rejects creating a Section under a parent the caller cannot edit (non-member)', async () => {
@@ -458,7 +477,7 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Country City Root 5',
       });
-      const section = await createSection(OWNER_TOKEN, 'groups', root.id, {
+      const section = await createSection(OWNER_TOKEN, root.id, {
         name: 'Editable Section',
       });
 
@@ -517,7 +536,7 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
         name: 'Ambiguous Section Root 2',
       });
 
-      const section = await createSection(OWNER_TOKEN, 'groups', root.id, {
+      const section = await createSection(OWNER_TOKEN, root.id, {
         name: 'Disambiguated Section',
         city: 'Piaski',
         region: 'Lublin',
@@ -540,9 +559,13 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
   });
 
   describe('hierarchy: immutability', () => {
-    it("has no move endpoint - a Section's parentId is fixed at creation", async () => {
+    // GroupHierarchyService.attachSection/detachSection exist internally
+    // (see group-hierarchy.service.ts) but are deliberately not exposed as
+    // public endpoints yet at this stage - so there is still no HTTP way
+    // to move a Section.
+    it("has no move endpoint - a Section's parentGroupId cannot be changed via the API yet", async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Immutable Root' });
-      const section = await createSection(OWNER_TOKEN, 'groups', root.id, {
+      const section = await createSection(OWNER_TOKEN, root.id, {
         name: 'Immutable Section',
       });
       const otherRoot = await createGroup(OWNER_TOKEN, {
@@ -561,7 +584,7 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(200),
       );
-      expect(fetched.parentId).toBe(root.id);
+      expect(fetched.parentGroupId).toBe(root.id);
     });
 
     it('rejects an unknown field on a Group update with 400 instead of silently ignoring it', async () => {
@@ -601,7 +624,7 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Section Update Root',
       });
-      const section = await createSection(OWNER_TOKEN, 'groups', root.id, {
+      const section = await createSection(OWNER_TOKEN, root.id, {
         name: 'Section Update Child',
       });
 
@@ -638,7 +661,7 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Kind Guard Root',
       });
-      const section = await createSection(OWNER_TOKEN, 'groups', root.id, {
+      const section = await createSection(OWNER_TOKEN, root.id, {
         name: 'Kind Guard Section',
       });
 

@@ -1,4 +1,6 @@
+import { Group } from '../../groups/entities/group.entity';
 import { MembershipRequestTarget } from '../../groups/enums/membership-request-target.enum';
+import { announcementCommunity } from '../announcement-community.util';
 import { Announcement } from '../entities/announcement.entity';
 import { AnnouncementResponseDto } from '../dto/announcement-response.dto';
 
@@ -14,11 +16,14 @@ export function toAnnouncementResponseDto(
   readInfo: { isRead: boolean; readAt: Date | null },
   now: Date = new Date(),
 ): AnnouncementResponseDto {
+  const community = announcementCommunity(announcement);
   return {
     id: announcement.id,
-    communityGroupId: announcement.community.id,
+    communityGroupId: community.id,
+    // Type-based, not a `parentGroup === null` check - see the
+    // organizational-domain rebuild, stage 1.
     communityResourceType:
-      announcement.community.parentGroup === null
+      community instanceof Group && community.parentGroup === null
         ? MembershipRequestTarget.GROUP
         : MembershipRequestTarget.SECTION,
     title: announcement.title,

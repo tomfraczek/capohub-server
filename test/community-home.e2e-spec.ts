@@ -39,6 +39,7 @@ import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-r
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { Group } from '../src/groups/entities/group.entity';
+import { Section } from '../src/groups/entities/section.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { MembershipRequest } from '../src/groups/entities/membership-request.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
@@ -153,10 +154,16 @@ describe('Community Home (e2e)', () => {
   afterAll(async () => {
     const cleanup = app.get(EntityManager).fork();
     await cleanup.nativeDelete(MembershipRequest, {
-      targetGroup: { $in: createdGroupIds },
+      $or: [
+        { targetGroup: { $in: createdGroupIds } },
+        { targetSection: { $in: createdGroupIds } },
+      ],
     });
     await cleanup.nativeDelete(RoleAssignment, {
-      group: { $in: createdGroupIds },
+      $or: [
+        { group: { $in: createdGroupIds } },
+        { section: { $in: createdGroupIds } },
+      ],
     });
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
@@ -164,6 +171,16 @@ describe('Community Home (e2e)', () => {
     await cleanup.nativeDelete(AuditLogEntry, {
       community: { $in: createdGroupIds },
     });
+    // Sections must be removed before their parent Groups to satisfy the
+    // parent_group_id foreign key (no cascade - see section.entity.ts).
+    await cleanup.nativeDelete(Section, { id: { $in: createdGroupIds } });
+    // Child Groups must be nulled before their parents to satisfy the
+    // parent_group_id self-FK (no cascade - see group.entity.ts).
+    await cleanup.nativeUpdate(
+      Group,
+      { id: { $in: createdGroupIds } },
+      { parentGroup: null },
+    );
     await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
     await cleanup.nativeDelete(User, {
       clerkUserId: { $in: TEST_CLERK_USER_IDS },
@@ -190,10 +207,6 @@ describe('Community Home (e2e)', () => {
       memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
-      country: 'PL',
-      city: 'Poznań',
-      region: 'Greater Poland',
-      geonameId: 3088171,
       ...overrides,
     };
   }

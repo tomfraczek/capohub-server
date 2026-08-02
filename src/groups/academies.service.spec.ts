@@ -5,6 +5,7 @@ import { CreateAcademyInput } from './dto/create-academy.schema';
 import { Academy } from './entities/academy.entity';
 import { Group } from './entities/group.entity';
 import { AcademyStatus } from './enums/academy-status.enum';
+import { GroupHierarchyService } from './group-hierarchy.service';
 
 function buildCreateInput(
   overrides: Partial<CreateAcademyInput> = {},
@@ -48,26 +49,31 @@ function buildMockEm(routing: MockRouting = {}) {
     .fn()
     .mockResolvedValue(routing.academy === undefined ? null : routing.academy);
   const find = jest.fn().mockResolvedValue(routing.academies ?? []);
-  const getReference = jest.fn((_entity: unknown, id: string) => {
-    const group = new Group();
-    group.id = id;
-    return group;
-  });
 
-  const raw = { findOne, find, persist, flush, getReference };
+  const raw = { findOne, find, persist, flush };
   return { em: raw as unknown as EntityManager, persist, flush };
+}
+
+function buildGroupHierarchyService(): GroupHierarchyService {
+  return {
+    findCommunityById: jest.fn((id: string) => {
+      const group = new Group();
+      group.id = id;
+      return Promise.resolve(group);
+    }),
+  } as unknown as GroupHierarchyService;
 }
 
 describe('AcademiesService', () => {
   describe('create', () => {
     it('creates an academy attached to the given group', async () => {
       const { em, persist } = buildMockEm();
-      const service = new AcademiesService(em);
+      const service = new AcademiesService(em, buildGroupHierarchyService());
 
       const result = await service.create('group-1', buildCreateInput());
 
       const persistedAcademy = persist.mock.calls[0][0];
-      expect(persistedAcademy.group.id).toBe('group-1');
+      expect(persistedAcademy.group?.id).toBe('group-1');
       expect(result.groupId).toBe('group-1');
       expect(result.name).toBe('Academy Center');
       expect(result.status).toBe(AcademyStatus.ACTIVE);
@@ -77,7 +83,7 @@ describe('AcademiesService', () => {
   describe('list', () => {
     it('returns every academy for the group', async () => {
       const { em } = buildMockEm({ academies: [buildAcademy()] });
-      const service = new AcademiesService(em);
+      const service = new AcademiesService(em, buildGroupHierarchyService());
 
       const result = await service.list('group-1');
 
@@ -89,7 +95,7 @@ describe('AcademiesService', () => {
   describe('getById', () => {
     it('throws ACADEMY_NOT_FOUND when the academy does not exist', async () => {
       const { em } = buildMockEm({ academy: null });
-      const service = new AcademiesService(em);
+      const service = new AcademiesService(em, buildGroupHierarchyService());
 
       const promise = service.getById('group-1', 'missing');
 
@@ -104,7 +110,7 @@ describe('AcademiesService', () => {
     it('applies every field from the input', async () => {
       const existing = buildAcademy({ name: 'Old name' });
       const { em } = buildMockEm({ academy: existing });
-      const service = new AcademiesService(em);
+      const service = new AcademiesService(em, buildGroupHierarchyService());
 
       await service.update(
         'group-1',
@@ -118,7 +124,7 @@ describe('AcademiesService', () => {
     it('rejects updating an archived academy', async () => {
       const existing = buildAcademy({ status: AcademyStatus.ARCHIVED });
       const { em } = buildMockEm({ academy: existing });
-      const service = new AcademiesService(em);
+      const service = new AcademiesService(em, buildGroupHierarchyService());
 
       const promise = service.update(
         'group-1',
@@ -137,7 +143,7 @@ describe('AcademiesService', () => {
     it('sets status to ARCHIVED', async () => {
       const existing = buildAcademy({ status: AcademyStatus.ACTIVE });
       const { em } = buildMockEm({ academy: existing });
-      const service = new AcademiesService(em);
+      const service = new AcademiesService(em, buildGroupHierarchyService());
 
       await service.archive('group-1', 'academy-1');
 
@@ -147,7 +153,7 @@ describe('AcademiesService', () => {
     it('rejects archiving an already-archived academy', async () => {
       const existing = buildAcademy({ status: AcademyStatus.ARCHIVED });
       const { em } = buildMockEm({ academy: existing });
-      const service = new AcademiesService(em);
+      const service = new AcademiesService(em, buildGroupHierarchyService());
 
       await expect(
         service.archive('group-1', 'academy-1'),

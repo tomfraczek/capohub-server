@@ -9,9 +9,13 @@ import { GroupSummaryResponseDto } from '../dto/group-summary-response.dto';
 import { MembershipCohortRefDto } from '../dto/membership-cohort-ref.dto';
 import { RoleAssignmentResponseDto } from '../dto/role-assignment-response.dto';
 
-export function toGroupResponseDto(group: Group): GroupResponseDto {
+export function toGroupResponseDto(
+  group: Group,
+  counts: { childGroupsCount: number; directSectionsCount: number },
+): GroupResponseDto {
   return {
     id: group.id,
+    parentGroupId: group.parentGroup?.id ?? null,
     name: group.name,
     description: group.description,
     logoUrl: group.logoUrl,
@@ -29,10 +33,8 @@ export function toGroupResponseDto(group: Group): GroupResponseDto {
     status: group.status,
     timezone: group.timezone,
     currencyCode: group.currencyCode,
-    country: group.country,
-    city: group.city,
-    region: group.region,
-    geonameId: group.geonameId,
+    childGroupsCount: counts.childGroupsCount,
+    directSectionsCount: counts.directSectionsCount,
     createdAt: group.createdAt.toISOString(),
     updatedAt: group.updatedAt.toISOString(),
   };
@@ -89,7 +91,10 @@ export function toRoleAssignmentResponseDto(
 ): RoleAssignmentResponseDto {
   return {
     id: roleAssignment.id,
-    groupId: roleAssignment.group.id,
+    // `group`/`section` are the two nullable halves of RoleAssignment's
+    // Group-or-Section reference (see role-assignment.entity.ts) - exactly
+    // one is ever set.
+    groupId: (roleAssignment.group ?? roleAssignment.section)!.id,
     membershipId: roleAssignment.membership.id,
     user: {
       id: roleAssignment.membership.user.id,

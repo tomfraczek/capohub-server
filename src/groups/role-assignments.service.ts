@@ -12,6 +12,7 @@ import { RoleAssignmentResponseDto } from './dto/role-assignment-response.dto';
 import { AuditAction } from './enums/audit-action.enum';
 import { AuditTargetType } from './enums/audit-target-type.enum';
 import { Group } from './entities/group.entity';
+import { Section } from './entities/section.entity';
 import { GroupMembership } from './entities/group-membership.entity';
 import { MembershipSuspension } from './entities/membership-suspension.entity';
 import {
@@ -21,15 +22,21 @@ import {
 import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
-import { GroupHierarchyService } from './group-hierarchy.service';
+import {
+  Community,
+  communityFilter,
+  communityIdFilter,
+  GroupHierarchyService,
+} from './group-hierarchy.service';
 import { toRoleAssignmentResponseDto } from './mappers/group.mapper';
 
 export interface ResolvedGroupAuthorization {
-  group: Group;
+  community: Community;
   membership: GroupMembership;
   // Every active Role Assignment the Membership holds for this exact
-  // Group - never a single Role, since a Membership may hold several at
-  // once (e.g. MEMBER + INSTRUCTOR + ADMIN together - see ADR-028).
+  // Group-or-Section - never a single Role, since a Membership may hold
+  // several at once (e.g. MEMBER + INSTRUCTOR + ADMIN together - see
+  // ADR-028).
   roleAssignments: RoleAssignment[];
 }
 
@@ -75,14 +82,17 @@ export class RoleAssignmentsService {
     userId: string,
     em: EntityManager = this.em,
   ): Promise<ResolvedGroupAuthorization | null> {
-    const group = await em.findOne(Group, { id: groupId });
-    if (!group) {
+    const community = await this.groupHierarchyService.findCommunityById(
+      groupId,
+      em,
+    );
+    if (!community) {
       return null;
     }
 
-    const rootGroupId = group.parentGroup
-      ? (await this.groupHierarchyService.getRootGroup(group.id, em)).id
-      : group.id;
+    const rootGroupId = (
+      await this.groupHierarchyService.resolveRootGroup(community, em)
+    ).id;
 
     const membership = await em.findOne(GroupMembership, {
       rootGroup: rootGroupId,
@@ -99,13 +109,13 @@ export class RoleAssignmentsService {
 
     const roleAssignments = await em.find(RoleAssignment, {
       membership: membership.id,
-      group: groupId,
+      ...communityFilter(community),
     });
     if (roleAssignments.length === 0) {
       return null;
     }
 
-    return { group, membership, roleAssignments };
+    return { community, membership, roleAssignments };
   }
 
   /**
@@ -128,11 +138,14 @@ export class RoleAssignmentsService {
     userId: string,
     em: EntityManager = this.em,
   ): Promise<boolean> {
-    const community = await em.findOne(Group, { id: communityGroupId });
+    const community = await this.groupHierarchyService.findCommunityById(
+      communityGroupId,
+      em,
+    );
     if (!community) {
       return false;
     }
-    if (community.parentGroup === null) {
+    if (community instanceof Group && community.parentGroup === null) {
       const membership = await em.findOne(GroupMembership, {
         rootGroup: communityGroupId,
         user: userId,
@@ -174,7 +187,10 @@ export class RoleAssignmentsService {
     communityGroupId: string,
     em: EntityManager,
   ): Promise<FilterQuery<GroupMembership> | null> {
-    const community = await em.findOne(Group, { id: communityGroupId });
+    const community = await this.groupHierarchyService.findCommunityById(
+      communityGroupId,
+      em,
+    );
     if (!community) {
       return null;
     }
@@ -183,17 +199,17 @@ export class RoleAssignmentsService {
       $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
     };
 
-    if (community.parentGroup === null) {
+    if (community instanceof Group && community.parentGroup === null) {
       return { rootGroup: communityGroupId, status: activeOrReadOnly };
     }
 
-    const rootGroup = await this.groupHierarchyService.getRootGroup(
-      community.id,
+    const rootGroup = await this.groupHierarchyService.resolveRootGroup(
+      community,
       em,
     );
     const roleAssignments = await em.find(
       RoleAssignment,
-      { group: communityGroupId },
+      communityFilter(community),
       { fields: ['membership'] },
     );
     const membershipIds = [
@@ -356,17 +372,22 @@ export class RoleAssignmentsService {
   async ensureMemberRole(
     em: EntityManager,
     membership: GroupMembership,
-    group: Group,
+    community: Community,
   ): Promise<void> {
     const existing = await em.findOne(RoleAssignment, {
       membership: membership.id,
-      group: group.id,
+      ...communityFilter(community),
       role: GroupRole.MEMBER,
     });
     if (existing) {
       return;
     }
-    await this.insertRoleAssignment(em, membership, group, GroupRole.MEMBER);
+    await this.insertRoleAssignment(
+      em,
+      membership,
+      community,
+      GroupRole.MEMBER,
+    );
   }
 
   /**
@@ -381,12 +402,16 @@ export class RoleAssignmentsService {
   async insertRoleAssignment(
     em: EntityManager,
     membership: GroupMembership,
-    group: Group,
+    community: Community,
     role: GroupRole,
   ): Promise<RoleAssignment> {
     const assignment = new RoleAssignment();
     assignment.membership = membership;
-    assignment.group = group;
+    if (community instanceof Section) {
+      assignment.section = community;
+    } else {
+      assignment.group = community;
+    }
     assignment.role = role;
     assignment.grantedAt = new Date();
     await em.persist(assignment).flush();
@@ -409,8 +434,11 @@ export class RoleAssignmentsService {
     actor: User,
   ): Promise<RoleAssignmentResponseDto> {
     return this.em.transactional(async (em) => {
-      const group = await em.findOne(Group, { id: groupId });
-      if (!group) {
+      const community = await this.groupHierarchyService.findCommunityById(
+        groupId,
+        em,
+      );
+      if (!community) {
         throw this.groupNotFound();
       }
 
@@ -423,9 +451,9 @@ export class RoleAssignmentsService {
         throw this.membershipNotFound();
       }
 
-      const rootGroupId = group.parentGroup
-        ? (await this.groupHierarchyService.getRootGroup(group.id, em)).id
-        : group.id;
+      const rootGroupId = (
+        await this.groupHierarchyService.resolveRootGroup(community, em)
+      ).id;
       if (membership.rootGroup.id !== rootGroupId) {
         throw new ConflictException({
           code: 'ROLE_ROOT_GROUP_MISMATCH',
@@ -443,7 +471,7 @@ export class RoleAssignmentsService {
 
       const existing = await em.findOne(RoleAssignment, {
         membership: input.membershipId,
-        group: groupId,
+        ...communityFilter(community),
         role: input.role,
       });
       if (existing) {
@@ -454,7 +482,7 @@ export class RoleAssignmentsService {
       }
 
       if (input.role !== GroupRole.MEMBER) {
-        await this.ensureMemberRole(em, membership, group);
+        await this.ensureMemberRole(em, membership, community);
       }
 
       let assignment: RoleAssignment;
@@ -462,7 +490,7 @@ export class RoleAssignmentsService {
         assignment = await this.insertRoleAssignment(
           em,
           membership,
-          group,
+          community,
           input.role,
         );
       } catch (error) {
@@ -500,7 +528,7 @@ export class RoleAssignmentsService {
   ): Promise<RoleAssignmentResponseDto[]> {
     const assignments = await this.em.find(
       RoleAssignment,
-      { group: groupId },
+      communityIdFilter(groupId),
       {
         populate: ['membership', 'membership.user'],
         orderBy: { grantedAt: 'asc' },
@@ -572,7 +600,7 @@ export class RoleAssignmentsService {
 
         const otherRoles = await em.find(RoleAssignment, {
           membership: assignment.membership.id,
-          group: groupId,
+          ...communityIdFilter(groupId),
           role: { $ne: GroupRole.MEMBER },
         });
         if (otherRoles.length > 0) {
@@ -616,7 +644,7 @@ export class RoleAssignmentsService {
   ): Promise<boolean> {
     const assignment = await em.findOne(RoleAssignment, {
       membership: membershipId,
-      group: groupId,
+      ...communityIdFilter(groupId),
       role,
     });
     return assignment !== null;
@@ -643,26 +671,33 @@ export class RoleAssignmentsService {
     em: EntityManager,
     membershipId: string,
     rootGroupId: string,
-  ): Promise<Group[]> {
-    const descendants = await this.groupHierarchyService.getDescendants(
+  ): Promise<Community[]> {
+    const descendantGroups = await this.groupHierarchyService.getDescendants(
       rootGroupId,
       em,
     );
-    const groupIds = [rootGroupId, ...descendants.map((group) => group.id)];
+    const descendantSections =
+      await this.groupHierarchyService.getDescendantSections(rootGroupId, em);
+    const groupIds = [
+      rootGroupId,
+      ...descendantGroups.map((group) => group.id),
+    ];
+    const sectionIds = descendantSections.map((section) => section.id);
 
     const assignments = await em.find(
       RoleAssignment,
       {
         membership: membershipId,
         role: GroupRole.OWNER,
-        group: { $in: groupIds },
+        $or: [{ group: { $in: groupIds } }, { section: { $in: sectionIds } }],
       },
-      { populate: ['group'] },
+      { populate: ['group', 'section'] },
     );
 
     return assignments
-      .map((assignment) => assignment.group)
-      .filter((group) => group.status !== GroupStatus.ARCHIVED);
+      .map((assignment) => assignment.group ?? assignment.section)
+      .filter((community): community is Community => community !== null)
+      .filter((community) => community.status !== GroupStatus.ARCHIVED);
   }
 
   /**
@@ -678,7 +713,7 @@ export class RoleAssignmentsService {
   ): Promise<RoleAssignment | null> {
     return em.findOne(RoleAssignment, {
       membership: membershipId,
-      group: groupId,
+      ...communityIdFilter(groupId),
       role,
     });
   }
@@ -695,7 +730,7 @@ export class RoleAssignmentsService {
   ): Promise<RoleAssignment[]> {
     return em.find(RoleAssignment, {
       membership: membershipId,
-      group: groupId,
+      ...communityIdFilter(groupId),
     });
   }
 
@@ -713,7 +748,7 @@ export class RoleAssignmentsService {
     }
     const assignments = await this.em.find(RoleAssignment, {
       membership: { $in: membershipIds },
-      group: groupId,
+      ...communityIdFilter(groupId),
     });
     const result = new Map<string, GroupRole[]>();
     for (const assignment of assignments) {
@@ -742,7 +777,8 @@ export class RoleAssignmentsService {
     });
     const byMembershipAndGroup = new Map<string, GroupRole[]>();
     for (const assignment of assignments) {
-      const key = `${assignment.membership.id}:${assignment.group.id}`;
+      const communityId = (assignment.group ?? assignment.section)!.id;
+      const key = `${assignment.membership.id}:${communityId}`;
       const roles = byMembershipAndGroup.get(key) ?? [];
       roles.push(assignment.role);
       byMembershipAndGroup.set(key, roles);
@@ -786,7 +822,7 @@ export class RoleAssignmentsService {
     >();
     for (const assignment of assignments) {
       const membershipId = assignment.membership.id;
-      const groupId = assignment.group.id;
+      const groupId = (assignment.group ?? assignment.section)!.id;
       const key = `${membershipId}:${groupId}`;
       const entry = byKey.get(key) ?? { membershipId, groupId, roles: [] };
       entry.roles.push(assignment.role);
@@ -802,7 +838,7 @@ export class RoleAssignmentsService {
   ): Promise<RoleAssignment> {
     const assignment = await em.findOne(
       RoleAssignment,
-      { id: roleAssignmentId, group: groupId },
+      { id: roleAssignmentId, ...communityIdFilter(groupId) },
       { populate: ['membership', 'membership.user', 'membership.rootGroup'] },
     );
     if (!assignment) {

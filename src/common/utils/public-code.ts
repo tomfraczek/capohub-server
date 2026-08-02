@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Event } from '../../events/entities/event.entity';
 import { Group } from '../../groups/entities/group.entity';
+import { Section } from '../../groups/entities/section.entity';
 import { User } from '../../users/entities/user.entity';
 
 // Crockford-inspired Base32 subset: digits 0-9 plus uppercase letters
@@ -27,8 +28,9 @@ export function generatePublicCode(): string {
 
 /**
  * Generates a public code that does not already exist in the `users`,
- * `groups` or `events` tables (and can be extended for future entity
- * types). Retries up to 10 times on the astronomically rare collision.
+ * `groups`, `sections` or `events` tables (and can be extended for future
+ * entity types). Retries up to 10 times on the astronomically rare
+ * collision.
  *
  * Must be called with the EntityManager that is currently active for the
  * caller's request (or transaction fork) - never `this.em` from inside an
@@ -39,12 +41,13 @@ export async function generateUniquePublicCode(
 ): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = generatePublicCode();
-    const [existingUser, existingGroup, existingEvent] = await Promise.all([
-      em.findOne(User, { publicCode: code }),
-      em.findOne(Group, { publicCode: code }),
-      em.findOne(Event, { publicCode: code }),
-    ]);
-    if (!existingUser && !existingGroup && !existingEvent) {
+    // Sequential, not Promise.all - concurrent queries on the same
+    // EntityManager/connection race each other at the driver level.
+    const existingUser = await em.findOne(User, { publicCode: code });
+    const existingGroup = await em.findOne(Group, { publicCode: code });
+    const existingSection = await em.findOne(Section, { publicCode: code });
+    const existingEvent = await em.findOne(Event, { publicCode: code });
+    if (!existingUser && !existingGroup && !existingSection && !existingEvent) {
       return code;
     }
   }

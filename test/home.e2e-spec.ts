@@ -198,30 +198,40 @@ describe('Home (e2e)', () => {
     const cleanup = app.get(EntityManager).fork();
     await cleanup.nativeDelete(Song, { category: category.id });
     await cleanup.nativeDelete(SongCategory, { id: category.id });
-    await cleanup.nativeDelete(EventGuardianAssignment, {
-      event: { community: { $in: createdGroupIds } },
+    const eventInCommunity = {
+      event: {
+        $or: [
+          { communityGroup: { $in: createdGroupIds } },
+          { communitySection: { $in: createdGroupIds } },
+        ],
+      },
+    };
+    await cleanup.nativeDelete(EventGuardianAssignment, eventInCommunity);
+    await cleanup.nativeDelete(EventAttendee, eventInCommunity);
+    await cleanup.nativeDelete(EventInvitation, eventInCommunity);
+    await cleanup.nativeDelete(EventRoleAssignment, eventInCommunity);
+    await cleanup.nativeDelete(EventStatusHistory, eventInCommunity);
+    await cleanup.nativeDelete(Event, {
+      $or: [
+        { communityGroup: { $in: createdGroupIds } },
+        { communitySection: { $in: createdGroupIds } },
+      ],
     });
-    await cleanup.nativeDelete(EventAttendee, {
-      event: { community: { $in: createdGroupIds } },
-    });
-    await cleanup.nativeDelete(EventInvitation, {
-      event: { community: { $in: createdGroupIds } },
-    });
-    await cleanup.nativeDelete(EventRoleAssignment, {
-      event: { community: { $in: createdGroupIds } },
-    });
-    await cleanup.nativeDelete(EventStatusHistory, {
-      event: { community: { $in: createdGroupIds } },
-    });
-    await cleanup.nativeDelete(Event, { community: { $in: createdGroupIds } });
+    const announcementCommunityInIds = {
+      $or: [
+        { communityGroup: { $in: createdGroupIds } },
+        { communitySection: { $in: createdGroupIds } },
+      ],
+    };
     await cleanup.nativeDelete(AnnouncementRead, {
-      announcement: { community: { $in: createdGroupIds } },
+      announcement: announcementCommunityInIds,
     });
-    await cleanup.nativeDelete(Announcement, {
-      community: { $in: createdGroupIds },
-    });
+    await cleanup.nativeDelete(Announcement, announcementCommunityInIds);
     await cleanup.nativeDelete(RoleAssignment, {
-      group: { $in: createdGroupIds },
+      $or: [
+        { group: { $in: createdGroupIds } },
+        { section: { $in: createdGroupIds } },
+      ],
     });
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
@@ -255,10 +265,6 @@ describe('Home (e2e)', () => {
       memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
-      country: 'PL',
-      city: 'Poznań',
-      region: 'Greater Poland',
-      geonameId: 3088171,
       ...overrides,
     };
   }

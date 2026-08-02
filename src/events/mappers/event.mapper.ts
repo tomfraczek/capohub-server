@@ -1,4 +1,5 @@
 import { Event } from '../entities/event.entity';
+import { eventCommunity } from '../event-community.util';
 import { EventCapabilitiesDto } from '../dto/event-capabilities.dto';
 import { EventResponseDto } from '../dto/event-response.dto';
 import { EventRole } from '../enums/event-role.enum';
@@ -31,7 +32,7 @@ export function toEventResponseDto(
 ): EventResponseDto {
   return {
     id: event.id,
-    community: toEventCommunityRefDto(event.community),
+    community: toEventCommunityRefDto(eventCommunity(event)),
     createdByUserId: event.createdBy?.id ?? null,
     type: event.type,
     customTypeLabel: event.customTypeLabel,

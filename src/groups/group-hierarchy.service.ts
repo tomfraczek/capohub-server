@@ -5,57 +5,101 @@ import {
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Group } from './entities/group.entity';
+import { Section } from './entities/section.entity';
 import { GroupStatus } from './enums/group-status.enum';
 
+// Group and Section are two distinct, physically-stored entity types. This
+// union only ever appears where a caller genuinely accepts either kind
+// (e.g. a RoleAssignment or an Announcement's target) - the type itself
+// never changes for a given row: a Section can never become a Group and
+// vice versa. Attach/detach only ever moves a row's *position* in the
+// hierarchy, never its kind.
+export type Community = Group | Section;
+
 /**
- * Owns every Group hierarchy rule (see organization-domain.md#hierarchy and
- * ADR-002): finding a Group's Root Group, walking ancestors/descendants, and
- * validating a parent before it is attached at creation time.
- * `parentGroup` must never be mutated outside this service.
+ * Builds the `{ group: id }` or `{ section: id }` fragment of a
+ * MikroORM `FilterQuery` for whichever kind `community` actually is - the
+ * query-side counterpart to the dual-nullable-FK pattern used by every
+ * entity that references "a Group or a Section" (RoleAssignment, Academy,
+ * Cohort, RecipientGroup, MembershipRequest, Announcement, Event). Shared
+ * here so each of those modules queries "by community" the same way,
+ * rather than re-deriving this branch itself.
+ */
+export function communityFilter(
+  community: Community,
+): { group: string } | { section: string } {
+  return community instanceof Section
+    ? { section: community.id }
+    : { group: community.id };
+}
+
+/**
+ * Same idea as communityFilter, but for querying "by community id" when
+ * only the id is known (not which table it lives in) - matches whichever
+ * of the two nullable FKs is set. IDs are unique across `groups` and
+ * `sections` by construction, so this is never ambiguous.
+ */
+export function communityIdFilter(id: string): {
+  $or: [{ group: string }, { section: string }];
+} {
+  return { $or: [{ group: id }, { section: id }] };
+}
+
+/**
+ * The single owner of every hierarchy rule for Group <-> Group and
+ * Group <-> Section relationships: resolving a Group's root, walking
+ * ancestors/descendants, validating a parent, and performing every
+ * attach/detach mutation. `parentGroup` on both Group and Section must
+ * never be assigned outside this service, so cycle-freedom and every other
+ * hierarchy invariant stay centrally enforced and are never duplicated in a
+ * controller.
  *
- * The one rule that shapes this service: `parentGroup` is fixed at creation
- * and never changes afterward. There is no attach/detach/move operation -
- * once a Group is created, its position in the hierarchy (and therefore its
- * Root Group) is permanent.
+ * Invariants enforced here (see the organizational-domain rebuild, stage
+ * 1):
+ *  - A Group may have at most one parent Group.
+ *  - A Group may have any number of child Groups and any number of
+ *    Sections.
+ *  - A Section may have at most one parent Group; it may never have
+ *    children of any kind.
+ *  - No Group may be its own ancestor, directly or transitively (no
+ *    cycles).
  */
 @Injectable()
 export class GroupHierarchyService {
   constructor(private readonly em: EntityManager) {}
 
+  // ---------------------------------------------------------------------
+  // Group <-> Group hierarchy
+  // ---------------------------------------------------------------------
+
   /**
    * Walks `parentGroup` up to the top. Returns the Group itself if it is
-   * already a Root Group. `visited` guards against corrupt/cyclic data
-   * that could only exist if something bypassed this service.
-   *
-   * Accepts an optional `em` so callers running inside their own
-   * `em.transactional(...)` callback can pass that forked EntityManager
-   * through, instead of this falling back to `this.em` - reaching for a
-   * second EntityManager from inside someone else's transaction risks the
-   * same connection-pool deadlock class described on
-   * GroupHierarchyService.moveGroup's (removed) history.
+   * already a root. `visited` guards against corrupt/cyclic data that could
+   * only exist if something bypassed this service.
    */
   async getRootGroup(
     groupId: string,
     em: EntityManager = this.em,
   ): Promise<Group> {
-    return this.resolveRootGroup(em, groupId);
+    const start = await this.loadGroupOrFail(em, groupId);
+    return this.walkToRoot(em, start);
   }
 
   /**
-   * Ancestors ordered from the Root Group down to the immediate parent
-   * (root-first). Empty array for a Root Group.
+   * Ancestors ordered from the root Group down to the immediate parent
+   * (root-first). Empty array for a root Group.
    */
   async getAncestors(
     groupId: string,
     em: EntityManager = this.em,
   ): Promise<Group[]> {
-    const group = await this.loadOrFail(em, groupId);
+    const group = await this.loadGroupOrFail(em, groupId);
     const ancestors: Group[] = [];
     const visited = new Set<string>([group.id]);
 
     let parentRef = group.parentGroup;
     while (parentRef) {
-      const parent = await this.loadOrFail(em, parentRef.id);
+      const parent = await this.loadGroupOrFail(em, parentRef.id);
       if (visited.has(parent.id)) {
         throw this.cycleDetected();
       }
@@ -68,17 +112,15 @@ export class GroupHierarchyService {
   }
 
   /**
-   * Every descendant of the Group, at any depth, in no particular order.
-   * Breadth-first over `parentGroup` - simple and correct; if this becomes
-   * a hot path, it can be replaced by a recursive CTE without changing the
-   * method's contract (see organization-domain.md#performance: correctness
-   * first, optimize later).
+   * Every descendant Group of `groupId`, at any depth, in no particular
+   * order. Sections are not included - use listDirectSections /
+   * getDescendantSections for those. Breadth-first over `parentGroup`.
    */
   async getDescendants(
     groupId: string,
     em: EntityManager = this.em,
   ): Promise<Group[]> {
-    await this.loadOrFail(em, groupId);
+    await this.loadGroupOrFail(em, groupId);
 
     const descendants: Group[] = [];
     let frontier = [groupId];
@@ -95,27 +137,162 @@ export class GroupHierarchyService {
   }
 
   /**
-   * Loads and validates a candidate parent for a new Group at creation
-   * time. Structural existence/status checks only - authorization (does the
-   * caller have permission to attach something under this parent) is the
-   * caller's responsibility.
+   * Every Section anywhere under `groupId`'s subtree - the Group's own
+   * direct Sections plus every descendant Group's direct Sections. Used
+   * anywhere a caller needs "every Section this Group hierarchy contains",
+   * not just one level down (see listDirectSections).
+   */
+  async getDescendantSections(
+    groupId: string,
+    em: EntityManager = this.em,
+  ): Promise<Section[]> {
+    const descendantGroups = await this.getDescendants(groupId, em);
+    const groupIds = [groupId, ...descendantGroups.map((group) => group.id)];
+    return em.find(Section, { parentGroup: { $in: groupIds } });
+  }
+
+  /** Direct child Groups only (one level down), in no particular order. */
+  async listChildGroups(
+    groupId: string,
+    em: EntityManager = this.em,
+  ): Promise<Group[]> {
+    await this.loadGroupOrFail(em, groupId);
+    return em.find(Group, { parentGroup: groupId });
+  }
+
+  /** Direct Sections only (one level down), in no particular order. */
+  async listDirectSections(
+    groupId: string,
+    em: EntityManager = this.em,
+  ): Promise<Section[]> {
+    await this.loadGroupOrFail(em, groupId);
+    return em.find(Section, { parentGroup: groupId });
+  }
+
+  /**
+   * Loads and validates a candidate parent Group - structural
+   * existence/status checks only. Authorization (does the caller have
+   * permission to attach something under this parent) is the caller's
+   * responsibility.
    */
   async assertParentIsUsable(
     parentGroupId: string,
     em: EntityManager = this.em,
   ): Promise<Group> {
-    return this.resolveUsableParent(em, parentGroupId);
+    return this.resolveUsableParentGroup(em, parentGroupId);
   }
 
-  private async resolveRootGroup(
-    em: EntityManager,
-    groupId: string,
+  /**
+   * Moves `childId` to become a child of `newParentGroupId`. Rejects a
+   * self-parent, a missing/archived parent, and any direct or
+   * multi-level cycle (i.e. `newParentGroupId` may not be `childId` itself
+   * or any descendant of it - attaching there would loop the tree back on
+   * itself).
+   */
+  async attachChildGroup(
+    childId: string,
+    newParentGroupId: string,
+    em: EntityManager = this.em,
   ): Promise<Group> {
-    let current = await this.loadOrFail(em, groupId);
+    if (childId === newParentGroupId) {
+      throw this.selfParent();
+    }
+
+    const child = await this.loadGroupOrFail(em, childId);
+    const newParent = await this.resolveUsableParentGroup(em, newParentGroupId);
+    await this.assertNotAncestorOrSelf(em, childId, newParent);
+
+    child.parentGroup = newParent;
+    await em.flush();
+    return child;
+  }
+
+  /** Detaches `childId` from its current parent, making it a root Group. */
+  async detachChildGroup(
+    childId: string,
+    em: EntityManager = this.em,
+  ): Promise<Group> {
+    const child = await this.loadGroupOrFail(em, childId);
+    child.parentGroup = null;
+    await em.flush();
+    return child;
+  }
+
+  /**
+   * Attaches `sectionId` under `groupId`. A Section can only ever be
+   * attached to a Group (never to another Section), and can never itself
+   * gain children - both are structural, not just validated here: nothing
+   * in this service accepts a Section id as a parent.
+   */
+  async attachSection(
+    sectionId: string,
+    groupId: string,
+    em: EntityManager = this.em,
+  ): Promise<Section> {
+    const section = await this.loadSectionOrFail(em, sectionId);
+    const group = await this.resolveUsableParentGroup(em, groupId);
+    section.parentGroup = group;
+    await em.flush();
+    return section;
+  }
+
+  /** Detaches `sectionId` from its Group, leaving it standalone. */
+  async detachSection(
+    sectionId: string,
+    em: EntityManager = this.em,
+  ): Promise<Section> {
+    const section = await this.loadSectionOrFail(em, sectionId);
+    section.parentGroup = null;
+    await em.flush();
+    return section;
+  }
+
+  // ---------------------------------------------------------------------
+  // Group-or-Section lookups, used by modules that reference "either kind"
+  // (e.g. RoleAssignment, Announcement) - kept here rather than duplicated
+  // in each of those modules.
+  // ---------------------------------------------------------------------
+
+  /** Looks up `id` in `groups` first, then `sections`. */
+  async findCommunityById(
+    id: string,
+    em: EntityManager = this.em,
+  ): Promise<Community | null> {
+    const group = await em.findOne(Group, { id });
+    if (group) {
+      return group;
+    }
+    return em.findOne(Section, { id });
+  }
+
+  /**
+   * Resolves the root Group "above" any Community (Group or Section). For a
+   * Section, that means its parent Group's own root; a standalone Section
+   * (no parent yet) has no root Group and this throws.
+   */
+  async resolveRootGroup(
+    community: Community,
+    em: EntityManager = this.em,
+  ): Promise<Group> {
+    if (community instanceof Section) {
+      if (!community.parentGroup) {
+        throw this.sectionHasNoParent();
+      }
+      return this.getRootGroup(community.parentGroup.id, em);
+    }
+    return this.getRootGroup(community.id, em);
+  }
+
+  // ---------------------------------------------------------------------
+  // Internals
+  // ---------------------------------------------------------------------
+
+  private async walkToRoot(em: EntityManager, start: Group): Promise<Group> {
+    let current = start;
     const visited = new Set<string>([current.id]);
 
     while (current.parentGroup) {
-      const parent = await this.loadOrFail(em, current.parentGroup.id);
+      const parent = await this.loadGroupOrFail(em, current.parentGroup.id);
       if (visited.has(parent.id)) {
         throw this.cycleDetected();
       }
@@ -126,7 +303,35 @@ export class GroupHierarchyService {
     return current;
   }
 
-  private async resolveUsableParent(
+  /**
+   * Rejects attaching `childId` under `candidateParent` when `candidateParent`
+   * is `childId` itself or any of its ancestors are `childId` - i.e. when
+   * `candidateParent` is already a descendant of `childId` (or is `childId`),
+   * which would close a loop the moment the attach completes.
+   */
+  private async assertNotAncestorOrSelf(
+    em: EntityManager,
+    childId: string,
+    candidateParent: Group,
+  ): Promise<void> {
+    let current: Group | null = candidateParent;
+    const visited = new Set<string>();
+
+    while (current) {
+      if (current.id === childId) {
+        throw this.cycleDetected();
+      }
+      if (visited.has(current.id)) {
+        throw this.cycleDetected();
+      }
+      visited.add(current.id);
+      current = current.parentGroup
+        ? await this.loadGroupOrFail(em, current.parentGroup.id)
+        : null;
+    }
+  }
+
+  private async resolveUsableParentGroup(
     em: EntityManager,
     parentGroupId: string,
   ): Promise<Group> {
@@ -148,12 +353,26 @@ export class GroupHierarchyService {
     return parent;
   }
 
-  private async loadOrFail(em: EntityManager, groupId: string): Promise<Group> {
+  private async loadGroupOrFail(
+    em: EntityManager,
+    groupId: string,
+  ): Promise<Group> {
     const group = await em.findOne(Group, { id: groupId });
     if (!group) {
       throw this.groupNotFound();
     }
     return group;
+  }
+
+  private async loadSectionOrFail(
+    em: EntityManager,
+    sectionId: string,
+  ): Promise<Section> {
+    const section = await em.findOne(Section, { id: sectionId });
+    if (!section) {
+      throw this.sectionNotFound();
+    }
+    return section;
   }
 
   private groupNotFound(): NotFoundException {
@@ -163,10 +382,31 @@ export class GroupHierarchyService {
     });
   }
 
+  private sectionNotFound(): NotFoundException {
+    return new NotFoundException({
+      code: 'SECTION_NOT_FOUND',
+      message: 'Section not found',
+    });
+  }
+
+  private selfParent(): ConflictException {
+    return new ConflictException({
+      code: 'GROUP_SELF_PARENT',
+      message: 'A group cannot be its own parent',
+    });
+  }
+
   private cycleDetected(): ConflictException {
     return new ConflictException({
       code: 'GROUP_HIERARCHY_CYCLE',
       message: 'A cycle was detected in the group hierarchy',
+    });
+  }
+
+  private sectionHasNoParent(): ConflictException {
+    return new ConflictException({
+      code: 'SECTION_HAS_NO_PARENT',
+      message: 'This section has no parent group',
     });
   }
 }

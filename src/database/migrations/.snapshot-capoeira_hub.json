@@ -60,7 +60,7 @@
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "unique": false,
           "length": null,
           "precision": null,
@@ -232,6 +232,22 @@
             "ARCHIVED"
           ],
           "mappedType": "enum"
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "academies",
@@ -259,6 +275,16 @@
         },
         {
           "columnNames": [
+            "section_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "academies_section_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
             "status"
           ],
           "composite": false,
@@ -268,7 +294,14 @@
           "primary": false
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "academies_group_or_section_check",
+          "columnName": "group_id",
+          "definition": "CHECK (((((group_id IS NOT NULL))::integer + ((section_id IS NOT NULL))::integer) = 1))",
+          "expression": "((group_id IS NOT NULL) + (section_id IS NOT NULL)) = 1"
+        }
+      ],
       "foreignKeys": {
         "academies_group_id_foreign": {
           "columnNames": [
@@ -277,6 +310,19 @@
           "constraintName": "academies_group_id_foreign",
           "localTableName": "public.academies",
           "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "academies_section_id_foreign": {
+          "columnNames": [
+            "section_id"
+          ],
+          "constraintName": "academies_section_id_foreign",
+          "localTableName": "public.academies",
+          "referencedTableName": "public.sections",
           "referencedColumnNames": [
             "id"
           ],
@@ -673,13 +719,13 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
-        "community_id": {
-          "name": "community_id",
+        "community_group_id": {
+          "name": "community_group_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "unique": false,
           "length": null,
           "precision": null,
@@ -836,6 +882,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "community_section_id": {
+          "name": "community_section_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "announcements",
@@ -843,11 +905,21 @@
       "indexes": [
         {
           "columnNames": [
-            "community_id"
+            "community_group_id"
           ],
           "composite": false,
           "constraint": false,
-          "keyName": "announcements_community_id_index",
+          "keyName": "announcements_community_group_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "community_section_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "announcements_community_section_id_index",
           "unique": false,
           "primary": false
         },
@@ -883,7 +955,14 @@
           "primary": false
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "announcements_community_group_or_section_check",
+          "columnName": "community_group_id",
+          "definition": "CHECK (((((community_group_id IS NOT NULL))::integer + ((community_section_id IS NOT NULL))::integer) = 1))",
+          "expression": "((community_group_id IS NOT NULL) + (community_section_id IS NOT NULL)) = 1"
+        }
+      ],
       "foreignKeys": {
         "announcements_author_id_foreign": {
           "columnNames": [
@@ -898,13 +977,26 @@
           "updateRule": "cascade",
           "deleteRule": "set null"
         },
-        "announcements_community_id_foreign": {
+        "announcements_community_group_id_foreign": {
           "columnNames": [
-            "community_id"
+            "community_group_id"
           ],
-          "constraintName": "announcements_community_id_foreign",
+          "constraintName": "announcements_community_group_id_foreign",
           "localTableName": "public.announcements",
           "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "announcements_community_section_id_foreign": {
+          "columnNames": [
+            "community_section_id"
+          ],
+          "constraintName": "announcements_community_section_id_foreign",
+          "localTableName": "public.announcements",
+          "referencedTableName": "public.sections",
           "referencedColumnNames": [
             "id"
           ],
@@ -1244,7 +1336,7 @@
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "unique": false,
           "length": null,
           "precision": null,
@@ -1304,6 +1396,22 @@
             "ARCHIVED"
           ],
           "mappedType": "enum"
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "cohorts",
@@ -1331,6 +1439,16 @@
         },
         {
           "columnNames": [
+            "section_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "cohorts_section_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
             "status"
           ],
           "composite": false,
@@ -1340,7 +1458,14 @@
           "primary": false
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "cohorts_group_or_section_check",
+          "columnName": "group_id",
+          "definition": "CHECK (((((group_id IS NOT NULL))::integer + ((section_id IS NOT NULL))::integer) = 1))",
+          "expression": "((group_id IS NOT NULL) + (section_id IS NOT NULL)) = 1"
+        }
+      ],
       "foreignKeys": {
         "cohorts_group_id_foreign": {
           "columnNames": [
@@ -1349,6 +1474,19 @@
           "constraintName": "cohorts_group_id_foreign",
           "localTableName": "public.cohorts",
           "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "cohorts_section_id_foreign": {
+          "columnNames": [
+            "section_id"
+          ],
+          "constraintName": "cohorts_section_id_foreign",
+          "localTableName": "public.cohorts",
+          "referencedTableName": "public.sections",
           "referencedColumnNames": [
             "id"
           ],
@@ -3102,13 +3240,13 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
-        "community_id": {
-          "name": "community_id",
+        "community_group_id": {
+          "name": "community_group_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "unique": false,
           "length": null,
           "precision": null,
@@ -3412,6 +3550,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "string"
+        },
+        "community_section_id": {
+          "name": "community_section_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "events",
@@ -3419,22 +3573,43 @@
       "indexes": [
         {
           "columnNames": [
-            "community_id"
+            "community_group_id"
           ],
           "composite": false,
           "constraint": false,
-          "keyName": "events_community_id_index",
+          "keyName": "events_community_group_id_index",
           "unique": false,
           "primary": false
         },
         {
           "columnNames": [
-            "community_id",
+            "community_group_id",
             "status"
           ],
           "composite": true,
           "constraint": false,
-          "keyName": "events_community_id_status_index",
+          "keyName": "events_community_group_id_status_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "community_section_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "events_community_section_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "community_section_id",
+            "status"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "events_community_section_id_status_index",
           "unique": false,
           "primary": false
         },
@@ -3509,15 +3684,35 @@
           "primary": false
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "events_community_group_or_section_check",
+          "columnName": "community_group_id",
+          "definition": "CHECK (((((community_group_id IS NOT NULL))::integer + ((community_section_id IS NOT NULL))::integer) = 1))",
+          "expression": "((community_group_id IS NOT NULL) + (community_section_id IS NOT NULL)) = 1"
+        }
+      ],
       "foreignKeys": {
-        "events_community_id_foreign": {
+        "events_community_group_id_foreign": {
           "columnNames": [
-            "community_id"
+            "community_group_id"
           ],
-          "constraintName": "events_community_id_foreign",
+          "constraintName": "events_community_group_id_foreign",
           "localTableName": "public.events",
           "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "events_community_section_id_foreign": {
+          "columnNames": [
+            "community_section_id"
+          ],
+          "constraintName": "events_community_section_id_foreign",
+          "localTableName": "public.events",
+          "referencedTableName": "public.sections",
           "referencedColumnNames": [
             "id"
           ],
@@ -4556,70 +4751,6 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "boolean"
-        },
-        "country": {
-          "name": "country",
-          "type": "varchar(2)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 2,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "city": {
-          "name": "city",
-          "type": "varchar(100)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 100,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "region": {
-          "name": "region",
-          "type": "varchar(100)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 100,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "geoname_id": {
-          "name": "geoname_id",
-          "type": "int4",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": 32,
-          "scale": 0,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "integer"
         }
       },
       "name": "groups",
@@ -4666,14 +4797,7 @@
           "primary": false
         }
       ],
-      "checks": [
-        {
-          "name": "groups_country_check",
-          "columnName": "country",
-          "definition": "CHECK (((country IS NULL) OR ((country)::text ~ '^[A-Z]{2}$'::text)))",
-          "expression": "country IS NULL) OR ((country ~ '^[A-Z]{2}$'::text)"
-        }
-      ],
+      "checks": [],
       "foreignKeys": {
         "groups_parent_group_id_foreign": {
           "columnNames": [
@@ -5620,8 +5744,8 @@
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
-          "unique": true,
+          "nullable": true,
+          "unique": false,
           "length": null,
           "precision": null,
           "scale": null,
@@ -5730,6 +5854,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "target_section_id": {
+          "name": "target_section_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "membership_requests",
@@ -5767,7 +5907,7 @@
         },
         {
           "columnNames": [
-            "target_group_id",
+            "COALESCE(target_group_id, target_section_id)",
             "invited_email"
           ],
           "composite": true,
@@ -5775,11 +5915,11 @@
           "keyName": "membership_requests_pending_email_invitation_unique",
           "unique": true,
           "primary": false,
-          "expression": "CREATE UNIQUE INDEX membership_requests_pending_email_invitation_unique ON public.membership_requests USING btree (target_group_id, invited_email) WHERE ((status = 'PENDING'::text) AND (type = 'INVITATION'::text) AND (invited_email IS NOT NULL))"
+          "expression": "CREATE UNIQUE INDEX membership_requests_pending_email_invitation_unique ON public.membership_requests USING btree (COALESCE(target_group_id, target_section_id), invited_email) WHERE ((status = 'PENDING'::text) AND (type = 'INVITATION'::text) AND (invited_email IS NOT NULL))"
         },
         {
           "columnNames": [
-            "target_group_id",
+            "COALESCE(target_group_id, target_section_id)",
             "initiated_by_id"
           ],
           "composite": true,
@@ -5787,11 +5927,11 @@
           "keyName": "membership_requests_pending_join_request_unique",
           "unique": true,
           "primary": false,
-          "expression": "CREATE UNIQUE INDEX membership_requests_pending_join_request_unique ON public.membership_requests USING btree (target_group_id, initiated_by_id) WHERE ((status = 'PENDING'::text) AND (type = 'JOIN_REQUEST'::text))"
+          "expression": "CREATE UNIQUE INDEX membership_requests_pending_join_request_unique ON public.membership_requests USING btree (COALESCE(target_group_id, target_section_id), initiated_by_id) WHERE ((status = 'PENDING'::text) AND (type = 'JOIN_REQUEST'::text))"
         },
         {
           "columnNames": [
-            "target_group_id",
+            "COALESCE(target_group_id, target_section_id)",
             "invited_user_id"
           ],
           "composite": true,
@@ -5799,7 +5939,7 @@
           "keyName": "membership_requests_pending_user_invitation_unique",
           "unique": true,
           "primary": false,
-          "expression": "CREATE UNIQUE INDEX membership_requests_pending_user_invitation_unique ON public.membership_requests USING btree (target_group_id, invited_user_id) WHERE ((status = 'PENDING'::text) AND (type = 'INVITATION'::text) AND (invited_user_id IS NOT NULL))"
+          "expression": "CREATE UNIQUE INDEX membership_requests_pending_user_invitation_unique ON public.membership_requests USING btree (COALESCE(target_group_id, target_section_id), invited_user_id) WHERE ((status = 'PENDING'::text) AND (type = 'INVITATION'::text) AND (invited_user_id IS NOT NULL))"
         },
         {
           "columnNames": [
@@ -5820,9 +5960,26 @@
           "keyName": "membership_requests_target_group_id_index",
           "unique": false,
           "primary": false
+        },
+        {
+          "columnNames": [
+            "target_section_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "membership_requests_target_section_id_index",
+          "unique": false,
+          "primary": false
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "membership_requests_target_group_or_section_check",
+          "columnName": "target_group_id",
+          "definition": "CHECK (((((target_group_id IS NOT NULL))::integer + ((target_section_id IS NOT NULL))::integer) = 1))",
+          "expression": "((target_group_id IS NOT NULL) + (target_section_id IS NOT NULL)) = 1"
+        }
+      ],
       "foreignKeys": {
         "membership_requests_initiated_by_id_foreign": {
           "columnNames": [
@@ -5870,6 +6027,19 @@
           "constraintName": "membership_requests_target_group_id_foreign",
           "localTableName": "public.membership_requests",
           "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "membership_requests_target_section_id_foreign": {
+          "columnNames": [
+            "target_section_id"
+          ],
+          "constraintName": "membership_requests_target_section_id_foreign",
+          "localTableName": "public.membership_requests",
+          "referencedTableName": "public.sections",
           "referencedColumnNames": [
             "id"
           ],
@@ -6657,8 +6827,8 @@
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
-          "unique": true,
+          "nullable": true,
+          "unique": false,
           "length": null,
           "precision": null,
           "scale": null,
@@ -6714,11 +6884,39 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "recipient_groups",
       "schema": "public",
       "indexes": [
+        {
+          "columnNames": [
+            "COALESCE(group_id, section_id)",
+            "lower(name::text)"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "recipient_groups_community_name_active_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX recipient_groups_community_name_active_unique ON public.recipient_groups USING btree (COALESCE(group_id, section_id), lower((name)::text)) WHERE (is_active = true)"
+        },
         {
           "columnNames": [
             "group_id"
@@ -6731,18 +6929,6 @@
         },
         {
           "columnNames": [
-            "group_id",
-            "lower(name::text)"
-          ],
-          "composite": true,
-          "constraint": false,
-          "keyName": "recipient_groups_group_id_name_active_unique",
-          "unique": true,
-          "primary": false,
-          "expression": "CREATE UNIQUE INDEX recipient_groups_group_id_name_active_unique ON public.recipient_groups USING btree (group_id, lower((name)::text)) WHERE (is_active = true)"
-        },
-        {
-          "columnNames": [
             "id"
           ],
           "composite": false,
@@ -6750,9 +6936,26 @@
           "keyName": "recipient_groups_pkey",
           "unique": true,
           "primary": true
+        },
+        {
+          "columnNames": [
+            "section_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "recipient_groups_section_id_index",
+          "unique": false,
+          "primary": false
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "recipient_groups_group_or_section_check",
+          "columnName": "group_id",
+          "definition": "CHECK (((((group_id IS NOT NULL))::integer + ((section_id IS NOT NULL))::integer) = 1))",
+          "expression": "((group_id IS NOT NULL) + (section_id IS NOT NULL)) = 1"
+        }
+      ],
       "foreignKeys": {
         "recipient_groups_created_by_id_foreign": {
           "columnNames": [
@@ -6774,6 +6977,19 @@
           "constraintName": "recipient_groups_group_id_foreign",
           "localTableName": "public.recipient_groups",
           "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "recipient_groups_section_id_foreign": {
+          "columnNames": [
+            "section_id"
+          ],
+          "constraintName": "recipient_groups_section_id_foreign",
+          "localTableName": "public.recipient_groups",
+          "referencedTableName": "public.sections",
           "referencedColumnNames": [
             "id"
           ],
@@ -7416,8 +7632,8 @@
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
-          "unique": true,
+          "nullable": true,
+          "unique": false,
           "length": null,
           "precision": null,
           "scale": null,
@@ -7463,6 +7679,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "role_assignments",
@@ -7480,26 +7712,27 @@
         },
         {
           "columnNames": [
-            "group_id"
+            "COALESCE(group_id, section_id)"
           ],
           "composite": false,
           "constraint": false,
           "keyName": "role_assignments_group_id_owner_unique",
           "unique": true,
           "primary": false,
-          "expression": "CREATE UNIQUE INDEX role_assignments_group_id_owner_unique ON public.role_assignments USING btree (group_id) WHERE (role = 'OWNER'::text)"
+          "expression": "CREATE UNIQUE INDEX role_assignments_group_id_owner_unique ON public.role_assignments USING btree (COALESCE(group_id, section_id)) WHERE (role = 'OWNER'::text)"
         },
         {
           "columnNames": [
             "membership_id",
-            "group_id",
+            "COALESCE(group_id, section_id)",
             "role"
           ],
           "composite": true,
-          "constraint": true,
+          "constraint": false,
           "keyName": "role_assignments_membership_id_group_id_role_unique",
           "unique": true,
-          "primary": false
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX role_assignments_membership_id_group_id_role_unique ON public.role_assignments USING btree (membership_id, COALESCE(group_id, section_id), role)"
         },
         {
           "columnNames": [
@@ -7520,9 +7753,26 @@
           "keyName": "role_assignments_pkey",
           "unique": true,
           "primary": true
+        },
+        {
+          "columnNames": [
+            "section_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "role_assignments_section_id_index",
+          "unique": false,
+          "primary": false
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "role_assignments_group_or_section_check",
+          "columnName": "group_id",
+          "definition": "CHECK (((((group_id IS NOT NULL))::integer + ((section_id IS NOT NULL))::integer) = 1))",
+          "expression": "((group_id IS NOT NULL) + (section_id IS NOT NULL)) = 1"
+        }
+      ],
       "foreignKeys": {
         "role_assignments_group_id_foreign": {
           "columnNames": [
@@ -7544,6 +7794,497 @@
           "constraintName": "role_assignments_membership_id_foreign",
           "localTableName": "public.role_assignments",
           "referencedTableName": "public.group_memberships",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "role_assignments_section_id_foreign": {
+          "columnNames": [
+            "section_id"
+          ],
+          "constraintName": "role_assignments_section_id_foreign",
+          "localTableName": "public.role_assignments",
+          "referencedTableName": "public.sections",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "parent_group_id": {
+          "name": "parent_group_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(150)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 150,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "logo_url": {
+          "name": "logo_url",
+          "type": "varchar(2048)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 2048,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "cover_image_url": {
+          "name": "cover_image_url",
+          "type": "varchar(2048)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 2048,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "contact_email": {
+          "name": "contact_email",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "contact_phone": {
+          "name": "contact_phone",
+          "type": "varchar(50)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 50,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "website_url": {
+          "name": "website_url",
+          "type": "varchar(2048)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 2048,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "facebook_url": {
+          "name": "facebook_url",
+          "type": "varchar(2048)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 2048,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "instagram_url": {
+          "name": "instagram_url",
+          "type": "varchar(2048)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 2048,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "youtube_url": {
+          "name": "youtube_url",
+          "type": "varchar(2048)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 2048,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "country": {
+          "name": "country",
+          "type": "varchar(2)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 2,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "city": {
+          "name": "city",
+          "type": "varchar(100)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 100,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "region": {
+          "name": "region",
+          "type": "varchar(100)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 100,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "geoname_id": {
+          "name": "geoname_id",
+          "type": "int4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": 32,
+          "scale": 0,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "is_public": {
+          "name": "is_public",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "is_hidden": {
+          "name": "is_hidden",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "member_invites_allowed": {
+          "name": "member_invites_allowed",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "public_code": {
+          "name": "public_code",
+          "type": "varchar(15)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": true,
+          "length": 15,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'ACTIVE'",
+          "comment": null,
+          "enumItems": [
+            "ACTIVE",
+            "READ_ONLY",
+            "ARCHIVED",
+            "DELETED"
+          ],
+          "mappedType": "enum"
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "varchar(100)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 100,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "currency_code": {
+          "name": "currency_code",
+          "type": "varchar(3)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 3,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        }
+      },
+      "name": "sections",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "parent_group_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "sections_parent_group_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "sections_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "public_code"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "sections_public_code_unique",
+          "unique": true,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "status"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "sections_status_index",
+          "unique": false,
+          "primary": false
+        }
+      ],
+      "checks": [
+        {
+          "name": "sections_country_check",
+          "columnName": "country",
+          "definition": "CHECK (((country IS NULL) OR ((country)::text ~ '^[A-Z]{2}$'::text)))",
+          "expression": "country IS NULL) OR ((country ~ '^[A-Z]{2}$'::text)"
+        }
+      ],
+      "foreignKeys": {
+        "sections_parent_group_id_foreign": {
+          "columnNames": [
+            "parent_group_id"
+          ],
+          "constraintName": "sections_parent_group_id_foreign",
+          "localTableName": "public.sections",
+          "referencedTableName": "public.groups",
           "referencedColumnNames": [
             "id"
           ],

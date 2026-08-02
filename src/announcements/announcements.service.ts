@@ -3,9 +3,11 @@ import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
 import { GroupPermission } from '../groups/permissions/group-permission.enum';
 import { GroupPermissionService } from '../groups/permissions/group-permission.service';
 import { Group } from '../groups/entities/group.entity';
+import { GroupHierarchyService } from '../groups/group-hierarchy.service';
 import { RecipientGroupsService } from '../groups/recipient-groups.service';
 import { RoleAssignmentsService } from '../groups/role-assignments.service';
 import { User } from '../users/entities/user.entity';
+import { assignAnnouncementCommunity } from './announcement-community.util';
 import { AnnouncementListQueryInput } from './dto/announcement-list-query.schema';
 import { AnnouncementResponseDto } from './dto/announcement-response.dto';
 import { CreateAnnouncementInput } from './dto/create-announcement.schema';
@@ -25,10 +27,24 @@ export interface AnnouncementListResult {
   hasMore: boolean;
 }
 
+const COMMUNITY_POPULATE = ['communityGroup', 'communitySection'] as const;
+
 // A concrete (spreadable) object type for buildVisibilityFilter's community
 // scope - one exact community, or a set of them for the cross-community
-// Home feed (see listForViewer).
-type CommunityScope = { community: string } | { community: { $in: string[] } };
+// Home feed (see listForViewer). Matches against whichever of
+// communityGroup/communitySection is actually set (see
+// announcement.entity.ts).
+type CommunityScope = {
+  $or: [
+    { communityGroup: string | { $in: string[] } },
+    { communitySection: string | { $in: string[] } },
+  ];
+};
+
+function communityScopeFilter(idOrIds: string | string[]): CommunityScope {
+  const value = Array.isArray(idOrIds) ? { $in: idOrIds } : idOrIds;
+  return { $or: [{ communityGroup: value }, { communitySection: value }] };
+}
 
 // Announcement existence/status of its *Group* is already enforced by
 // GroupPermissionsGuard (via :groupId/:sectionId) before any handler here
@@ -54,6 +70,7 @@ export class AnnouncementsService {
     private readonly recipientGroupsService: RecipientGroupsService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly groupPermissionService: GroupPermissionService,
+    private readonly groupHierarchyService: GroupHierarchyService,
   ) {}
 
   async create(
@@ -62,13 +79,16 @@ export class AnnouncementsService {
     author: User,
   ): Promise<AnnouncementResponseDto> {
     const announcement = await this.em.transactional(async (em) => {
-      const community = await em.findOne(Group, { id: communityGroupId });
+      const community = await this.groupHierarchyService.findCommunityById(
+        communityGroupId,
+        em,
+      );
       if (!community) {
         throw this.communityNotFound();
       }
 
       const created = new Announcement();
-      created.community = community;
+      assignAnnouncementCommunity(created, community);
       created.author = author;
       created.title = input.title;
       created.body = input.body;
@@ -84,8 +104,10 @@ export class AnnouncementsService {
         created.recipientType = AnnouncementRecipientType.RECIPIENT_GROUP;
         created.recipientGroup = recipientGroup;
       } else {
+        // Type-based, not a `parentGroup === null` check - see the
+        // organizational-domain rebuild, stage 1.
         created.recipientType =
-          community.parentGroup === null
+          community instanceof Group && community.parentGroup === null
             ? AnnouncementRecipientType.GROUP
             : AnnouncementRecipientType.SECTION;
       }
@@ -175,7 +197,7 @@ export class AnnouncementsService {
   ): Promise<void> {
     const announcement = await this.em.findOne(Announcement, {
       id: announcementId,
-      community: communityGroupId,
+      ...communityScopeFilter(communityGroupId),
     });
     if (!announcement) {
       throw this.announcementNotFound();
@@ -194,7 +216,7 @@ export class AnnouncementsService {
     const where = await this.buildVisibilityFilter(
       this.em,
       viewer.id,
-      { community: communityGroupId },
+      communityScopeFilter(communityGroupId),
       { expiry: 'active', restrictToRecipientSnapshot: true },
     );
 
@@ -220,7 +242,7 @@ export class AnnouncementsService {
     const where = await this.buildVisibilityFilter(
       this.em,
       viewer.id,
-      { community: communityGroupId },
+      communityScopeFilter(communityGroupId),
       { expiry: 'archived', restrictToRecipientSnapshot: false },
     );
 
@@ -339,7 +361,7 @@ export class AnnouncementsService {
     const where = await this.buildVisibilityFilter(
       this.em,
       viewer.id,
-      { community: { $in: communityIds } },
+      communityScopeFilter(communityIds),
       { expiry: 'active', restrictToRecipientSnapshot: true },
     );
 
@@ -363,7 +385,7 @@ export class AnnouncementsService {
         : where;
 
     const [rows, total] = await this.em.findAndCount(Announcement, finalWhere, {
-      populate: ['community', 'author', 'recipientGroup'],
+      populate: [...COMMUNITY_POPULATE, 'author', 'recipientGroup'],
       // `id` is a deterministic tie-breaker for rows sharing the same
       // isPinned/createdAt (e.g. bulk-created in the same transaction) -
       // without it, LIMIT/OFFSET pagination across two requests could
@@ -417,7 +439,7 @@ export class AnnouncementsService {
       Announcement,
       finalWhere,
       {
-        populate: ['community', 'author', 'recipientGroup'],
+        populate: [...COMMUNITY_POPULATE, 'author', 'recipientGroup'],
         orderBy: { isPinned: 'desc', createdAt: 'desc' },
         limit: query.limit,
         offset: query.offset,
@@ -502,7 +524,11 @@ export class AnnouncementsService {
       });
     }
 
-    return { ...base, $or: recipientOr };
+    // `base` already carries its own `$or` (the community scope, from
+    // `communityFilter`) - spreading a second `$or: recipientOr` in here
+    // would silently clobber it instead of combining the two, so the two
+    // `$or`s are ANDed together explicitly.
+    return { $and: [base, { $or: recipientOr }] };
   }
 
   /**
@@ -580,11 +606,7 @@ export class AnnouncementsService {
   ): Promise<string[]> {
     const rows = await em.find(AnnouncementRead, {
       user: viewerId,
-      announcement: {
-        community: Array.isArray(communityScope)
-          ? { $in: communityScope }
-          : communityScope,
-      },
+      announcement: communityScopeFilter(communityScope),
     });
     return rows.map((row) => row.announcement.id);
   }
@@ -637,8 +659,12 @@ export class AnnouncementsService {
   ): Promise<Announcement> {
     const announcement = await em.findOne(
       Announcement,
-      { id: announcementId, community: communityGroupId, deletedAt: null },
-      { populate: ['community', 'author', 'recipientGroup'] },
+      {
+        id: announcementId,
+        ...communityScopeFilter(communityGroupId),
+        deletedAt: null,
+      },
+      { populate: [...COMMUNITY_POPULATE, 'author', 'recipientGroup'] },
     );
     if (!announcement) {
       throw this.announcementNotFound();

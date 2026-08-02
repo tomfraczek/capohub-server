@@ -16,6 +16,7 @@ import { AuditAction } from './enums/audit-action.enum';
 import { AuditTargetType } from './enums/audit-target-type.enum';
 import { GroupBan } from './entities/group-ban.entity';
 import { Group } from './entities/group.entity';
+import { Section } from './entities/section.entity';
 import { GroupMembership } from './entities/group-membership.entity';
 import {
   MEMBERSHIP_REQUEST_PENDING_EMAIL_IDX,
@@ -31,9 +32,29 @@ import { GroupStatus } from './enums/group-status.enum';
 import { MembershipRequestStatus } from './enums/membership-request-status.enum';
 import { MembershipRequestTarget } from './enums/membership-request-target.enum';
 import { MembershipRequestType } from './enums/membership-request-type.enum';
-import { GroupHierarchyService } from './group-hierarchy.service';
+import {
+  Community,
+  communityFilter,
+  GroupHierarchyService,
+} from './group-hierarchy.service';
 import { loadActiveMembership } from './group-membership.query';
 import { RoleAssignmentsService } from './role-assignments.service';
+
+// The Group-or-Section a MembershipRequest targets, whichever of
+// targetGroup/targetSection is actually set (see membership-request.entity.ts).
+function requestTarget(request: MembershipRequest): Community {
+  return (request.targetGroup ?? request.targetSection)!;
+}
+
+function assignTarget(request: MembershipRequest, community: Community): void {
+  if (community instanceof Section) {
+    request.targetSection = community;
+    request.targetGroup = null;
+  } else {
+    request.targetGroup = community;
+    request.targetSection = null;
+  }
+}
 
 /**
  * Handles the full lifecycle of invitations and join requests for both
@@ -84,16 +105,19 @@ export class MembershipRequestsService {
     requestingUser: User,
   ): Promise<MembershipRequestResponseDto | { joined: true }> {
     return this.em.transactional(async (em) => {
-      const targetGroup = await this.loadActiveGroupOrFail(em, targetGroupId);
+      const targetGroup = await this.loadActiveCommunityOrFail(
+        em,
+        targetGroupId,
+      );
 
       if (targetType === MembershipRequestTarget.GROUP) {
         this.assertIsRootGroup(targetGroup);
       }
 
-      const rootGroup =
-        targetGroup.parentGroup === null
-          ? targetGroup
-          : await this.groupHierarchyService.getRootGroup(targetGroup.id, em);
+      const rootGroup = await this.groupHierarchyService.resolveRootGroup(
+        targetGroup,
+        em,
+      );
       await this.assertNotBanned(em, rootGroup.id, requestingUser.id);
 
       // Check if already a member (GROUP or SECTION level)
@@ -122,7 +146,7 @@ export class MembershipRequestsService {
         const request = new MembershipRequest();
         request.type = MembershipRequestType.JOIN_REQUEST;
         request.targetType = targetType;
-        request.targetGroup = targetGroup;
+        assignTarget(request, targetGroup);
         request.initiatedBy = requestingUser;
 
         try {
@@ -163,7 +187,7 @@ export class MembershipRequestsService {
   ): Promise<void> {
     await this.em.transactional(async (em) => {
       const request = await em.findOne(MembershipRequest, {
-        targetGroup: targetGroupId,
+        $or: [{ targetGroup: targetGroupId }, { targetSection: targetGroupId }],
         initiatedBy: requestingUser.id,
         type: MembershipRequestType.JOIN_REQUEST,
         status: MembershipRequestStatus.PENDING,
@@ -234,7 +258,10 @@ export class MembershipRequestsService {
     callerMembershipStatus: GroupMembershipStatus,
   ): Promise<MembershipRequestResponseDto> {
     return this.em.transactional(async (em) => {
-      const targetGroup = await this.loadActiveGroupOrFail(em, targetGroupId);
+      const targetGroup = await this.loadActiveCommunityOrFail(
+        em,
+        targetGroupId,
+      );
 
       if (input.targetType === MembershipRequestTarget.GROUP) {
         this.assertIsRootGroup(targetGroup);
@@ -301,10 +328,10 @@ export class MembershipRequestsService {
         }
       }
 
-      const rootGroup =
-        targetGroup.parentGroup === null
-          ? targetGroup
-          : await this.groupHierarchyService.getRootGroup(targetGroup.id, em);
+      const rootGroup = await this.groupHierarchyService.resolveRootGroup(
+        targetGroup,
+        em,
+      );
       // Only checkable once an actual account is identified - an
       // email-only invitee with no account yet cannot have been banned
       // (banning requires having held a Membership first).
@@ -315,7 +342,7 @@ export class MembershipRequestsService {
       const request = new MembershipRequest();
       request.type = MembershipRequestType.INVITATION;
       request.targetType = input.targetType;
-      request.targetGroup = targetGroup;
+      assignTarget(request, targetGroup);
       request.initiatedBy = inviter;
       request.invitedUser = invitedUser;
       request.invitedEmail = invitedEmail;
@@ -449,7 +476,7 @@ export class MembershipRequestsService {
       const fresh = new MembershipRequest();
       fresh.type = MembershipRequestType.INVITATION;
       fresh.targetType = existing.targetType;
-      fresh.targetGroup = existing.targetGroup;
+      assignTarget(fresh, requestTarget(existing));
       fresh.initiatedBy = actor;
       fresh.invitedUser = existing.invitedUser;
       fresh.invitedEmail = existing.invitedEmail;
@@ -483,7 +510,12 @@ export class MembershipRequestsService {
         MembershipRequest,
         { id: requestId },
         {
-          populate: ['targetGroup', 'invitedUser', 'initiatedBy'],
+          populate: [
+            'targetGroup',
+            'targetSection',
+            'invitedUser',
+            'initiatedBy',
+          ],
           lockMode: LockMode.PESSIMISTIC_WRITE,
         },
       );
@@ -510,7 +542,7 @@ export class MembershipRequestsService {
 
       await this.fulfillJoin(
         em,
-        request.targetGroup,
+        requestTarget(request),
         request.targetType,
         acceptingUser,
       );
@@ -540,7 +572,7 @@ export class MembershipRequestsService {
       const request = await em.findOne(
         MembershipRequest,
         { id: requestId },
-        { populate: ['invitedUser', 'targetGroup'] },
+        { populate: ['invitedUser', 'targetGroup', 'targetSection'] },
       );
       if (!request) throw this.requestNotFound();
 
@@ -588,7 +620,7 @@ export class MembershipRequestsService {
         MembershipRequest,
         { id: requestId },
         {
-          populate: ['targetGroup', 'initiatedBy'],
+          populate: ['targetGroup', 'targetSection', 'initiatedBy'],
           lockMode: LockMode.PESSIMISTIC_WRITE,
         },
       );
@@ -604,7 +636,7 @@ export class MembershipRequestsService {
 
       await this.fulfillJoin(
         em,
-        request.targetGroup,
+        requestTarget(request),
         request.targetType,
         request.initiatedBy,
       );
@@ -631,7 +663,7 @@ export class MembershipRequestsService {
       const request = await em.findOne(
         MembershipRequest,
         { id: requestId },
-        { populate: ['targetGroup'] },
+        { populate: ['targetGroup', 'targetSection'] },
       );
       if (!request) throw this.requestNotFound();
 
@@ -671,7 +703,13 @@ export class MembershipRequestsService {
         status: MembershipRequestStatus.PENDING,
       },
       {
-        populate: ['targetGroup', 'initiatedBy', 'invitedUser', 'processedBy'],
+        populate: [
+          'targetGroup',
+          'targetSection',
+          'initiatedBy',
+          'invitedUser',
+          'processedBy',
+        ],
       },
     );
     return requests.map(toMembershipRequestResponseDto);
@@ -684,12 +722,18 @@ export class MembershipRequestsService {
     const requests = await this.em.find(
       MembershipRequest,
       {
-        targetGroup: targetGroupId,
+        $or: [{ targetGroup: targetGroupId }, { targetSection: targetGroupId }],
         type: MembershipRequestType.INVITATION,
         status: MembershipRequestStatus.PENDING,
       },
       {
-        populate: ['initiatedBy', 'invitedUser', 'processedBy', 'targetGroup'],
+        populate: [
+          'initiatedBy',
+          'invitedUser',
+          'processedBy',
+          'targetGroup',
+          'targetSection',
+        ],
       },
     );
     return requests.map(toMembershipRequestResponseDto);
@@ -702,11 +746,18 @@ export class MembershipRequestsService {
     const requests = await this.em.find(
       MembershipRequest,
       {
-        targetGroup: targetGroupId,
+        $or: [{ targetGroup: targetGroupId }, { targetSection: targetGroupId }],
         type: MembershipRequestType.JOIN_REQUEST,
         status: MembershipRequestStatus.PENDING,
       },
-      { populate: ['initiatedBy', 'processedBy', 'targetGroup'] },
+      {
+        populate: [
+          'initiatedBy',
+          'processedBy',
+          'targetGroup',
+          'targetSection',
+        ],
+      },
     );
     return requests.map(toMembershipRequestResponseDto);
   }
@@ -727,11 +778,21 @@ export class MembershipRequestsService {
     const requests = await this.em.find(
       MembershipRequest,
       {
-        targetGroup: { $in: targetGroupIds },
+        $or: [
+          { targetGroup: { $in: targetGroupIds } },
+          { targetSection: { $in: targetGroupIds } },
+        ],
         type: MembershipRequestType.JOIN_REQUEST,
         status: MembershipRequestStatus.PENDING,
       },
-      { populate: ['initiatedBy', 'processedBy', 'targetGroup'] },
+      {
+        populate: [
+          'initiatedBy',
+          'processedBy',
+          'targetGroup',
+          'targetSection',
+        ],
+      },
     );
     return requests.map(toMembershipRequestResponseDto);
   }
@@ -746,14 +807,14 @@ export class MembershipRequestsService {
    */
   private async fulfillJoin(
     em: EntityManager,
-    targetGroup: Group,
+    targetGroup: Community,
     targetType: MembershipRequestTarget,
     user: User,
   ): Promise<void> {
-    const rootGroup =
-      targetGroup.parentGroup === null
-        ? targetGroup
-        : await this.groupHierarchyService.getRootGroup(targetGroup.id, em);
+    const rootGroup = await this.groupHierarchyService.resolveRootGroup(
+      targetGroup,
+      em,
+    );
 
     // Re-checked here (not just at Join/Invite creation time) since this is
     // also reached by acceptInvitation/approveJoinRequest, which can run
@@ -812,14 +873,14 @@ export class MembershipRequestsService {
    */
   private async assertNotAlreadyJoined(
     em: EntityManager,
-    targetGroup: Group,
+    targetGroup: Community,
     targetType: MembershipRequestTarget,
     user: User,
   ): Promise<void> {
-    const rootGroup =
-      targetGroup.parentGroup === null
-        ? targetGroup
-        : await this.groupHierarchyService.getRootGroup(targetGroup.id, em);
+    const rootGroup = await this.groupHierarchyService.resolveRootGroup(
+      targetGroup,
+      em,
+    );
 
     const membership = await loadActiveMembership(em, rootGroup.id, user.id);
 
@@ -835,7 +896,7 @@ export class MembershipRequestsService {
       if (membership) {
         const memberRole = await em.findOne(RoleAssignment, {
           membership: membership.id,
-          group: targetGroup.id,
+          ...communityFilter(targetGroup),
           role: GroupRole.MEMBER,
         });
         if (memberRole) {
@@ -885,13 +946,10 @@ export class MembershipRequestsService {
     action: AuditAction,
     actor: User,
   ): Promise<void> {
-    const community =
-      request.targetGroup.parentGroup === null
-        ? request.targetGroup
-        : await this.groupHierarchyService.getRootGroup(
-            request.targetGroup.id,
-            em,
-          );
+    const community = await this.groupHierarchyService.resolveRootGroup(
+      requestTarget(request),
+      em,
+    );
     this.auditLogService.record(em, {
       community,
       action,
@@ -903,7 +961,7 @@ export class MembershipRequestsService {
 
   /** Enforces that a MEMBER may only invite when memberInvitesAllowed=true. */
   private assertCanInviteToGroup(
-    targetGroup: Group,
+    targetGroup: Community,
     callerRoles: GroupRole[],
     callerMembershipStatus: GroupMembershipStatus,
   ): void {
@@ -928,8 +986,8 @@ export class MembershipRequestsService {
     }
   }
 
-  private assertIsRootGroup(group: Group): void {
-    if (group.parentGroup !== null) {
+  private assertIsRootGroup(community: Community): void {
+    if (!(community instanceof Group) || community.parentGroup !== null) {
       throw new UnprocessableEntityException({
         code: 'NOT_A_ROOT_GROUP',
         message:
@@ -947,24 +1005,27 @@ export class MembershipRequestsService {
     }
   }
 
-  private async loadActiveGroupOrFail(
+  private async loadActiveCommunityOrFail(
     em: EntityManager,
     groupId: string,
-  ): Promise<Group> {
-    const group = await em.findOne(Group, { id: groupId });
-    if (!group) {
+  ): Promise<Community> {
+    const community = await this.groupHierarchyService.findCommunityById(
+      groupId,
+      em,
+    );
+    if (!community) {
       throw new NotFoundException({
         code: 'GROUP_NOT_FOUND',
         message: 'Group not found',
       });
     }
-    if (group.status === GroupStatus.ARCHIVED) {
+    if (community.status === GroupStatus.ARCHIVED) {
       throw new ConflictException({
         code: 'GROUP_ARCHIVED',
         message: 'This group is archived and is read-only until it is restored',
       });
     }
-    return group;
+    return community;
   }
 
   private async loadRequestByIdOrFail(
@@ -975,7 +1036,13 @@ export class MembershipRequestsService {
       MembershipRequest,
       { id: requestId },
       {
-        populate: ['targetGroup', 'initiatedBy', 'invitedUser', 'processedBy'],
+        populate: [
+          'targetGroup',
+          'targetSection',
+          'initiatedBy',
+          'invitedUser',
+          'processedBy',
+        ],
       },
     );
     if (!request) throw this.requestNotFound();
@@ -999,7 +1066,7 @@ export function toMembershipRequestResponseDto(
     id: request.id,
     type: request.type,
     targetType: request.targetType,
-    targetGroupId: request.targetGroup.id,
+    targetGroupId: requestTarget(request).id,
     status: request.status,
     initiatedBy: {
       id: request.initiatedBy.id,

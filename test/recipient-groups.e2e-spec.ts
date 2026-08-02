@@ -42,6 +42,7 @@ import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
+import { Section } from '../src/groups/entities/section.entity';
 import { RecipientGroupMember } from '../src/groups/entities/recipient-group-member.entity';
 import { RecipientGroup } from '../src/groups/entities/recipient-group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
@@ -183,23 +184,33 @@ describe('Recipient Groups (e2e)', () => {
 
   afterAll(async () => {
     const cleanup = app.get(EntityManager).fork();
+    const communityInIds = {
+      $or: [
+        { communityGroup: { $in: createdGroupIds } },
+        { communitySection: { $in: createdGroupIds } },
+      ],
+    };
     await cleanup.nativeDelete(AnnouncementRead, {
-      announcement: { community: { $in: createdGroupIds } },
+      announcement: communityInIds,
     });
     await cleanup.nativeDelete(AnnouncementRecipient, {
-      announcement: { community: { $in: createdGroupIds } },
+      announcement: communityInIds,
     });
-    await cleanup.nativeDelete(Announcement, {
-      community: { $in: createdGroupIds },
-    });
+    await cleanup.nativeDelete(Announcement, communityInIds);
     await cleanup.nativeDelete(RecipientGroupMember, {
       recipientGroup: { group: { $in: createdGroupIds } },
     });
     await cleanup.nativeDelete(RecipientGroup, {
-      group: { $in: createdGroupIds },
+      $or: [
+        { group: { $in: createdGroupIds } },
+        { section: { $in: createdGroupIds } },
+      ],
     });
     await cleanup.nativeDelete(RoleAssignment, {
-      group: { $in: createdGroupIds },
+      $or: [
+        { group: { $in: createdGroupIds } },
+        { section: { $in: createdGroupIds } },
+      ],
     });
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
@@ -207,6 +218,16 @@ describe('Recipient Groups (e2e)', () => {
     await cleanup.nativeDelete(AuditLogEntry, {
       community: { $in: createdGroupIds },
     });
+    // Sections must be removed before their parent Groups to satisfy the
+    // parent_group_id foreign key (no cascade - see section.entity.ts).
+    await cleanup.nativeDelete(Section, { id: { $in: createdGroupIds } });
+    // Child Groups must be nulled before their parents to satisfy the
+    // parent_group_id self-FK (no cascade - see group.entity.ts).
+    await cleanup.nativeUpdate(
+      Group,
+      { id: { $in: createdGroupIds } },
+      { parentGroup: null },
+    );
     await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
     await cleanup.nativeDelete(User, {
       clerkUserId: { $in: TEST_CLERK_USER_IDS },
@@ -233,10 +254,6 @@ describe('Recipient Groups (e2e)', () => {
       memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
-      country: 'PL',
-      city: 'Poznań',
-      region: 'Greater Poland',
-      geonameId: 3088171,
       ...overrides,
     };
   }
@@ -290,6 +307,10 @@ describe('Recipient Groups (e2e)', () => {
         .send(
           groupPayload({
             name: `Recipient Groups Test Section ${Date.now()}-${Math.random()}`,
+            country: 'PL',
+            city: 'Poznań',
+            region: 'Greater Poland',
+            geonameId: 3088171,
             ...overrides,
           }),
         )

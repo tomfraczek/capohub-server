@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
-import { GroupHierarchyService } from '../groups/group-hierarchy.service';
-import { Group } from '../groups/entities/group.entity';
+import {
+  Community,
+  GroupHierarchyService,
+} from '../groups/group-hierarchy.service';
 import { GroupMembership } from '../groups/entities/group-membership.entity';
 import { GroupMembershipStatus } from '../groups/enums/group-membership-status.enum';
 import { EventInvitation } from './entities/event-invitation.entity';
@@ -9,6 +11,7 @@ import { EventInvitationStatus } from './enums/event-invitation-status.enum';
 import { EventStatus } from './enums/event-status.enum';
 import { EventVisibility } from './enums/event-visibility.enum';
 import { Event } from './entities/event.entity';
+import { eventCommunity } from './event-community.util';
 import { reconcileEventFinished } from './event-write-policy';
 
 /**
@@ -37,7 +40,10 @@ export class EventAccessService {
   async loadOrFail(
     em: EntityManager,
     eventId: string,
-    populate: ('community' | 'createdBy')[] = ['community'],
+    populate: ('communityGroup' | 'communitySection' | 'createdBy')[] = [
+      'communityGroup',
+      'communitySection',
+    ],
   ): Promise<Event> {
     const event = await em.findOne(Event, { id: eventId }, { populate });
     if (!event) {
@@ -52,27 +58,24 @@ export class EventAccessService {
    * when the Community already *is* the Root Group. Community membership
    * (GroupMembership) is always Root-Group-scoped (ADR-004), so this is
    * the id every membership-based check below resolves against, even when
-   * the Event belongs to a Child Group.
+   * the Event belongs to a Child Group or a Section.
    */
   async getRootGroupId(em: EntityManager, event: Event): Promise<string> {
-    return this.getRootGroupIdForCommunity(em, event.community);
+    return this.getRootGroupIdForCommunity(em, eventCommunity(event));
   }
 
   /**
-   * Same resolution as getRootGroupId, but for a Community (Group) that
-   * has not necessarily been loaded as part of an Event yet - used by
-   * EventsService.list, which resolves the community once per request
-   * rather than once per Event row.
+   * Same resolution as getRootGroupId, but for a Community (Group or
+   * Section) that has not necessarily been loaded as part of an Event yet -
+   * used by EventsService.list, which resolves the community once per
+   * request rather than once per Event row.
    */
   async getRootGroupIdForCommunity(
     em: EntityManager,
-    community: Group,
+    community: Community,
   ): Promise<string> {
-    if (community.parentGroup === null) {
-      return community.id;
-    }
-    const root = await this.groupHierarchyService.getRootGroup(
-      community.id,
+    const root = await this.groupHierarchyService.resolveRootGroup(
+      community,
       em,
     );
     return root.id;

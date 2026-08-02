@@ -49,15 +49,18 @@ export class HomeService {
   async getHome(user: User): Promise<HomeResponseDto> {
     const now = new Date().toISOString();
 
-    const [{ nearestEvent, nearestTraining }, learningSongs, announcements] =
-      await Promise.all([
-        this.eventsService.findNearestEventAndTraining(user, now),
-        this.learningStatusService.listLearningSongs(user.id),
-        this.announcementsService.listForViewer(user, {
-          limit: ANNOUNCEMENTS_PREVIEW_LIMIT,
-          includeUnreadCount: true,
-        }),
-      ]);
+    // Sequential, not Promise.all - concurrent queries on the same
+    // request-scoped EntityManager corrupt the underlying pg connection
+    // (see CapoHub's other services' identical comment on this pattern).
+    const { nearestEvent, nearestTraining } =
+      await this.eventsService.findNearestEventAndTraining(user, now);
+    const learningSongs = await this.learningStatusService.listLearningSongs(
+      user.id,
+    );
+    const announcements = await this.announcementsService.listForViewer(user, {
+      limit: ANNOUNCEMENTS_PREVIEW_LIMIT,
+      includeUnreadCount: true,
+    });
 
     const toReviewItems = learningSongs.filter(
       (item) => item.learningStatus === LearningStatus.TO_REVIEW,

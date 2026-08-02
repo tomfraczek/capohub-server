@@ -12,6 +12,7 @@ import { GroupPermission } from '../../groups/permissions/group-permission.enum'
 import { GroupPermissionService } from '../../groups/permissions/group-permission.service';
 import { RoleAssignmentsService } from '../../groups/role-assignments.service';
 import { EVENT_PERMISSIONS_KEY } from '../decorators/require-event-permission.decorator';
+import { eventCommunity } from '../event-community.util';
 import { EventRolesService } from '../event-roles.service';
 import { EventPermission } from '../permissions/event-permission.enum';
 import { EventPermissionService } from '../permissions/event-permission.service';
@@ -80,7 +81,7 @@ export class EventPermissionsGuard implements CanActivate {
     if (overridable) {
       const communityAuthorization =
         await this.roleAssignmentsService.resolveAuthorization(
-          event.community.id,
+          eventCommunity(event).id,
           request.localUser.id,
         );
       if (communityAuthorization) {

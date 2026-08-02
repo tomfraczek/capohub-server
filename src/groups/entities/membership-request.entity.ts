@@ -9,6 +9,7 @@ import {
 import { BaseEntity } from '../../database/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { Group } from './group.entity';
+import { Section } from './section.entity';
 import { MembershipRequestStatus } from '../enums/membership-request-status.enum';
 import { MembershipRequestTarget } from '../enums/membership-request-target.enum';
 import { MembershipRequestType } from '../enums/membership-request-type.enum';
@@ -38,38 +39,40 @@ export const MEMBERSHIP_REQUEST_PENDING_JOIN_IDX =
 //
 // targetType encodes which *effect* accepting has:
 //  GROUP   → creates/reactivates Membership only (no RoleAssignment)
-//  SECTION → ensures Membership + grants MEMBER for the exact targetGroup
+//  SECTION → ensures Membership + grants MEMBER for the exact target
 //
 // Lifecycle: PENDING → ACCEPTED / REJECTED / CANCELLED.  Terminal rows are
 // never reused.  No expiresAt or TTL.
 //
 // Three partial unique indexes enforce "only one PENDING request per
 // (recipient, target)" at the DB level, covering both concurrent-request
-// races and application-level checks:
-//   1. (targetGroup, invitedUser)  WHERE type='INVITATION' AND status='PENDING'
-//   2. (targetGroup, invitedEmail) WHERE type='INVITATION' AND status='PENDING'
-//   3. (targetGroup, initiatedBy)  WHERE type='JOIN_REQUEST' AND status='PENDING'
+// races and application-level checks. `coalesce(target_group_id,
+// target_section_id)` folds the two nullable target FKs (see below) into
+// one comparison key, since exactly one is ever set for a given row:
+//   1. (target, invitedUser)  WHERE type='INVITATION' AND status='PENDING'
+//   2. (target, invitedEmail) WHERE type='INVITATION' AND status='PENDING'
+//   3. (target, initiatedBy)  WHERE type='JOIN_REQUEST' AND status='PENDING'
 //
-// No delete cascade on any FK: Groups and Users are soft-deleted / archived,
-// never physically removed in normal operation (see ADR-007).
+// No delete cascade on any FK: Groups, Sections and Users are soft-deleted
+// / archived, never physically removed in normal operation (see ADR-007).
 @Entity({ tableName: 'membership_requests' })
 @Unique({
   name: MEMBERSHIP_REQUEST_PENDING_USER_IDX,
-  properties: ['targetGroup', 'invitedUser'],
+  properties: ['targetGroup', 'targetSection', 'invitedUser'],
   expression: (table, columns, indexName) =>
-    `create unique index "${indexName}" on ${table.toString()} ("${columns.targetGroup}", "${columns.invitedUser}") where ("${columns.status}" = 'PENDING' and "${columns.type}" = 'INVITATION' and "${columns.invitedUser}" is not null)`,
+    `create unique index "${indexName}" on ${table.toString()} (coalesce("${columns.targetGroup}", "${columns.targetSection}"), "${columns.invitedUser}") where ("${columns.status}" = 'PENDING' and "${columns.type}" = 'INVITATION' and "${columns.invitedUser}" is not null)`,
 })
 @Unique({
   name: MEMBERSHIP_REQUEST_PENDING_EMAIL_IDX,
-  properties: ['targetGroup', 'invitedEmail'],
+  properties: ['targetGroup', 'targetSection', 'invitedEmail'],
   expression: (table, columns, indexName) =>
-    `create unique index "${indexName}" on ${table.toString()} ("${columns.targetGroup}", "${columns.invitedEmail}") where ("${columns.status}" = 'PENDING' and "${columns.type}" = 'INVITATION' and "${columns.invitedEmail}" is not null)`,
+    `create unique index "${indexName}" on ${table.toString()} (coalesce("${columns.targetGroup}", "${columns.targetSection}"), "${columns.invitedEmail}") where ("${columns.status}" = 'PENDING' and "${columns.type}" = 'INVITATION' and "${columns.invitedEmail}" is not null)`,
 })
 @Unique({
   name: MEMBERSHIP_REQUEST_PENDING_JOIN_IDX,
-  properties: ['targetGroup', 'initiatedBy'],
+  properties: ['targetGroup', 'targetSection', 'initiatedBy'],
   expression: (table, columns, indexName) =>
-    `create unique index "${indexName}" on ${table.toString()} ("${columns.targetGroup}", "${columns.initiatedBy}") where ("${columns.status}" = 'PENDING' and "${columns.type}" = 'JOIN_REQUEST')`,
+    `create unique index "${indexName}" on ${table.toString()} (coalesce("${columns.targetGroup}", "${columns.targetSection}"), "${columns.initiatedBy}") where ("${columns.status}" = 'PENDING' and "${columns.type}" = 'JOIN_REQUEST')`,
 })
 export class MembershipRequest extends BaseEntity {
   @Enum({ items: () => Object.values(MembershipRequestType) })
@@ -78,29 +81,31 @@ export class MembershipRequest extends BaseEntity {
   @Enum({ items: () => Object.values(MembershipRequestTarget) })
   targetType!: MembershipRequestTarget;
 
-  // The Group targeted by this request.
+  // The Group-or-Section targeted by this request, represented by two
+  // nullable FKs (exactly one set) since the Group/Section physical split -
+  // see GroupHierarchyService.findCommunityById for resolving whichever one
+  // is populated.
   //
-  // IMPORTANT: this field serves a DUAL role depending on targetType (see
-  // the Group/Section rename ADR):
+  // IMPORTANT: this pair serves a DUAL role depending on targetType:
   //
   //   targetType = GROUP
-  //     targetGroup MUST be a root Group (parentGroup === null).
-  //     There is no separate Group entity in this system (ADR-001).
-  //     A root Group IS the organization.  Accepting this request creates a
-  //     GroupMembership for the Group only — no RoleAssignment is created
-  //     anywhere (see ADR-004).
+  //     The target MUST be a root Group (targetGroup set, targetSection
+  //     null, and that Group's own parentGroup === null). A root Group IS
+  //     the organization. Accepting this request creates a GroupMembership
+  //     for the Group only — no RoleAssignment is created anywhere (see
+  //     ADR-004).
   //
   //   targetType = SECTION
-  //     targetGroup may be a Group or a Section, at any depth.  Accepting
-  //     this request ensures a GroupMembership in the Group AND grants a
-  //     MEMBER RoleAssignment in exactly targetGroup.
-  //
-  // No separate FK to an "Group" entity exists and none will be
-  // added — the hierarchy model intentionally treats all organizational
-  // units as the same entity type (ADR-001).
+  //     The target may be a Group (at any depth) or a Section. Accepting
+  //     this request ensures a GroupMembership in the target's root Group
+  //     AND grants a MEMBER RoleAssignment in exactly the target.
   @Index()
-  @ManyToOne(() => Group, { deleteRule: 'no action' })
-  targetGroup!: Group;
+  @ManyToOne(() => Group, { nullable: true, deleteRule: 'no action' })
+  targetGroup: Group | null = null;
+
+  @Index()
+  @ManyToOne(() => Section, { nullable: true, deleteRule: 'no action' })
+  targetSection: Section | null = null;
 
   // The User who created this request:
   //   INVITATION → the member who sent the invite

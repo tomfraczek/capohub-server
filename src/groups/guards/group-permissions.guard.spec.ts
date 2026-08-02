@@ -41,7 +41,7 @@ describe('GroupPermissionsGuard', () => {
     membershipStatus: GroupMembershipStatus = GroupMembershipStatus.ACTIVE,
   ): ResolvedGroupAuthorization {
     return {
-      group: { status: groupStatus } as never,
+      community: { status: groupStatus } as never,
       membership: { status: membershipStatus } as never,
       roleAssignments: roles.map((role) => ({ role }) as never),
     };
@@ -203,7 +203,7 @@ describe('GroupPermissionsGuard', () => {
     // stub, to prove the guard doesn't secretly only look at roles[0].
     const realGroupPermissionService = new GroupPermissionService();
     const resolveAuthorization = jest.fn().mockResolvedValue({
-      group: { status: GroupStatus.ACTIVE },
+      community: { status: GroupStatus.ACTIVE },
       membership: { status: GroupMembershipStatus.ACTIVE },
       roleAssignments: [{ role: GroupRole.MEMBER }, { role: GroupRole.ADMIN }],
     });

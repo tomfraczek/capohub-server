@@ -12,12 +12,16 @@ import { RecipientGroupEligibleMembersResponseDto } from './dto/recipient-group-
 import { RecipientGroupEligibleMembersQueryInput } from './dto/recipient-group-eligible-members-query.schema';
 import { RecipientGroupResponseDto } from './dto/recipient-group-response.dto';
 import { UpdateRecipientGroupInput } from './dto/update-recipient-group.schema';
-import { Group } from './entities/group.entity';
+import { Section } from './entities/section.entity';
 import {
   RECIPIENT_GROUPS_ACTIVE_NAME_UNIQUE_INDEX,
   RecipientGroup,
 } from './entities/recipient-group.entity';
 import { RecipientGroupMember } from './entities/recipient-group-member.entity';
+import {
+  communityIdFilter,
+  GroupHierarchyService,
+} from './group-hierarchy.service';
 import { toRecipientGroupResponseDto } from './mappers/recipient-group.mapper';
 import { RoleAssignmentsService } from './role-assignments.service';
 
@@ -32,6 +36,7 @@ export class RecipientGroupsService {
   constructor(
     private readonly em: EntityManager,
     private readonly roleAssignmentsService: RoleAssignmentsService,
+    private readonly groupHierarchyService: GroupHierarchyService,
   ) {}
 
   async create(
@@ -46,8 +51,23 @@ export class RecipientGroupsService {
         input.memberUserIds,
       );
 
+      const community = await this.groupHierarchyService.findCommunityById(
+        communityGroupId,
+        em,
+      );
+      if (!community) {
+        throw new NotFoundException({
+          code: 'GROUP_NOT_FOUND',
+          message: 'Group not found',
+        });
+      }
+
       const recipientGroup = new RecipientGroup();
-      recipientGroup.group = em.getReference(Group, communityGroupId);
+      if (community instanceof Section) {
+        recipientGroup.section = community;
+      } else {
+        recipientGroup.group = community;
+      }
       recipientGroup.name = input.name;
       recipientGroup.createdBy = actor;
 
@@ -74,7 +94,7 @@ export class RecipientGroupsService {
   async list(communityGroupId: string): Promise<RecipientGroupResponseDto[]> {
     const recipientGroups = await this.em.find(
       RecipientGroup,
-      { group: communityGroupId },
+      communityIdFilter(communityGroupId),
       { orderBy: { createdAt: 'asc' } },
     );
     const membersByGroup = await this.loadMembersByGroup(
@@ -341,8 +361,8 @@ export class RecipientGroupsService {
   ): Promise<RecipientGroup> {
     const recipientGroup = await em.findOne(
       RecipientGroup,
-      { id: recipientGroupId, group: communityGroupId },
-      { populate: ['group', 'createdBy'] },
+      { id: recipientGroupId, ...communityIdFilter(communityGroupId) },
+      { populate: ['group', 'section', 'createdBy'] },
     );
     if (!recipientGroup) {
       throw new NotFoundException({

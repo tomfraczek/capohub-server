@@ -29,8 +29,11 @@ export const GROUP_MEMBERSHIPS_ACTIVE_UNIQUE_INDEX =
 // so this stays stable under `schema:diff` (see
 // PostgreSqlSchemaHelper/SchemaComparator).
 //
-// `rootGroup` must always reference an actual Root Group (a Group with no
-// parent) - GroupMembershipsService validates this at creation time,
+// `rootGroup` must always reference a root Group (a Group with no parent -
+// note that as of the Group/Section physical split, `rootGroup` can never
+// point at a Section row at all, since it is now typed against the Group
+// entity specifically) - GroupMembershipsService validates the "no parent"
+// part at creation time,
 // since Membership represents participation in an organization as a
 // whole, never in one specific Child Group (see
 // organization-entities.md#membership). Like `parentGroupId` on Group,

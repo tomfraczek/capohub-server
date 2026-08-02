@@ -8,7 +8,10 @@ export function toRecipientGroupResponseDto(
 ): RecipientGroupResponseDto {
   return {
     id: recipientGroup.id,
-    groupId: recipientGroup.group.id,
+    // `group`/`section` are the two nullable halves of RecipientGroup's
+    // Group-or-Section reference (see recipient-group.entity.ts) - exactly
+    // one is ever set.
+    groupId: (recipientGroup.group ?? recipientGroup.section)!.id,
     name: recipientGroup.name,
     isActive: recipientGroup.isActive,
     members: members

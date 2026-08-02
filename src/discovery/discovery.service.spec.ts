@@ -1,21 +1,25 @@
 /**
  * Unit tests for DiscoveryService.
  *
- * Covers:
- *  - resolveByCode(): Root Group → resourceType = 'GROUP',
- *    isRootGroup = true; Section (non-root Group) → resourceType = 'SECTION';
- *    User → resourceType = 'USER'; unknown code → NotFoundException
- *  - search(): always filters isHidden=false + status=ACTIVE; name/country/
- *    city filters are added only when provided; type=GROUP/SECTION narrows
- *    via parentGroup; each result maps to the correct
- *    CommunitySearchResultDto shape (type/parentId/sectionsCount)
+ * Covers (post organizational-domain rebuild, stage 1 - Group and Section
+ * are now separate tables, so search() queries and merges both):
+ *  - resolveByCode(): Group → resourceType = 'GROUP', isRootGroup = true;
+ *    Section → resourceType = 'SECTION'; User → resourceType = 'USER';
+ *    unknown code → NotFoundException
+ *  - search(): always filters isHidden=false + status=ACTIVE on both
+ *    tables; name filter applies to both; country/city filters only ever
+ *    match a Section (Group has no location fields); type=GROUP/SECTION
+ *    narrows which table(s) are queried at all; each result maps to the
+ *    correct CommunitySearchResultDto shape (type/parentId/sectionsCount)
  */
 
 import { NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { Group } from '../groups/entities/group.entity';
+import { Section } from '../groups/entities/section.entity';
 import { User } from '../users/entities/user.entity';
 import { GroupStatus } from '../groups/enums/group-status.enum';
+import { GroupHierarchyService } from '../groups/group-hierarchy.service';
 import { DiscoveryService } from './discovery.service';
 import { DiscoverySearchQuery } from './dto/discovery-search-query.schema';
 
@@ -31,12 +35,12 @@ function buildUser(overrides: Partial<User> = {}): User {
   return Object.assign(user, overrides);
 }
 
-function buildRootGroup(overrides: Partial<Group> = {}): Group {
+function buildGroup(overrides: Partial<Group> = {}): Group {
   const group = new Group();
   group.id = 'root-1';
   group.name = 'Capoeira Brasil';
   group.status = GroupStatus.ACTIVE;
-  group.parentGroup = null; // Root Group = Group
+  group.parentGroup = null;
   group.isPublic = true;
   group.isHidden = false;
   group.publicCode = 'CBRA-0001';
@@ -47,49 +51,73 @@ function buildRootGroup(overrides: Partial<Group> = {}): Group {
   return Object.assign(group, overrides);
 }
 
-function buildChildGroup(overrides: Partial<Group> = {}): Group {
-  const group = buildRootGroup({
-    id: 'child-1',
-    name: 'Capoeira Brasil Poland',
-    publicCode: 'CBPL-0001',
-  });
-  // Non-null parentGroup proxy marks this as a Child Group
-  group.parentGroup = buildRootGroup();
-  return Object.assign(group, overrides);
+function buildSection(overrides: Partial<Section> = {}): Section {
+  const section = new Section();
+  section.id = 'section-1';
+  section.name = 'Capoeira Brasil Poland';
+  section.status = GroupStatus.ACTIVE;
+  section.parentGroup = buildGroup();
+  section.isPublic = true;
+  section.isHidden = false;
+  section.publicCode = 'CBPL-0001';
+  section.description = null;
+  section.logoUrl = null;
+  section.coverImageUrl = null;
+  section.websiteUrl = null;
+  section.country = null;
+  section.city = null;
+  return Object.assign(section, overrides);
 }
 
 // ─── Mock EM factory ─────────────────────────────────────────────────────────
 
 interface MockRouting {
-  findOneResult?: Group | User | null;
-  findAndCountResult?: [Group[], number];
-  // Rows countDirectSections() reads back from the raw connection query -
-  // see discovery.service.ts.
+  groupFindOneResult?: Group | null;
+  sectionFindOneResult?: Section | null;
+  userFindOneResult?: User | null;
+  groupFindResult?: Group[];
+  sectionFindResult?: Section[];
   sectionCountRows?: { parent_group_id: string; count: string }[];
 }
 
 function buildMockEm(routing: MockRouting = {}) {
-  const findOne = jest
-    .fn<Promise<Group | User | null>, unknown[]>()
-    .mockResolvedValue(routing.findOneResult ?? null);
-  const findAndCount = jest
-    .fn<Promise<[Group[], number]>, unknown[]>()
-    .mockResolvedValue(routing.findAndCountResult ?? [[], 0]);
+  const findOne = jest.fn<Promise<unknown>, unknown[]>((entity: unknown) => {
+    if (entity === Group)
+      return Promise.resolve(routing.groupFindOneResult ?? null);
+    if (entity === Section)
+      return Promise.resolve(routing.sectionFindOneResult ?? null);
+    if (entity === User)
+      return Promise.resolve(routing.userFindOneResult ?? null);
+    return Promise.resolve(null);
+  });
+  const find = jest.fn<Promise<unknown[]>, unknown[]>((entity: unknown) => {
+    if (entity === Group) return Promise.resolve(routing.groupFindResult ?? []);
+    if (entity === Section)
+      return Promise.resolve(routing.sectionFindResult ?? []);
+    return Promise.resolve([]);
+  });
   const execute = jest
     .fn<Promise<{ parent_group_id: string; count: string }[]>, unknown[]>()
     .mockResolvedValue(routing.sectionCountRows ?? []);
   const getConnection = jest.fn().mockReturnValue({ execute });
 
-  const em = {
-    findOne,
-    findAndCount,
-    getConnection,
-  } as unknown as EntityManager;
-  return { em, findOne, findAndCount, execute };
+  const em = { findOne, find, getConnection } as unknown as EntityManager;
+  return { em, findOne, find, execute };
+}
+
+function buildGroupHierarchyService(em: EntityManager): GroupHierarchyService {
+  return {
+    findCommunityById: jest.fn(async (id: string) => {
+      const group = await em.findOne(Group, { id });
+      if (group) return group;
+      return em.findOne(Section, { id });
+    }),
+    resolveRootGroup: jest.fn(() => Promise.reject(new Error('no membership'))),
+  } as unknown as GroupHierarchyService;
 }
 
 function buildService(em: EntityManager) {
-  return new DiscoveryService(em);
+  return new DiscoveryService(em, buildGroupHierarchyService(em));
 }
 
 function buildQuery(
@@ -110,12 +138,9 @@ describe('DiscoveryService', () => {
   // ─── resolveByCode() ───────────────────────────────────────────────────
 
   describe('resolveByCode()', () => {
-    it('returns resourceType GROUP and isRootGroup=true for a Root Group', async () => {
-      const rootGroup = buildRootGroup();
-      const { em, findOne } = buildMockEm();
-      findOne
-        .mockResolvedValueOnce(rootGroup) // Group lookup
-        .mockResolvedValue(null); // membership + pending request checks
+    it('returns resourceType GROUP and isRootGroup=true for a Group', async () => {
+      const group = buildGroup();
+      const { em } = buildMockEm({ groupFindOneResult: group });
       const service = buildService(em);
 
       const result = await service.resolveByCode('CBRA-0001', requestingUser);
@@ -127,9 +152,8 @@ describe('DiscoveryService', () => {
     });
 
     it('returns resourceType SECTION and isRootGroup=false for a Section', async () => {
-      const childGroup = buildChildGroup();
-      const { em, findOne } = buildMockEm();
-      findOne.mockResolvedValueOnce(childGroup).mockResolvedValue(null);
+      const section = buildSection();
+      const { em } = buildMockEm({ sectionFindOneResult: section });
       const service = buildService(em);
 
       const result = await service.resolveByCode('CBPL-0001', requestingUser);
@@ -138,12 +162,9 @@ describe('DiscoveryService', () => {
       expect(result.group!.isRootGroup).toBe(false);
     });
 
-    it('returns resourceType USER when the code belongs to a User (no matching Group)', async () => {
+    it('returns resourceType USER when the code belongs to a User (no matching Group/Section)', async () => {
       const user = buildUser({ publicCode: 'USR-0001' });
-      const { em, findOne } = buildMockEm();
-      findOne
-        .mockResolvedValueOnce(null) // Group lookup → miss
-        .mockResolvedValueOnce(user); // User lookup → hit
+      const { em } = buildMockEm({ userFindOneResult: user });
       const service = buildService(em);
 
       const result = await service.resolveByCode('USR-0001', requestingUser);
@@ -155,21 +176,20 @@ describe('DiscoveryService', () => {
     });
 
     it('normalizes the code to uppercase before lookup', async () => {
-      const rootGroup = buildRootGroup();
-      const { em, findOne } = buildMockEm();
-      findOne.mockResolvedValueOnce(rootGroup).mockResolvedValue(null);
+      const group = buildGroup();
+      const { em, findOne } = buildMockEm({ groupFindOneResult: group });
       const service = buildService(em);
 
       await service.resolveByCode('cbra-0001', requestingUser);
 
-      // The first findOne call should use the uppercased code
-      expect(findOne.mock.calls[0][1]).toMatchObject({
-        publicCode: 'CBRA-0001',
-      });
+      expect(findOne).toHaveBeenCalledWith(
+        Group,
+        expect.objectContaining({ publicCode: 'CBRA-0001' }),
+      );
     });
 
     it('throws NotFoundException for an unknown code', async () => {
-      const { em } = buildMockEm({ findOneResult: null });
+      const { em } = buildMockEm();
       const service = buildService(em);
 
       await expect(
@@ -178,14 +198,12 @@ describe('DiscoveryService', () => {
     });
 
     it('returns the Group even when isHidden=true (publicCode bypasses hidden filter)', async () => {
-      const hiddenGroup = buildRootGroup({ isHidden: true });
-      const { em, findOne } = buildMockEm();
-      findOne.mockResolvedValueOnce(hiddenGroup).mockResolvedValue(null);
+      const hiddenGroup = buildGroup({ isHidden: true });
+      const { em } = buildMockEm({ groupFindOneResult: hiddenGroup });
       const service = buildService(em);
 
       const result = await service.resolveByCode('CBRA-0001', requestingUser);
 
-      // The result is returned regardless of isHidden
       expect(result.resourceType).toBe('GROUP');
       expect(result.group!.isHidden).toBe(true);
     });
@@ -194,16 +212,22 @@ describe('DiscoveryService', () => {
   // ─── search() ────────────────────────────────────────────────────────
 
   describe('search()', () => {
-    it('always queries isHidden=false + ACTIVE, regardless of which filters are provided', async () => {
-      const { em, findAndCount } = buildMockEm({
-        findAndCountResult: [[], 0],
-      });
+    it('always queries isHidden=false + ACTIVE on both tables', async () => {
+      const { em, find } = buildMockEm();
       const service = buildService(em);
 
       await service.search(buildQuery({ name: 'brasil' }));
 
-      expect(findAndCount).toHaveBeenCalledWith(
+      expect(find).toHaveBeenCalledWith(
         Group,
+        expect.objectContaining({
+          isHidden: false,
+          status: GroupStatus.ACTIVE,
+        }),
+        expect.anything(),
+      );
+      expect(find).toHaveBeenCalledWith(
+        Section,
         expect.objectContaining({
           isHidden: false,
           status: GroupStatus.ACTIVE,
@@ -212,88 +236,98 @@ describe('DiscoveryService', () => {
       );
     });
 
-    it('passes the name filter as a case-insensitive substring match when provided', async () => {
-      const { em, findAndCount } = buildMockEm({
-        findAndCountResult: [[], 0],
-      });
+    it('passes the name filter as a case-insensitive substring match on both tables', async () => {
+      const { em, find } = buildMockEm();
       const service = buildService(em);
 
       await service.search(buildQuery({ name: 'brasil' }));
 
-      const whereArg = findAndCount.mock.calls[0][1] as Record<string, unknown>;
-      expect(whereArg).toMatchObject({ name: { $ilike: '%brasil%' } });
+      const groupWhere = find.mock.calls.find(
+        (c) => c[0] === Group,
+      )![1] as Record<string, unknown>;
+      const sectionWhere = find.mock.calls.find(
+        (c) => c[0] === Section,
+      )![1] as Record<string, unknown>;
+      expect(groupWhere).toMatchObject({ name: { $ilike: '%brasil%' } });
+      expect(sectionWhere).toMatchObject({ name: { $ilike: '%brasil%' } });
     });
 
-    it('does not pass a name filter when none is given', async () => {
-      const { em, findAndCount } = buildMockEm({
-        findAndCountResult: [[], 0],
-      });
-      const service = buildService(em);
-
-      await service.search(buildQuery({ country: 'PL' }));
-
-      const whereArg = findAndCount.mock.calls[0][1] as Record<string, unknown>;
-      expect(whereArg).not.toHaveProperty('name');
-    });
-
-    it('passes the country filter as an exact match and the city filter as a substring match', async () => {
-      const { em, findAndCount } = buildMockEm({
-        findAndCountResult: [[], 0],
-      });
+    it('a country/city filter only ever queries Sections - a Group has no location fields', async () => {
+      const { em, find } = buildMockEm();
       const service = buildService(em);
 
       await service.search(buildQuery({ country: 'PL', city: 'Poznan' }));
 
-      const whereArg = findAndCount.mock.calls[0][1] as Record<string, unknown>;
-      expect(whereArg).toMatchObject({
+      expect(find).not.toHaveBeenCalledWith(
+        Group,
+        expect.anything(),
+        expect.anything(),
+      );
+      const sectionWhere = find.mock.calls.find(
+        (c) => c[0] === Section,
+      )![1] as Record<string, unknown>;
+      expect(sectionWhere).toMatchObject({
         country: 'PL',
         city: { $ilike: '%Poznan%' },
       });
     });
 
-    it('narrows to root Groups only when type=GROUP', async () => {
-      const { em, findAndCount } = buildMockEm({
-        findAndCountResult: [[], 0],
-      });
+    it('queries only Group when type=GROUP', async () => {
+      const { em, find } = buildMockEm();
       const service = buildService(em);
 
       await service.search(buildQuery({ name: 'brasil', type: 'GROUP' }));
 
-      const whereArg = findAndCount.mock.calls[0][1] as Record<string, unknown>;
-      expect(whereArg).toMatchObject({ parentGroup: null });
+      expect(find).toHaveBeenCalledWith(
+        Group,
+        expect.anything(),
+        expect.anything(),
+      );
+      expect(find).not.toHaveBeenCalledWith(
+        Section,
+        expect.anything(),
+        expect.anything(),
+      );
     });
 
-    it('narrows to Sections only when type=SECTION', async () => {
-      const { em, findAndCount } = buildMockEm({
-        findAndCountResult: [[], 0],
-      });
+    it('queries only Section when type=SECTION', async () => {
+      const { em, find } = buildMockEm();
       const service = buildService(em);
 
       await service.search(buildQuery({ name: 'brasil', type: 'SECTION' }));
 
-      const whereArg = findAndCount.mock.calls[0][1] as Record<string, unknown>;
-      expect(whereArg).toMatchObject({ parentGroup: { $ne: null } });
+      expect(find).not.toHaveBeenCalledWith(
+        Group,
+        expect.anything(),
+        expect.anything(),
+      );
+      expect(find).toHaveBeenCalledWith(
+        Section,
+        expect.anything(),
+        expect.anything(),
+      );
     });
 
-    it('returns each result with the correct type and parentId/sectionsCount based on parentGroup', async () => {
-      const rootGroup = buildRootGroup();
-      const childGroup = buildChildGroup();
+    it('returns each result with the correct type and parentId/sectionsCount', async () => {
+      const group = buildGroup();
+      const section = buildSection();
       const { em } = buildMockEm({
-        findAndCountResult: [[rootGroup, childGroup], 2],
+        groupFindResult: [group],
+        sectionFindResult: [section],
         sectionCountRows: [{ parent_group_id: 'root-1', count: '3' }],
       });
       const service = buildService(em);
 
       const result = await service.search(buildQuery({ name: 'brasil' }));
 
-      expect(result.data[0]).toMatchObject({
-        id: 'root-1',
+      const groupResult = result.data.find((r) => r.id === 'root-1');
+      const sectionResult = result.data.find((r) => r.id === 'section-1');
+      expect(groupResult).toMatchObject({
         type: 'GROUP',
         parentId: null,
         sectionsCount: 3,
       });
-      expect(result.data[1]).toMatchObject({
-        id: 'child-1',
+      expect(sectionResult).toMatchObject({
         type: 'SECTION',
         parentId: 'root-1',
         sectionsCount: null,
@@ -301,25 +335,19 @@ describe('DiscoveryService', () => {
     });
 
     it('hidden Groups/Sections are excluded because the query filter prevents them from being returned', async () => {
-      // The service passes { isHidden: false } to em.findAndCount() - this
-      // test verifies that the filter is present. The actual DB filtering
-      // is an integration concern; here we confirm the filter is
-      // constructed correctly.
-      const { em, findAndCount } = buildMockEm({
-        findAndCountResult: [[], 0],
-      });
+      const { em, find } = buildMockEm();
       const service = buildService(em);
 
       await service.search(buildQuery({ name: 'brasil' }));
 
-      const whereArg = findAndCount.mock.calls[0][1] as Record<string, unknown>;
-      expect(whereArg.isHidden).toBe(false);
+      const groupWhere = find.mock.calls.find(
+        (c) => c[0] === Group,
+      )![1] as Record<string, unknown>;
+      expect(groupWhere.isHidden).toBe(false);
     });
 
     it('returns pagination meta reflecting the requested page/limit and total count', async () => {
-      const { em } = buildMockEm({
-        findAndCountResult: [[buildRootGroup()], 1],
-      });
+      const { em } = buildMockEm({ groupFindResult: [buildGroup()] });
       const service = buildService(em);
 
       const result = await service.search(

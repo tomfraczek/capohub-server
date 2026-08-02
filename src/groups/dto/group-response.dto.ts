@@ -1,10 +1,13 @@
 import { GroupStatus } from '../enums/group-status.enum';
 
-// A Group is always root-level (parentGroup === null) - see the
-// Group/Section rename ADR. No parentGroupId field: a Section's parent is
-// exposed on SectionResponseDto instead.
+// Group is a physically distinct entity type (see the Group/Section
+// physical-split ADR, stage 1) - `parentGroupId` reflects its actual
+// position in the hierarchy (null for a root Group), never a way to guess
+// *what kind* of row this is; every row returned through this DTO is
+// already known to be a Group.
 export interface GroupResponseDto {
   id: string;
+  parentGroupId: string | null;
   name: string;
   description: string | null;
   logoUrl: string | null;
@@ -22,16 +25,10 @@ export interface GroupResponseDto {
   status: GroupStatus;
   timezone: string;
   currencyCode: string;
-  // ISO 3166-1 alpha-2, optional - a Group may span multiple countries.
-  country: string | null;
-  city: string | null;
-  // The admin1 region name - display/compatibility only, see `city`.
-  region: string | null;
-  // The GeoNames identifier this location resolves to - the source of
-  // truth `country`/`city`/`region` are cross-checked against (see
-  // group-validation.helpers.ts#refineCityIdentification). `null` only on
-  // a legacy row created before this field existed - see group.entity.ts.
-  geonameId: number | null;
+  // Direct child Groups only (one level down) - not recursive.
+  childGroupsCount: number;
+  // Direct Sections only (one level down) - not recursive.
+  directSectionsCount: number;
   createdAt: string;
   updatedAt: string;
 }

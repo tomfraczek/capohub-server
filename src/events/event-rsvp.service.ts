@@ -52,7 +52,8 @@ export class EventRsvpService {
   ): Promise<EventAttendeeResponseDto[]> {
     return this.em.transactional(async (em) => {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
-        'community',
+        'communityGroup',
+        'communitySection',
       ]);
       assertEventStatusAllowed(event, [EventStatus.PUBLISHED]);
 
@@ -151,7 +152,8 @@ export class EventRsvpService {
   ): Promise<EventAttendeeResponseDto> {
     return this.em.transactional(async (em) => {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
-        'community',
+        'communityGroup',
+        'communitySection',
       ]);
       assertEventStatusAllowed(event, [EventStatus.PUBLISHED]);
 
@@ -212,7 +214,8 @@ export class EventRsvpService {
   ): Promise<EventAttendeeResponseDto> {
     return this.em.transactional(async (em) => {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
-        'community',
+        'communityGroup',
+        'communitySection',
       ]);
       assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
       if (event.waitlistPolicy !== EventWaitlistPolicy.MANUAL) {

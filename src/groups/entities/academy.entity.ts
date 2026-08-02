@@ -2,19 +2,28 @@ import { Entity, Enum, Index, ManyToOne, Property } from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { AcademyStatus } from '../enums/academy-status.enum';
 import { Group } from './group.entity';
+import { Section } from './section.entity';
 
 // Academy is a physical training location, not an organizational unit - it
 // has no members, permissions, administrators, or child academies (see
-// ADR-012). It always belongs to exactly one Group and is never part of
-// the Group hierarchy itself.
+// ADR-012). It always belongs to exactly one Group-or-Section and is never
+// part of the hierarchy itself. Since the Group/Section physical split
+// (stage 1 of the organizational-domain rebuild), that "belongs to either
+// kind" relationship is represented by two nullable FKs, exactly one of
+// which is ever set - see GroupHierarchyService.findCommunityById for
+// resolving whichever one is populated.
 @Entity({ tableName: 'academies' })
 export class Academy extends BaseEntity {
   // No delete cascade - Academy is archived, never physically deleted, and
   // must remain a valid historical reference even if its Group is archived
   // (see ADR-007).
   @Index()
-  @ManyToOne(() => Group)
-  group!: Group;
+  @ManyToOne(() => Group, { nullable: true, deleteRule: 'no action' })
+  group: Group | null = null;
+
+  @Index()
+  @ManyToOne(() => Section, { nullable: true, deleteRule: 'no action' })
+  section: Section | null = null;
 
   @Property({ length: 150 })
   name!: string;

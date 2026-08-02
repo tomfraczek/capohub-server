@@ -21,6 +21,7 @@ import { GroupMembership } from '../src/groups/entities/group-membership.entity'
 import { Group } from '../src/groups/entities/group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
+import { Section } from '../src/groups/entities/section.entity';
 import { EventResponseDto } from '../src/events/dto/event-response.dto';
 import { EventAttendeeResponseDto } from '../src/events/dto/event-attendee-response.dto';
 import { EventRoleAssignmentResponseDto } from '../src/events/dto/event-role-assignment-response.dto';
@@ -181,24 +182,30 @@ describe('Events (e2e)', () => {
 
   afterAll(async () => {
     const cleanup = app.get(EntityManager).fork();
-    await cleanup.nativeDelete(EventGuardianAssignment, {
-      event: { community: { $in: createdGroupIds } },
+    const eventInCommunity = {
+      event: {
+        $or: [
+          { communityGroup: { $in: createdGroupIds } },
+          { communitySection: { $in: createdGroupIds } },
+        ],
+      },
+    };
+    await cleanup.nativeDelete(EventGuardianAssignment, eventInCommunity);
+    await cleanup.nativeDelete(EventAttendee, eventInCommunity);
+    await cleanup.nativeDelete(EventInvitation, eventInCommunity);
+    await cleanup.nativeDelete(EventRoleAssignment, eventInCommunity);
+    await cleanup.nativeDelete(EventStatusHistory, eventInCommunity);
+    await cleanup.nativeDelete(Event, {
+      $or: [
+        { communityGroup: { $in: createdGroupIds } },
+        { communitySection: { $in: createdGroupIds } },
+      ],
     });
-    await cleanup.nativeDelete(EventAttendee, {
-      event: { community: { $in: createdGroupIds } },
-    });
-    await cleanup.nativeDelete(EventInvitation, {
-      event: { community: { $in: createdGroupIds } },
-    });
-    await cleanup.nativeDelete(EventRoleAssignment, {
-      event: { community: { $in: createdGroupIds } },
-    });
-    await cleanup.nativeDelete(EventStatusHistory, {
-      event: { community: { $in: createdGroupIds } },
-    });
-    await cleanup.nativeDelete(Event, { community: { $in: createdGroupIds } });
     await cleanup.nativeDelete(RoleAssignment, {
-      group: { $in: createdGroupIds },
+      $or: [
+        { group: { $in: createdGroupIds } },
+        { section: { $in: createdGroupIds } },
+      ],
     });
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
@@ -206,6 +213,14 @@ describe('Events (e2e)', () => {
     await cleanup.nativeDelete(AuditLogEntry, {
       community: { $in: createdGroupIds },
     });
+    await cleanup.nativeDelete(Section, {
+      parentGroup: { $in: createdGroupIds },
+    });
+    await cleanup.nativeUpdate(
+      Group,
+      { id: { $in: createdGroupIds } },
+      { parentGroup: null },
+    );
     await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
     await cleanup.nativeDelete(User, {
       clerkUserId: { $in: TEST_CLERK_USER_IDS },
@@ -232,10 +247,6 @@ describe('Events (e2e)', () => {
       memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
-      country: 'PL',
-      city: 'Poznań',
-      region: 'Greater Poland',
-      geonameId: 3088171,
       ...overrides,
     };
   }

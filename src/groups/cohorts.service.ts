@@ -7,25 +7,46 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { CreateCohortInput } from './dto/create-cohort.schema';
 import { CohortResponseDto } from './dto/cohort-response.dto';
 import { UpdateCohortInput } from './dto/update-cohort.schema';
-import { Group } from './entities/group.entity';
+import { Section } from './entities/section.entity';
 import { Cohort } from './entities/cohort.entity';
 import { CohortStatus } from './enums/cohort-status.enum';
+import {
+  communityIdFilter,
+  GroupHierarchyService,
+} from './group-hierarchy.service';
 import { toCohortResponseDto } from './mappers/cohort.mapper';
 
 // A Group works identically with zero Cohorts (see ADR-003) - this
 // service has no logic that depends on whether any Cohort exists.
-// Cohort existence/status of its *Group* is already enforced by
-// GroupPermissionsGuard (via :groupId) before any handler here runs.
+// Cohort existence/status of its *Group-or-Section* is already enforced by
+// GroupPermissionsGuard (via :groupId/:sectionId) before any handler here
+// runs.
 @Injectable()
 export class CohortsService {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly groupHierarchyService: GroupHierarchyService,
+  ) {}
 
   async create(
     groupId: string,
     input: CreateCohortInput,
   ): Promise<CohortResponseDto> {
+    const community =
+      await this.groupHierarchyService.findCommunityById(groupId);
+    if (!community) {
+      throw new NotFoundException({
+        code: 'GROUP_NOT_FOUND',
+        message: 'Group not found',
+      });
+    }
+
     const cohort = new Cohort();
-    cohort.group = this.em.getReference(Group, groupId);
+    if (community instanceof Section) {
+      cohort.section = community;
+    } else {
+      cohort.group = community;
+    }
     this.applyFields(cohort, input);
 
     await this.em.persist(cohort).flush();
@@ -33,11 +54,9 @@ export class CohortsService {
   }
 
   async list(groupId: string): Promise<CohortResponseDto[]> {
-    const cohorts = await this.em.find(
-      Cohort,
-      { group: groupId },
-      { orderBy: { createdAt: 'asc' } },
-    );
+    const cohorts = await this.em.find(Cohort, communityIdFilter(groupId), {
+      orderBy: { createdAt: 'asc' },
+    });
     return cohorts.map(toCohortResponseDto);
   }
 
@@ -84,8 +103,8 @@ export class CohortsService {
   private async loadOrFail(groupId: string, cohortId: string): Promise<Cohort> {
     const cohort = await this.em.findOne(
       Cohort,
-      { id: cohortId, group: groupId },
-      { populate: ['group'] },
+      { id: cohortId, ...communityIdFilter(groupId) },
+      { populate: ['group', 'section'] },
     );
     if (!cohort) {
       throw new NotFoundException({

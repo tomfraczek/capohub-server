@@ -1,40 +1,32 @@
-import { Group } from '../entities/group.entity';
+import { Section } from '../entities/section.entity';
 import { SectionResponseDto } from '../dto/section-response.dto';
 
-// `group` here is always non-root (SectionsService only ever loads/creates
-// Group rows with a parentGroup - see the Group/Section rename ADR). The
-// caller is responsible for that invariant; this mapper trusts it and
-// throws if parentGroup is unexpectedly null, since a "Section" with no
-// parent would be a Group in disguise and must never reach a response.
-export function toSectionResponseDto(group: Group): SectionResponseDto {
-  if (!group.parentGroup) {
-    throw new Error('toSectionResponseDto called with a root Group');
-  }
+export function toSectionResponseDto(section: Section): SectionResponseDto {
   return {
-    id: group.id,
-    parentId: group.parentGroup.id,
-    name: group.name,
-    description: group.description,
-    logoUrl: group.logoUrl,
-    coverImageUrl: group.coverImageUrl,
-    contactEmail: group.contactEmail,
-    contactPhone: group.contactPhone,
-    websiteUrl: group.websiteUrl,
-    facebookUrl: group.facebookUrl,
-    instagramUrl: group.instagramUrl,
-    youtubeUrl: group.youtubeUrl,
-    isPublic: group.isPublic,
-    isHidden: group.isHidden,
-    memberInvitesAllowed: group.memberInvitesAllowed,
-    publicCode: group.publicCode,
-    status: group.status,
-    timezone: group.timezone,
-    currencyCode: group.currencyCode,
-    country: group.country,
-    city: group.city,
-    region: group.region,
-    geonameId: group.geonameId,
-    createdAt: group.createdAt.toISOString(),
-    updatedAt: group.updatedAt.toISOString(),
+    id: section.id,
+    parentGroupId: section.parentGroup?.id ?? null,
+    name: section.name,
+    description: section.description,
+    logoUrl: section.logoUrl,
+    coverImageUrl: section.coverImageUrl,
+    contactEmail: section.contactEmail,
+    contactPhone: section.contactPhone,
+    websiteUrl: section.websiteUrl,
+    facebookUrl: section.facebookUrl,
+    instagramUrl: section.instagramUrl,
+    youtubeUrl: section.youtubeUrl,
+    isPublic: section.isPublic,
+    isHidden: section.isHidden,
+    memberInvitesAllowed: section.memberInvitesAllowed,
+    publicCode: section.publicCode,
+    status: section.status,
+    timezone: section.timezone,
+    currencyCode: section.currencyCode,
+    country: section.country,
+    city: section.city,
+    region: section.region,
+    geonameId: section.geonameId,
+    createdAt: section.createdAt.toISOString(),
+    updatedAt: section.updatedAt.toISOString(),
   };
 }

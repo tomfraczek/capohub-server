@@ -23,6 +23,7 @@ import { CohortResponseDto } from '../src/groups/dto/cohort-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
+import { Section } from '../src/groups/entities/section.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { Cohort } from '../src/groups/entities/cohort.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
@@ -149,20 +150,33 @@ describe('Role Assignments (e2e)', () => {
   afterAll(async () => {
     const cleanup = app.get(EntityManager).fork();
     await cleanup.nativeDelete(RoleAssignment, {
-      group: { $in: createdGroupIds },
+      $or: [
+        { group: { $in: createdGroupIds } },
+        { section: { $in: createdGroupIds } },
+      ],
     });
-    await cleanup.nativeDelete(Cohort, { group: { $in: createdGroupIds } });
+    await cleanup.nativeDelete(Cohort, {
+      $or: [
+        { group: { $in: createdGroupIds } },
+        { section: { $in: createdGroupIds } },
+      ],
+    });
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
     });
+    await cleanup.nativeDelete(AuditLogEntry, {
+      community: { $in: createdGroupIds },
+    });
+    // Sections must be removed before their parent Groups to satisfy the
+    // parent_group_id foreign key (no cascade - see section.entity.ts).
+    await cleanup.nativeDelete(Section, { id: { $in: createdGroupIds } });
+    // Child Groups must be nulled before their parents to satisfy the
+    // parent_group_id self-FK (no cascade - see group.entity.ts).
     await cleanup.nativeUpdate(
       Group,
       { id: { $in: createdGroupIds } },
       { parentGroup: null },
     );
-    await cleanup.nativeDelete(AuditLogEntry, {
-      community: { $in: createdGroupIds },
-    });
     await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
     await cleanup.nativeDelete(User, {
       clerkUserId: { $in: TEST_CLERK_USER_IDS },
@@ -189,10 +203,6 @@ describe('Role Assignments (e2e)', () => {
       memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
-      country: 'PL',
-      city: 'Poznań',
-      region: 'Greater Poland',
-      geonameId: 3088171,
       ...overrides,
     };
   }
@@ -221,7 +231,28 @@ describe('Role Assignments (e2e)', () => {
       request(app.getHttpServer())
         .post(`/api/v1/groups/${parentId}/sections`)
         .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload({ country: 'PL', ...overrides }))
+        .send({
+          name: 'Section',
+          description: null,
+          logoUrl: null,
+          coverImageUrl: null,
+          contactEmail: null,
+          contactPhone: null,
+          websiteUrl: null,
+          facebookUrl: null,
+          instagramUrl: null,
+          youtubeUrl: null,
+          isPublic: true,
+          isHidden: false,
+          memberInvitesAllowed: false,
+          timezone: 'Europe/Warsaw',
+          currencyCode: 'PLN',
+          country: 'PL',
+          city: 'Poznań',
+          region: 'Greater Poland',
+          geonameId: 3088171,
+          ...overrides,
+        })
         .expect(201),
     );
     createdGroupIds.push(created.id);
@@ -679,7 +710,7 @@ describe('Role Assignments (e2e)', () => {
       const em = app.get(EntityManager).fork();
       const stillExists = await em.findOne(RoleAssignment, {
         membership: membership.id,
-        group: child.id,
+        section: child.id,
         role: GroupRole.ADMIN,
       });
       expect(stillExists).not.toBeNull();

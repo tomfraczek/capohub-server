@@ -141,8 +141,15 @@ function buildMockEm(routing: MockRouting = {}) {
 // ─── Service factory ─────────────────────────────────────────────────────────
 
 function buildService(em: EntityManager) {
+  const getRootGroup = jest
+    .fn<Promise<Group>, [string]>()
+    .mockResolvedValue(buildGroup());
   const groupHierarchyService = {
-    getRootGroup: jest.fn().mockResolvedValue(buildGroup()),
+    getRootGroup,
+    resolveRootGroup: (community: Group): Promise<Group> =>
+      getRootGroup(community.id),
+    findCommunityById: (id: string, emArg?: EntityManager) =>
+      (emArg ?? em).findOne(Group, { id }),
   } as unknown as GroupHierarchyService;
 
   const ensureMemberRole = jest.fn().mockResolvedValue(undefined);

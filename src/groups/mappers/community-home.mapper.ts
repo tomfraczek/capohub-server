@@ -1,4 +1,5 @@
 import { Group } from '../entities/group.entity';
+import { Community } from '../group-hierarchy.service';
 import { MembershipRequestResponseDto } from '../dto/membership-request-response.dto';
 import {
   CommunityHomeCommunityDto,
@@ -8,35 +9,42 @@ import {
 } from '../dto/community-home-response.dto';
 import { GroupRole } from '../enums/group-role.enum';
 
+// Type-based, not a `parentGroup === null` check - see the
+// organizational-domain rebuild, stage 1: a Section is never "root"
+// regardless of whether it currently has a parent.
+function isRootGroup(community: Community): boolean {
+  return community instanceof Group && community.parentGroup === null;
+}
+
 export function toCommunityHomeCommunityRefDto(
-  group: Group,
+  community: Community,
 ): CommunityHomeCommunityRefDto {
   return {
-    id: group.id,
-    name: group.name,
-    logoUrl: group.logoUrl,
-    isRootGroup: group.parentGroup === null,
+    id: community.id,
+    name: community.name,
+    logoUrl: community.logoUrl,
+    isRootGroup: isRootGroup(community),
   };
 }
 
 export function toCommunityHomeCommunityDto(
-  group: Group,
+  community: Community,
   rootGroupId: string,
   myRoles: GroupRole[],
 ): CommunityHomeCommunityDto {
   return {
-    id: group.id,
-    name: group.name,
-    description: group.description,
-    logoUrl: group.logoUrl,
-    coverImageUrl: group.coverImageUrl,
-    parentId: group.parentGroup ? group.parentGroup.id : null,
+    id: community.id,
+    name: community.name,
+    description: community.description,
+    logoUrl: community.logoUrl,
+    coverImageUrl: community.coverImageUrl,
+    parentId: community.parentGroup ? community.parentGroup.id : null,
     rootGroupId,
-    isRootGroup: group.parentGroup === null,
+    isRootGroup: isRootGroup(community),
     myRoles,
-    isPublic: group.isPublic,
-    isHidden: group.isHidden,
-    status: group.status,
+    isPublic: community.isPublic,
+    isHidden: community.isHidden,
+    status: community.status,
   };
 }
 

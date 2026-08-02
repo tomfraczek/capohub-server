@@ -12,6 +12,7 @@ import { EventStatus } from './enums/event-status.enum';
 import { EventVisibility } from './enums/event-visibility.enum';
 import { EventWaitlistPolicy } from './enums/event-waitlist-policy.enum';
 import { EventRolesService } from './event-roles.service';
+import { eventCommunity } from './event-community.util';
 import { EventsService } from './events.service';
 import { EventPermissionService } from './permissions/event-permission.service';
 import { CreateEventInput } from './dto/create-event.schema';
@@ -34,7 +35,8 @@ function buildGroup(overrides: Partial<Group> = {}): Group {
 function buildEvent(overrides: Partial<Event> = {}): Event {
   const event = new Event();
   event.id = 'event-1';
-  event.community = buildGroup();
+  event.communityGroup = buildGroup();
+  event.communitySection = null;
   event.createdBy = ACTOR;
   event.status = EventStatus.DRAFT;
   event.visibility = EventVisibility.COMMUNITY_MEMBERS;
@@ -123,6 +125,7 @@ function buildService(
     visible?: boolean;
     canRegister?: boolean;
     communityRoles?: EventRole[] | 'none';
+    communityForCreate?: Group | null;
   } = {},
 ) {
   const event = options.event ?? buildEvent();
@@ -151,7 +154,7 @@ function buildService(
       options.communityRoles === 'none' || options.communityRoles === undefined
         ? null
         : {
-            group: event.community,
+            community: eventCommunity(event),
             membership: { status: 'ACTIVE' },
             roleAssignments: options.communityRoles.map((role) => ({ role })),
           },
@@ -161,6 +164,14 @@ function buildService(
   const groupPermissionService = new GroupPermissionService();
   const groupHierarchyService = {
     getDescendants: jest.fn().mockResolvedValue([]),
+    getDescendantSections: jest.fn().mockResolvedValue([]),
+    findCommunityById: jest
+      .fn()
+      .mockResolvedValue(
+        options.communityForCreate === undefined
+          ? buildGroup()
+          : options.communityForCreate,
+      ),
   } as unknown as GroupHierarchyService;
 
   return new EventsService(
@@ -192,8 +203,8 @@ describe('EventsService', () => {
     });
 
     it('throws GROUP_NOT_FOUND when the community does not exist', async () => {
-      const { em } = buildMockEm({ community: null });
-      const service = buildService(em);
+      const { em } = buildMockEm();
+      const service = buildService(em, { communityForCreate: null });
 
       await expect(
         service.create('missing', buildCreateInput(), ACTOR),

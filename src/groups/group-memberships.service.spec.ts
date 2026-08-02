@@ -194,13 +194,20 @@ function buildMockEm(routing: MockRouting = {}) {
 
 function buildService(
   em: EntityManager,
-  getRootGroupImpl?: (groupId: string) => Promise<Group>,
+  getRootGroupImpl?: (groupId: string, em?: EntityManager) => Promise<Group>,
   getDescendantsImpl?: (groupId: string) => Promise<Group[]>,
   auditLogServiceOverride?: AuditLogService,
 ) {
+  const resolveGetRootGroup =
+    getRootGroupImpl ?? (() => Promise.resolve(buildGroup()));
   const groupHierarchyService = {
-    getRootGroup: getRootGroupImpl ?? (() => Promise.resolve(buildGroup())),
+    getRootGroup: resolveGetRootGroup,
     getDescendants: getDescendantsImpl ?? (() => Promise.resolve([])),
+    getDescendantSections: () => Promise.resolve([]),
+    findCommunityById: (id: string, emArg?: EntityManager) =>
+      (emArg ?? em).findOne(Group, { id }),
+    resolveRootGroup: (community: Group, emArg?: EntityManager) =>
+      resolveGetRootGroup(community.id, emArg),
   } as unknown as GroupHierarchyService;
   const auditLogService =
     auditLogServiceOverride ??

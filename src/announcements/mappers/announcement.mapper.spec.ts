@@ -1,3 +1,5 @@
+import { Group } from '../../groups/entities/group.entity';
+import { Section } from '../../groups/entities/section.entity';
 import { MembershipRequestTarget } from '../../groups/enums/membership-request-target.enum';
 import { Announcement } from '../entities/announcement.entity';
 import { AnnouncementRecipientType } from '../enums/announcement-recipient-type.enum';
@@ -6,15 +8,29 @@ import {
   toAnnouncementResponseDto,
 } from './announcement.mapper';
 
+function buildGroup(overrides: Partial<Group> = {}): Group {
+  const group = new Group();
+  group.id = 'group-1';
+  group.parentGroup = null;
+  return Object.assign(group, overrides);
+}
+
+function buildSection(overrides: Partial<Section> = {}): Section {
+  const section = new Section();
+  section.id = 'section-1';
+  section.parentGroup = buildGroup();
+  return Object.assign(section, overrides);
+}
+
 function buildAnnouncement(
   overrides: Partial<Announcement> = {},
 ): Announcement {
   const announcement = new Announcement();
   announcement.id = 'announcement-1';
-  // Root Group by default (parentGroup: null) - tests that need a Section
-  // pass a non-null parentGroup explicitly (see communityResourceType
-  // tests below).
-  announcement.community = { id: 'group-1', parentGroup: null } as never;
+  // Group by default - tests that need a Section pass communitySection
+  // explicitly (see communityResourceType tests below).
+  announcement.communityGroup = buildGroup();
+  announcement.communitySection = null;
   announcement.author = { id: 'user-1', displayName: 'Author' } as never;
   announcement.title = 'Title';
   announcement.body = 'Body';
@@ -119,9 +135,10 @@ describe('toAnnouncementResponseDto', () => {
     ).toBe('recipient-group-1');
   });
 
-  it('sets communityResourceType to GROUP when the community is a root Group (parentGroup: null)', () => {
+  it('sets communityResourceType to GROUP when the community is a Group', () => {
     const announcement = buildAnnouncement({
-      community: { id: 'group-1', parentGroup: null } as never,
+      communityGroup: buildGroup(),
+      communitySection: null,
     });
     const dto = toAnnouncementResponseDto(announcement, {
       isRead: false,
@@ -131,12 +148,10 @@ describe('toAnnouncementResponseDto', () => {
     expect(dto.communityResourceType).toBe(MembershipRequestTarget.GROUP);
   });
 
-  it('sets communityResourceType to SECTION when the community has a non-null parentGroup', () => {
+  it('sets communityResourceType to SECTION when the community is a Section', () => {
     const announcement = buildAnnouncement({
-      community: {
-        id: 'section-1',
-        parentGroup: { id: 'group-1' },
-      } as never,
+      communityGroup: null,
+      communitySection: buildSection(),
     });
     const dto = toAnnouncementResponseDto(announcement, {
       isRead: false,

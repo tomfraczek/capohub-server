@@ -9,6 +9,7 @@ import {
 import { BaseEntity } from '../../database/entities/base.entity';
 import { GroupRole } from '../enums/group-role.enum';
 import { Group } from './group.entity';
+import { Section } from './section.entity';
 import { GroupMembership } from './group-membership.entity';
 
 export const ROLE_ASSIGNMENTS_UNIQUE_INDEX =
@@ -54,25 +55,38 @@ export const ROLE_ASSIGNMENTS_OWNER_UNIQUE_INDEX =
 @Entity({ tableName: 'role_assignments' })
 @Unique({
   name: ROLE_ASSIGNMENTS_UNIQUE_INDEX,
-  properties: ['membership', 'group', 'role'],
+  properties: ['membership', 'group', 'section', 'role'],
+  // `coalesce` folds the two nullable community FKs into one comparison
+  // key, since exactly one of them is ever set for a given row (see the
+  // Group/Section physical-split ADR).
+  expression: (table, columns, indexName) =>
+    `create unique index "${indexName}" on ${table.toString()} ("${columns.membership}", coalesce("${columns.group}", "${columns.section}"), "${columns.role}")`,
 })
 @Unique({
   name: ROLE_ASSIGNMENTS_OWNER_UNIQUE_INDEX,
-  properties: ['group'],
+  properties: ['group', 'section'],
   // Partial unique index (only rows where role = OWNER) - same `expression`
   // technique as GROUP_MEMBERSHIPS_ACTIVE_UNIQUE_INDEX, required because a
   // plain @Unique() cannot express a WHERE predicate.
   expression: (table, columns, indexName) =>
-    `create unique index "${indexName}" on ${table.toString()} ("${columns.group}") where ("${columns.role}" = 'OWNER')`,
+    `create unique index "${indexName}" on ${table.toString()} (coalesce("${columns.group}", "${columns.section}")) where ("${columns.role}" = 'OWNER')`,
 })
 export class RoleAssignment extends BaseEntity {
   @Index()
   @ManyToOne(() => GroupMembership)
   membership!: GroupMembership;
 
+  // The Group-or-Section this Role Assignment targets, represented by two
+  // nullable FKs (exactly one set) since the Group/Section physical split -
+  // see GroupHierarchyService.findCommunityById for resolving whichever one
+  // is populated.
   @Index()
-  @ManyToOne(() => Group)
-  group!: Group;
+  @ManyToOne(() => Group, { nullable: true, deleteRule: 'no action' })
+  group: Group | null = null;
+
+  @Index()
+  @ManyToOne(() => Section, { nullable: true, deleteRule: 'no action' })
+  section: Section | null = null;
 
   @Enum({ items: () => Object.values(GroupRole) })
   role!: GroupRole;

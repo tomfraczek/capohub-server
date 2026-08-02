@@ -23,6 +23,7 @@ import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
+import { Section } from '../src/groups/entities/section.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 
 const OWNER_TOKEN = 'valid-discovery-owner-token';
@@ -113,7 +114,10 @@ describe('Discovery search (e2e)', () => {
   afterAll(async () => {
     const cleanup = app.get(EntityManager).fork();
     await cleanup.nativeDelete(RoleAssignment, {
-      group: { $in: createdGroupIds },
+      $or: [
+        { group: { $in: createdGroupIds } },
+        { section: { $in: createdGroupIds } },
+      ],
     });
     await cleanup.nativeDelete(GroupMembership, {
       rootGroup: { $in: createdGroupIds },
@@ -121,6 +125,16 @@ describe('Discovery search (e2e)', () => {
     await cleanup.nativeDelete(AuditLogEntry, {
       community: { $in: createdGroupIds },
     });
+    // Sections must be removed before their parent Groups to satisfy the
+    // parent_group_id foreign key (no cascade - see section.entity.ts).
+    await cleanup.nativeDelete(Section, { id: { $in: createdGroupIds } });
+    // Child Groups must be nulled before their parents to satisfy the
+    // parent_group_id self-FK (no cascade - see group.entity.ts).
+    await cleanup.nativeUpdate(
+      Group,
+      { id: { $in: createdGroupIds } },
+      { parentGroup: null },
+    );
     await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
     await cleanup.nativeDelete(User, { clerkUserId: OWNER_CLERK_ID });
     await app.close();
@@ -133,10 +147,6 @@ describe('Discovery search (e2e)', () => {
       currencyCode: 'PLN',
       isPublic: true,
       isHidden: false,
-      country: 'PL',
-      city: 'Poznań',
-      region: 'Greater Poland',
-      geonameId: 3088171,
       ...overrides,
     };
   }
@@ -209,7 +219,6 @@ describe('Discovery search (e2e)', () => {
   it('finds a Group by partial, case-insensitive name and reports type/sectionsCount', async () => {
     const group = await createGroup({
       name: `${uniqueSuffix} FindByName`,
-      country: 'PL',
     });
     await createSection(group.id);
 
@@ -220,7 +229,8 @@ describe('Discovery search (e2e)', () => {
     const match = res.data.find((row) => row.id === group.id);
     expect(match).toBeDefined();
     expect(match?.type).toBe('GROUP');
-    expect(match?.country).toBe('PL');
+    // Group has no location fields (stage-1 organizational-domain rebuild).
+    expect(match?.country).toBeNull();
     expect(match?.parentId).toBeNull();
     expect(match?.sectionsCount).toBe(1);
   });
@@ -245,8 +255,11 @@ describe('Discovery search (e2e)', () => {
     expect(match?.country).toBe('BR');
   });
 
-  it('filters by country', async () => {
-    const group = await createGroup({
+  it('filters by country - Group has no location, so only a Section can match', async () => {
+    const root = await createGroup({
+      name: `${uniqueSuffix} CountryFilter Root`,
+    });
+    const section = await createSection(root.id, {
       name: `${uniqueSuffix} CountryFilter`,
       country: 'DE',
       city: 'Berlin',
@@ -257,18 +270,19 @@ describe('Discovery search (e2e)', () => {
     const matching = await bodyOf<PaginatedResponse<CommunitySearchResultDto>>(
       search(`name=${encodeURIComponent(uniqueSuffix)}&country=DE`).expect(200),
     );
-    expect(matching.data.some((row) => row.id === group.id)).toBe(true);
+    expect(matching.data.some((row) => row.id === section.id)).toBe(true);
 
     const nonMatching = await bodyOf<
       PaginatedResponse<CommunitySearchResultDto>
     >(
       search(`name=${encodeURIComponent(uniqueSuffix)}&country=FR`).expect(200),
     );
-    expect(nonMatching.data.some((row) => row.id === group.id)).toBe(false);
+    expect(nonMatching.data.some((row) => row.id === section.id)).toBe(false);
   });
 
-  it('filters by city (partial, case-insensitive)', async () => {
-    const group = await createGroup({
+  it('filters by city (partial, case-insensitive) - Group has no location, so only a Section can match', async () => {
+    const root = await createGroup({ name: `${uniqueSuffix} CityFilter Root` });
+    const section = await createSection(root.id, {
       name: `${uniqueSuffix} CityFilter`,
       country: 'PL',
       city: 'Warsaw',
@@ -279,7 +293,7 @@ describe('Discovery search (e2e)', () => {
     const res = await bodyOf<PaginatedResponse<CommunitySearchResultDto>>(
       search(`name=${encodeURIComponent(uniqueSuffix)}&city=wars`).expect(200),
     );
-    expect(res.data.some((row) => row.id === group.id)).toBe(true);
+    expect(res.data.some((row) => row.id === section.id)).toBe(true);
   });
 
   it('filters by type to build separate Groups/Sections tabs', async () => {
@@ -463,14 +477,20 @@ describe('Discovery search (e2e)', () => {
       expect(byExonym[0]).toMatchObject({ geonameId: 756135, name: 'Warsaw' });
     });
 
-    it('returns a geonameId/name/region that Group/Section creation accepts as-is (endpoint and validation share one source)', async () => {
+    // Group has no location fields (stage-1 organizational-domain rebuild) -
+    // the geonameId/name/region contract is now Section-only, so this
+    // creates a root Group first and asserts on a Section under it.
+    it('returns a geonameId/name/region that Section creation accepts as-is (endpoint and validation share one source)', async () => {
       const res = await bodyOf<CityResultDto[]>(
         searchCities('country=BR&search=Paulo').expect(200),
       );
       const saoPaulo = res.find((city) => city.geonameId === 3448439);
       expect(saoPaulo).toBeDefined();
 
-      const created = await createGroup({
+      const root = await createGroup({
+        name: `${uniqueSuffix} CityContractMatch Root`,
+      });
+      const created = await createSection(root.id, {
         name: `${uniqueSuffix} CityContractMatch`,
         country: 'BR',
         city: saoPaulo!.name,
@@ -482,7 +502,7 @@ describe('Discovery search (e2e)', () => {
 
     // Regression coverage for the city-identification problem: the two
     // "Piaski" entries the search endpoint returns must each be usable
-    // as-is (name + region + geonameId) to create a Group unambiguously -
+    // as-is (name + region + geonameId) to create a Section unambiguously -
     // proving the endpoint and the create validation agree on exactly
     // which (geonameId, name, region) combinations are real.
     it('lets each of two same-named cities be created unambiguously using the exact record the endpoint returned', async () => {
@@ -493,14 +513,15 @@ describe('Discovery search (e2e)', () => {
       expect(piaskiEntries).toHaveLength(2);
 
       const [first, second] = piaskiEntries;
-      const createdFirst = await createGroup({
+      const root = await createGroup({ name: `${uniqueSuffix} Piaski Root` });
+      const createdFirst = await createSection(root.id, {
         name: `${uniqueSuffix} Piaski First`,
         country: 'PL',
         city: first.name,
         region: first.region,
         geonameId: first.geonameId,
       });
-      const createdSecond = await createGroup({
+      const createdSecond = await createSection(root.id, {
         name: `${uniqueSuffix} Piaski Second`,
         country: 'PL',
         city: second.name,

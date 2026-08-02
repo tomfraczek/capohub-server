@@ -29,15 +29,15 @@ const ANY_STATUS = [
   GroupStatus.DELETED,
 ] as const;
 
-// Creates/lists Sections directly under a parent, which may be a Group or
-// another Section (nesting is unlimited-depth - ADR-002) - hence the
-// dual-mounted path, matching whichever of :groupId/:sectionId the request
-// used. No @RequireGroupKind here: unlike SectionController (single-
-// resource), the parent may legitimately be either kind. Single-resource
-// operations on one specific Section (get/update/lifecycle) live on
-// SectionController (sections/:sectionId), mirroring the
-// EventsController/EventController split already used in this codebase.
-@Controller(['groups/:groupId/sections', 'sections/:sectionId/sections'])
+// Creates/lists Sections directly under a Group. As of the
+// Group/Section physical split (organizational-domain rebuild, stage 1), a
+// Section can never have children - it may only ever be attached to a
+// Group - so the old dual-mounted 'sections/:sectionId/sections' path
+// (creating a Section under another Section) no longer has any meaning and
+// has been removed; only 'groups/:groupId/sections' remains. Single-
+// resource operations on one specific Section (get/update/lifecycle) live
+// on SectionController (sections/:sectionId).
+@Controller('groups/:groupId/sections')
 @UseGuards(GroupPermissionsGuard)
 export class SectionsController {
   constructor(private readonly sectionsService: SectionsService) {}
@@ -47,20 +47,16 @@ export class SectionsController {
   @RequireGroupPermission(GroupPermission.SECTION_CREATE)
   create(
     @Param('groupId') groupId: string,
-    @Param('sectionId') sectionId: string,
     @CurrentUser() user: User,
     @Body(new ZodValidationPipe(createSectionSchema)) dto: CreateSectionDto,
   ): Promise<SectionResponseDto> {
-    return this.sectionsService.create(groupId ?? sectionId, user, dto);
+    return this.sectionsService.create(groupId, user, dto);
   }
 
   @Get()
   @RequireGroupPermission(GroupPermission.SECTION_VIEW)
   @AllowGroupStatuses(...ANY_STATUS)
-  list(
-    @Param('groupId') groupId: string,
-    @Param('sectionId') sectionId: string,
-  ): Promise<SectionResponseDto[]> {
-    return this.sectionsService.list(groupId ?? sectionId);
+  list(@Param('groupId') groupId: string): Promise<SectionResponseDto[]> {
+    return this.sectionsService.list(groupId);
   }
 }

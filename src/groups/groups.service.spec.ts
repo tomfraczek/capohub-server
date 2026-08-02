@@ -4,6 +4,7 @@ import { User } from '../users/entities/user.entity';
 import { CreateGroupInput } from './dto/create-group.schema';
 import { GroupMembership } from './entities/group-membership.entity';
 import { Group } from './entities/group.entity';
+import { Section } from './entities/section.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
 import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
@@ -32,10 +33,6 @@ function buildCreateInput(
     memberInvitesAllowed: false,
     timezone: 'Europe/Warsaw',
     currencyCode: 'PLN',
-    country: 'PL',
-    city: 'Poznań',
-    region: 'Greater Poland',
-    geonameId: 3088171,
     ...overrides,
   };
 }
@@ -84,6 +81,7 @@ interface MockRouting {
   memberships?: GroupMembership[];
   roleAssignmentFindResults?: RoleAssignment[];
   children?: Group[];
+  sections?: Section[];
 }
 
 function buildMockEm(routing: MockRouting = {}) {
@@ -135,12 +133,18 @@ function buildMockEm(routing: MockRouting = {}) {
     if (entity === Group) {
       return Promise.resolve(routing.children ?? []);
     }
+    if (entity === Section) {
+      return Promise.resolve(routing.sections ?? []);
+    }
     throw new Error(`Unexpected find entity in test mock: ${String(entity)}`);
   });
+
+  const count = jest.fn().mockResolvedValue(0);
 
   const raw = {
     findOne,
     find,
+    count,
     persist,
     flush,
     transactional: jest

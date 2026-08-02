@@ -162,10 +162,16 @@ describe('MembershipRequests + Discovery (e2e)', () => {
     const cleanup = app.get(EntityManager).fork();
     if (createdGroupIds.length > 0) {
       await cleanup.nativeDelete(MembershipRequest, {
-        targetGroup: { $in: createdGroupIds },
+        $or: [
+          { targetGroup: { $in: createdGroupIds } },
+          { targetSection: { $in: createdGroupIds } },
+        ],
       });
       await cleanup.nativeDelete(RoleAssignment, {
-        group: { $in: createdGroupIds },
+        $or: [
+          { group: { $in: createdGroupIds } },
+          { section: { $in: createdGroupIds } },
+        ],
       });
       await cleanup.nativeDelete(GroupMembership, {
         rootGroup: { $in: createdGroupIds },
@@ -200,10 +206,6 @@ describe('MembershipRequests + Discovery (e2e)', () => {
       memberInvitesAllowed: false,
       timezone: 'Europe/Warsaw',
       currencyCode: 'PLN',
-      country: 'PL',
-      city: 'Poznań',
-      region: 'Greater Poland',
-      geonameId: 3088171,
       ...overrides,
     };
   }

@@ -31,10 +31,14 @@ describe('group.mapper', () => {
     it('maps every field, including timestamps as ISO strings', () => {
       const group = buildGroup({ logoUrl: 'https://example.com/logo.png' });
 
-      const dto = toGroupResponseDto(group);
+      const dto = toGroupResponseDto(group, {
+        childGroupsCount: 2,
+        directSectionsCount: 3,
+      });
 
       expect(dto).toMatchObject({
         id: 'group-1',
+        parentGroupId: null,
         name: 'Capoeira Angola SP',
         logoUrl: 'https://example.com/logo.png',
         isPublic: true,
@@ -43,6 +47,8 @@ describe('group.mapper', () => {
         status: GroupStatus.ACTIVE,
         timezone: 'Europe/Warsaw',
         currencyCode: 'PLN',
+        childGroupsCount: 2,
+        directSectionsCount: 3,
       });
       expect(dto.createdAt).toBe(group.createdAt.toISOString());
       expect(dto.updatedAt).toBe(group.updatedAt.toISOString());

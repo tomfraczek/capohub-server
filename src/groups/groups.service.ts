@@ -18,6 +18,7 @@ import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
 import { GroupMembership } from './entities/group-membership.entity';
 import { Group } from './entities/group.entity';
+import { Section } from './entities/section.entity';
 import {
   toGroupResponseDto,
   toGroupSummaryResponseDto,
@@ -85,7 +86,7 @@ export class GroupsService {
       return group;
     });
 
-    return toGroupResponseDto(group);
+    return this.toResponseDto(this.em, group);
   }
 
   async listMine(userId: string): Promise<GroupSummaryResponseDto[]> {
@@ -122,7 +123,7 @@ export class GroupsService {
 
   async getById(groupId: string): Promise<GroupResponseDto> {
     const group = await this.loadGroupOrFail(groupId);
-    return toGroupResponseDto(group);
+    return this.toResponseDto(this.em, group);
   }
 
   async update(
@@ -135,7 +136,7 @@ export class GroupsService {
       this.applyFields(group, input);
       this.recordCommunityAudit(em, group, AuditAction.UPDATE_COMMUNITY, actor);
       await em.flush();
-      return toGroupResponseDto(group);
+      return this.toResponseDto(em, group);
     });
   }
 
@@ -191,8 +192,12 @@ export class GroupsService {
     return this.em.transactional(async (em) => {
       const group = await this.loadGroupOrFail(groupId, em);
 
-      const children = await em.find(Group, { parentGroup: groupId });
-      const activeChildren = children.filter(
+      // "Children" means both child Groups and direct Sections - deleting a
+      // Group must not silently orphan either kind of substructure under a
+      // now-permanently-gone parent.
+      const childGroups = await em.find(Group, { parentGroup: groupId });
+      const sections = await em.find(Section, { parentGroup: groupId });
+      const activeChildren = [...childGroups, ...sections].filter(
         (child) =>
           child.status !== GroupStatus.ARCHIVED &&
           child.status !== GroupStatus.DELETED,
@@ -201,7 +206,7 @@ export class GroupsService {
         throw new ConflictException({
           code: 'GROUP_HAS_ACTIVE_CHILDREN',
           message:
-            'Archive or delete every child group before deleting this one',
+            'Archive or delete every child group and section before deleting this one',
           childGroupIds: activeChildren.map((child) => child.id),
         });
       }
@@ -209,7 +214,7 @@ export class GroupsService {
       group.status = GroupStatus.DELETED;
       this.recordCommunityAudit(em, group, AuditAction.DELETE, actor);
       await em.flush();
-      return toGroupResponseDto(group);
+      return this.toResponseDto(em, group);
     });
   }
 
@@ -226,7 +231,7 @@ export class GroupsService {
         this.recordCommunityAudit(em, group, auditAction, actor);
       }
       await em.flush();
-      return toGroupResponseDto(group);
+      return this.toResponseDto(em, group);
     });
   }
 
@@ -266,10 +271,24 @@ export class GroupsService {
     group.memberInvitesAllowed = input.memberInvitesAllowed;
     group.timezone = input.timezone;
     group.currencyCode = input.currencyCode;
-    group.country = input.country;
-    group.city = input.city;
-    group.region = input.region;
-    group.geonameId = input.geonameId;
+  }
+
+  // childGroupsCount/directSectionsCount are direct-children counts only
+  // (see GroupResponseDto) - queried fresh rather than relying on
+  // Group.childGroups/sections' Collection state, which is not loaded by
+  // default.
+  private async toResponseDto(
+    em: EntityManager,
+    group: Group,
+  ): Promise<GroupResponseDto> {
+    // Sequential, not Promise.all - two queries issued concurrently on the
+    // same EntityManager/connection race each other at the driver level
+    // (see the pg deprecation warning this used to trigger under load).
+    const childGroupsCount = await em.count(Group, { parentGroup: group.id });
+    const directSectionsCount = await em.count(Section, {
+      parentGroup: group.id,
+    });
+    return toGroupResponseDto(group, { childGroupsCount, directSectionsCount });
   }
 
   private async loadGroupOrFail(

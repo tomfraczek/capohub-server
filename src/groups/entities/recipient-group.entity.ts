@@ -2,19 +2,21 @@ import { Entity, Index, ManyToOne, Property, Unique } from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { Group } from './group.entity';
+import { Section } from './section.entity';
 
 export const RECIPIENT_GROUPS_ACTIVE_NAME_UNIQUE_INDEX =
-  'recipient_groups_group_id_name_active_unique';
+  'recipient_groups_community_name_active_unique';
 
 // A manually-managed, named subset of one Group-or-Section's members, used
 // only to target Announcements (see Announcement.recipientGroup) - never a
-// Group, Section, or Cohort itself (Cohort divides a Group's members for
-// *management* convenience and has no notion of "who receives what"; a
+// Group, Section, or Cohort itself (Cohort divides a community's members
+// for *management* convenience and has no notion of "who receives what"; a
 // Recipient Group exists purely to name a communication audience, e.g.
-// "Trenerzy", "Rodzice"). Belongs to exactly one Group-kind entity (a Root
-// Group or a Section) - same single-FK pattern as Academy/Cohort/
-// Event.community (no separate resourceType discriminator: a Section is a
-// Group row, not a distinct type - ADR-001).
+// "Trenerzy", "Rodzice"). Belongs to exactly one Group-or-Section,
+// represented by two nullable FKs (exactly one set) since the Group/Section
+// physical split - same pattern as Academy/Cohort/Event.community - see
+// GroupHierarchyService.findCommunityById for resolving whichever one is
+// populated.
 //
 // Never physically deleted, even once no Announcement references it -
 // `isActive: false` ("deactivated") is the only removal state, so it can
@@ -24,27 +26,32 @@ export const RECIPIENT_GROUPS_ACTIVE_NAME_UNIQUE_INDEX =
 @Entity({ tableName: 'recipient_groups' })
 @Unique({
   name: RECIPIENT_GROUPS_ACTIVE_NAME_UNIQUE_INDEX,
-  properties: ['group', 'name'],
-  // Case-insensitive per-Group uniqueness among *active* Recipient Groups
-  // only ("Trenerzy" and "trenerzy" in the same Group must collide, but
-  // only while both are active) - partial on `is_active = true`, same
-  // `expression` escape hatch as RoleAssignment's partial OWNER index (see
-  // role-assignment.entity.ts): a plain @Unique() can express neither the
-  // lower(name) comparison nor a WHERE predicate. Deliberately does NOT
+  properties: ['group', 'section', 'name'],
+  // Case-insensitive per-community uniqueness among *active* Recipient
+  // Groups only ("Trenerzy" and "trenerzy" in the same community must
+  // collide, but only while both are active) - partial on
+  // `is_active = true`, same `expression` escape hatch as RoleAssignment's
+  // partial OWNER index (see role-assignment.entity.ts). `coalesce` folds
+  // the two nullable community FKs into one comparison key, since exactly
+  // one of them is ever set for a given row. Deliberately does NOT
   // constrain inactive rows at all - a deactivated Recipient Group is this
   // entity's only "removal" state (see the comment above), so a name it
   // once held must become free again for a brand new Recipient Group the
   // moment it's deactivated, without deleting or renaming the old,
   // historical row (task requirement).
   expression: (table, columns, indexName) =>
-    `create unique index "${indexName}" on ${table.toString()} ("${columns.group}", lower("${columns.name}")) where ("${columns.isActive}" = true)`,
+    `create unique index "${indexName}" on ${table.toString()} (coalesce("${columns.group}", "${columns.section}"), lower("${columns.name}")) where ("${columns.isActive}" = true)`,
 })
 export class RecipientGroup extends BaseEntity {
   // No delete cascade - Group/Section rows are archived, never physically
   // deleted (ADR-007), so there is never a delete to cascade from.
   @Index()
-  @ManyToOne(() => Group)
-  group!: Group;
+  @ManyToOne(() => Group, { nullable: true, deleteRule: 'no action' })
+  group: Group | null = null;
+
+  @Index()
+  @ManyToOne(() => Section, { nullable: true, deleteRule: 'no action' })
+  section: Section | null = null;
 
   @Property({ length: 150 })
   name!: string;

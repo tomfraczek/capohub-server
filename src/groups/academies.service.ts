@@ -8,24 +8,45 @@ import { AcademyResponseDto } from './dto/academy-response.dto';
 import { CreateAcademyInput } from './dto/create-academy.schema';
 import { UpdateAcademyInput } from './dto/update-academy.schema';
 import { Academy } from './entities/academy.entity';
-import { Group } from './entities/group.entity';
+import { Section } from './entities/section.entity';
 import { AcademyStatus } from './enums/academy-status.enum';
+import {
+  communityIdFilter,
+  GroupHierarchyService,
+} from './group-hierarchy.service';
 import { toAcademyResponseDto } from './mappers/academy.mapper';
 
-// Academy existence/status of its *Group* is already enforced by
-// GroupPermissionsGuard (via :groupId, see group-permissions.guard.ts)
-// before any handler here runs - this service only re-validates the
-// Academy's own lifecycle status, which the guard has no visibility into.
+// Academy existence/status of its *Group-or-Section* is already enforced by
+// GroupPermissionsGuard (via :groupId/:sectionId, see
+// group-permissions.guard.ts) before any handler here runs - this service
+// only re-validates the Academy's own lifecycle status, which the guard has
+// no visibility into.
 @Injectable()
 export class AcademiesService {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly groupHierarchyService: GroupHierarchyService,
+  ) {}
 
   async create(
     groupId: string,
     input: CreateAcademyInput,
   ): Promise<AcademyResponseDto> {
+    const community =
+      await this.groupHierarchyService.findCommunityById(groupId);
+    if (!community) {
+      throw new NotFoundException({
+        code: 'GROUP_NOT_FOUND',
+        message: 'Group not found',
+      });
+    }
+
     const academy = new Academy();
-    academy.group = this.em.getReference(Group, groupId);
+    if (community instanceof Section) {
+      academy.section = community;
+    } else {
+      academy.group = community;
+    }
     this.applyFields(academy, input);
 
     await this.em.persist(academy).flush();
@@ -33,11 +54,9 @@ export class AcademiesService {
   }
 
   async list(groupId: string): Promise<AcademyResponseDto[]> {
-    const academies = await this.em.find(
-      Academy,
-      { group: groupId },
-      { orderBy: { createdAt: 'asc' } },
-    );
+    const academies = await this.em.find(Academy, communityIdFilter(groupId), {
+      orderBy: { createdAt: 'asc' },
+    });
     return academies.map(toAcademyResponseDto);
   }
 
@@ -100,8 +119,8 @@ export class AcademiesService {
   ): Promise<Academy> {
     const academy = await this.em.findOne(
       Academy,
-      { id: academyId, group: groupId },
-      { populate: ['group'] },
+      { id: academyId, ...communityIdFilter(groupId) },
+      { populate: ['group', 'section'] },
     );
     if (!academy) {
       throw new NotFoundException({

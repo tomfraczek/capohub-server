@@ -7,10 +7,12 @@ import {
   CommunityHomeResponseDto,
 } from './dto/community-home-response.dto';
 import { Group } from './entities/group.entity';
+import { Section } from './entities/section.entity';
 import { GroupMembership } from './entities/group-membership.entity';
 import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
+import { Community } from './group-hierarchy.service';
 import {
   toCommunityHomeCommunityDto,
   toCommunityHomeCommunityRefDto,
@@ -39,7 +41,7 @@ type CapabilityListKey = Exclude<
 
 interface ParticipationResult {
   communities: CommunityHomeCommunityDto[];
-  communityMap: Map<string, Group>;
+  communityMap: Map<string, Community>;
   capabilityLists: Record<CapabilityListKey, string[]>;
 }
 
@@ -53,10 +55,11 @@ export class CommunityHomeService {
   ) {}
 
   async getHome(user: User): Promise<CommunityHomeResponseDto> {
-    const [participation, invitations] = await Promise.all([
-      this.buildParticipation(user.id),
-      this.membershipRequestsService.listReceivedInvitations(user),
-    ]);
+    // Sequential, not Promise.all - concurrent queries on the same
+    // EntityManager/connection race each other at the driver level.
+    const participation = await this.buildParticipation(user.id);
+    const invitations =
+      await this.membershipRequestsService.listReceivedInvitations(user);
     const { communities, communityMap, capabilityLists } = participation;
     const joinRequestReviewableIds =
       capabilityLists.canReviewJoinRequestsInCommunityIds;
@@ -80,11 +83,9 @@ export class CommunityHomeService {
       ),
     ];
     if (missingGroupIds.length > 0) {
-      const extraGroups = await this.em.find(Group, {
-        id: { $in: missingGroupIds },
-      });
-      for (const group of extraGroups) {
-        communityMap.set(group.id, group);
+      const extraCommunities = await this.findCommunitiesByIds(missingGroupIds);
+      for (const community of extraCommunities) {
+        communityMap.set(community.id, community);
       }
     }
 
@@ -172,6 +173,15 @@ export class CommunityHomeService {
    * organization-entities.md#membership) and Membership itself is what
    * "belonging to this Group" means.
    */
+  // Role Assignment participation can point at a Group or a Section (see
+  // group-hierarchy.service.ts) - resolves a batch of ids against both
+  // tables, sequentially (not Promise.all - see this file's other queries).
+  private async findCommunitiesByIds(ids: string[]): Promise<Community[]> {
+    const groups = await this.em.find(Group, { id: { $in: ids } });
+    const sections = await this.em.find(Section, { id: { $in: ids } });
+    return [...groups, ...sections];
+  }
+
   private async buildParticipation(
     userId: string,
   ): Promise<ParticipationResult> {
@@ -214,14 +224,15 @@ export class CommunityHomeService {
       for (const id of ids) allGroupIds.add(id);
     }
 
-    const groups =
+    const communityList =
       allGroupIds.size > 0
-        ? await this.em.find(Group, {
-            id: { $in: [...allGroupIds] },
-            status: { $ne: GroupStatus.DELETED },
-          })
+        ? await this.findCommunitiesByIds([...allGroupIds])
         : [];
-    const communityMap = new Map(groups.map((group) => [group.id, group]));
+    const communityMap = new Map(
+      communityList
+        .filter((community) => community.status !== GroupStatus.DELETED)
+        .map((community) => [community.id, community]),
+    );
 
     const communities: CommunityHomeCommunityDto[] = [];
     const capabilityLists: Record<CapabilityListKey, string[]> = {

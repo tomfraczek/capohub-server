@@ -15,19 +15,18 @@ import { AuditTargetType } from './enums/audit-target-type.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
 import { Group } from './entities/group.entity';
+import { Section } from './entities/section.entity';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { toSectionResponseDto } from './mappers/section.mapper';
 import { RoleAssignmentsService } from './role-assignments.service';
 
-// A Section is a non-root Group nested under a Group or another Section
-// (see the Group/Section rename ADR - same underlying entity/table as
-// Group, unlimited depth per ADR-002). This service is the Section-facing
-// counterpart to GroupsService; the two intentionally duplicate a modest
-// amount of lifecycle-transition logic rather than share it, since a Group
-// and a Section expose different response DTOs (SectionResponseDto carries
-// `parentId`, GroupResponseDto does not) and are reached through different
-// route families with different kind-enforcement (see
-// decorators/require-group-kind.decorator.ts).
+// A Section is its own entity type, physically separate from Group (see
+// the organizational-domain rebuild, stage 1) - it may have at most one
+// parent Group (never another Section) and can never have children of its
+// own. This service is the Section-facing counterpart to GroupsService;
+// the two intentionally duplicate a modest amount of lifecycle-transition
+// logic rather than share it, since a Group and a Section expose different
+// response DTOs and are reached through different route families.
 @Injectable()
 export class SectionsService {
   constructor(
@@ -39,12 +38,11 @@ export class SectionsService {
 
   // The parent's existence and the caller's SECTION_CREATE permission there
   // are already established by GroupPermissionsGuard before this ever runs
-  // (see SectionsController - the parent is always the route's
-  // :groupId/:sectionId). This only needs the caller's Membership in the
-  // parent's Root Group, to attach the new Section's initial MEMBER/OWNER
-  // Role Assignments to it - mirrors GroupsService.create, one level down.
-  // Unlike creating a new Group, creating a Section never creates a second
-  // Membership (see organization-entities.md#roleassignment).
+  // (see SectionsController - the parent is always the route's :groupId).
+  // This only needs the caller's Membership in the parent's Root Group, to
+  // attach the new Section's initial MEMBER/OWNER Role Assignments to it -
+  // mirrors GroupsService.create, one level down. Unlike creating a new
+  // Group, creating a Section never creates a second Membership.
   async create(
     parentId: string,
     actor: User,
@@ -73,7 +71,7 @@ export class SectionsService {
         throw this.notFound();
       }
 
-      const section = new Group();
+      const section = new Section();
       section.publicCode = await generateUniquePublicCode(em);
       this.applyFields(section, input);
       section.parentGroup = parent;
@@ -91,8 +89,8 @@ export class SectionsService {
         GroupRole.OWNER,
       );
 
-      const community = await this.groupHierarchyService.getRootGroup(
-        section.id,
+      const community = await this.groupHierarchyService.resolveRootGroup(
+        section,
         em,
       );
       this.auditLogService.record(em, {
@@ -111,7 +109,7 @@ export class SectionsService {
   }
 
   async list(parentId: string): Promise<SectionResponseDto[]> {
-    const sections = await this.em.find(Group, { parentGroup: parentId });
+    const sections = await this.em.find(Section, { parentGroup: parentId });
     return sections.map(toSectionResponseDto);
   }
 
@@ -169,27 +167,11 @@ export class SectionsService {
   }
 
   // Mirrors GroupsService.delete - see its own comment for why this is a
-  // status-only, historically-preserving change, and why active children
-  // (nested Sections) block it.
+  // status-only, historically-preserving change. Unlike a Group, a Section
+  // can never have children, so there is no "active children" check here.
   async delete(sectionId: string, actor: User): Promise<SectionResponseDto> {
     return this.em.transactional(async (em) => {
       const section = await this.loadOrFail(sectionId, em);
-
-      const children = await em.find(Group, { parentGroup: sectionId });
-      const activeChildren = children.filter(
-        (child) =>
-          child.status !== GroupStatus.ARCHIVED &&
-          child.status !== GroupStatus.DELETED,
-      );
-      if (activeChildren.length > 0) {
-        throw new ConflictException({
-          code: 'GROUP_HAS_ACTIVE_CHILDREN',
-          message:
-            'Archive or delete every child section before deleting this one',
-          childGroupIds: activeChildren.map((child) => child.id),
-        });
-      }
-
       section.status = GroupStatus.DELETED;
       await this.recordCommunityAudit(em, section, AuditAction.DELETE, actor);
       await em.flush();
@@ -214,17 +196,18 @@ export class SectionsService {
     });
   }
 
-  // Unlike GroupsService's version, always resolves the Root Group - a
-  // Section can be nested at any depth (ADR-002), so it is never its own
-  // Root Group the way a Group always is.
+  // Unlike GroupsService's version, this always resolves the parent Group's
+  // own root (a Section is never its own Root Group) - throws if the
+  // Section currently has no parent (a standalone Section has no Root
+  // Group to file audit history under yet).
   private async recordCommunityAudit(
     em: EntityManager,
-    section: Group,
+    section: Section,
     action: AuditAction,
     actor: User,
   ): Promise<void> {
-    const community = await this.groupHierarchyService.getRootGroup(
-      section.id,
+    const community = await this.groupHierarchyService.resolveRootGroup(
+      section,
       em,
     );
     this.auditLogService.record(em, {
@@ -236,7 +219,7 @@ export class SectionsService {
     });
   }
 
-  private applyFields(section: Group, input: CreateSectionInput): void {
+  private applyFields(section: Section, input: CreateSectionInput): void {
     section.name = input.name;
     section.description = input.description;
     section.logoUrl = input.logoUrl;
@@ -261,8 +244,8 @@ export class SectionsService {
   private async loadOrFail(
     sectionId: string,
     em: EntityManager = this.em,
-  ): Promise<Group> {
-    const section = await em.findOne(Group, { id: sectionId });
+  ): Promise<Section> {
+    const section = await em.findOne(Section, { id: sectionId });
     if (!section) {
       throw this.notFound();
     }

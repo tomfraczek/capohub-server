@@ -290,13 +290,16 @@ export class GroupMembershipsService {
     }
 
     return this.em.transactional(async (em) => {
-      const group = await em.findOne(Group, { id: groupId });
+      const group = await this.groupHierarchyService.findCommunityById(
+        groupId,
+        em,
+      );
       if (!group) {
         throw this.groupNotFound();
       }
-      const rootGroupId = group.parentGroup
-        ? (await this.groupHierarchyService.getRootGroup(group.id, em)).id
-        : group.id;
+      const rootGroupId = (
+        await this.groupHierarchyService.resolveRootGroup(group, em)
+      ).id;
 
       const previousOwnerMembership = await loadActiveMembership(
         em,
@@ -350,9 +353,10 @@ export class GroupMembershipsService {
         GroupRole.OWNER,
       );
 
-      const auditCommunity = group.parentGroup
-        ? await this.groupHierarchyService.getRootGroup(group.id, em)
-        : group;
+      const auditCommunity = await this.groupHierarchyService.resolveRootGroup(
+        group,
+        em,
+      );
       this.auditLogService.record(em, {
         community: auditCommunity,
         action: AuditAction.TRANSFER_OWNERSHIP,
@@ -406,8 +410,8 @@ export class GroupMembershipsService {
         });
       }
 
-      const cohortRoot = await this.groupHierarchyService.getRootGroup(
-        cohort.group.id,
+      const cohortRoot = await this.groupHierarchyService.resolveRootGroup(
+        (cohort.group ?? cohort.section)!,
         em,
       );
       if (cohortRoot.id !== rootGroupId) {
@@ -788,14 +792,15 @@ export class GroupMembershipsService {
     membership: GroupMembership,
     em: EntityManager = this.em,
   ): Promise<GroupMembershipResponseDto> {
-    const [cohorts, rootRoleAssignments] = await Promise.all([
-      this.loadCohortRefs(em, [membership.id]),
-      this.roleAssignmentsService.getRoleAssignmentsForMembership(
+    // Sequential, not Promise.all - concurrent queries on the same
+    // EntityManager corrupt the underlying pg connection.
+    const cohorts = await this.loadCohortRefs(em, [membership.id]);
+    const rootRoleAssignments =
+      await this.roleAssignmentsService.getRoleAssignmentsForMembership(
         em,
         membership.id,
         rootGroupId,
-      ),
-    ]);
+      );
     return toGroupMembershipResponseDto(
       membership,
       rootRoleAssignments.map((roleAssignment) => roleAssignment.role),
@@ -807,16 +812,17 @@ export class GroupMembershipsService {
     rootGroupId: string,
     memberships: GroupMembership[],
   ): Promise<GroupMembershipResponseDto[]> {
-    const [cohortsByMembership, rootRoles] = await Promise.all([
-      this.loadCohortRefs(
-        this.em,
-        memberships.map((membership) => membership.id),
-      ),
-      this.roleAssignmentsService.getRoleAssignmentsForGroup(
+    // Sequential, not Promise.all - concurrent queries on the same
+    // EntityManager corrupt the underlying pg connection.
+    const cohortsByMembership = await this.loadCohortRefs(
+      this.em,
+      memberships.map((membership) => membership.id),
+    );
+    const rootRoles =
+      await this.roleAssignmentsService.getRoleAssignmentsForGroup(
         memberships.map((membership) => membership.id),
         rootGroupId,
-      ),
-    ]);
+      );
     return memberships.map((membership) =>
       toGroupMembershipResponseDto(
         membership,

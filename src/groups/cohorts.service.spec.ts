@@ -5,6 +5,7 @@ import { Group } from './entities/group.entity';
 import { Cohort } from './entities/cohort.entity';
 import { CohortStatus } from './enums/cohort-status.enum';
 import { CohortsService } from './cohorts.service';
+import { GroupHierarchyService } from './group-hierarchy.service';
 
 function buildCreateInput(
   overrides: Partial<CreateCohortInput> = {},
@@ -51,16 +52,26 @@ function buildMockEm(routing: MockRouting = {}) {
   return { em: raw as unknown as EntityManager, persist, flush };
 }
 
+function buildGroupHierarchyService(): GroupHierarchyService {
+  return {
+    findCommunityById: jest.fn((id: string) => {
+      const group = new Group();
+      group.id = id;
+      return Promise.resolve(group);
+    }),
+  } as unknown as GroupHierarchyService;
+}
+
 describe('CohortsService', () => {
   describe('create', () => {
     it('creates a cohort attached to the given group', async () => {
       const { em, persist } = buildMockEm();
-      const service = new CohortsService(em);
+      const service = new CohortsService(em, buildGroupHierarchyService());
 
       const result = await service.create('group-1', buildCreateInput());
 
       const persistedCohort = persist.mock.calls[0][0];
-      expect(persistedCohort.group.id).toBe('group-1');
+      expect(persistedCohort.group?.id).toBe('group-1');
       expect(result.groupId).toBe('group-1');
       expect(result.name).toBe('Kids');
       expect(result.status).toBe(CohortStatus.ACTIVE);
@@ -72,11 +83,13 @@ describe('CohortsService', () => {
       const withCohorts = buildMockEm({ cohorts: [buildCohort()] });
       const withoutCohorts = buildMockEm({ cohorts: [] });
 
-      const resultWithCohorts = await new CohortsService(withCohorts.em).list(
-        'group-1',
-      );
+      const resultWithCohorts = await new CohortsService(
+        withCohorts.em,
+        buildGroupHierarchyService(),
+      ).list('group-1');
       const resultWithoutCohorts = await new CohortsService(
         withoutCohorts.em,
+        buildGroupHierarchyService(),
       ).list('group-1');
 
       expect(resultWithCohorts).toHaveLength(1);
@@ -87,7 +100,7 @@ describe('CohortsService', () => {
   describe('getById', () => {
     it('throws COHORT_NOT_FOUND when the cohort does not exist', async () => {
       const { em } = buildMockEm({ cohort: null });
-      const service = new CohortsService(em);
+      const service = new CohortsService(em, buildGroupHierarchyService());
 
       const promise = service.getById('group-1', 'missing');
 
@@ -102,7 +115,7 @@ describe('CohortsService', () => {
     it('applies every field from the input', async () => {
       const existing = buildCohort({ name: 'Old name' });
       const { em } = buildMockEm({ cohort: existing });
-      const service = new CohortsService(em);
+      const service = new CohortsService(em, buildGroupHierarchyService());
 
       await service.update(
         'group-1',
@@ -116,7 +129,7 @@ describe('CohortsService', () => {
     it('rejects updating an archived cohort', async () => {
       const existing = buildCohort({ status: CohortStatus.ARCHIVED });
       const { em } = buildMockEm({ cohort: existing });
-      const service = new CohortsService(em);
+      const service = new CohortsService(em, buildGroupHierarchyService());
 
       const promise = service.update('group-1', 'cohort-1', buildCreateInput());
 
@@ -131,7 +144,7 @@ describe('CohortsService', () => {
     it('sets status to ARCHIVED', async () => {
       const existing = buildCohort({ status: CohortStatus.ACTIVE });
       const { em } = buildMockEm({ cohort: existing });
-      const service = new CohortsService(em);
+      const service = new CohortsService(em, buildGroupHierarchyService());
 
       await service.archive('group-1', 'cohort-1');
 
@@ -141,7 +154,7 @@ describe('CohortsService', () => {
     it('rejects archiving an already-archived cohort', async () => {
       const existing = buildCohort({ status: CohortStatus.ARCHIVED });
       const { em } = buildMockEm({ cohort: existing });
-      const service = new CohortsService(em);
+      const service = new CohortsService(em, buildGroupHierarchyService());
 
       await expect(
         service.archive('group-1', 'cohort-1'),

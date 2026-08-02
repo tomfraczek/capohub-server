@@ -8,28 +8,31 @@ import {
 } from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { Group } from '../../groups/entities/group.entity';
+import { Section } from '../../groups/entities/section.entity';
 import { User } from '../../users/entities/user.entity';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
 import { EventVisibility } from '../enums/event-visibility.enum';
 import { EventWaitlistPolicy } from '../enums/event-waitlist-policy.enum';
 
-// Belongs to exactly one Community - a Group (root) or a Section (nested,
-// any depth), never both, and never moved afterwards (spec: "Nie
-// przewidujemy późniejszego przenoszenia Eventu pomiędzy Community" - there
-// is deliberately no "move" operation anywhere in this module). Mirrors
-// Academy/Cohort: a plain @ManyToOne(() => Group), no discriminator
-// column - "Community" has no entity of its own (ADR-001). Named
-// `community` (not `group`, unlike Academy/Cohort) because the Events
-// spec itself uses "Community" as the umbrella term for "Group or
-// Section" throughout - not because this field carries different semantics
-// from Academy.group/Cohort.group.
+// Belongs to exactly one Community - a Group or a Section, never both, and
+// never moved afterwards (spec: "Nie przewidujemy późniejszego
+// przenoszenia Eventu pomiędzy Community" - there is deliberately no
+// "move" operation anywhere in this module). Represented by two nullable
+// FKs (exactly one set) since the Group/Section physical split - see
+// GroupHierarchyService.findCommunityById for resolving whichever one is
+// populated.
 @Entity({ tableName: 'events' })
-@Index({ properties: ['community', 'status'] })
+@Index({ properties: ['communityGroup', 'status'] })
+@Index({ properties: ['communitySection', 'status'] })
 export class Event extends BaseEntity {
   @Index()
-  @ManyToOne(() => Group, { deleteRule: 'no action' })
-  community!: Group;
+  @ManyToOne(() => Group, { nullable: true, deleteRule: 'no action' })
+  communityGroup: Group | null = null;
+
+  @Index()
+  @ManyToOne(() => Section, { nullable: true, deleteRule: 'no action' })
+  communitySection: Section | null = null;
 
   // The User who originally created the Event. Always also granted
   // EventRole.OWNER at creation (see EventRolesService.create), but kept

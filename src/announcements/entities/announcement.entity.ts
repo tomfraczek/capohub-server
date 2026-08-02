@@ -1,6 +1,7 @@
 import { Entity, Enum, Index, ManyToOne, Property } from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { Group } from '../../groups/entities/group.entity';
+import { Section } from '../../groups/entities/section.entity';
 import { RecipientGroup } from '../../groups/entities/recipient-group.entity';
 import { User } from '../../users/entities/user.entity';
 import { AnnouncementRecipientType } from '../enums/announcement-recipient-type.enum';
@@ -40,9 +41,17 @@ import { AnnouncementRecipientType } from '../enums/announcement-recipient-type.
 @Entity({ tableName: 'announcements' })
 @Index({ properties: ['isPinned', 'createdAt'] })
 export class Announcement extends BaseEntity {
+  // The Group-or-Section this Announcement belongs to, represented by two
+  // nullable FKs (exactly one set) since the Group/Section physical split -
+  // see GroupHierarchyService.findCommunityById for resolving whichever one
+  // is populated.
   @Index()
-  @ManyToOne(() => Group)
-  community!: Group;
+  @ManyToOne(() => Group, { nullable: true, deleteRule: 'no action' })
+  communityGroup: Group | null = null;
+
+  @Index()
+  @ManyToOne(() => Section, { nullable: true, deleteRule: 'no action' })
+  communitySection: Section | null = null;
 
   // Purely informational/audit (byline) - never checked to gate any
   // operation, so a deleted author account must not block anything.

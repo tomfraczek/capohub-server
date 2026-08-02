@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
 import { generateUniquePublicCode } from '../common/utils/public-code';
-import { Group } from '../groups/entities/group.entity';
 import { GroupMembership } from '../groups/entities/group-membership.entity';
 import { GroupMembershipStatus } from '../groups/enums/group-membership-status.enum';
 import { GroupHierarchyService } from '../groups/group-hierarchy.service';
@@ -16,6 +15,7 @@ import { EventListQueryInput } from './dto/event-list-query.schema';
 import { EventResponseDto } from './dto/event-response.dto';
 import { UpdateEventInput } from './dto/update-event.schema';
 import { EventAccessService } from './event-access.service';
+import { assignEventCommunity, eventCommunity } from './event-community.util';
 import { EventAttendee } from './entities/event-attendee.entity';
 import { EventInvitation } from './entities/event-invitation.entity';
 import { EventRoleAssignment } from './entities/event-role-assignment.entity';
@@ -65,13 +65,16 @@ export class EventsService {
     actor: User,
   ): Promise<EventResponseDto> {
     return this.em.transactional(async (em) => {
-      const community = await em.findOne(Group, { id: communityGroupId });
+      const community = await this.groupHierarchyService.findCommunityById(
+        communityGroupId,
+        em,
+      );
       if (!community) {
         throw this.communityNotFound();
       }
 
       const event = new Event();
-      event.community = community;
+      assignEventCommunity(event, community);
       event.createdBy = actor;
       event.status = EventStatus.DRAFT;
       this.applyFields(event, input);
@@ -98,7 +101,8 @@ export class EventsService {
   ): Promise<EventResponseDto> {
     return this.em.transactional(async (em) => {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
-        'community',
+        'communityGroup',
+        'communitySection',
       ]);
       assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
       this.applyFields(event, input);
@@ -116,7 +120,8 @@ export class EventsService {
   async publish(eventId: string, actor: User): Promise<EventResponseDto> {
     return this.em.transactional(async (em) => {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
-        'community',
+        'communityGroup',
+        'communitySection',
       ]);
       assertEventStatusAllowed(event, [EventStatus.DRAFT]);
       await this.transitionStatus(
@@ -143,7 +148,8 @@ export class EventsService {
   ): Promise<EventResponseDto> {
     return this.em.transactional(async (em) => {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
-        'community',
+        'communityGroup',
+        'communitySection',
       ]);
       assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
       await this.transitionStatus(
@@ -166,7 +172,8 @@ export class EventsService {
   async finish(eventId: string, actor: User): Promise<EventResponseDto> {
     return this.em.transactional(async (em) => {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
-        'community',
+        'communityGroup',
+        'communitySection',
       ]);
       assertEventStatusAllowed(event, [EventStatus.PUBLISHED]);
       await this.transitionStatus(em, event, EventStatus.FINISHED, actor, null);
@@ -183,7 +190,8 @@ export class EventsService {
   async getById(eventId: string, viewer: User): Promise<EventResponseDto> {
     const em = this.em;
     const event = await this.eventAccessService.loadOrFail(em, eventId, [
-      'community',
+      'communityGroup',
+      'communitySection',
       'createdBy',
     ]);
 
@@ -217,7 +225,10 @@ export class EventsService {
     query: EventListQueryInput,
   ): Promise<EventListResult> {
     const em = this.em;
-    const community = await em.findOne(Group, { id: communityGroupId });
+    const community = await this.groupHierarchyService.findCommunityById(
+      communityGroupId,
+      em,
+    );
     if (!community) {
       throw this.communityNotFound();
     }
@@ -235,20 +246,26 @@ export class EventsService {
       viewer.id,
     );
 
-    const [roleAssignments, invitations] = await Promise.all([
-      em.find(
-        EventRoleAssignment,
-        { user: viewer.id, event: { community: communityGroupId } },
-        { populate: ['event'] },
-      ),
-      em.find(EventInvitation, {
-        event: { community: communityGroupId },
-        status: {
-          $in: [EventInvitationStatus.PENDING, EventInvitationStatus.ACCEPTED],
-        },
-        $or: [{ invitedUser: viewer.id }, { invitedEmail: viewer.email }],
-      }),
-    ]);
+    const eventInCommunity = {
+      $or: [
+        { communityGroup: communityGroupId },
+        { communitySection: communityGroupId },
+      ],
+    };
+    // Sequential, not Promise.all - concurrent queries on the same
+    // EntityManager/connection race each other at the driver level.
+    const roleAssignments = await em.find(
+      EventRoleAssignment,
+      { user: viewer.id, event: eventInCommunity },
+      { populate: ['event'] },
+    );
+    const invitations = await em.find(EventInvitation, {
+      event: eventInCommunity,
+      status: {
+        $in: [EventInvitationStatus.PENDING, EventInvitationStatus.ACCEPTED],
+      },
+      $or: [{ invitedUser: viewer.id }, { invitedEmail: viewer.email }],
+    });
     const roleEventIds = [
       ...new Set(roleAssignments.map((assignment) => assignment.event.id)),
     ];
@@ -262,7 +279,12 @@ export class EventsService {
       rolesByEvent.set(assignment.event.id, list);
     }
 
-    const where: FilterQuery<Event> = { community: communityGroupId };
+    const where: FilterQuery<Event> = {
+      $or: [
+        { communityGroup: communityGroupId },
+        { communitySection: communityGroupId },
+      ],
+    };
     if (query.status) where.status = query.status;
     if (query.type) where.type = query.type;
     if (query.from) where.endsAt = { $gte: new Date(query.from) };
@@ -295,7 +317,7 @@ export class EventsService {
     }
 
     const [events, total] = await em.findAndCount(Event, where, {
-      populate: ['community'],
+      populate: ['communityGroup', 'communitySection'],
       orderBy: { startsAt: 'asc' },
       limit: query.limit,
       offset: query.offset,
@@ -305,17 +327,21 @@ export class EventsService {
       await reconcileEventFinished(em, event);
     }
 
-    const items = await Promise.all(
-      events.map((event) =>
-        this.buildResponse(
+    // Sequential, not Promise.all(events.map(...)) - each buildResponse
+    // issues several queries against the same EntityManager/connection;
+    // running them concurrently races at the driver level.
+    const items = [];
+    for (const event of events) {
+      items.push(
+        await this.buildResponse(
           em,
           event,
           viewer,
           rolesByEvent.get(event.id) ?? [],
           oversight,
         ),
-      ),
-    );
+      );
+    }
 
     return {
       items,
@@ -358,7 +384,7 @@ export class EventsService {
     if (query.to) where.startsAt = { $lte: new Date(query.to) };
 
     const [events, total] = await em.findAndCount(Event, where, {
-      populate: ['community'],
+      populate: ['communityGroup', 'communitySection'],
       orderBy: { startsAt: 'asc' },
       limit: query.limit,
       offset: query.offset,
@@ -368,11 +394,19 @@ export class EventsService {
       await reconcileEventFinished(em, event);
     }
 
-    const items = await Promise.all(
-      events.map((event) =>
-        this.buildResponse(em, event, viewer, rolesByEvent.get(event.id) ?? []),
-      ),
-    );
+    // Sequential, not Promise.all(events.map(...)) - see list()'s identical
+    // comment above.
+    const items = [];
+    for (const event of events) {
+      items.push(
+        await this.buildResponse(
+          em,
+          event,
+          viewer,
+          rolesByEvent.get(event.id) ?? [],
+        ),
+      );
+    }
 
     return {
       items,
@@ -411,45 +445,51 @@ export class EventsService {
     );
     const endsAtFrom = { $gte: new Date(from) };
 
-    const [[anyEvents], [trainingEvents]] = await Promise.all([
-      em.findAndCount(
-        Event,
-        { $and: visibilityAnd, endsAt: endsAtFrom },
-        { populate: ['community'], orderBy: { startsAt: 'asc' }, limit: 1 },
-      ),
-      em.findAndCount(
-        Event,
-        {
-          $and: visibilityAnd,
-          endsAt: endsAtFrom,
-          type: EventType.OPEN_TRAINING,
-        },
-        { populate: ['community'], orderBy: { startsAt: 'asc' }, limit: 1 },
-      ),
-    ]);
+    // Sequential, not Promise.all - concurrent queries on the same
+    // EntityManager/connection race each other at the driver level.
+    const [anyEvents] = await em.findAndCount(
+      Event,
+      { $and: visibilityAnd, endsAt: endsAtFrom },
+      {
+        populate: ['communityGroup', 'communitySection'],
+        orderBy: { startsAt: 'asc' },
+        limit: 1,
+      },
+    );
+    const [trainingEvents] = await em.findAndCount(
+      Event,
+      {
+        $and: visibilityAnd,
+        endsAt: endsAtFrom,
+        type: EventType.OPEN_TRAINING,
+      },
+      {
+        populate: ['communityGroup', 'communitySection'],
+        orderBy: { startsAt: 'asc' },
+        limit: 1,
+      },
+    );
 
     for (const event of [...anyEvents, ...trainingEvents]) {
       await reconcileEventFinished(em, event);
     }
 
-    const [nearestEvent, nearestTraining] = await Promise.all([
-      anyEvents[0]
-        ? this.buildResponse(
-            em,
-            anyEvents[0],
-            viewer,
-            rolesByEvent.get(anyEvents[0].id) ?? [],
-          )
-        : null,
-      trainingEvents[0]
-        ? this.buildResponse(
-            em,
-            trainingEvents[0],
-            viewer,
-            rolesByEvent.get(trainingEvents[0].id) ?? [],
-          )
-        : null,
-    ]);
+    const nearestEvent = anyEvents[0]
+      ? await this.buildResponse(
+          em,
+          anyEvents[0],
+          viewer,
+          rolesByEvent.get(anyEvents[0].id) ?? [],
+        )
+      : null;
+    const nearestTraining = trainingEvents[0]
+      ? await this.buildResponse(
+          em,
+          trainingEvents[0],
+          viewer,
+          rolesByEvent.get(trainingEvents[0].id) ?? [],
+        )
+      : null;
 
     return { nearestEvent, nearestTraining };
   }
@@ -481,6 +521,7 @@ export class EventsService {
       },
     });
     const myCommunityGroupIds = new Set<string>();
+    const myCommunitySectionIds = new Set<string>();
     for (const membership of memberships) {
       const rootGroupId = membership.rootGroup.id;
       myCommunityGroupIds.add(rootGroupId);
@@ -491,21 +532,28 @@ export class EventsService {
       for (const descendant of descendants) {
         myCommunityGroupIds.add(descendant.id);
       }
+      const sections = await this.groupHierarchyService.getDescendantSections(
+        rootGroupId,
+        em,
+      );
+      for (const section of sections) {
+        myCommunitySectionIds.add(section.id);
+      }
     }
 
-    const [roleAssignments, invitations] = await Promise.all([
-      em.find(
-        EventRoleAssignment,
-        { user: viewer.id },
-        { populate: ['event'] },
-      ),
-      em.find(EventInvitation, {
-        status: {
-          $in: [EventInvitationStatus.PENDING, EventInvitationStatus.ACCEPTED],
-        },
-        $or: [{ invitedUser: viewer.id }, { invitedEmail: viewer.email }],
-      }),
-    ]);
+    // Sequential, not Promise.all - concurrent queries on the same
+    // EntityManager/connection race each other at the driver level.
+    const roleAssignments = await em.find(
+      EventRoleAssignment,
+      { user: viewer.id },
+      { populate: ['event'] },
+    );
+    const invitations = await em.find(EventInvitation, {
+      status: {
+        $in: [EventInvitationStatus.PENDING, EventInvitationStatus.ACCEPTED],
+      },
+      $or: [{ invitedUser: viewer.id }, { invitedEmail: viewer.email }],
+    });
     const roleEventIds = [
       ...new Set(roleAssignments.map((assignment) => assignment.event.id)),
     ];
@@ -525,7 +573,13 @@ export class EventsService {
     if (myCommunityGroupIds.size > 0) {
       visibilityOr.push({
         visibility: EventVisibility.COMMUNITY_MEMBERS,
-        community: { $in: [...myCommunityGroupIds] },
+        communityGroup: { $in: [...myCommunityGroupIds] },
+      });
+    }
+    if (myCommunitySectionIds.size > 0) {
+      visibilityOr.push({
+        visibility: EventVisibility.COMMUNITY_MEMBERS,
+        communitySection: { $in: [...myCommunitySectionIds] },
       });
     }
     if (invitedEventIds.length > 0) {
@@ -635,17 +689,22 @@ export class EventsService {
     viewerRoles: EventRole[],
     precomputedOversight?: { viewAll: boolean; moderate: boolean },
   ): Promise<EventResponseDto> {
-    const [attendeeCounts, oversight, canRegister] = await Promise.all([
-      this.countAttendees(em, event),
+    // Sequential, not Promise.all - concurrent queries on the same
+    // EntityManager/connection race each other at the driver level.
+    const attendeeCounts = await this.countAttendees(em, event);
+    const oversight =
       precomputedOversight ??
-        this.resolveCommunityOversight(em, event.community.id, viewer.id),
-      this.eventAccessService.canViewerRegister(
+      (await this.resolveCommunityOversight(
         em,
-        event,
+        eventCommunity(event).id,
         viewer.id,
-        viewer.email,
-      ),
-    ]);
+      ));
+    const canRegister = await this.eventAccessService.canViewerRegister(
+      em,
+      event,
+      viewer.id,
+      viewer.email,
+    );
 
     const capabilities = this.buildCapabilities(
       viewerRoles,
@@ -669,14 +728,17 @@ export class EventsService {
     em: EntityManager,
     event: Event,
   ): Promise<{ seatsTaken: number; waitlistCount: number }> {
-    const [seatsTaken, waitlistCount] = await Promise.all([
-      em.count(EventAttendee, {
-        event: event.id,
-        isWaitlisted: false,
-        rsvpStatus: { $in: [EventRsvpStatus.GOING, EventRsvpStatus.MAYBE] },
-      }),
-      em.count(EventAttendee, { event: event.id, isWaitlisted: true }),
-    ]);
+    // Sequential, not Promise.all - concurrent queries on the same
+    // EntityManager/connection race each other at the driver level.
+    const seatsTaken = await em.count(EventAttendee, {
+      event: event.id,
+      isWaitlisted: false,
+      rsvpStatus: { $in: [EventRsvpStatus.GOING, EventRsvpStatus.MAYBE] },
+    });
+    const waitlistCount = await em.count(EventAttendee, {
+      event: event.id,
+      isWaitlisted: true,
+    });
     return { seatsTaken, waitlistCount };
   }
 

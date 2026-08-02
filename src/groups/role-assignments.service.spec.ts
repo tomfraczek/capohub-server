@@ -142,12 +142,19 @@ function buildMockEm(routing: MockRouting = {}) {
 
 function buildService(
   em: EntityManager,
-  getRootGroupImpl?: (groupId: string) => Promise<Group>,
+  getRootGroupImpl?: (groupId: string, em?: EntityManager) => Promise<Group>,
   getDescendantsImpl?: (groupId: string) => Promise<Group[]>,
 ) {
+  const resolveRootGroup =
+    getRootGroupImpl ?? (() => Promise.resolve(buildGroup()));
   const groupHierarchyService = {
-    getRootGroup: getRootGroupImpl ?? (() => Promise.resolve(buildGroup())),
+    getRootGroup: resolveRootGroup,
     getDescendants: getDescendantsImpl ?? (() => Promise.resolve([])),
+    getDescendantSections: () => Promise.resolve([]),
+    findCommunityById: (id: string, emArg?: EntityManager) =>
+      (emArg ?? em).findOne(Group, { id }),
+    resolveRootGroup: (community: Group, emArg?: EntityManager) =>
+      resolveRootGroup(community.id, emArg),
   } as unknown as GroupHierarchyService;
   const auditLogService = {
     record: jest.fn().mockResolvedValue(undefined),
@@ -179,14 +186,19 @@ describe('RoleAssignmentsService', () => {
         membershipResults: [membership],
         roleAssignmentFindResults: [roleAssignment],
       });
-      const getRootGroup = jest.fn();
+      // resolveAuthorization always delegates root resolution to
+      // GroupHierarchyService.resolveRootGroup (see the organizational-
+      // domain rebuild, stage 1 - hierarchy logic is centralized there,
+      // never duplicated with an inline "already root?" shortcut here).
+      // Its own zero-iteration walk correctly returns the Group itself.
+      const getRootGroup = jest.fn().mockResolvedValue(rootGroup);
       const service = buildService(em, getRootGroup);
 
       const result = await service.resolveAuthorization('root-1', 'user-1');
 
-      expect(getRootGroup).not.toHaveBeenCalled();
+      expect(getRootGroup).toHaveBeenCalledWith('root-1', em);
       expect(result).toEqual({
-        group: rootGroup,
+        community: rootGroup,
         membership,
         roleAssignments: [roleAssignment],
       });

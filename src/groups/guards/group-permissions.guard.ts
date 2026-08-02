@@ -15,6 +15,7 @@ import {
   GroupKind,
 } from '../decorators/require-group-kind.decorator';
 import { assertGroupStatusAllowed } from '../group-write-policy';
+import { Group } from '../entities/group.entity';
 import { GroupStatus } from '../enums/group-status.enum';
 import { GroupPermission } from '../permissions/group-permission.enum';
 import { GroupPermissionService } from '../permissions/group-permission.service';
@@ -98,7 +99,7 @@ export class GroupPermissionsGuard implements CanActivate {
       throw this.groupNotFound();
     }
 
-    const { group, membership, roleAssignments } = authorization;
+    const { community, membership, roleAssignments } = authorization;
     const roles = roleAssignments.map((roleAssignment) => roleAssignment.role);
 
     if (
@@ -119,7 +120,12 @@ export class GroupPermissionsGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
     if (requiredKind) {
-      const isRoot = group.parentGroup === null;
+      // Type-based, not a `parentGroup === null` check: a Section is never
+      // a ROOT kind regardless of whether it currently has a parent (see
+      // the organizational-domain rebuild, stage 1 - `parentGroupId` is no
+      // longer how a row's type is recognized).
+      const isRoot =
+        community instanceof Group && community.parentGroup === null;
       const matches = requiredKind === GroupKind.ROOT ? isRoot : !isRoot;
       if (!matches) {
         throw this.groupNotFound();
@@ -131,7 +137,7 @@ export class GroupPermissionsGuard implements CanActivate {
         ALLOW_GROUP_STATUSES_KEY,
         [context.getHandler(), context.getClass()],
       ) ?? DEFAULT_ALLOWED_STATUSES;
-    assertGroupStatusAllowed(group, allowedStatuses);
+    assertGroupStatusAllowed(community, allowedStatuses);
 
     return true;
   }
