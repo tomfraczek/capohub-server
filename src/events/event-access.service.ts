@@ -4,8 +4,7 @@ import {
   Community,
   GroupHierarchyService,
 } from '../groups/group-hierarchy.service';
-import { GroupMembership } from '../groups/entities/group-membership.entity';
-import { GroupMembershipStatus } from '../groups/enums/group-membership-status.enum';
+import { RoleAssignmentsService } from '../groups/role-assignments.service';
 import { EventInvitation } from './entities/event-invitation.entity';
 import { EventInvitationStatus } from './enums/event-invitation-status.enum';
 import { EventStatus } from './enums/event-status.enum';
@@ -28,6 +27,7 @@ export class EventAccessService {
   constructor(
     private readonly em: EntityManager,
     private readonly groupHierarchyService: GroupHierarchyService,
+    private readonly roleAssignmentsService: RoleAssignmentsService,
   ) {}
 
   /**
@@ -81,19 +81,23 @@ export class EventAccessService {
     return root.id;
   }
 
+  /**
+   * Whether `userId` is currently a member of `communityId` - the *exact*
+   * Group or Section the Event belongs to, never a resolved root (no
+   * inheritance: a Section's own membership is what gates COMMUNITY_MEMBERS
+   * visibility for an Event under that Section, not the parent
+   * organization's). Delegates to RoleAssignmentsService.isCommunityMember.
+   */
   async isActiveCommunityMember(
     em: EntityManager,
-    rootGroupId: string,
+    communityId: string,
     userId: string,
   ): Promise<boolean> {
-    const membership = await em.findOne(GroupMembership, {
-      rootGroup: rootGroupId,
-      user: userId,
-      status: {
-        $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
-      },
-    });
-    return membership !== null;
+    return this.roleAssignmentsService.isCommunityMember(
+      communityId,
+      userId,
+      em,
+    );
   }
 
   /**
@@ -138,8 +142,8 @@ export class EventAccessService {
       case EventVisibility.PUBLIC:
         return true;
       case EventVisibility.COMMUNITY_MEMBERS: {
-        const rootGroupId = await this.getRootGroupId(em, event);
-        return this.isActiveCommunityMember(em, rootGroupId, viewerId);
+        const community = eventCommunity(event);
+        return this.isActiveCommunityMember(em, community.id, viewerId);
       }
       case EventVisibility.INVITE_ONLY: {
         const invitation = await this.findActiveInvitation(

@@ -1,22 +1,32 @@
 /**
  * E2E tests for GET /community/home (Community Home dashboard - PAD-001 §10).
  *
+ * Under the Membership/RoleAssignments rebuild, `myCommunities` is built
+ * purely from RoleAssignments the caller directly holds (see
+ * CommunityHomeService.buildParticipation) - a Group has no membership at
+ * all (only OWNER/ADMIN via direct grant/transfer), and joining a Section
+ * never adds its parent Group to the list (no inheritance in either
+ * direction). Capability fields are split into `...GroupIds`/`...SectionIds`
+ * pairs (see CommunityHomeCapabilitiesDto) rather than one mixed list.
+ *
  * Scenarios:
  *  1. Unauthenticated request → 401
  *  2. Brand new user → empty dashboard with correct default capabilities
- *  3. User belonging to several Groups → every active Membership's
- *     Root Group appears in myCommunities
- *  4. A Membership holding several Roles for the same Group → myRoles is
- *     an array containing all of them (never collapsed to one `role`)
- *  5. The caller sees their own pending invitations
- *  6. The caller never sees another user's pending invitations
- *  7. A caller with GROUP_JOIN_REQUEST_REVIEW sees pending join requests
- *     for that community
- *  8. A plain MEMBER of the same community does not see its join requests
+ *  3. A user holding ADMIN on several Groups → every one appears in
+ *     myCommunities
+ *  4. A user holding several Roles on the same Section → myRoles is an
+ *     array containing all of them (never collapsed to one `role`)
+ *  5. Joining only a Section never adds its parent Group to myCommunities
+ *     at all (no derived participation - stricter than the old model)
+ *  6. The caller sees their own pending invitations (Section-scoped - a
+ *     Group has no invitation flow)
+ *  7. The caller never sees another user's pending invitations
+ *  8. A caller with GROUP_JOIN_REQUEST_REVIEW on a Section sees its
+ *     pending join requests
+ *  9. A plain MEMBER of the same Section does not see its join requests
  *     (role name is not assumed sufficient - resolved via GroupPermissionService)
- *  9. A hidden (isHidden=true) community is fully visible to its own
- *     member, but leaks nothing to an unrelated outsider
- * 10. summary counters are consistent with the returned lists
+ * 10. A hidden (isHidden=true) Section is fully visible to its own member,
+ *     but leaks nothing to an unrelated outsider
  */
 
 import {
@@ -34,13 +44,14 @@ import { CLERK_CLIENT } from '../src/auth/clerk/clerk-client.provider';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { closeE2eApp } from './close-e2e-app.helper';
 import { CommunityHomeResponseDto } from '../src/groups/dto/community-home-response.dto';
-import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
+import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
-import { GroupMembership } from '../src/groups/entities/group-membership.entity';
+import { SectionMembership } from '../src/groups/entities/section-membership.entity';
 import { MembershipRequest } from '../src/groups/entities/membership-request.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
@@ -114,6 +125,7 @@ async function bodyOf<T>(req: request.Test): Promise<T> {
 describe('Community Home (e2e)', () => {
   let app: INestApplication<App>;
   const createdGroupIds: string[] = [];
+  const createdSectionIds: string[] = [];
   const localUserIdByToken = new Map<string, string>();
 
   beforeAll(async () => {
@@ -152,40 +164,38 @@ describe('Community Home (e2e)', () => {
   });
 
   afterAll(async () => {
-    const cleanup = app.get(EntityManager).fork();
-    await cleanup.nativeDelete(MembershipRequest, {
-      $or: [
-        { targetGroup: { $in: createdGroupIds } },
-        { targetSection: { $in: createdGroupIds } },
-      ],
+    await closeE2eApp(app, async () => {
+      const cleanup = app.get(EntityManager).fork();
+      const allTargetIds = [...createdGroupIds, ...createdSectionIds];
+      await cleanup.nativeDelete(MembershipRequest, {
+        $or: [
+          { targetGroup: { $in: allTargetIds } },
+          { targetSection: { $in: allTargetIds } },
+        ],
+      });
+      await cleanup.nativeDelete(RoleAssignment, {
+        $or: [
+          { group: { $in: allTargetIds } },
+          { section: { $in: allTargetIds } },
+        ],
+      });
+      await cleanup.nativeDelete(SectionMembership, {
+        section: { $in: createdSectionIds },
+      });
+      await cleanup.nativeDelete(AuditLogEntry, {
+        $or: [
+          { group: { $in: allTargetIds } },
+          { section: { $in: allTargetIds } },
+        ],
+      });
+      // Sections must be removed before their parent Groups to satisfy the
+      // parent_group_id foreign key (no cascade - see section.entity.ts).
+      await cleanup.nativeDelete(Section, { id: { $in: createdSectionIds } });
+      await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      await cleanup.nativeDelete(User, {
+        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+      });
     });
-    await cleanup.nativeDelete(RoleAssignment, {
-      $or: [
-        { group: { $in: createdGroupIds } },
-        { section: { $in: createdGroupIds } },
-      ],
-    });
-    await cleanup.nativeDelete(GroupMembership, {
-      rootGroup: { $in: createdGroupIds },
-    });
-    await cleanup.nativeDelete(AuditLogEntry, {
-      community: { $in: createdGroupIds },
-    });
-    // Sections must be removed before their parent Groups to satisfy the
-    // parent_group_id foreign key (no cascade - see section.entity.ts).
-    await cleanup.nativeDelete(Section, { id: { $in: createdGroupIds } });
-    // Child Groups must be nulled before their parents to satisfy the
-    // parent_group_id self-FK (no cascade - see group.entity.ts).
-    await cleanup.nativeUpdate(
-      Group,
-      { id: { $in: createdGroupIds } },
-      { parentGroup: null },
-    );
-    await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
-    await cleanup.nativeDelete(User, {
-      clerkUserId: { $in: TEST_CLERK_USER_IDS },
-    });
-    await app.close();
   });
 
   function groupPayload(
@@ -226,32 +236,20 @@ describe('Community Home (e2e)', () => {
     return created;
   }
 
-  async function addMember(
-    ownerToken: string,
-    rootGroupId: string,
-    memberToken: string,
-    role: GroupRole,
-  ): Promise<GroupMembershipResponseDto> {
-    return bodyOf<GroupMembershipResponseDto>(
-      request(app.getHttpServer())
-        .post(`/api/v1/groups/${rootGroupId}/members`)
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .send({ userId: localUserIdByToken.get(memberToken), role })
-        .expect(201),
-    );
-  }
-
   async function createSection(
     ownerToken: string,
     parentGroupId: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
+  ): Promise<SectionResponseDto> {
+    const created = await bodyOf<SectionResponseDto>(
       request(app.getHttpServer())
         .post(`/api/v1/groups/${parentGroupId}/sections`)
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({
           name: 'Community Home Test Section',
+          isPublic: true,
+          isHidden: false,
+          memberInvitesAllowed: false,
           timezone: 'Europe/Warsaw',
           currencyCode: 'PLN',
           country: 'PL',
@@ -262,20 +260,48 @@ describe('Community Home (e2e)', () => {
         })
         .expect(201),
     );
-    createdGroupIds.push(created.id);
+    createdSectionIds.push(created.id);
     return created;
   }
 
-  async function grantRole(
+  // Admin-driven add (not self-service join) - mirrors the old addMember
+  // helper, now against a Section (Group has no members at all).
+  async function addSectionMember(
+    ownerToken: string,
+    sectionId: string,
+    memberToken: string,
+    role?: GroupRole,
+  ): Promise<void> {
+    await request(app.getHttpServer())
+      .post(`/api/v1/sections/${sectionId}/members`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ userId: localUserIdByToken.get(memberToken), role })
+      .expect(201);
+  }
+
+  async function grantGroupRole(
     granterToken: string,
     groupId: string,
-    membershipId: string,
+    memberToken: string,
     role: GroupRole,
   ): Promise<void> {
     await request(app.getHttpServer())
       .post(`/api/v1/groups/${groupId}/role-assignments`)
       .set('Authorization', `Bearer ${granterToken}`)
-      .send({ membershipId, role })
+      .send({ userId: localUserIdByToken.get(memberToken), role })
+      .expect(201);
+  }
+
+  async function grantSectionRole(
+    granterToken: string,
+    sectionId: string,
+    memberToken: string,
+    role: GroupRole,
+  ): Promise<void> {
+    await request(app.getHttpServer())
+      .post(`/api/v1/sections/${sectionId}/role-assignments`)
+      .set('Authorization', `Bearer ${granterToken}`)
+      .send({ userId: localUserIdByToken.get(memberToken), role })
       .expect(201);
   }
 
@@ -316,55 +342,61 @@ describe('Community Home (e2e)', () => {
     });
     expect(home.capabilities).toEqual({
       canCreateGroup: true,
-      canCreateSectionInCommunityIds: [],
-      canCreateEventInCommunityIds: [],
-      canReviewJoinRequestsInCommunityIds: [],
-      canViewMembersInCommunityIds: [],
-      canManageMembersInCommunityIds: [],
-      canInviteMembersInCommunityIds: [],
-      canManageInvitationsInCommunityIds: [],
-      canManageRolesInCommunityIds: [],
-      canTransferOwnershipInCommunityIds: [],
-      canArchiveCommunityIds: [],
-      canRestoreCommunityIds: [],
-      canDeleteCommunityIds: [],
-      canViewAuditLogInCommunityIds: [],
-      canManageNotificationsInCommunityIds: [],
-      canBanMembersInCommunityIds: [],
-      canSuspendMembersInCommunityIds: [],
-      canManageAnnouncementsInCommunityIds: [],
-      canViewAnnouncementArchiveInCommunityIds: [],
-      canViewRecipientGroupsInCommunityIds: [],
-      canManageRecipientGroupsInCommunityIds: [],
+      canCreateSectionInGroupIds: [],
+      canCreateSectionInSectionIds: [],
+      canCreateEventInGroupIds: [],
+      canCreateEventInSectionIds: [],
+      canReviewJoinRequestsInSectionIds: [],
+      canViewMembersInSectionIds: [],
+      canManageMembersInSectionIds: [],
+      canInviteMembersInSectionIds: [],
+      canManageInvitationsInSectionIds: [],
+      canBanMembersInSectionIds: [],
+      canSuspendMembersInSectionIds: [],
+      canManageRolesInGroupIds: [],
+      canManageRolesInSectionIds: [],
+      canTransferOwnershipInGroupIds: [],
+      canTransferOwnershipInSectionIds: [],
+      canArchiveGroupIds: [],
+      canArchiveSectionIds: [],
+      canRestoreGroupIds: [],
+      canRestoreSectionIds: [],
+      canDeleteGroupIds: [],
+      canDeleteSectionIds: [],
+      canViewAuditLogInGroupIds: [],
+      canViewAuditLogInSectionIds: [],
+      canManageNotificationsInSectionIds: [],
+      canManageAnnouncementsInGroupIds: [],
+      canManageAnnouncementsInSectionIds: [],
+      canViewAnnouncementArchiveInGroupIds: [],
+      canViewAnnouncementArchiveInSectionIds: [],
+      canViewRecipientGroupsInGroupIds: [],
+      canViewRecipientGroupsInSectionIds: [],
+      canManageRecipientGroupsInGroupIds: [],
+      canManageRecipientGroupsInSectionIds: [],
       canManageAnyCommunity: false,
     });
   });
 
   describe('My Communities', () => {
-    it('lists every active Membership across several Groups, and preserves multiple Roles for the same Group as an array', async () => {
+    it('lists every Group the user holds ADMIN on (Group has no MEMBER role - it is administered only via OWNER/ADMIN)', async () => {
       const orgOne = await createRootGroup(tokenFor('ch-owner'), {
         name: 'Cordão de Ouro',
       });
       const orgTwo = await createRootGroup(tokenFor('ch-owner'), {
         name: 'Abadá',
       });
-      await addMember(
+      await grantGroupRole(
         tokenFor('ch-owner'),
         orgOne.id,
         tokenFor('ch-member'),
-        GroupRole.MEMBER,
+        GroupRole.ADMIN,
       );
-      const membership = await addMember(
+      await grantGroupRole(
         tokenFor('ch-owner'),
         orgTwo.id,
         tokenFor('ch-member'),
-        GroupRole.MEMBER,
-      );
-      await grantRole(
-        tokenFor('ch-owner'),
-        orgTwo.id,
-        membership.id,
-        GroupRole.INSTRUCTOR,
+        GroupRole.ADMIN,
       );
 
       const home = await getHome(tokenFor('ch-member'));
@@ -373,27 +405,51 @@ describe('Community Home (e2e)', () => {
       const orgOneEntry = home.myCommunities.find((c) => c.id === orgOne.id);
       const orgTwoEntry = home.myCommunities.find((c) => c.id === orgTwo.id);
       expect(orgOneEntry).toMatchObject({
-        isRootGroup: true,
-        myRoles: ['MEMBER'],
+        isGroup: true,
+        myRoles: ['ADMIN'],
       });
-      expect(orgTwoEntry?.isRootGroup).toBe(true);
-      expect([...(orgTwoEntry?.myRoles ?? [])].sort()).toEqual(
-        ['INSTRUCTOR', 'MEMBER'].sort(),
-      );
+      expect(orgTwoEntry).toMatchObject({
+        isGroup: true,
+        myRoles: ['ADMIN'],
+      });
       expect(home.summary.communitiesCount).toBe(2);
     });
 
-    // Regression coverage for the "Moje społeczności" business rule:
-    // joining a Section must never be treated as joining its parent Group
-    // (ADR-004 "no membership inheritance"). GroupMembership.rootGroup is
-    // always the Group (mandatory - see group-membership.entity.ts), so
-    // this Section-only joiner's Membership still points there; the Group
-    // legitimately still appears (it owns the tree this Section lives in -
-    // see PAD-001 §11 "grouped by organization"), but only with an empty
-    // myRoles - proving no Role/participation was ever granted for it.
-    it('joining only a Section never grants a derived Role in its parent Group - the Group appears with an empty myRoles, the Section with the real one', async () => {
+    it('preserves multiple Roles held on the same Section as an array, never collapsed to one `role`', async () => {
       const org = await createRootGroup(tokenFor('ch-owner'), {
-        name: 'Cordão de Ouro (Section test)',
+        name: 'Cordão de Ouro (multi-role Section test)',
+      });
+      const section = await createSection(tokenFor('ch-owner'), org.id, {
+        name: 'Multi-role Section',
+      });
+      await addSectionMember(
+        tokenFor('ch-owner'),
+        section.id,
+        tokenFor('ch-member'),
+      );
+      await grantSectionRole(
+        tokenFor('ch-owner'),
+        section.id,
+        tokenFor('ch-member'),
+        GroupRole.INSTRUCTOR,
+      );
+
+      const home = await getHome(tokenFor('ch-member'));
+
+      const sectionEntry = home.myCommunities.find((c) => c.id === section.id);
+      expect(sectionEntry?.isGroup).toBe(false);
+      expect([...(sectionEntry?.myRoles ?? [])].sort()).toEqual(
+        ['INSTRUCTOR', 'MEMBER'].sort(),
+      );
+    });
+
+    // No inheritance in either direction: joining a Section never adds its
+    // parent Group to myCommunities - a Role held on a Section has zero
+    // effect on the Group above it (a Group has no membership to derive
+    // anything from in the first place).
+    it('joining only a Section never adds its parent Group to myCommunities at all', async () => {
+      const org = await createRootGroup(tokenFor('ch-owner'), {
+        name: 'Cordão de Ouro (Section-only test)',
       });
       const section = await createSection(tokenFor('ch-owner'), org.id, {
         name: 'Poznań',
@@ -407,12 +463,12 @@ describe('Community Home (e2e)', () => {
 
       const home = await getHome(tokenFor('ch-section-member'));
 
-      expect(home.myCommunities).toHaveLength(2);
+      expect(home.myCommunities).toHaveLength(1);
       const orgEntry = home.myCommunities.find((c) => c.id === org.id);
       const sectionEntry = home.myCommunities.find((c) => c.id === section.id);
-      expect(orgEntry).toMatchObject({ isRootGroup: true, myRoles: [] });
+      expect(orgEntry).toBeUndefined();
       expect(sectionEntry).toMatchObject({
-        isRootGroup: false,
+        isGroup: false,
         parentId: org.id,
         myRoles: ['MEMBER'],
       });
@@ -420,16 +476,19 @@ describe('Community Home (e2e)', () => {
   });
 
   describe('Pending Invitations', () => {
-    it("shows the caller's own pending invitation and never another user's", async () => {
+    it("shows the caller's own pending invitation and never another user's - Section-scoped, Group has no invitation flow", async () => {
       const org = await createRootGroup(tokenFor('ch-owner'), {
         name: 'Invitation Test Org',
       });
+      const section = await createSection(tokenFor('ch-owner'), org.id, {
+        name: 'Invitation Test Section',
+      });
 
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${org.id}/invitations`)
+        .post(`/api/v1/sections/${section.id}/invitations`)
         .set('Authorization', `Bearer ${tokenFor('ch-owner')}`)
         .send({
-          targetType: 'GROUP',
+          targetType: 'SECTION',
           invitedUserId: localUserIdByToken.get(tokenFor('ch-invitee')),
         })
         .expect(201);
@@ -437,9 +496,9 @@ describe('Community Home (e2e)', () => {
       const inviteeHome = await getHome(tokenFor('ch-invitee'));
       expect(inviteeHome.pendingInvitations.total).toBe(1);
       expect(inviteeHome.pendingInvitations.items[0].community).toMatchObject({
-        id: org.id,
-        name: 'Invitation Test Org',
-        isRootGroup: true,
+        id: section.id,
+        name: 'Invitation Test Section',
+        isGroup: false,
       });
       expect(inviteeHome.summary.pendingInvitationsCount).toBe(1);
       expect(inviteeHome.summary.actionableItemsCount).toBe(
@@ -450,99 +509,104 @@ describe('Community Home (e2e)', () => {
       const outsiderHome = await getHome(tokenFor('ch-outsider'));
       expect(
         outsiderHome.pendingInvitations.items.some(
-          (invitation) => invitation.community.id === org.id,
+          (invitation) => invitation.community.id === section.id,
         ),
       ).toBe(false);
     });
   });
 
   describe('Pending Join Requests', () => {
-    it('are visible to a caller with GROUP_JOIN_REQUEST_REVIEW, and hidden from a plain MEMBER of the very same community', async () => {
+    it('are visible to a caller with GROUP_JOIN_REQUEST_REVIEW on a Section, and hidden from a plain MEMBER of the very same Section', async () => {
       const org = await createRootGroup(tokenFor('ch-owner'), {
         name: 'Join Request Test Org',
+      });
+      // The Section creator (ch-owner) automatically becomes its OWNER -
+      // no separate grant needed for the review-capability assertion below.
+      const section = await createSection(tokenFor('ch-owner'), org.id, {
+        name: 'Join Request Test Section',
         isPublic: false,
       });
-      await addMember(
+      await addSectionMember(
         tokenFor('ch-owner'),
-        org.id,
+        section.id,
         tokenFor('ch-member'),
-        GroupRole.MEMBER,
       );
-      const adminMembership = await addMember(
+      await addSectionMember(
         tokenFor('ch-owner'),
-        org.id,
+        section.id,
         tokenFor('ch-admin'),
         GroupRole.ADMIN,
       );
-      void adminMembership;
 
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${org.id}/join`)
+        .post(`/api/v1/sections/${section.id}/join`)
         .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
-        .send({ targetType: 'GROUP' })
+        .send({ targetType: 'SECTION' })
         .expect(200);
 
       const ownerHome = await getHome(tokenFor('ch-owner'));
       expect(
-        ownerHome.capabilities.canReviewJoinRequestsInCommunityIds,
-      ).toContain(org.id);
+        ownerHome.capabilities.canReviewJoinRequestsInSectionIds,
+      ).toContain(section.id);
       const ownerJoinRequest = ownerHome.pendingJoinRequests.items.find(
-        (item) => item.community.id === org.id,
+        (item) => item.community.id === section.id,
       );
       expect(ownerJoinRequest).toBeDefined();
 
       const adminHome = await getHome(tokenFor('ch-admin'));
       expect(
-        adminHome.capabilities.canReviewJoinRequestsInCommunityIds,
-      ).toContain(org.id);
+        adminHome.capabilities.canReviewJoinRequestsInSectionIds,
+      ).toContain(section.id);
       expect(
         adminHome.pendingJoinRequests.items.some(
-          (item) => item.community.id === org.id,
+          (item) => item.community.id === section.id,
         ),
       ).toBe(true);
 
       const memberHome = await getHome(tokenFor('ch-member'));
       expect(
-        memberHome.capabilities.canReviewJoinRequestsInCommunityIds,
-      ).not.toContain(org.id);
+        memberHome.capabilities.canReviewJoinRequestsInSectionIds,
+      ).not.toContain(section.id);
       expect(
         memberHome.pendingJoinRequests.items.some(
-          (item) => item.community.id === org.id,
+          (item) => item.community.id === section.id,
         ),
       ).toBe(false);
     });
   });
 
   describe('Hidden communities', () => {
-    it('are fully visible to their own member but leak nothing to an unrelated outsider', async () => {
-      const hiddenOrg = await createRootGroup(tokenFor('ch-owner'), {
+    it('a hidden Section is fully visible to its own member but leaks nothing to an unrelated outsider', async () => {
+      const org = await createRootGroup(tokenFor('ch-owner'), {
         name: 'Hidden Org',
+      });
+      const hiddenSection = await createSection(tokenFor('ch-owner'), org.id, {
+        name: 'Hidden Section',
         isHidden: true,
       });
-      await addMember(
+      await addSectionMember(
         tokenFor('ch-owner'),
-        hiddenOrg.id,
+        hiddenSection.id,
         tokenFor('ch-member'),
-        GroupRole.MEMBER,
       );
 
       const memberHome = await getHome(tokenFor('ch-member'));
-      expect(memberHome.myCommunities.some((c) => c.id === hiddenOrg.id)).toBe(
-        true,
-      );
+      expect(
+        memberHome.myCommunities.some((c) => c.id === hiddenSection.id),
+      ).toBe(true);
 
       const outsiderHome = await getHome(tokenFor('ch-outsider'));
       expect(
-        outsiderHome.myCommunities.some((c) => c.id === hiddenOrg.id),
+        outsiderHome.myCommunities.some((c) => c.id === hiddenSection.id),
       ).toBe(false);
       expect(
         outsiderHome.pendingInvitations.items.some(
-          (i) => i.community.id === hiddenOrg.id,
+          (i) => i.community.id === hiddenSection.id,
         ),
       ).toBe(false);
       expect(
         outsiderHome.pendingJoinRequests.items.some(
-          (i) => i.community.id === hiddenOrg.id,
+          (i) => i.community.id === hiddenSection.id,
         ),
       ).toBe(false);
     });

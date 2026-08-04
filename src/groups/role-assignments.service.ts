@@ -1,27 +1,28 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
+import { EntityManager, LockMode } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
 import { CreateRoleAssignmentInput } from './dto/create-role-assignment.schema';
 import { RoleAssignmentResponseDto } from './dto/role-assignment-response.dto';
+import { TransferOwnershipResponseDto } from './dto/transfer-ownership-response.dto';
 import { AuditAction } from './enums/audit-action.enum';
 import { AuditTargetType } from './enums/audit-target-type.enum';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
-import { GroupMembership } from './entities/group-membership.entity';
+import { SectionMembership } from './entities/section-membership.entity';
 import { MembershipSuspension } from './entities/membership-suspension.entity';
 import {
   ROLE_ASSIGNMENTS_UNIQUE_INDEX,
   RoleAssignment,
 } from './entities/role-assignment.entity';
-import { GroupMembershipStatus } from './enums/group-membership-status.enum';
+import { SectionMembershipStatus } from './enums/section-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
-import { GroupStatus } from './enums/group-status.enum';
 import {
   Community,
   communityFilter,
@@ -32,25 +33,27 @@ import { toRoleAssignmentResponseDto } from './mappers/group.mapper';
 
 export interface ResolvedGroupAuthorization {
   community: Community;
-  membership: GroupMembership;
-  // Every active Role Assignment the Membership holds for this exact
-  // Group-or-Section - never a single Role, since a Membership may hold
-  // several at once (e.g. MEMBER + INSTRUCTOR + ADMIN together - see
-  // ADR-028).
+  // `null` for a Group target - Group has no membership at all, so a held
+  // RoleAssignment is unconditionally authoritative. Populated for a
+  // Section target - its `status` gates whether/how the held roles below
+  // currently translate to permissions (see GroupPermissionService).
+  membership: SectionMembership | null;
+  // Every currently-active (revokedAt === null) Role Assignment the user
+  // holds for this exact Group-or-Section - never a single Role, since a
+  // user may hold several at once (e.g. MEMBER + INSTRUCTOR + ADMIN
+  // together).
   roleAssignments: RoleAssignment[];
 }
 
 // The single place that grants and revokes Role Assignments, and resolves
-// "what authority does this user have, directly, for this exact Group"
-// (see ADR-028, ADR-013: Role Assignment is a separate concept from
-// Membership, scoped per-Group, never inherited through the hierarchy).
-// There is deliberately no "change a Role" operation: Roles are
-// independent of one another (a Membership may hold several for the same
-// Group at once), so there is no single Role left to "change" - granting
-// and revoking are the only two mutations (see ADR-028).
-// GroupPermissionsGuard is the primary caller of resolveAuthorization();
-// GroupsService and GroupMembershipsService call the mutation methods for
-// the Root Group bootstrap/member-management flows they already own.
+// "what authority does this user have, directly, for this exact
+// Group-or-Section" - never inherited from a parent, a child, or a
+// sibling. A Role Assignment is granted directly to a User, for exactly
+// one target, with no relation to any membership at all - see
+// role-assignment.entity.ts. GroupPermissionsGuard is the primary caller
+// of resolveAuthorization(); GroupsService/SectionsService/
+// SectionMembershipsService call the mutation methods for the
+// creation-bootstrap and member-management flows they already own.
 @Injectable()
 export class RoleAssignmentsService {
   constructor(
@@ -60,45 +63,55 @@ export class RoleAssignmentsService {
   ) {}
 
   /**
-   * Resolves the caller's authorization for `groupId` directly - never a
-   * Root Group fallback, never inherited from a parent or sibling Group
-   * (see ADR-013). Returns null if the user has no usable Membership in
-   * the Group's Root Group (INVITED/ARCHIVED memberships are excluded -
-   * only ACTIVE/READ_ONLY carry any authority), or holds no Role
-   * Assignment at all for this exact Group. When it does hold Role
-   * Assignments, `roleAssignments` may contain more than one row - the
-   * caller is responsible for unioning their permissions (see
-   * GroupPermissionService.hasAllPermissionsForRoles), never picking just
-   * one.
+   * Resolves the caller's authorization for `groupOrSectionId` directly -
+   * never inherited from a parent, a child, or a sibling. Branches by
+   * target kind:
+   *  - Group: a held RoleAssignment (revokedAt === null) is unconditionally
+   *    authoritative - Group has no membership concept, so there is
+   *    nothing to gate on.
+   *  - Section: additionally requires an active (ACTIVE/READ_ONLY)
+   *    SectionMembership for the same (user, section), found by an
+   *    independent query - never a stored relation. Returns null if either
+   *    the membership or every Role Assignment is missing.
    *
    * Accepts an optional `em` so callers running inside their own
-   * `em.transactional(...)` callback (e.g. GroupsService.create checking
-   * whether the caller may attach a Child Group here) can pass that forked
-   * EntityManager through, rather than this reaching for `this.em` from
-   * inside someone else's transaction.
+   * `em.transactional(...)` callback can pass that forked EntityManager
+   * through, rather than this reaching for `this.em` from inside someone
+   * else's transaction.
    */
   async resolveAuthorization(
-    groupId: string,
+    groupOrSectionId: string,
     userId: string,
     em: EntityManager = this.em,
   ): Promise<ResolvedGroupAuthorization | null> {
     const community = await this.groupHierarchyService.findCommunityById(
-      groupId,
+      groupOrSectionId,
       em,
     );
     if (!community) {
       return null;
     }
 
-    const rootGroupId = (
-      await this.groupHierarchyService.resolveRootGroup(community, em)
-    ).id;
+    if (community instanceof Group) {
+      const roleAssignments = await em.find(RoleAssignment, {
+        user: userId,
+        group: groupOrSectionId,
+        revokedAt: null,
+      });
+      if (roleAssignments.length === 0) {
+        return null;
+      }
+      return { community, membership: null, roleAssignments };
+    }
 
-    const membership = await em.findOne(GroupMembership, {
-      rootGroup: rootGroupId,
+    const membership = await em.findOne(SectionMembership, {
+      section: groupOrSectionId,
       user: userId,
       status: {
-        $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
+        $in: [
+          SectionMembershipStatus.ACTIVE,
+          SectionMembershipStatus.READ_ONLY,
+        ],
       },
     });
     if (!membership) {
@@ -108,8 +121,9 @@ export class RoleAssignmentsService {
     await this.reconcileExpiredSuspension(em, membership);
 
     const roleAssignments = await em.find(RoleAssignment, {
-      membership: membership.id,
-      ...communityFilter(community),
+      user: userId,
+      section: groupOrSectionId,
+      revokedAt: null,
     });
     if (roleAssignments.length === 0) {
       return null;
@@ -119,169 +133,173 @@ export class RoleAssignmentsService {
   }
 
   /**
-   * Whether `userId` currently counts as "a member of" `communityGroupId` -
-   * broader than resolveAuthorization, and with a deliberately different
-   * rule depending on what kind of Group `communityGroupId` is:
-   *  - a Root Group: a plain ACTIVE/READ_ONLY Membership is already enough,
-   *    no Role required (see organization-entities.md#membership - "an
-   *    ACTIVE Membership with no Role anywhere is a normal, valid state").
-   *  - a Section (Child Group): Membership alone proves nothing about one
-   *    specific Section (it is always Root-Group-scoped - ADR-004), so this
-   *    still requires an actual Role Assignment for that exact Section -
-   *    i.e. exactly what resolveAuthorization already answers.
+   * Whether `userId` currently counts as "a member of" `communityId`:
+   *  - Group: holds any active RoleAssignment there (OWNER/ADMIN - Group
+   *    has no ordinary members, so this is really "administers this
+   *    Group").
+   *  - Section: has an active (ACTIVE/READ_ONLY) SectionMembership there -
+   *    no Role required, mirroring "an ACTIVE membership with no extra
+   *    Role is a normal, valid state" (every membership always carries at
+   *    least MEMBER, but that is not re-verified here).
    * Used by RecipientGroupsService (validating a member add is in-scope)
-   * and AnnouncementsService (GROUP/SECTION recipient visibility) so
-   * neither reimplements this Root-vs-Section branch itself.
+   * and AnnouncementsService (GROUP/SECTION recipient visibility).
    */
   async isCommunityMember(
-    communityGroupId: string,
+    communityId: string,
     userId: string,
     em: EntityManager = this.em,
   ): Promise<boolean> {
     const community = await this.groupHierarchyService.findCommunityById(
-      communityGroupId,
+      communityId,
       em,
     );
     if (!community) {
       return false;
     }
-    if (community instanceof Group && community.parentGroup === null) {
-      const membership = await em.findOne(GroupMembership, {
-        rootGroup: communityGroupId,
+    if (community instanceof Group) {
+      const assignment = await em.findOne(RoleAssignment, {
         user: userId,
-        status: {
-          $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
-        },
+        group: communityId,
+        revokedAt: null,
       });
-      return membership !== null;
+      return assignment !== null;
     }
-    const authorization = await this.resolveAuthorization(
-      communityGroupId,
-      userId,
-      em,
-    );
-    return authorization !== null;
-  }
-
-  /**
-   * The GroupMembership `where` clause behind "counts as a member of
-   * `communityGroupId`" - the exact same Root-vs-Section rule
-   * isCommunityMember() checks one user at a time (see its own comment),
-   * expressed instead as a set so it can be paginated/searched
-   * (findEligibleMembers) or checked in bulk (findEligibleMemberIds)
-   * without an N+1 loop of isCommunityMember() calls. The two must never
-   * drift apart - if this rule ever changes, isCommunityMember() has to
-   * change with it.
-   *
-   * Root Group: any ACTIVE/READ_ONLY Membership there already qualifies -
-   * no Role required. Section: Membership alone proves nothing about one
-   * specific Section (ADR-004), so this also requires an actual Role
-   * Assignment for that exact Section - never inherited from the Root
-   * Group or any ancestor Section.
-   *
-   * Returns `null` when `communityGroupId` does not exist - callers treat
-   * that as "no one is eligible" (mirrors isCommunityMember() returning
-   * `false` for the same case).
-   */
-  private async buildEligibleMembershipWhere(
-    communityGroupId: string,
-    em: EntityManager,
-  ): Promise<FilterQuery<GroupMembership> | null> {
-    const community = await this.groupHierarchyService.findCommunityById(
-      communityGroupId,
-      em,
-    );
-    if (!community) {
-      return null;
-    }
-
-    const activeOrReadOnly = {
-      $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
-    };
-
-    if (community instanceof Group && community.parentGroup === null) {
-      return { rootGroup: communityGroupId, status: activeOrReadOnly };
-    }
-
-    const rootGroup = await this.groupHierarchyService.resolveRootGroup(
-      community,
-      em,
-    );
-    const roleAssignments = await em.find(
-      RoleAssignment,
-      communityFilter(community),
-      { fields: ['membership'] },
-    );
-    const membershipIds = [
-      ...new Set(roleAssignments.map((ra) => ra.membership.id)),
-    ];
-    // No one holds a Role Assignment for this exact Section yet - `id: {
-    // $in: [] }` deterministically matches nothing, same as returning early
-    // with an empty result, but keeps one return shape for the caller.
-    return {
-      rootGroup: rootGroup.id,
-      status: activeOrReadOnly,
-      id: { $in: membershipIds },
-    };
+    const membership = await em.findOne(SectionMembership, {
+      section: communityId,
+      user: userId,
+      status: {
+        $in: [
+          SectionMembershipStatus.ACTIVE,
+          SectionMembershipStatus.READ_ONLY,
+        ],
+      },
+    });
+    return membership !== null;
   }
 
   /**
    * Bulk version of isCommunityMember() - which of `userIds` currently
-   * count as a member of `communityGroupId`, in one query instead of N.
-   * Used by RecipientGroupsService.assertMembersInScope() so create/update
+   * count as a member of `communityId`, in one query instead of N. Used by
+   * RecipientGroupsService.assertMembersInScope() so create/update
    * validation and findEligibleMembers() (the candidate-listing endpoint)
    * can never answer this question differently for the same input.
    */
   async findEligibleMemberIds(
-    communityGroupId: string,
+    communityId: string,
     userIds: string[],
     em: EntityManager = this.em,
   ): Promise<Set<string>> {
     if (userIds.length === 0) {
       return new Set();
     }
-    const where = await this.buildEligibleMembershipWhere(communityGroupId, em);
-    if (!where) {
+    const community = await this.groupHierarchyService.findCommunityById(
+      communityId,
+      em,
+    );
+    if (!community) {
       return new Set();
     }
+
+    if (community instanceof Group) {
+      const assignments = await em.find(
+        RoleAssignment,
+        { user: { $in: userIds }, group: communityId, revokedAt: null },
+        { fields: ['user'] },
+      );
+      return new Set(assignments.map((a) => a.user.id));
+    }
+
     const memberships = await em.find(
-      GroupMembership,
-      { $and: [where, { user: { $in: userIds } }] },
+      SectionMembership,
+      {
+        user: { $in: userIds },
+        section: communityId,
+        status: {
+          $in: [
+            SectionMembershipStatus.ACTIVE,
+            SectionMembershipStatus.READ_ONLY,
+          ],
+        },
+      },
       { fields: ['user'] },
     );
     return new Set(memberships.map((m) => m.user.id));
   }
 
   /**
-   * Every User eligible to be added to a Recipient Group of
-   * `communityGroupId` - i.e. exactly the set create()/update() there would
-   * accept (see buildEligibleMembershipWhere's own comment) - searchable by
-   * `displayName` and paginated, sorted deterministically (displayName ASC,
-   * id ASC, no configurable sort - see RecipientGroupsController). Backs
-   * GET .../recipient-groups/eligible-members.
+   * Every User eligible to be added to a Recipient Group of `communityId` -
+   * i.e. exactly the set findEligibleMemberIds() would accept - searchable
+   * by `displayName` and paginated, sorted deterministically (displayName
+   * ASC, id ASC, no configurable sort). Backs GET
+   * .../recipient-groups/eligible-members.
    */
   async findEligibleMembers(
-    communityGroupId: string,
+    communityId: string,
     options: { search?: string; limit: number; offset: number },
     em: EntityManager = this.em,
   ): Promise<{ items: User[]; total: number }> {
-    const where = await this.buildEligibleMembershipWhere(communityGroupId, em);
-    if (!where) {
+    const community = await this.groupHierarchyService.findCommunityById(
+      communityId,
+      em,
+    );
+    if (!community) {
       return { items: [], total: 0 };
     }
 
-    const finalWhere: FilterQuery<GroupMembership> = options.search
+    if (community instanceof Group) {
+      // Group's eligible-member pool is small by construction (only
+      // OWNER/ADMIN) - a single unpaginated query plus in-memory
+      // search/sort/paginate is simpler than a DISTINCT-users SQL query and
+      // performs identically at this scale.
+      const assignments = await em.find(
+        RoleAssignment,
+        { group: communityId, revokedAt: null },
+        { populate: ['user'] },
+      );
+      let users = [
+        ...new Map(assignments.map((a) => [a.user.id, a.user])).values(),
+      ];
+      if (options.search) {
+        const needle = options.search.toLowerCase();
+        users = users.filter((u) =>
+          u.displayName.toLowerCase().includes(needle),
+        );
+      }
+      users.sort(
+        (a, b) =>
+          a.displayName.localeCompare(b.displayName) ||
+          a.id.localeCompare(b.id),
+      );
+      return {
+        items: users.slice(options.offset, options.offset + options.limit),
+        total: users.length,
+      };
+    }
+
+    const where = options.search
       ? {
-          $and: [
-            where,
-            { user: { displayName: { $ilike: `%${options.search}%` } } },
-          ],
+          section: communityId,
+          status: {
+            $in: [
+              SectionMembershipStatus.ACTIVE,
+              SectionMembershipStatus.READ_ONLY,
+            ],
+          },
+          user: { displayName: { $ilike: `%${options.search}%` } },
         }
-      : where;
+      : {
+          section: communityId,
+          status: {
+            $in: [
+              SectionMembershipStatus.ACTIVE,
+              SectionMembershipStatus.READ_ONLY,
+            ],
+          },
+        };
 
     const [memberships, total] = await em.findAndCount(
-      GroupMembership,
-      finalWhere,
+      SectionMembership,
+      where,
       {
         populate: ['user'],
         orderBy: { user: { displayName: 'asc', id: 'asc' } } as never,
@@ -294,56 +312,78 @@ export class RoleAssignmentsService {
   }
 
   /**
-   * Every Group-kind entity id (Root Group or Section, at any depth) where
-   * `userId` currently holds *any* Role Assignment at all, across every
-   * ACTIVE/READ_ONLY root Membership they have. Holding any Role there
-   * (even the base MEMBER role every Membership is granted on join)
-   * already satisfies every MEMBER-tier GroupPermission, including
-   * ANNOUNCEMENT_VIEW/RECIPIENT_GROUP_VIEW (see
-   * group-role-permissions.map.ts) - so this is exactly "every community
-   * whose Announcements this user's cross-community feed may include" (see
-   * AnnouncementsService.listForViewer), without re-deriving that rule
-   * itself. Reuses getGroupParticipationForMemberships - the same batched
-   * lookup CommunityHomeService already relies on for "every community I
-   * participate in" - rather than re-querying Role Assignments here.
+   * Every Group-or-Section id where `userId` currently holds *any*
+   * currently-active Role Assignment - for a Group, that alone is
+   * sufficient; for a Section, the corresponding SectionMembership must
+   * also be ACTIVE/READ_ONLY (ending a membership revokes every Role
+   * Assignment tied to it - see revokeAllForEndedMembership - but a
+   * READ_ONLY one does not, so a suspended member's communities still
+   * count here). Used by AnnouncementsService.listForViewer as "every
+   * community whose Announcements this user's cross-community feed may
+   * include".
    */
   async getCommunityIdsWithAnyRole(userId: string): Promise<string[]> {
-    const memberships = await this.em.find(GroupMembership, {
-      user: userId,
-      status: {
-        $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
-      },
-    });
-    if (memberships.length === 0) {
-      return [];
-    }
-    const participation = await this.getGroupParticipationForMemberships(
-      memberships.map((membership) => membership.id),
+    const assignments = await this.em.find(
+      RoleAssignment,
+      { user: userId, revokedAt: null },
+      { populate: ['group', 'section'] },
     );
-    return [...new Set(participation.map((row) => row.groupId))];
+    const groupIds = assignments
+      .filter((a) => a.group !== null)
+      .map((a) => a.group!.id);
+    const sectionIds = [
+      ...new Set(
+        assignments.filter((a) => a.section !== null).map((a) => a.section!.id),
+      ),
+    ];
+    if (sectionIds.length === 0) {
+      return groupIds;
+    }
+    const activeMemberships = await this.em.find(
+      SectionMembership,
+      {
+        user: userId,
+        section: { $in: sectionIds },
+        status: {
+          $in: [
+            SectionMembershipStatus.ACTIVE,
+            SectionMembershipStatus.READ_ONLY,
+          ],
+        },
+      },
+      { fields: ['section'] },
+    );
+    const activeSectionIds = new Set(
+      activeMemberships.map((m) => m.section.id),
+    );
+    return [
+      ...new Set([
+        ...groupIds,
+        ...sectionIds.filter((id) => activeSectionIds.has(id)),
+      ]),
+    ];
   }
 
   /**
    * Lazily expires a time-bound suspension (see MembershipSuspension) -
    * this codebase has no scheduler/cron infrastructure, so instead of a
    * background job flipping `status` back to ACTIVE at `until`, the next
-   * time this Membership's authorization is resolved (i.e. on the very
-   * next request that touches this Group, by anyone), an `until` in the
-   * past is detected and both the Membership and the suspension record are
-   * reconciled back to ACTIVE/lifted right here, before the permission
-   * check that called this method runs. Deliberately not audit-logged as
-   * an UNSUSPEND action - no actor performed it, it is a passive
-   * consequence of time passing (see AuditLogEntry.actor).
+   * time this membership's authorization is resolved (i.e. on the very
+   * next request that touches this Section, by anyone), an `until` in the
+   * past is detected and both the membership and the suspension record are
+   * reconciled back to ACTIVE/lifted right here. Deliberately not
+   * audit-logged as an UNSUSPEND action - no actor performed it, it is a
+   * passive consequence of time passing.
    *
-   * A no-op whenever the Membership isn't READ_ONLY, has no active
+   * A no-op whenever the membership isn't READ_ONLY, has no active
    * suspension record, or that suspension is indefinite (`until === null`)
    * or not yet due.
    */
   private async reconcileExpiredSuspension(
     em: EntityManager,
-    membership: GroupMembership,
+    membership: SectionMembership,
   ): Promise<void> {
-    if (membership.status !== GroupMembershipStatus.READ_ONLY) {
+    if (membership.status !== SectionMembershipStatus.READ_ONLY) {
       return;
     }
 
@@ -355,58 +395,60 @@ export class RoleAssignmentsService {
       return;
     }
 
-    membership.status = GroupMembershipStatus.ACTIVE;
+    membership.status = SectionMembershipStatus.ACTIVE;
     suspension.liftedAt = new Date();
     await em.flush();
   }
 
   /**
-   * Ensures `membership` holds a MEMBER Role Assignment for `group`,
-   * creating one if it doesn't already exist. MEMBER is the **base Role**
-   * of every Group: it answers "does this user belong to this specific
-   * Group" (separate from Membership itself, which only answers "does
-   * this user belong to the organization"), and every other Role requires
-   * it - see ADR-028. Idempotent - safe to call even if the Role
-   * Assignment already exists. Must run inside the caller's transaction.
+   * Ensures `user` holds an active MEMBER Role Assignment for `section`,
+   * creating one if it doesn't already exist. MEMBER is the base Role of
+   * every Section membership - normally created atomically alongside the
+   * SectionMembership itself (see SectionMembershipsService), so this
+   * exists as a defensive idempotent backstop for grantRole(), not as the
+   * primary creation path. Must run inside the caller's transaction.
    */
   async ensureMemberRole(
     em: EntityManager,
-    membership: GroupMembership,
-    community: Community,
+    section: Section,
+    user: User,
+    grantedBy: User | null,
   ): Promise<void> {
     const existing = await em.findOne(RoleAssignment, {
-      membership: membership.id,
-      ...communityFilter(community),
+      user: user.id,
+      section: section.id,
       role: GroupRole.MEMBER,
+      revokedAt: null,
     });
     if (existing) {
       return;
     }
     await this.insertRoleAssignment(
       em,
-      membership,
-      community,
+      user,
+      section,
       GroupRole.MEMBER,
+      grantedBy,
     );
   }
 
   /**
    * Unconditionally creates one new Role Assignment row - the primitive
-   * behind every Role grant (initial OWNER at Group creation, automatic
-   * MEMBER on join, and additional Roles granted on top of either). Does
-   * not check for an existing (membership, group, role) row - callers that
-   * need that check (e.g. grantRole(), which is reachable directly from
-   * the API) must do so themselves first. Must run inside the caller's
-   * transaction.
+   * behind every Role grant (initial OWNER at Group/Section creation,
+   * MEMBER on join, and additional Roles granted on top). Does not check
+   * for an existing active (user, target, role) row - callers that need
+   * that check (e.g. grantRole(), reachable directly from the API) must do
+   * so themselves first. Must run inside the caller's transaction.
    */
   async insertRoleAssignment(
     em: EntityManager,
-    membership: GroupMembership,
+    user: User,
     community: Community,
     role: GroupRole,
+    grantedBy: User | null,
   ): Promise<RoleAssignment> {
     const assignment = new RoleAssignment();
-    assignment.membership = membership;
+    assignment.user = user;
     if (community instanceof Section) {
       assignment.section = community;
     } else {
@@ -414,108 +456,123 @@ export class RoleAssignmentsService {
     }
     assignment.role = role;
     assignment.grantedAt = new Date();
+    assignment.grantedBy = grantedBy;
     await em.persist(assignment).flush();
     return assignment;
   }
 
   /**
-   * Grants a Role for `groupId` to an existing Membership - the mechanism
-   * behind assigning a Role in any Group, Root or Child (see
+   * Revokes every currently-active Role Assignment `user` holds for
+   * `section` - MEMBER and every additional Role - as a side effect of
+   * their SectionMembership ending (leave/remove/ban). Must run in the
+   * same transaction as the membership-ending update, so an authorization
+   * check racing this operation never observes an ended membership with
+   * still-active Role Assignments. Does not touch historical
+   * (already-revoked) rows - they stay exactly as they were.
+   */
+  async revokeAllForEndedMembership(
+    em: EntityManager,
+    user: User,
+    section: Section,
+    revokedBy: User | null,
+  ): Promise<void> {
+    await em.nativeUpdate(
+      RoleAssignment,
+      { user: user.id, section: section.id, revokedAt: null },
+      { revokedAt: new Date(), revokedBy: revokedBy?.id ?? null },
+    );
+  }
+
+  /**
+   * Grants a Role for `groupOrSectionId` directly to `input.userId` - the
+   * mechanism behind assigning a Role on either a Group or a Section (see
    * RoleAssignmentsController). OWNER is deliberately unassignable here -
    * see assignable-group-role.schema.ts; it can only be granted through
-   * transferOwnership. If this is the Membership's first Role Assignment
-   * for this Group, MEMBER - the base Role every other Role requires - is
-   * granted alongside the requested Role (unless the requested Role is
-   * itself MEMBER) - see ensureMemberRole().
+   * SectionMembershipsService.transferOwnership.
    */
   async grantRole(
-    groupId: string,
+    groupOrSectionId: string,
     input: CreateRoleAssignmentInput,
     actor: User,
   ): Promise<RoleAssignmentResponseDto> {
     return this.em.transactional(async (em) => {
       const community = await this.groupHierarchyService.findCommunityById(
-        groupId,
+        groupOrSectionId,
         em,
       );
       if (!community) {
         throw this.groupNotFound();
       }
 
-      const membership = await em.findOne(
-        GroupMembership,
-        { id: input.membershipId },
-        { populate: ['user', 'rootGroup'] },
-      );
-      if (!membership) {
-        throw this.membershipNotFound();
+      const targetUser = await em.findOne(User, { id: input.userId });
+      if (!targetUser) {
+        throw this.userNotFound();
       }
 
-      const rootGroupId = (
-        await this.groupHierarchyService.resolveRootGroup(community, em)
-      ).id;
-      if (membership.rootGroup.id !== rootGroupId) {
-        throw new ConflictException({
-          code: 'ROLE_ROOT_GROUP_MISMATCH',
-          message:
-            "This membership does not belong to the target group's Root Group",
+      if (community instanceof Section) {
+        const membership = await em.findOne(SectionMembership, {
+          section: community.id,
+          user: targetUser.id,
+          status: {
+            $in: [
+              SectionMembershipStatus.ACTIVE,
+              SectionMembershipStatus.READ_ONLY,
+            ],
+          },
         });
-      }
-
-      if (membership.status !== GroupMembershipStatus.ACTIVE) {
-        throw new ConflictException({
-          code: 'ROLE_MEMBERSHIP_NOT_ACTIVE',
-          message: 'A Role can only be assigned to an active membership',
-        });
+        if (!membership) {
+          throw new ConflictException({
+            code: 'ROLE_MEMBERSHIP_NOT_ACTIVE',
+            message: 'A role can only be assigned to an active section member',
+          });
+        }
       }
 
       const existing = await em.findOne(RoleAssignment, {
-        membership: input.membershipId,
+        user: targetUser.id,
         ...communityFilter(community),
         role: input.role,
+        revokedAt: null,
       });
       if (existing) {
         throw new ConflictException({
           code: 'ROLE_ASSIGNMENT_ALREADY_EXISTS',
-          message: 'This membership already holds this role in this group',
+          message: 'This user already holds this role for this target',
         });
       }
 
-      if (input.role !== GroupRole.MEMBER) {
-        await this.ensureMemberRole(em, membership, community);
+      if (community instanceof Section && input.role !== GroupRole.MEMBER) {
+        await this.ensureMemberRole(em, community, targetUser, actor);
       }
 
       let assignment: RoleAssignment;
       try {
         assignment = await this.insertRoleAssignment(
           em,
-          membership,
+          targetUser,
           community,
           input.role,
+          actor,
         );
       } catch (error) {
         // Race backstop - see the equivalent comment in
-        // GroupMembershipsService.addMember().
+        // SectionMembershipsService.addMember().
         if (isUniqueViolationOn(error, ROLE_ASSIGNMENTS_UNIQUE_INDEX)) {
           throw new ConflictException({
             code: 'ROLE_ASSIGNMENT_ALREADY_EXISTS',
-            message: 'This membership already holds this role in this group',
+            message: 'This user already holds this role for this target',
           });
         }
         throw error;
       }
 
-      // membership.rootGroup is already the correct Root Group regardless
-      // of whether `groupId` (the Role's own target) is a Root or Child
-      // Group - Membership is always Root-Group-scoped (ADR-004), so no
-      // extra hierarchy lookup is needed here.
       this.auditLogService.record(em, {
-        community: membership.rootGroup,
+        community,
         action: AuditAction.ADD_ROLE,
         actor,
         targetType: AuditTargetType.USER,
-        targetId: membership.user.id,
-        metadata: { groupId, role: input.role },
+        targetId: targetUser.id,
+        metadata: { groupOrSectionId, role: input.role },
       });
       await em.flush();
 
@@ -524,13 +581,13 @@ export class RoleAssignmentsService {
   }
 
   async listRoleAssignments(
-    groupId: string,
+    groupOrSectionId: string,
   ): Promise<RoleAssignmentResponseDto[]> {
     const assignments = await this.em.find(
       RoleAssignment,
-      communityIdFilter(groupId),
+      { ...communityIdFilter(groupOrSectionId), revokedAt: null },
       {
-        populate: ['membership', 'membership.user'],
+        populate: ['user', 'grantedBy', 'revokedBy'],
         orderBy: { grantedAt: 'asc' },
       },
     );
@@ -538,47 +595,40 @@ export class RoleAssignmentsService {
   }
 
   async getRoleAssignment(
-    groupId: string,
+    groupOrSectionId: string,
     roleAssignmentId: string,
   ): Promise<RoleAssignmentResponseDto> {
     const assignment = await this.loadByIdOrFail(
       this.em,
-      groupId,
+      groupOrSectionId,
       roleAssignmentId,
     );
     return toRoleAssignmentResponseDto(assignment);
   }
 
   /**
-   * Revokes a single Role Assignment. Two Roles are protected against
-   * direct revocation here, each for a different reason:
+   * Revokes a single Role Assignment (soft: sets revokedAt/revokedBy,
+   * never deletes the row - see role-assignment.entity.ts). Two Roles are
+   * protected against direct revocation here:
    *
    * - OWNER can only move via an atomic ownership transfer (see
-   *   GroupMembershipsService.transferOwnership) - never revoked directly,
-   *   since a Group must never be left without one.
-   * - MEMBER is the base Role of the Group (see ADR-028): while the
-   *   Membership holds any *other* Role for this same Group, MEMBER cannot
-   *   be revoked - every other Role requires it. Once no other Role
-   *   remains, MEMBER may be revoked, which is how a user is removed from
-   *   a Child Group (Child Groups have no separate "membership" concept of
-   *   their own - see organization-entities.md#roleassignment). For the
-   *   Membership's own Root Group specifically, MEMBER is never revocable
-   *   through this endpoint at all: leaving or being removed from the
-   *   organization already has dedicated flows
-   *   (GroupMembershipsService.leave/removeMember) that properly archive
-   *   the Membership itself - revoking the Root Group's MEMBER Role
-   *   Assignment here instead would leave an ACTIVE Membership with no
-   *   Role at all in its own Root Group, a state with no defined meaning.
+   *   SectionMembershipsService.transferOwnership) - never revoked
+   *   directly, since a target must never be left without one.
+   * - MEMBER is the base Role of a Section membership: it can only be
+   *   revoked as a side effect of the membership ending (leave/remove/ban -
+   *   see revokeAllForEndedMembership), never through this endpoint
+   *   directly, so a membership can never be left without its base Role
+   *   while still ACTIVE/READ_ONLY.
    */
   async revokeRole(
-    groupId: string,
+    groupOrSectionId: string,
     roleAssignmentId: string,
     actor: User,
   ): Promise<void> {
     return this.em.transactional(async (em) => {
       const assignment = await this.loadByIdOrFail(
         em,
-        groupId,
+        groupOrSectionId,
         roleAssignmentId,
       );
 
@@ -590,241 +640,315 @@ export class RoleAssignmentsService {
       }
 
       if (assignment.role === GroupRole.MEMBER) {
-        if (assignment.membership.rootGroup.id === groupId) {
-          throw new ConflictException({
-            code: 'CANNOT_REMOVE_ROOT_MEMBER_ROLE',
-            message:
-              'MEMBER for the Root Group cannot be revoked directly - use leave or remove the member instead',
-          });
-        }
-
-        const otherRoles = await em.find(RoleAssignment, {
-          membership: assignment.membership.id,
-          ...communityIdFilter(groupId),
-          role: { $ne: GroupRole.MEMBER },
+        throw new ConflictException({
+          code: 'CANNOT_REMOVE_MEMBER_ROLE',
+          message:
+            'MEMBER cannot be revoked directly - use leave or remove the member instead',
         });
-        if (otherRoles.length > 0) {
-          throw new ConflictException({
-            code: 'CANNOT_REMOVE_MEMBER_ROLE',
-            message:
-              'MEMBER is the base role for this group - revoke every other role held here first',
-          });
-        }
       }
 
-      const targetUserId = assignment.membership.user.id;
+      const targetUserId = assignment.user.id;
       const role = assignment.role;
-      await em.remove(assignment).flush();
+      assignment.revokedAt = new Date();
+      assignment.revokedBy = actor;
+      await em.flush();
 
+      const community = assignment.group ?? assignment.section ?? undefined;
       this.auditLogService.record(em, {
-        community: assignment.membership.rootGroup,
+        community: community!,
         action: AuditAction.REMOVE_ROLE,
         actor,
         targetType: AuditTargetType.USER,
         targetId: targetUserId,
-        metadata: { groupId, role },
+        metadata: { groupOrSectionId, role },
       });
       await em.flush();
     });
   }
 
   /**
-   * Whether `membershipId` holds an active-in-principle Role Assignment
-   * for `role` in `groupId` - used for existence checks that don't care
-   * about any *other* Role the Membership might additionally hold there
-   * (e.g. "is this membership the Group's OWNER", which no longer implies
-   * OWNER is their only Role - see GroupMembershipsService.removeMember/
-   * leave).
+   * Atomic ownership transfer for a Group or a Section - one implementation,
+   * branching by target kind, so the "never zero, never two active OWNERs"
+   * invariant is enforced identically for both:
+   *  - Group: the new owner must already hold an active ADMIN Role
+   *    Assignment there (the Group-side equivalent of "already a member" -
+   *    Group has no membership to check instead). Only the OWNER
+   *    RoleAssignment row is locked (FOR UPDATE) - there is no membership
+   *    row to lock.
+   *  - Section: the new owner must have a `SectionMembership.status`of
+   *    exactly ACTIVE (READ_ONLY is not enough - ownership must never move
+   *    to someone who cannot currently act). Both the previous and new
+   *    owner's SectionMembership rows are locked (FOR UPDATE), serializing
+   *    against a concurrent leave()/removeMember()/banMember() naming
+   *    either of them.
+   *
+   * In both branches: the previous owner's OWNER row is revoked
+   * (revokedAt/revokedBy set, never deleted); the new owner's OWNER row is
+   * inserted fresh (their MEMBER role, for a Section, is ensured alongside
+   * it, defensively - they should already hold it, being ACTIVE). The
+   * previous owner keeps every other Role they hold untouched.
+   */
+  async transferOwnership(
+    groupOrSectionId: string,
+    currentOwnerUserId: string,
+    newOwnerUserId: string,
+    actor: User,
+  ): Promise<TransferOwnershipResponseDto> {
+    if (newOwnerUserId === currentOwnerUserId) {
+      throw new BadRequestException({
+        code: 'CANNOT_TRANSFER_TO_SELF',
+        message: 'newOwnerUserId must be a different user',
+      });
+    }
+
+    return this.em.transactional(async (em) => {
+      const community = await this.groupHierarchyService.findCommunityById(
+        groupOrSectionId,
+        em,
+      );
+      if (!community) {
+        throw this.groupNotFound();
+      }
+
+      const newOwnerUser = await em.findOne(User, { id: newOwnerUserId });
+      if (!newOwnerUser) {
+        throw this.userNotFound();
+      }
+
+      if (community instanceof Section) {
+        await em.findOne(
+          SectionMembership,
+          { section: community.id, user: currentOwnerUserId },
+          { lockMode: LockMode.PESSIMISTIC_WRITE },
+        );
+        const newOwnerMembership = await em.findOne(
+          SectionMembership,
+          { section: community.id, user: newOwnerUserId },
+          { lockMode: LockMode.PESSIMISTIC_WRITE },
+        );
+        if (
+          !newOwnerMembership ||
+          newOwnerMembership.status !== SectionMembershipStatus.ACTIVE
+        ) {
+          throw new BadRequestException({
+            code: 'TARGET_NOT_ACTIVE_MEMBER',
+            message:
+              'newOwnerUserId must have an ACTIVE membership in this section',
+          });
+        }
+      } else {
+        const newOwnerIsAdmin = await this.hasRole(
+          em,
+          newOwnerUserId,
+          community.id,
+          GroupRole.ADMIN,
+        );
+        if (!newOwnerIsAdmin) {
+          throw new BadRequestException({
+            code: 'TARGET_NOT_GROUP_ADMIN',
+            message: 'newOwnerUserId must already be an ADMIN of this group',
+          });
+        }
+      }
+
+      const previousOwnerAssignment = await em.findOne(
+        RoleAssignment,
+        {
+          user: currentOwnerUserId,
+          ...communityFilter(community),
+          role: GroupRole.OWNER,
+          revokedAt: null,
+        },
+        { lockMode: LockMode.PESSIMISTIC_WRITE, populate: ['user'] },
+      );
+      if (!previousOwnerAssignment) {
+        throw this.groupNotFound();
+      }
+
+      previousOwnerAssignment.revokedAt = new Date();
+      previousOwnerAssignment.revokedBy = actor;
+      // Flushed before the new OWNER row is inserted below - MikroORM's
+      // UnitOfWork applies inserts before updates within a single flush,
+      // which would otherwise insert the new OWNER row while the previous
+      // one is still active, transiently violating
+      // ROLE_ASSIGNMENTS_OWNER_UNIQUE_INDEX (exactly one active OWNER).
+      await em.flush();
+
+      if (community instanceof Section) {
+        await this.ensureMemberRole(em, community, newOwnerUser, actor);
+      }
+      const newOwnerAssignment = await this.insertRoleAssignment(
+        em,
+        newOwnerUser,
+        community,
+        GroupRole.OWNER,
+        actor,
+      );
+
+      this.auditLogService.record(em, {
+        community,
+        action: AuditAction.TRANSFER_OWNERSHIP,
+        actor,
+        targetType: AuditTargetType.USER,
+        targetId: newOwnerUserId,
+        metadata: { groupOrSectionId, previousOwnerUserId: currentOwnerUserId },
+      });
+      await em.flush();
+
+      return {
+        previousOwner: toRoleAssignmentResponseDto(previousOwnerAssignment),
+        newOwner: toRoleAssignmentResponseDto(newOwnerAssignment),
+      };
+    });
+  }
+
+  /**
+   * Whether `userId` currently holds an active `role` for
+   * `groupOrSectionId` - used for existence checks that don't care about
+   * any *other* Role the user might additionally hold there (e.g. "is this
+   * user the target's OWNER").
    */
   async hasRole(
     em: EntityManager,
-    membershipId: string,
-    groupId: string,
+    userId: string,
+    groupOrSectionId: string,
     role: GroupRole,
   ): Promise<boolean> {
     const assignment = await em.findOne(RoleAssignment, {
-      membership: membershipId,
-      ...communityIdFilter(groupId),
+      user: userId,
+      ...communityIdFilter(groupOrSectionId),
       role,
+      revokedAt: null,
     });
     return assignment !== null;
   }
 
   /**
-   * Every active Group (the Root Group itself, or any Child Group at any
-   * depth under it) where this Membership currently holds OWNER - the
-   * single query behind the "a Membership can never disappear while it
-   * still owns a Group" invariant (see
-   * GroupMembershipsService.assertOwnsNoActiveGroups, used by leave() and
-   * removeMember()). Deliberately organization-wide, not Root-Group-only:
-   * OWNER is scoped per-Group (ADR-013/ADR-028), so a Membership can hold
-   * it for any Child Group in the tree, not just the Root Group itself.
-   *
-   * Archived Groups are excluded - an archived Group can never accept
-   * writes again short of unarchiving it first (ADR-007), so its OWNER
-   * Role Assignment does not block ending this Membership. READ_ONLY
-   * Groups still count: they are informationally active and can return to
-   * ACTIVE at any time (see group-write-policy.ts), so they must not be
-   * left ownerless either.
-   */
-  async findOwnedActiveGroups(
-    em: EntityManager,
-    membershipId: string,
-    rootGroupId: string,
-  ): Promise<Community[]> {
-    const descendantGroups = await this.groupHierarchyService.getDescendants(
-      rootGroupId,
-      em,
-    );
-    const descendantSections =
-      await this.groupHierarchyService.getDescendantSections(rootGroupId, em);
-    const groupIds = [
-      rootGroupId,
-      ...descendantGroups.map((group) => group.id),
-    ];
-    const sectionIds = descendantSections.map((section) => section.id);
-
-    const assignments = await em.find(
-      RoleAssignment,
-      {
-        membership: membershipId,
-        role: GroupRole.OWNER,
-        $or: [{ group: { $in: groupIds } }, { section: { $in: sectionIds } }],
-      },
-      { populate: ['group', 'section'] },
-    );
-
-    return assignments
-      .map((assignment) => assignment.group ?? assignment.section)
-      .filter((community): community is Community => community !== null)
-      .filter((community) => community.status !== GroupStatus.ARCHIVED);
-  }
-
-  /**
-   * Finds the specific Role Assignment row for (membership, group, role),
-   * if any - used by transferOwnership to locate the exact OWNER row to
-   * remove.
+   * Finds the specific active Role Assignment row for (user,
+   * groupOrSectionId, role), if any - used by transferOwnership to locate
+   * the exact OWNER row to revoke, and by OWNER-lifecycle guards to check
+   * whether a target user is the current OWNER.
    */
   async findRoleAssignment(
     em: EntityManager,
-    membershipId: string,
-    groupId: string,
+    userId: string,
+    groupOrSectionId: string,
     role: GroupRole,
   ): Promise<RoleAssignment | null> {
     return em.findOne(RoleAssignment, {
-      membership: membershipId,
-      ...communityIdFilter(groupId),
+      user: userId,
+      ...communityIdFilter(groupOrSectionId),
       role,
+      revokedAt: null,
     });
   }
 
   /**
-   * Every Role a Membership holds for a specific Group - used to surface
-   * `rootRoles` on GroupMembershipResponseDto. May be empty (no Role
-   * Assignment at all) or contain several Roles at once.
+   * Every active Role a user holds for a specific Group-or-Section - used
+   * to surface `rootRoles`/`roles` on membership response DTOs. May be
+   * empty or contain several Roles at once.
    */
-  async getRoleAssignmentsForMembership(
+  async getRoleAssignmentsForUser(
     em: EntityManager,
-    membershipId: string,
-    groupId: string,
+    userId: string,
+    groupOrSectionId: string,
   ): Promise<RoleAssignment[]> {
     return em.find(RoleAssignment, {
-      membership: membershipId,
-      ...communityIdFilter(groupId),
+      user: userId,
+      ...communityIdFilter(groupOrSectionId),
+      revokedAt: null,
     });
   }
 
   /**
-   * Batch version of getRoleAssignmentsForMembership for a single Group,
-   * across many Memberships - avoids N+1 queries when building a member
-   * list response. Each Membership may map to several Roles.
+   * Batch version of getRoleAssignmentsForUser for a single target, across
+   * many users - avoids N+1 queries when building a member list response.
    */
-  async getRoleAssignmentsForGroup(
-    membershipIds: string[],
-    groupId: string,
+  async getRoleAssignmentsForTarget(
+    userIds: string[],
+    groupOrSectionId: string,
   ): Promise<Map<string, GroupRole[]>> {
-    if (membershipIds.length === 0) {
+    if (userIds.length === 0) {
       return new Map();
     }
     const assignments = await this.em.find(RoleAssignment, {
-      membership: { $in: membershipIds },
-      ...communityIdFilter(groupId),
+      user: { $in: userIds },
+      ...communityIdFilter(groupOrSectionId),
+      revokedAt: null,
     });
     const result = new Map<string, GroupRole[]>();
     for (const assignment of assignments) {
-      const membershipId = assignment.membership.id;
-      const roles = result.get(membershipId) ?? [];
+      const userId = assignment.user.id;
+      const roles = result.get(userId) ?? [];
       roles.push(assignment.role);
-      result.set(membershipId, roles);
+      result.set(userId, roles);
     }
     return result;
   }
 
   /**
-   * Cross-group batch lookup: for each (membershipId, groupId) pair, find
-   * every Role that Membership holds for that specific Group - used by
-   * GroupsService.listMine, where every row is a *different* Root Group.
+   * Cross-target batch lookup: for each (userId, groupOrSectionId) pair,
+   * find every active Role that user holds for that specific target - used
+   * by GroupsService.listMine, where every row is a *different* Group.
    */
-  async getRoleAssignmentsForMemberships(
-    pairs: { membershipId: string; groupId: string }[],
+  async getRoleAssignmentsForUsers(
+    pairs: { userId: string; groupOrSectionId: string }[],
   ): Promise<Map<string, GroupRole[]>> {
     if (pairs.length === 0) {
       return new Map();
     }
-    const membershipIds = pairs.map((pair) => pair.membershipId);
+    const userIds = [...new Set(pairs.map((pair) => pair.userId))];
     const assignments = await this.em.find(RoleAssignment, {
-      membership: { $in: membershipIds },
+      user: { $in: userIds },
+      revokedAt: null,
     });
-    const byMembershipAndGroup = new Map<string, GroupRole[]>();
+    const byUserAndTarget = new Map<string, GroupRole[]>();
     for (const assignment of assignments) {
-      const communityId = (assignment.group ?? assignment.section)!.id;
-      const key = `${assignment.membership.id}:${communityId}`;
-      const roles = byMembershipAndGroup.get(key) ?? [];
+      const targetId = (assignment.group ?? assignment.section)!.id;
+      const key = `${assignment.user.id}:${targetId}`;
+      const roles = byUserAndTarget.get(key) ?? [];
       roles.push(assignment.role);
-      byMembershipAndGroup.set(key, roles);
+      byUserAndTarget.set(key, roles);
     }
     const result = new Map<string, GroupRole[]>();
     for (const pair of pairs) {
-      const roles = byMembershipAndGroup.get(
-        `${pair.membershipId}:${pair.groupId}`,
+      const roles = byUserAndTarget.get(
+        `${pair.userId}:${pair.groupOrSectionId}`,
       );
       if (roles) {
-        result.set(pair.membershipId, roles);
+        result.set(pair.userId, roles);
       }
     }
     return result;
   }
 
   /**
-   * Every (Group, Role[]) pair any of the given Memberships holds a Role
-   * Assignment for - Root Group or any Child Group, at any depth - batched
-   * across all Memberships in a single query. Unlike
-   * getRoleAssignmentsForMemberships(), this does not require the caller to
-   * already know which Groups to ask about; it discovers every Group each
-   * Membership actually participates in. Used by Community Home to build
-   * the "My Communities" list, which must include Child Groups the caller
-   * holds a Role in, not just the Groups they have a Membership in
-   * (see organization-entities.md#roleassignment: Role Assignment is
-   * independent of Membership and can target any Group).
+   * Every (target id, Role[]) pair any of the given users holds a Role
+   * Assignment for - Group or Section, at any depth - batched across all
+   * users in a single query. Unlike getRoleAssignmentsForUsers(), this
+   * does not require the caller to already know which targets to ask
+   * about; it discovers every target each user actually participates in.
+   * Used by Community Home to build the "My Communities" list.
    */
-  async getGroupParticipationForMemberships(
-    membershipIds: string[],
-  ): Promise<{ membershipId: string; groupId: string; roles: GroupRole[] }[]> {
-    if (membershipIds.length === 0) {
+  async getGroupParticipationForUsers(
+    userIds: string[],
+  ): Promise<{ userId: string; groupId: string; roles: GroupRole[] }[]> {
+    if (userIds.length === 0) {
       return [];
     }
     const assignments = await this.em.find(RoleAssignment, {
-      membership: { $in: membershipIds },
+      user: { $in: userIds },
+      revokedAt: null,
     });
     const byKey = new Map<
       string,
-      { membershipId: string; groupId: string; roles: GroupRole[] }
+      { userId: string; groupId: string; roles: GroupRole[] }
     >();
     for (const assignment of assignments) {
-      const membershipId = assignment.membership.id;
+      const userId = assignment.user.id;
       const groupId = (assignment.group ?? assignment.section)!.id;
-      const key = `${membershipId}:${groupId}`;
-      const entry = byKey.get(key) ?? { membershipId, groupId, roles: [] };
+      const key = `${userId}:${groupId}`;
+      const entry = byKey.get(key) ?? { userId, groupId, roles: [] };
       entry.roles.push(assignment.role);
       byKey.set(key, entry);
     }
@@ -833,13 +957,17 @@ export class RoleAssignmentsService {
 
   private async loadByIdOrFail(
     em: EntityManager,
-    groupId: string,
+    groupOrSectionId: string,
     roleAssignmentId: string,
   ): Promise<RoleAssignment> {
     const assignment = await em.findOne(
       RoleAssignment,
-      { id: roleAssignmentId, ...communityIdFilter(groupId) },
-      { populate: ['membership', 'membership.user', 'membership.rootGroup'] },
+      {
+        id: roleAssignmentId,
+        ...communityIdFilter(groupOrSectionId),
+        revokedAt: null,
+      },
+      { populate: ['user', 'grantedBy', 'revokedBy'] },
     );
     if (!assignment) {
       throw new NotFoundException({
@@ -857,10 +985,10 @@ export class RoleAssignmentsService {
     });
   }
 
-  private membershipNotFound(): NotFoundException {
+  private userNotFound(): NotFoundException {
     return new NotFoundException({
-      code: 'MEMBERSHIP_NOT_FOUND',
-      message: 'Group membership not found',
+      code: 'USER_NOT_FOUND',
+      message: 'User not found',
     });
   }
 }

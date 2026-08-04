@@ -13,10 +13,8 @@ import { GroupSummaryResponseDto } from './dto/group-summary-response.dto';
 import { UpdateGroupInput } from './dto/update-group.schema';
 import { AuditAction } from './enums/audit-action.enum';
 import { AuditTargetType } from './enums/audit-target-type.enum';
-import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
-import { GroupMembership } from './entities/group-membership.entity';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
 import {
@@ -35,43 +33,31 @@ export class GroupsService {
 
   // The creator automatically becomes OWNER (spec: "Po utworzeniu grupy
   // użytkownik automatycznie staje się OWNER") - Group and its creator's
-  // Role Assignments for it are created atomically, so there is no window
+  // OWNER Role Assignment are created atomically, so there is no window
   // where a Group exists without an owner. A Group always gets exactly one
   // OWNER this way - enforced not just by this code path but by
-  // ROLE_ASSIGNMENTS_OWNER_UNIQUE_INDEX (a DB-level partial unique index
-  // on (group) where role = OWNER - see ADR-028). Being added to a Group
-  // also always grants MEMBER for it (see
-  // RoleAssignmentsService.ensureMemberRole), so the creator ends up
-  // holding both MEMBER and OWNER - not just OWNER alone.
+  // ROLE_ASSIGNMENTS_OWNER_UNIQUE_INDEX. Group has no membership at all -
+  // unlike a Section, the creator does not receive MEMBER (Group has no
+  // such role - see group-role-permissions.map.ts); OWNER is their only
+  // Role Assignment here.
   //
-  // A Group is always root-level: a brand new Membership is created for
-  // the caller in the new Group, plus MEMBER and OWNER Role Assignments
-  // for that same Group, tied to that Membership. Creating a Section
-  // (nested under an existing Group or Section) is a different operation -
-  // see SectionsService.create.
+  // A Group is always root-level. Creating a Section (nested under an
+  // existing Group or Section, which always creates a real membership) is
+  // a different operation - see SectionsService.create.
   async create(user: User, input: CreateGroupInput): Promise<GroupResponseDto> {
     const group = await this.em.transactional(async (em) => {
       const group = new Group();
       group.publicCode = await generateUniquePublicCode(em);
       this.applyFields(group, input);
       group.parentGroup = null;
+      em.persist(group);
 
-      const ownerMembership = new GroupMembership();
-      ownerMembership.rootGroup = group;
-      ownerMembership.user = user;
-      ownerMembership.joinedAt = new Date();
-      em.persist([group, ownerMembership]);
-
-      await this.roleAssignmentsService.ensureMemberRole(
-        em,
-        ownerMembership,
-        group,
-      );
       await this.roleAssignmentsService.insertRoleAssignment(
         em,
-        ownerMembership,
+        user,
         group,
         GroupRole.OWNER,
+        user,
       );
 
       this.auditLogService.record(em, {
@@ -90,35 +76,29 @@ export class GroupsService {
   }
 
   async listMine(userId: string): Promise<GroupSummaryResponseDto[]> {
-    // READ_ONLY is included alongside ACTIVE - a suspended Membership
-    // (see GroupMembershipsService.suspendMember) remains visible here,
-    // same "remains visible... loses operational permissions" doctrine
-    // already applied to GET /community/home (organization-entities.md#membership).
-    const memberships = await this.em.find(
-      GroupMembership,
-      {
-        user: userId,
-        status: {
-          $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
-        },
-      },
-      { populate: ['rootGroup'], orderBy: { joinedAt: 'desc' } },
-    );
+    // Group participation is purely RoleAssignment-based - no membership
+    // concept at all, so there is no status to gate on the way Section
+    // does (READ_ONLY/ARCHIVED). A revoked (former) Role Assignment is
+    // already excluded by getGroupParticipationForUsers.
+    const participation =
+      await this.roleAssignmentsService.getGroupParticipationForUsers([userId]);
+    if (participation.length === 0) {
+      return [];
+    }
 
-    const rootRoles =
-      await this.roleAssignmentsService.getRoleAssignmentsForMemberships(
-        memberships.map((membership) => ({
-          membershipId: membership.id,
-          groupId: membership.rootGroup.id,
-        })),
-      );
+    const groups = await this.em.find(Group, {
+      id: { $in: participation.map((row) => row.groupId) },
+    });
+    const groupsById = new Map(groups.map((group) => [group.id, group]));
 
-    return memberships.map((membership) =>
-      toGroupSummaryResponseDto(
-        membership.rootGroup,
-        rootRoles.get(membership.id) ?? [],
-      ),
-    );
+    return participation
+      .map((row) => groupsById.get(row.groupId))
+      .filter((group): group is Group => group !== undefined)
+      .map((group) => {
+        const roles =
+          participation.find((row) => row.groupId === group.id)?.roles ?? [];
+        return toGroupSummaryResponseDto(group, roles);
+      });
   }
 
   async getById(groupId: string): Promise<GroupResponseDto> {

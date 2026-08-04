@@ -8,6 +8,7 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
 import { User } from '../users/entities/user.entity';
 import { EventAccessService } from './event-access.service';
+import { eventCommunity } from './event-community.util';
 import { GrantEventRoleInput } from './dto/grant-event-role.schema';
 import { EventRoleAssignmentResponseDto } from './dto/event-role-assignment-response.dto';
 import { TransferEventOwnershipInput } from './dto/transfer-event-ownership.schema';
@@ -128,13 +129,9 @@ export class EventRolesService {
         });
       }
 
-      const rootGroupId = await this.eventAccessService.getRootGroupId(
-        em,
-        event,
-      );
       const isMember = await this.eventAccessService.isActiveCommunityMember(
         em,
-        rootGroupId,
+        eventCommunity(event).id,
         input.userId,
       );
       if (!isMember) {
@@ -271,13 +268,9 @@ export class EventRolesService {
         });
       }
 
-      const rootGroupId = await this.eventAccessService.getRootGroupId(
-        em,
-        event,
-      );
       const isMember = await this.eventAccessService.isActiveCommunityMember(
         em,
-        rootGroupId,
+        eventCommunity(event).id,
         input.toUserId,
       );
       if (!isMember) {

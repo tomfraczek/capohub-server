@@ -14,6 +14,7 @@ import { CLERK_CLIENT } from '../src/auth/clerk/clerk-client.provider';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { closeE2eApp } from './close-e2e-app.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { FavoriteSongsListResponseDto } from '../src/song-library/dto/favorite-songs-list-response.dto';
@@ -160,13 +161,14 @@ describe('Song library (e2e) - favorites, learning status, notes', () => {
   });
 
   afterAll(async () => {
-    const cleanup = app.get(EntityManager).fork();
-    await cleanup.nativeDelete(Song, { category: category.id });
-    await cleanup.nativeDelete(SongCategory, { id: category.id });
-    await cleanup.nativeDelete(User, {
-      clerkUserId: { $in: TEST_CLERK_USER_IDS },
+    await closeE2eApp(app, async () => {
+      const cleanup = app.get(EntityManager).fork();
+      await cleanup.nativeDelete(Song, { category: category.id });
+      await cleanup.nativeDelete(SongCategory, { id: category.id });
+      await cleanup.nativeDelete(User, {
+        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+      });
     });
-    await app.close();
   });
 
   afterEach(async () => {

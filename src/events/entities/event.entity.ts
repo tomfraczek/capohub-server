@@ -1,4 +1,5 @@
 import {
+  Check,
   Entity,
   Enum,
   Index,
@@ -25,6 +26,16 @@ import { EventWaitlistPolicy } from '../enums/event-waitlist-policy.enum';
 @Entity({ tableName: 'events' })
 @Index({ properties: ['communityGroup', 'status'] })
 @Index({ properties: ['communitySection', 'status'] })
+// Exactly one of `communityGroup`/`communitySection` must be set, never
+// both, never neither - mirrored here so migration:create/schema:update
+// know this constraint is intentional and never propose dropping it. Name
+// matches the constraint the migration creates verbatim - see
+// Migration20260802100200_AddPolymorphicCommunityReferences.
+@Check<Event>({
+  name: 'events_community_group_or_section_check',
+  expression: (columns) =>
+    `("${columns.communityGroup}" is not null and "${columns.communitySection}" is null) or ("${columns.communityGroup}" is null and "${columns.communitySection}" is not null)`,
+})
 export class Event extends BaseEntity {
   @Index()
   @ManyToOne(() => Group, { nullable: true, deleteRule: 'no action' })

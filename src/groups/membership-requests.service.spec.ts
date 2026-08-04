@@ -1,32 +1,32 @@
 /**
  * Unit tests for MembershipRequestsService.
  *
- * Covers:
- *  - join(): public group → auto-join; private group → JOIN_REQUEST;
- *    hidden+private → JOIN_REQUEST (hidden does NOT block join);
- *    GROUP target requires Root Group
+ * Covers (post Membership/RoleAssignments/Permissions rebuild - Section is
+ * the only target with membership, Group is always rejected):
+ *  - join(): GROUP target always rejected (GROUP_HAS_NO_MEMBERSHIP);
+ *    public Section → auto-join; private Section → JOIN_REQUEST;
+ *    hidden+private → JOIN_REQUEST (hidden does NOT block join)
  *  - cancelInvitation(): inviter can, ADMIN can, OWNER can, MEMBER cannot;
  *    already-cancelled → REQUEST_NOT_PENDING
- *  - createInvitation(): MEMBER blocked when memberInvitesAllowed=false;
- *    ADMIN/OWNER always allowed
+ *  - createInvitation(): GROUP target always rejected; MEMBER blocked when
+ *    memberInvitesAllowed=false; ADMIN/OWNER always allowed
  */
 
 import { NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
-import { GroupBan } from './entities/group-ban.entity';
-import { Group } from './entities/group.entity';
-import { GroupMembership } from './entities/group-membership.entity';
+import { SectionBan } from './entities/section-ban.entity';
+import { Section } from './entities/section.entity';
+import { SectionMembership } from './entities/section-membership.entity';
 import { MembershipRequest } from './entities/membership-request.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
-import { GroupMembershipStatus } from './enums/group-membership-status.enum';
+import { SectionMembershipStatus } from './enums/section-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
 import { MembershipRequestStatus } from './enums/membership-request-status.enum';
 import { MembershipRequestTarget } from './enums/membership-request-target.enum';
 import { MembershipRequestType } from './enums/membership-request-type.enum';
 import { AuditLogService } from './audit-log.service';
-import { GroupHierarchyService } from './group-hierarchy.service';
 import { MembershipRequestsService } from './membership-requests.service';
 import { RoleAssignmentsService } from './role-assignments.service';
 
@@ -40,25 +40,24 @@ function buildUser(overrides: Partial<User> = {}): User {
   return Object.assign(user, overrides);
 }
 
-function buildGroup(overrides: Partial<Group> = {}): Group {
-  const group = new Group();
-  group.id = 'group-1';
-  group.name = 'Capoeira Group';
-  group.status = GroupStatus.ACTIVE;
-  group.parentGroup = null;
-  group.isPublic = true;
-  group.isHidden = false;
-  group.memberInvitesAllowed = false;
-  return Object.assign(group, overrides);
+function buildSection(overrides: Partial<Section> = {}): Section {
+  const section = new Section();
+  section.id = 'section-1';
+  section.name = 'Capoeira Section';
+  section.status = GroupStatus.ACTIVE;
+  section.isPublic = true;
+  section.isHidden = false;
+  section.memberInvitesAllowed = false;
+  return Object.assign(section, overrides);
 }
 
 function buildMembership(
-  overrides: Partial<GroupMembership> = {},
-): GroupMembership {
-  const membership = new GroupMembership();
+  overrides: Partial<SectionMembership> = {},
+): SectionMembership {
+  const membership = new SectionMembership();
   membership.id = 'membership-1';
-  membership.status = GroupMembershipStatus.ACTIVE;
-  membership.rootGroup = buildGroup();
+  membership.status = SectionMembershipStatus.ACTIVE;
+  membership.section = buildSection();
   membership.user = buildUser();
   membership.joinedAt = new Date('2026-01-01T00:00:00.000Z');
   return Object.assign(membership, overrides);
@@ -70,9 +69,9 @@ function buildInvitation(
   const req = new MembershipRequest();
   req.id = 'req-1';
   req.type = MembershipRequestType.INVITATION;
-  req.targetType = MembershipRequestTarget.GROUP;
+  req.targetType = MembershipRequestTarget.SECTION;
   req.status = MembershipRequestStatus.PENDING;
-  req.targetGroup = buildGroup();
+  req.targetSection = buildSection();
   req.initiatedBy = buildUser({ id: 'inviter-1' });
   req.invitedUser = buildUser({ id: 'invitee-1' });
   req.invitedEmail = null;
@@ -84,20 +83,21 @@ function buildInvitation(
 // ─── Mock EM factory ─────────────────────────────────────────────────────────
 
 interface MockRouting {
-  groupResults?: (Group | null)[];
-  membershipResults?: (GroupMembership | null)[];
+  sectionResults?: (Section | null)[];
+  membershipResults?: (SectionMembership | null)[];
   membershipRequestResults?: (MembershipRequest | null)[];
-  roleAssignmentResults?: (RoleAssignment | null)[];
+  banResults?: (SectionBan | null)[];
+  userResult?: User | null;
   // Bulk find() results for MembershipRequest - static, not a FIFO queue.
   membershipRequestFindResults?: MembershipRequest[];
   flushError?: Error;
 }
 
 function buildMockEm(routing: MockRouting = {}) {
-  const groupQueue = [...(routing.groupResults ?? [])];
+  const sectionQueue = [...(routing.sectionResults ?? [])];
   const membershipQueue = [...(routing.membershipResults ?? [])];
   const requestQueue = [...(routing.membershipRequestResults ?? [])];
-  const roleAssignmentQueue = [...(routing.roleAssignmentResults ?? [])];
+  const banQueue = [...(routing.banResults ?? [])];
 
   const flush = routing.flushError
     ? jest.fn().mockRejectedValue(routing.flushError)
@@ -106,13 +106,14 @@ function buildMockEm(routing: MockRouting = {}) {
   const persist = jest.fn<void, [unknown]>();
 
   const findOne = jest.fn((entity: unknown) => {
-    if (entity === Group) return Promise.resolve(groupQueue.shift() ?? null);
-    if (entity === GroupMembership)
+    if (entity === Section)
+      return Promise.resolve(sectionQueue.shift() ?? null);
+    if (entity === SectionMembership)
       return Promise.resolve(membershipQueue.shift() ?? null);
     if (entity === MembershipRequest)
       return Promise.resolve(requestQueue.shift() ?? null);
-    if (entity === RoleAssignment)
-      return Promise.resolve(roleAssignmentQueue.shift() ?? null);
+    if (entity === SectionBan) return Promise.resolve(banQueue.shift() ?? null);
+    if (entity === User) return Promise.resolve(routing.userResult ?? null);
     return Promise.resolve(null);
   });
 
@@ -141,20 +142,11 @@ function buildMockEm(routing: MockRouting = {}) {
 // ─── Service factory ─────────────────────────────────────────────────────────
 
 function buildService(em: EntityManager) {
-  const getRootGroup = jest
-    .fn<Promise<Group>, [string]>()
-    .mockResolvedValue(buildGroup());
-  const groupHierarchyService = {
-    getRootGroup,
-    resolveRootGroup: (community: Group): Promise<Group> =>
-      getRootGroup(community.id),
-    findCommunityById: (id: string, emArg?: EntityManager) =>
-      (emArg ?? em).findOne(Group, { id }),
-  } as unknown as GroupHierarchyService;
-
-  const ensureMemberRole = jest.fn().mockResolvedValue(undefined);
+  const insertRoleAssignment = jest
+    .fn()
+    .mockResolvedValue(new RoleAssignment());
   const roleAssignmentsService = {
-    ensureMemberRole,
+    insertRoleAssignment,
     resolveAuthorization: jest.fn().mockResolvedValue(null),
   } as unknown as RoleAssignmentsService;
 
@@ -164,16 +156,14 @@ function buildService(em: EntityManager) {
 
   const service = new MembershipRequestsService(
     em,
-    groupHierarchyService,
     roleAssignmentsService,
     auditLogService,
   );
 
   return {
     service,
-    groupHierarchyService,
     roleAssignmentsService,
-    ensureMemberRole,
+    insertRoleAssignment,
     auditLogService,
   };
 }
@@ -184,61 +174,56 @@ describe('MembershipRequestsService', () => {
   // ─── join() ────────────────────────────────────────────────────────────
 
   describe('join()', () => {
-    it('auto-joins a public Group immediately and returns { joined: true }, granting no Role for a GROUP target', async () => {
-      const rootGroup = buildGroup({ id: 'root-1', isPublic: true });
-      const { em, persist } = buildMockEm({
-        groupResults: [rootGroup],
-        membershipResults: [null], // assertNotAlreadyJoined: no membership
-        // fulfillJoin reads existing membership to avoid duplicate
+    it('rejects a GROUP target unconditionally with GROUP_HAS_NO_MEMBERSHIP, without touching the database', async () => {
+      const { em, findOne } = buildMockEm();
+      const { service } = buildService(em);
+
+      await expect(
+        service.join('group-1', MembershipRequestTarget.GROUP, buildUser()),
+      ).rejects.toMatchObject({
+        response: { code: 'GROUP_HAS_NO_MEMBERSHIP' },
       });
-      const { service, ensureMemberRole } = buildService(em);
-      const user = buildUser();
-
-      const result = await service.join(
-        'root-1',
-        MembershipRequestTarget.GROUP,
-        user,
-      );
-
-      expect(result).toEqual({ joined: true });
-      expect(persist).toHaveBeenCalled();
-      // GROUP target: only creates a Membership, never a Role (ADR-004).
-      expect(ensureMemberRole).not.toHaveBeenCalled();
+      expect(findOne).not.toHaveBeenCalled();
     });
 
-    it('auto-joins a public Section immediately and grants the MEMBER Role for a SECTION target', async () => {
-      const section = buildGroup({ id: 'root-1', isPublic: true });
+    it('auto-joins a public Section immediately, creating membership and MEMBER atomically', async () => {
+      const section = buildSection({ id: 'section-1', isPublic: true });
       const { em, persist } = buildMockEm({
-        groupResults: [section],
-        membershipResults: [null], // assertNotAlreadyJoined: no membership
-        // fulfillJoin reads existing membership to avoid duplicate
+        sectionResults: [section],
+        membershipResults: [null], // assertNotAlreadyJoined, then fulfillJoin's own check
       });
-      const { service, ensureMemberRole } = buildService(em);
+      const { service, insertRoleAssignment } = buildService(em);
       const user = buildUser();
 
       const result = await service.join(
-        'root-1',
+        'section-1',
         MembershipRequestTarget.SECTION,
         user,
       );
 
       expect(result).toEqual({ joined: true });
       expect(persist).toHaveBeenCalled();
-      expect(ensureMemberRole).toHaveBeenCalled();
+      expect(insertRoleAssignment).toHaveBeenCalledWith(
+        em,
+        user,
+        section,
+        GroupRole.MEMBER,
+        user,
+      );
     });
 
-    it('creates a PENDING JOIN_REQUEST for a private (isPublic=false) Group', async () => {
-      const privateGroup = buildGroup({ id: 'root-1', isPublic: false });
+    it('creates a PENDING JOIN_REQUEST for a private (isPublic=false) Section', async () => {
+      const privateSection = buildSection({ id: 'section-1', isPublic: false });
       const { em, persist, flush } = buildMockEm({
-        groupResults: [privateGroup],
-        membershipResults: [null], // assertNotAlreadyJoined: no membership
+        sectionResults: [privateSection],
+        membershipResults: [null],
       });
       const { service } = buildService(em);
       const user = buildUser();
 
       const result = await service.join(
-        'root-1',
-        MembershipRequestTarget.GROUP,
+        'section-1',
+        MembershipRequestTarget.SECTION,
         user,
       );
 
@@ -252,23 +237,21 @@ describe('MembershipRequestsService', () => {
       expect(flush).toHaveBeenCalled();
     });
 
-    it('creates a JOIN_REQUEST for a hidden+private Group (isHidden=true does NOT block join)', async () => {
-      // isHidden means "not discoverable via search" — it has no effect on
-      // whether a user can join when they have the direct link / publicCode.
-      const hiddenPrivate = buildGroup({
-        id: 'hidden-group',
+    it('creates a JOIN_REQUEST for a hidden+private Section (isHidden=true does NOT block join)', async () => {
+      const hiddenPrivate = buildSection({
+        id: 'hidden-section',
         isPublic: false,
         isHidden: true,
       });
       const { em, persist } = buildMockEm({
-        groupResults: [hiddenPrivate],
+        sectionResults: [hiddenPrivate],
         membershipResults: [null],
       });
       const { service } = buildService(em);
 
       const result = await service.join(
-        'hidden-group',
-        MembershipRequestTarget.GROUP,
+        'hidden-section',
+        MembershipRequestTarget.SECTION,
         buildUser(),
       );
 
@@ -279,68 +262,36 @@ describe('MembershipRequestsService', () => {
       expect(persisted).toBeInstanceOf(MembershipRequest);
     });
 
-    it('rejects with NOT_A_ROOT_GROUP when targetType=GROUP targets a Section', async () => {
-      const childGroup = buildGroup({
-        id: 'child-1',
-        parentGroup: buildGroup({ id: 'root-1' }),
-        isPublic: true,
-      });
-      const { em } = buildMockEm({ groupResults: [childGroup] });
-      const { service } = buildService(em);
-
-      await expect(
-        service.join('child-1', MembershipRequestTarget.GROUP, buildUser()),
-      ).rejects.toMatchObject({ response: { code: 'NOT_A_ROOT_GROUP' } });
-    });
-
-    it('rejects with ALREADY_MEMBER when user already has an active Membership (GROUP target)', async () => {
-      const rootGroup = buildGroup({ isPublic: true });
-      const existingMembership = buildMembership({ rootGroup });
+    it('rejects with ALREADY_MEMBER when the user already has an active SectionMembership', async () => {
+      const section = buildSection({ isPublic: true });
+      const existingMembership = buildMembership({ section });
       const { em } = buildMockEm({
-        groupResults: [rootGroup],
+        sectionResults: [section],
         membershipResults: [existingMembership],
       });
       const { service } = buildService(em);
 
       await expect(
-        service.join('group-1', MembershipRequestTarget.GROUP, buildUser()),
+        service.join('section-1', MembershipRequestTarget.SECTION, buildUser()),
       ).rejects.toMatchObject({ response: { code: 'ALREADY_MEMBER' } });
     });
 
-    it('rejects with ALREADY_GROUP_MEMBER when user already has MEMBER Role in the Section (SECTION target)', async () => {
-      const rootGroup = buildGroup({ isPublic: true });
-      const existingMembership = buildMembership({ rootGroup });
-      const existingRole = new RoleAssignment();
-      existingRole.id = 'ra-1';
-      existingRole.role = GroupRole.MEMBER;
-      const { em } = buildMockEm({
-        groupResults: [rootGroup],
-        membershipResults: [existingMembership],
-        roleAssignmentResults: [existingRole],
-      });
+    it('rejects with SECTION_NOT_FOUND when the section does not exist', async () => {
+      const { em } = buildMockEm({ sectionResults: [null] });
       const { service } = buildService(em);
 
       await expect(
-        service.join('group-1', MembershipRequestTarget.SECTION, buildUser()),
-      ).rejects.toMatchObject({ response: { code: 'ALREADY_GROUP_MEMBER' } });
-    });
-
-    it('rejects with GROUP_NOT_FOUND when the group does not exist', async () => {
-      const { em } = buildMockEm({ groupResults: [null] });
-      const { service } = buildService(em);
-
-      await expect(
-        service.join('missing', MembershipRequestTarget.GROUP, buildUser()),
+        service.join('missing', MembershipRequestTarget.SECTION, buildUser()),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('rejects with GROUP_ARCHIVED for an archived group', async () => {
-      const archived = buildGroup({ status: GroupStatus.ARCHIVED });
-      const { em } = buildMockEm({ groupResults: [archived] });
+    it('rejects with GROUP_ARCHIVED for an archived section', async () => {
+      const archived = buildSection({ status: GroupStatus.ARCHIVED });
+      const { em } = buildMockEm({ sectionResults: [archived] });
       const { service } = buildService(em);
 
       await expect(
-        service.join('group-1', MembershipRequestTarget.GROUP, buildUser()),
+        service.join('section-1', MembershipRequestTarget.SECTION, buildUser()),
       ).rejects.toMatchObject({ response: { code: 'GROUP_ARCHIVED' } });
     });
   });
@@ -472,70 +423,8 @@ describe('MembershipRequestsService', () => {
   // ─── createInvitation() ────────────────────────────────────────────────
 
   describe('createInvitation()', () => {
-    it('rejects with MEMBER_INVITES_NOT_ALLOWED when memberInvitesAllowed=false and caller is MEMBER', async () => {
-      const group = buildGroup({ memberInvitesAllowed: false });
-      const { em } = buildMockEm({ groupResults: [group] });
-      const { service } = buildService(em);
-
-      await expect(
-        service.createInvitation(
-          'group-1',
-          {
-            targetType: MembershipRequestTarget.SECTION,
-            invitedUserId: 'user-2',
-            invitedEmail: null,
-          },
-          buildUser({ id: 'inviter-1' }),
-          [GroupRole.MEMBER],
-          GroupMembershipStatus.ACTIVE,
-        ),
-      ).rejects.toMatchObject({
-        response: { code: 'MEMBER_INVITES_NOT_ALLOWED' },
-      });
-    });
-
-    it('allows ADMIN to invite regardless of memberInvitesAllowed setting', async () => {
-      const group = buildGroup({ memberInvitesAllowed: false });
-      const invitee = buildUser({
-        id: 'invitee-1',
-        email: 'invitee@example.com',
-      });
-      // override findOne to return the invitee for User lookup
-      const { em: emWithUser } = buildMockEm({
-        groupResults: [group],
-        membershipResults: [null], // assertNotAlreadyJoined
-      });
-      (
-        emWithUser as never as { findOne: jest.Mock }
-      ).findOne.mockImplementation((entity: unknown) => {
-        if (entity === Group) return Promise.resolve(group);
-        if (entity === GroupMembership) return Promise.resolve(null);
-        if (entity === MembershipRequest) return Promise.resolve(null);
-        if (entity === RoleAssignment) return Promise.resolve(null);
-        if (entity === GroupBan) return Promise.resolve(null);
-        // User lookup for invitedUserId
-        return Promise.resolve(invitee);
-      });
-      const { service } = buildService(emWithUser);
-
-      await expect(
-        service.createInvitation(
-          'group-1',
-          {
-            targetType: MembershipRequestTarget.SECTION,
-            invitedUserId: 'invitee-1',
-            invitedEmail: null,
-          },
-          buildUser({ id: 'admin-1' }),
-          [GroupRole.ADMIN],
-          GroupMembershipStatus.ACTIVE,
-        ),
-      ).resolves.toMatchObject({ type: MembershipRequestType.INVITATION });
-    });
-
-    it('rejects with INVITATION_RECIPIENT_REQUIRED when neither invitedUserId nor invitedEmail provided', async () => {
-      const group = buildGroup({ memberInvitesAllowed: true });
-      const { em } = buildMockEm({ groupResults: [group] });
+    it('rejects a GROUP target unconditionally with GROUP_HAS_NO_MEMBERSHIP, without touching the database', async () => {
+      const { em, findOne } = buildMockEm();
       const { service } = buildService(em);
 
       await expect(
@@ -543,12 +432,85 @@ describe('MembershipRequestsService', () => {
           'group-1',
           {
             targetType: MembershipRequestTarget.GROUP,
+            invitedUserId: 'user-2',
+            invitedEmail: null,
+          },
+          buildUser({ id: 'admin-1' }),
+          [GroupRole.ADMIN],
+          SectionMembershipStatus.ACTIVE,
+        ),
+      ).rejects.toMatchObject({
+        response: { code: 'GROUP_HAS_NO_MEMBERSHIP' },
+      });
+      expect(findOne).not.toHaveBeenCalled();
+    });
+
+    it('rejects with MEMBER_INVITES_NOT_ALLOWED when memberInvitesAllowed=false and caller is MEMBER', async () => {
+      const section = buildSection({ memberInvitesAllowed: false });
+      const { em } = buildMockEm({ sectionResults: [section] });
+      const { service } = buildService(em);
+
+      await expect(
+        service.createInvitation(
+          'section-1',
+          {
+            targetType: MembershipRequestTarget.SECTION,
+            invitedUserId: 'user-2',
+            invitedEmail: null,
+          },
+          buildUser({ id: 'inviter-1' }),
+          [GroupRole.MEMBER],
+          SectionMembershipStatus.ACTIVE,
+        ),
+      ).rejects.toMatchObject({
+        response: { code: 'MEMBER_INVITES_NOT_ALLOWED' },
+      });
+    });
+
+    it('allows ADMIN to invite regardless of memberInvitesAllowed setting', async () => {
+      const section = buildSection({ memberInvitesAllowed: false });
+      const invitee = buildUser({
+        id: 'invitee-1',
+        email: 'invitee@example.com',
+      });
+      const { em } = buildMockEm({
+        sectionResults: [section],
+        membershipResults: [null], // assertNotAlreadyJoined
+        userResult: invitee,
+      });
+      const { service } = buildService(em);
+
+      await expect(
+        service.createInvitation(
+          'section-1',
+          {
+            targetType: MembershipRequestTarget.SECTION,
+            invitedUserId: 'invitee-1',
+            invitedEmail: null,
+          },
+          buildUser({ id: 'admin-1' }),
+          [GroupRole.ADMIN],
+          SectionMembershipStatus.ACTIVE,
+        ),
+      ).resolves.toMatchObject({ type: MembershipRequestType.INVITATION });
+    });
+
+    it('rejects with INVITATION_RECIPIENT_REQUIRED when neither invitedUserId nor invitedEmail provided', async () => {
+      const section = buildSection({ memberInvitesAllowed: true });
+      const { em } = buildMockEm({ sectionResults: [section] });
+      const { service } = buildService(em);
+
+      await expect(
+        service.createInvitation(
+          'section-1',
+          {
+            targetType: MembershipRequestTarget.SECTION,
             invitedUserId: null,
             invitedEmail: null,
           },
           buildUser({ id: 'admin-1' }),
           [GroupRole.ADMIN],
-          GroupMembershipStatus.ACTIVE,
+          SectionMembershipStatus.ACTIVE,
         ),
       ).rejects.toMatchObject({
         response: { code: 'INVITATION_RECIPIENT_REQUIRED' },
@@ -559,7 +521,7 @@ describe('MembershipRequestsService', () => {
   // ─── withdrawMyJoinRequest() ───────────────────────────────────────────
 
   describe('withdrawMyJoinRequest()', () => {
-    it("cancels the caller's PENDING JOIN_REQUEST for the group", async () => {
+    it("cancels the caller's PENDING JOIN_REQUEST for the section", async () => {
       const user = buildUser();
       const joinRequest = new MembershipRequest();
       joinRequest.id = 'req-1';
@@ -573,7 +535,7 @@ describe('MembershipRequestsService', () => {
       const { service } = buildService(em);
 
       await expect(
-        service.withdrawMyJoinRequest('group-1', user),
+        service.withdrawMyJoinRequest('section-1', user),
       ).resolves.toBeUndefined();
       expect(flush).toHaveBeenCalled();
       expect(joinRequest.status).toBe(MembershipRequestStatus.CANCELLED);
@@ -584,38 +546,41 @@ describe('MembershipRequestsService', () => {
       const { service } = buildService(em);
 
       await expect(
-        service.withdrawMyJoinRequest('group-1', buildUser()),
+        service.withdrawMyJoinRequest('section-1', buildUser()),
       ).rejects.toMatchObject({ response: { code: 'JOIN_REQUEST_NOT_FOUND' } });
     });
   });
 
   describe('listJoinRequestsForGroups()', () => {
-    it('returns PENDING join requests across every given target group in one query', async () => {
-      const requestForGroupOne = buildInvitation({
+    it('returns PENDING join requests across every given target section in one query', async () => {
+      const requestForSectionOne = buildInvitation({
         id: 'req-1',
         type: MembershipRequestType.JOIN_REQUEST,
-        targetGroup: buildGroup({ id: 'group-1' }),
+        targetSection: buildSection({ id: 'section-1' }),
       });
-      const requestForGroupTwo = buildInvitation({
+      const requestForSectionTwo = buildInvitation({
         id: 'req-2',
         type: MembershipRequestType.JOIN_REQUEST,
-        targetGroup: buildGroup({ id: 'group-2' }),
+        targetSection: buildSection({ id: 'section-2' }),
       });
       const { em, find } = buildMockEm({
-        membershipRequestFindResults: [requestForGroupOne, requestForGroupTwo],
+        membershipRequestFindResults: [
+          requestForSectionOne,
+          requestForSectionTwo,
+        ],
       });
       const { service } = buildService(em);
 
       const result = await service.listJoinRequestsForGroups([
-        'group-1',
-        'group-2',
+        'section-1',
+        'section-2',
       ]);
 
       expect(result.map((request) => request.id)).toEqual(['req-1', 'req-2']);
       expect(find).toHaveBeenCalledTimes(1);
     });
 
-    it('returns an empty array without querying when given no group ids', async () => {
+    it('returns an empty array without querying when given no section ids', async () => {
       const { em, find } = buildMockEm();
       const { service } = buildService(em);
 

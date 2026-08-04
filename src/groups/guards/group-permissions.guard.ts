@@ -26,43 +26,41 @@ const DEFAULT_ALLOWED_STATUSES: readonly GroupStatus[] = [GroupStatus.ACTIVE];
 /**
  * Not global - only runs on routes decorated with
  * @UseGuards(GroupPermissionsGuard) alongside @RequireGroupPermission(...)
- * (see GroupsController). Reads the group id from the route's :id param, or
- * :groupId/:sectionId for routes nested under a Group or a Section (e.g.
- * AcademiesController/CohortsController at groups/:groupId/academies, dual-
- * mounted at sections/:sectionId/academies) - the three never collide,
- * since a route only ever has one of the three.
+ * (see GroupsController/SectionController). Reads the group id from the
+ * route's :id param, or :groupId/:sectionId for routes nested under a Group
+ * or a Section - the three never collide, since a route only ever has one
+ * of the three.
  *
- * Whether the group exists at all and whether the caller can see it are the
- * same question here: a user with no usable authorization for it gets 404,
- * exactly like PlaylistsService.getById returns 404 for another user's
- * playlist (see playlists.service.ts) - never a 403 that would confirm the
- * group's existence to a non-member. A 403 is reserved for someone with a
- * Role Assignment for this exact Group whose Role lacks the specific
- * permission required for the action.
+ * Whether the group/section exists at all and whether the caller can see it
+ * are the same question here: a user with no usable authorization for it
+ * gets 404, never a 403 that would confirm the entity's existence to a
+ * non-holder. A 403 is reserved for someone with a Role Assignment for this
+ * exact target whose Role lacks the specific permission required.
  *
  * After the permission check passes, this is also the single place that
- * enforces the group's lifecycle-status policy (see group-write-policy.ts):
+ * enforces the entity's lifecycle-status policy (see group-write-policy.ts):
  * the handler's @AllowGroupStatuses(...) lists which statuses it may run in
- * (default: ACTIVE only), and any other status rejects the request with 409
- * - so a future write endpoint is blocked by default, not opted in.
+ * (default: ACTIVE only). This applies identically to Group and Section - a
+ * Section's own archival is authorization-only (see
+ * SectionMembership/RoleAssignment, which archiving never touches): nothing
+ * about this check changed for Section, it just now runs against a
+ * Section-target authorization the same way it always ran for a Group.
  *
  * Delegates authorization resolution entirely to
- * RoleAssignmentsService.resolveAuthorization(), which:
- * 1. resolves the acted-on Group's Root Group,
- * 2. finds the caller's Membership there (must be ACTIVE or READ_ONLY),
- * 3. finds *every* Role Assignment the caller holds for the exact acted-on
- *    Group - never a Root Group fallback, never inherited from a parent, a
- *    Child, or a sibling Group (see ADR-013, ADR-028).
+ * RoleAssignmentsService.resolveAuthorization(), which branches by target
+ * kind: a Group target has no membership at all (a held RoleAssignment is
+ * unconditionally authoritative); a Section target additionally requires an
+ * active SectionMembership for the same (user, section) - see that
+ * method's own comment.
  *
- * A Membership may hold several Role Assignments for the same Group at
- * once (e.g. MEMBER + INSTRUCTOR + ADMIN together) - the permission check
- * is the *union* of every held Role's permissions, never just one (see
+ * A user may hold several Role Assignments for the same target at once
+ * (e.g. MEMBER + INSTRUCTOR + ADMIN together) - the permission check is the
+ * *union* of every held Role's permissions, never just one (see
  * GroupPermissionService.hasAllPermissionsForRoles).
  *
- * A Membership that is READ_ONLY only grants the View-tier subset of that
- * union (see READ_ONLY_SAFE_PERMISSIONS) - "remains visible... but the
- * user loses operational permissions" (see
- * organization-entities.md#membership).
+ * A Section membership that is READ_ONLY only grants the View-tier subset
+ * of that union (see READ_ONLY_SAFE_PERMISSIONS) - it is never zero
+ * authority, nor full authority.
  */
 @Injectable()
 export class GroupPermissionsGuard implements CanActivate {
@@ -101,12 +99,14 @@ export class GroupPermissionsGuard implements CanActivate {
 
     const { community, membership, roleAssignments } = authorization;
     const roles = roleAssignments.map((roleAssignment) => roleAssignment.role);
+    const targetKind = community instanceof Group ? 'GROUP' : 'SECTION';
 
     if (
       !this.groupPermissionService.hasAllPermissionsForRoles(
+        targetKind,
         roles,
         requiredPermissions,
-        membership.status,
+        membership?.status ?? null,
       )
     ) {
       throw new ForbiddenException({
@@ -121,9 +121,7 @@ export class GroupPermissionsGuard implements CanActivate {
     );
     if (requiredKind) {
       // Type-based, not a `parentGroup === null` check: a Section is never
-      // a ROOT kind regardless of whether it currently has a parent (see
-      // the organizational-domain rebuild, stage 1 - `parentGroupId` is no
-      // longer how a row's type is recognized).
+      // a ROOT kind regardless of whether it currently has a parent.
       const isRoot =
         community instanceof Group && community.parentGroup === null;
       const matches = requiredKind === GroupKind.ROOT ? isRoot : !isRoot;

@@ -1,4 +1,5 @@
 import {
+  Check,
   Entity,
   Enum,
   Index,
@@ -73,6 +74,16 @@ export const MEMBERSHIP_REQUEST_PENDING_JOIN_IDX =
   properties: ['targetGroup', 'targetSection', 'initiatedBy'],
   expression: (table, columns, indexName) =>
     `create unique index "${indexName}" on ${table.toString()} (coalesce("${columns.targetGroup}", "${columns.targetSection}"), "${columns.initiatedBy}") where ("${columns.status}" = 'PENDING' and "${columns.type}" = 'JOIN_REQUEST')`,
+})
+// Exactly one of `targetGroup`/`targetSection` must be set, never both,
+// never neither - mirrored here so migration:create/schema:update know
+// this constraint is intentional and never propose dropping it. Name
+// matches the constraint the migration creates verbatim - see
+// Migration20260802100200_AddPolymorphicCommunityReferences.
+@Check<MembershipRequest>({
+  name: 'membership_requests_target_group_or_section_check',
+  expression: (columns) =>
+    `("${columns.targetGroup}" is not null and "${columns.targetSection}" is null) or ("${columns.targetGroup}" is null and "${columns.targetSection}" is not null)`,
 })
 export class MembershipRequest extends BaseEntity {
   @Enum({ items: () => Object.values(MembershipRequestType) })

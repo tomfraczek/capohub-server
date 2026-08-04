@@ -1,9 +1,18 @@
 /**
  * E2E tests for Recipient Groups (GET/POST/PATCH .../recipient-groups...).
  *
+ * Under the Membership/RoleAssignments rebuild, a Group has no membership
+ * at all (only OWNER/ADMIN via direct grant/transfer) - eligible-members
+ * for a Group is therefore "everyone holding an active RoleAssignment on
+ * that exact Group" (only ever OWNER/ADMIN), while for a Section it is
+ * "everyone with an active/READ_ONLY SectionMembership" (any Role, since
+ * joining always grants at least MEMBER) - see
+ * RoleAssignmentsService.findEligibleMembers.
+ *
  * Scenarios:
  *  1. OWNER and ADMIN can create and edit a Recipient Group
- *  2. A plain MEMBER cannot create/edit/activate/deactivate
+ *  2. A plain Section MEMBER cannot create/edit/activate/deactivate
+ *     (Group has no MEMBER tier at all, so this is Section-scoped)
  *  3. A member outside the community's scope cannot be added
  *  4. A Recipient Group can be deactivated and reactivated
  *  5. Name uniqueness is case-insensitive, per Group/Section
@@ -15,10 +24,9 @@
  *     name, including when reactivating one whose name was reused by a
  *     newer, still-active Recipient Group in the meantime
  *  8. GET .../recipient-groups/eligible-members returns exactly the set
- *     create()/update() would accept - for a Group, its members; for a
- *     Section, only those holding a Role Assignment for that exact
- *     Section (no inheritance) - searchable, paginated, sorted
- *     deterministically, with no cross-resource leakage
+ *     create()/update() would accept - for a Group, its OWNER/ADMIN
+ *     holders; for a Section, every active/READ_ONLY member - searchable,
+ *     paginated, sorted deterministically, with no cross-resource leakage
  */
 
 import {
@@ -36,13 +44,15 @@ import { CLERK_CLIENT } from '../src/auth/clerk/clerk-client.provider';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { closeE2eApp } from './close-e2e-app.helper';
 import { RecipientGroupEligibleMembersResponseDto } from '../src/groups/dto/recipient-group-eligible-member.dto';
 import { RecipientGroupResponseDto } from '../src/groups/dto/recipient-group-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
+import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
-import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
+import { SectionMembership } from '../src/groups/entities/section-membership.entity';
 import { RecipientGroupMember } from '../src/groups/entities/recipient-group-member.entity';
 import { RecipientGroup } from '../src/groups/entities/recipient-group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
@@ -145,6 +155,7 @@ async function bodyOf<T>(req: request.Test): Promise<T> {
 describe('Recipient Groups (e2e)', () => {
   let app: INestApplication<App>;
   const createdGroupIds: string[] = [];
+  const createdSectionIds: string[] = [];
   const localUserIdByToken = new Map<string, string>();
 
   beforeAll(async () => {
@@ -183,56 +194,59 @@ describe('Recipient Groups (e2e)', () => {
   });
 
   afterAll(async () => {
-    const cleanup = app.get(EntityManager).fork();
-    const communityInIds = {
-      $or: [
-        { communityGroup: { $in: createdGroupIds } },
-        { communitySection: { $in: createdGroupIds } },
-      ],
-    };
-    await cleanup.nativeDelete(AnnouncementRead, {
-      announcement: communityInIds,
+    await closeE2eApp(app, async () => {
+      const cleanup = app.get(EntityManager).fork();
+      const allTargetIds = [...createdGroupIds, ...createdSectionIds];
+      const communityInIds = {
+        $or: [
+          { communityGroup: { $in: allTargetIds } },
+          { communitySection: { $in: allTargetIds } },
+        ],
+      };
+      await cleanup.nativeDelete(AnnouncementRead, {
+        announcement: communityInIds,
+      });
+      await cleanup.nativeDelete(AnnouncementRecipient, {
+        announcement: communityInIds,
+      });
+      await cleanup.nativeDelete(Announcement, communityInIds);
+      await cleanup.nativeDelete(RecipientGroupMember, {
+        recipientGroup: {
+          $or: [
+            { group: { $in: allTargetIds } },
+            { section: { $in: allTargetIds } },
+          ],
+        },
+      });
+      await cleanup.nativeDelete(RecipientGroup, {
+        $or: [
+          { group: { $in: allTargetIds } },
+          { section: { $in: allTargetIds } },
+        ],
+      });
+      await cleanup.nativeDelete(RoleAssignment, {
+        $or: [
+          { group: { $in: allTargetIds } },
+          { section: { $in: allTargetIds } },
+        ],
+      });
+      await cleanup.nativeDelete(SectionMembership, {
+        section: { $in: createdSectionIds },
+      });
+      await cleanup.nativeDelete(AuditLogEntry, {
+        $or: [
+          { group: { $in: allTargetIds } },
+          { section: { $in: allTargetIds } },
+        ],
+      });
+      // Sections must be removed before their parent Groups to satisfy the
+      // parent_group_id foreign key (no cascade - see section.entity.ts).
+      await cleanup.nativeDelete(Section, { id: { $in: createdSectionIds } });
+      await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      await cleanup.nativeDelete(User, {
+        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+      });
     });
-    await cleanup.nativeDelete(AnnouncementRecipient, {
-      announcement: communityInIds,
-    });
-    await cleanup.nativeDelete(Announcement, communityInIds);
-    await cleanup.nativeDelete(RecipientGroupMember, {
-      recipientGroup: { group: { $in: createdGroupIds } },
-    });
-    await cleanup.nativeDelete(RecipientGroup, {
-      $or: [
-        { group: { $in: createdGroupIds } },
-        { section: { $in: createdGroupIds } },
-      ],
-    });
-    await cleanup.nativeDelete(RoleAssignment, {
-      $or: [
-        { group: { $in: createdGroupIds } },
-        { section: { $in: createdGroupIds } },
-      ],
-    });
-    await cleanup.nativeDelete(GroupMembership, {
-      rootGroup: { $in: createdGroupIds },
-    });
-    await cleanup.nativeDelete(AuditLogEntry, {
-      community: { $in: createdGroupIds },
-    });
-    // Sections must be removed before their parent Groups to satisfy the
-    // parent_group_id foreign key (no cascade - see section.entity.ts).
-    await cleanup.nativeDelete(Section, { id: { $in: createdGroupIds } });
-    // Child Groups must be nulled before their parents to satisfy the
-    // parent_group_id self-FK (no cascade - see group.entity.ts).
-    await cleanup.nativeUpdate(
-      Group,
-      { id: { $in: createdGroupIds } },
-      { parentGroup: null },
-    );
-    await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
-    await cleanup.nativeDelete(User, {
-      clerkUserId: { $in: TEST_CLERK_USER_IDS },
-    });
-    await app.close();
   });
 
   function groupPayload(
@@ -273,25 +287,27 @@ describe('Recipient Groups (e2e)', () => {
     return created;
   }
 
-  async function addMember(
+  async function grantGroupRole(
     ownerToken: string,
     groupId: string,
     memberToken: string,
-    role: GroupRole = GroupRole.MEMBER,
+    role: GroupRole,
   ): Promise<void> {
     await request(app.getHttpServer())
-      .post(`/api/v1/groups/${groupId}/members`)
+      .post(`/api/v1/groups/${groupId}/role-assignments`)
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ userId: localUserIdByToken.get(memberToken), role })
       .expect(201);
   }
 
-  async function createOrgWithMembers(): Promise<GroupResponseDto> {
+  // Group with an OWNER (the creator) and an ADMIN - the only two Roles a
+  // Group ever holds. Used by tests that just need "an authorized Group",
+  // not a specific member count.
+  async function createOrgWithGroupAdmin(): Promise<GroupResponseDto> {
     const org = await createGroup(OWNER_TOKEN, {
       name: `Recipient Groups Test Org ${Date.now()}`,
     });
-    await addMember(OWNER_TOKEN, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
-    await addMember(OWNER_TOKEN, org.id, MEMBER_TOKEN, GroupRole.MEMBER);
+    await grantGroupRole(OWNER_TOKEN, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
     return org;
   }
 
@@ -299,8 +315,8 @@ describe('Recipient Groups (e2e)', () => {
     token: string,
     parentGroupId: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
+  ): Promise<SectionResponseDto> {
+    const created = await bodyOf<SectionResponseDto>(
       request(app.getHttpServer())
         .post(`/api/v1/groups/${parentGroupId}/sections`)
         .set('Authorization', `Bearer ${token}`)
@@ -316,38 +332,20 @@ describe('Recipient Groups (e2e)', () => {
         )
         .expect(201),
     );
-    createdGroupIds.push(created.id);
+    createdSectionIds.push(created.id);
     return created;
   }
 
-  async function findMembershipId(
+  async function addSectionMember(
     ownerToken: string,
-    rootGroupId: string,
-    userId: string | undefined,
-  ): Promise<string> {
-    const members = await bodyOf<{ id: string; user: { id: string } }[]>(
-      request(app.getHttpServer())
-        .get(`/api/v1/groups/${rootGroupId}/members`)
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .expect(200),
-    );
-    const membership = members.find((m) => m.user.id === userId);
-    if (!membership) {
-      throw new Error(`No membership found for user ${userId}`);
-    }
-    return membership.id;
-  }
-
-  async function grantRole(
-    granterToken: string,
-    groupId: string,
-    membershipId: string,
-    role: GroupRole = GroupRole.MEMBER,
+    sectionId: string,
+    memberToken: string,
+    role?: GroupRole,
   ): Promise<void> {
     await request(app.getHttpServer())
-      .post(`/api/v1/groups/${groupId}/role-assignments`)
-      .set('Authorization', `Bearer ${granterToken}`)
-      .send({ membershipId, role })
+      .post(`/api/v1/sections/${sectionId}/members`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ userId: localUserIdByToken.get(memberToken), role })
       .expect(201);
   }
 
@@ -373,11 +371,11 @@ describe('Recipient Groups (e2e)', () => {
 
   function createRecipientGroup(
     token: string,
-    groupId: string,
+    resourcePathPrefix: string,
     overrides: Record<string, unknown> = {},
   ): request.Test {
     return request(app.getHttpServer())
-      .post(`/api/v1/groups/${groupId}/recipient-groups`)
+      .post(`${resourcePathPrefix}/recipient-groups`)
       .set('Authorization', `Bearer ${token}`)
       .send({
         name: 'Trenerzy',
@@ -410,20 +408,20 @@ describe('Recipient Groups (e2e)', () => {
   }
 
   it('lets OWNER create a Recipient Group with in-scope members, and ADMIN edit it', async () => {
-    const org = await createOrgWithMembers();
-    const memberUserId = localUserIdByToken.get(MEMBER_TOKEN);
+    const org = await createOrgWithGroupAdmin();
+    const adminUserId = localUserIdByToken.get(ADMIN_TOKEN);
 
     const created = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, org.id, {
+      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
         name: 'Trenerzy',
-        memberUserIds: [memberUserId],
+        memberUserIds: [adminUserId],
       }).expect(201),
     );
 
     expect(created.name).toBe('Trenerzy');
     expect(created.isActive).toBe(true);
     expect(created.members).toHaveLength(1);
-    expect(created.members[0].id).toBe(memberUserId);
+    expect(created.members[0].id).toBe(adminUserId);
     expect(typeof created.members[0].displayName).toBe('string');
 
     const updated = await bodyOf<RecipientGroupResponseDto>(
@@ -438,58 +436,77 @@ describe('Recipient Groups (e2e)', () => {
     expect(updated.members).toEqual([]);
   });
 
-  it('a plain MEMBER cannot create, edit, activate, or deactivate a Recipient Group', async () => {
-    const org = await createOrgWithMembers();
+  it('a plain Section MEMBER cannot create, edit, activate, or deactivate a Recipient Group (Group has no MEMBER tier at all)', async () => {
+    const root = await createGroup(OWNER_TOKEN, {
+      name: `Plain Member Root ${Date.now()}`,
+    });
+    const section = await createSection(OWNER_TOKEN, root.id);
+    await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
     const created = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, org.id, { name: 'Musicos' }).expect(
-        201,
-      ),
+      createRecipientGroup(OWNER_TOKEN, `/api/v1/sections/${section.id}`, {
+        name: 'Musicos',
+      }).expect(201),
     );
 
-    await createRecipientGroup(MEMBER_TOKEN, org.id, {
+    await createRecipientGroup(MEMBER_TOKEN, `/api/v1/sections/${section.id}`, {
       name: 'Should Fail',
     }).expect(403);
 
     await request(app.getHttpServer())
-      .patch(`/api/v1/groups/${org.id}/recipient-groups/${created.id}`)
+      .patch(`/api/v1/sections/${section.id}/recipient-groups/${created.id}`)
       .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
       .send({ name: 'Hacked', memberUserIds: [] })
       .expect(403);
 
     await request(app.getHttpServer())
       .post(
-        `/api/v1/groups/${org.id}/recipient-groups/${created.id}/deactivate`,
+        `/api/v1/sections/${section.id}/recipient-groups/${created.id}/deactivate`,
       )
       .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
       .expect(403);
   });
 
   it('cannot add a member who is outside the community scope', async () => {
-    const org = await createOrgWithMembers();
+    const org = await createOrgWithGroupAdmin();
     const outsiderUserId = localUserIdByToken.get(OUTSIDER_TOKEN);
 
-    await createRecipientGroup(OWNER_TOKEN, org.id, {
+    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
       name: 'Zarząd',
       memberUserIds: [outsiderUserId],
     }).expect(400);
   });
 
   it('can be deactivated and reactivated, and stays visible in the list either way', async () => {
-    const org = await createOrgWithMembers();
-    const created = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, org.id, { name: 'Rodzice' }).expect(
-        201,
-      ),
+    const org = await createOrgWithGroupAdmin();
+    const createRes = await createRecipientGroup(
+      OWNER_TOKEN,
+      `/api/v1/groups/${org.id}`,
+      { name: 'Rodzice' },
     );
+    // eslint-disable-next-line no-console
+    console.error(
+      'DIAG createRes',
+      createRes.status,
+      JSON.stringify(createRes.body),
+    );
+    expect(createRes.status).toBe(201);
+    const created = createRes.body as RecipientGroupResponseDto;
 
-    const deactivated = await bodyOf<RecipientGroupResponseDto>(
-      request(app.getHttpServer())
-        .post(
-          `/api/v1/groups/${org.id}/recipient-groups/${created.id}/deactivate`,
-        )
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-        .expect(201),
+    const deactivateRes = await request(app.getHttpServer())
+      .post(`/api/v1/groups/${org.id}/recipient-groups/${created.id}/deactivate`)
+      .set('Authorization', `Bearer ${OWNER_TOKEN}`);
+    // eslint-disable-next-line no-console
+    console.error(
+      'DIAG deactivateRes',
+      deactivateRes.status,
+      JSON.stringify(deactivateRes.body),
+      'created.id=',
+      created.id,
+      'org.id=',
+      org.id,
     );
+    expect(deactivateRes.status).toBe(201);
+    const deactivated = deactivateRes.body as RecipientGroupResponseDto;
     expect(deactivated.isActive).toBe(false);
 
     const listAfterDeactivate = await bodyOf<RecipientGroupResponseDto[]>(
@@ -514,22 +531,22 @@ describe('Recipient Groups (e2e)', () => {
   });
 
   it('enforces case-insensitive name uniqueness among active Recipient Groups within the same Group', async () => {
-    const org = await createOrgWithMembers();
-    await createRecipientGroup(OWNER_TOKEN, org.id, {
+    const org = await createOrgWithGroupAdmin();
+    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
       name: 'Organizatorzy Batizado',
     }).expect(201);
 
-    await createRecipientGroup(OWNER_TOKEN, org.id, {
+    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
       name: 'organizatorzy batizado',
     }).expect(409);
   });
 
   it('frees the name for a brand new Recipient Group once the old one holding it is deactivated', async () => {
-    const org = await createOrgWithMembers();
+    const org = await createOrgWithGroupAdmin();
     const original = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, org.id, { name: 'Trenerzy' }).expect(
-        201,
-      ),
+      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+        name: 'Trenerzy',
+      }).expect(201),
     );
 
     await request(app.getHttpServer())
@@ -541,9 +558,9 @@ describe('Recipient Groups (e2e)', () => {
 
     // No 409 - the old, now-inactive "Trenerzy" no longer occupies the name.
     const recreated = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, org.id, { name: 'Trenerzy' }).expect(
-        201,
-      ),
+      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+        name: 'Trenerzy',
+      }).expect(201),
     );
     expect(recreated.id).not.toBe(original.id);
     expect(recreated.isActive).toBe(true);
@@ -565,15 +582,17 @@ describe('Recipient Groups (e2e)', () => {
     );
 
     // Two *active* "Trenerzy" is still rejected, case-insensitively.
-    await createRecipientGroup(OWNER_TOKEN, org.id, {
+    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
       name: 'TRENERZY',
     }).expect(409);
   });
 
   it('rejects reactivating a Recipient Group whose name was reused by a newer, still-active one', async () => {
-    const org = await createOrgWithMembers();
+    const org = await createOrgWithGroupAdmin();
     const original = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, org.id, { name: 'Rada' }).expect(201),
+      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+        name: 'Rada',
+      }).expect(201),
     );
     await request(app.getHttpServer())
       .post(
@@ -582,9 +601,9 @@ describe('Recipient Groups (e2e)', () => {
       .set('Authorization', `Bearer ${OWNER_TOKEN}`)
       .expect(201);
 
-    await createRecipientGroup(OWNER_TOKEN, org.id, { name: 'Rada' }).expect(
-      201,
-    );
+    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+      name: 'Rada',
+    }).expect(201);
 
     // Reactivating the original would now collide with the newer active one.
     await request(app.getHttpServer())
@@ -594,12 +613,12 @@ describe('Recipient Groups (e2e)', () => {
   });
 
   it("reusing a deactivated Recipient Group name for a new one never touches the old one's historical Announcement snapshot or visibility", async () => {
-    const org = await createOrgWithMembers();
-    const memberUserId = localUserIdByToken.get(MEMBER_TOKEN);
+    const org = await createOrgWithGroupAdmin();
+    const adminUserId = localUserIdByToken.get(ADMIN_TOKEN);
     const original = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, org.id, {
+      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
         name: 'Reused Name',
-        memberUserIds: [memberUserId],
+        memberUserIds: [adminUserId],
       }).expect(201),
     );
     const announcement = await bodyOf<AnnouncementResponseDto>(
@@ -614,7 +633,7 @@ describe('Recipient Groups (e2e)', () => {
       .expect(201);
 
     const newGroup = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, org.id, {
+      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
         name: 'Reused Name',
         memberUserIds: [],
       }).expect(201),
@@ -630,7 +649,7 @@ describe('Recipient Groups (e2e)', () => {
     const detail = await bodyOf<AnnouncementResponseDto>(
       request(app.getHttpServer())
         .get(`/api/v1/groups/${org.id}/announcements/${announcement.id}`)
-        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
         .expect(200),
     );
     expect(detail.recipientGroupId).toBe(original.id);
@@ -639,39 +658,39 @@ describe('Recipient Groups (e2e)', () => {
     const snapshot = await em.find(AnnouncementRecipient, {
       announcement: announcement.id,
     });
-    expect(snapshot.map((row) => row.user.id)).toEqual([memberUserId]);
+    expect(snapshot.map((row) => row.user.id)).toEqual([adminUserId]);
   });
 
   it('allows the same name to be reused across two different Groups', async () => {
-    const orgA = await createOrgWithMembers();
-    const orgB = await createOrgWithMembers();
+    const orgA = await createOrgWithGroupAdmin();
+    const orgB = await createOrgWithGroupAdmin();
 
-    await createRecipientGroup(OWNER_TOKEN, orgA.id, {
+    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${orgA.id}`, {
       name: 'Zarząd',
     }).expect(201);
 
     // Uniqueness is scoped per-Group, not global - the same name in an
     // unrelated Group must not collide.
-    await createRecipientGroup(OWNER_TOKEN, orgB.id, {
+    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${orgB.id}`, {
       name: 'Zarząd',
     }).expect(201);
   });
 
   it('rejects duplicate ids within memberUserIds', async () => {
-    const org = await createOrgWithMembers();
-    const memberUserId = localUserIdByToken.get(MEMBER_TOKEN);
+    const org = await createOrgWithGroupAdmin();
+    const adminUserId = localUserIdByToken.get(ADMIN_TOKEN);
 
-    await createRecipientGroup(OWNER_TOKEN, org.id, {
+    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
       name: 'Duplicated members',
-      memberUserIds: [memberUserId, memberUserId],
+      memberUserIds: [adminUserId, adminUserId],
     }).expect(400);
   });
 
   it('rejects an out-of-scope member on update, not just on create', async () => {
-    const org = await createOrgWithMembers();
+    const org = await createOrgWithGroupAdmin();
     const outsiderUserId = localUserIdByToken.get(OUTSIDER_TOKEN);
     const created = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, org.id, {
+      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
         name: 'Zespół',
       }).expect(201),
     );
@@ -684,12 +703,12 @@ describe('Recipient Groups (e2e)', () => {
   });
 
   it('GET :recipientGroupId returns the detail with populated members', async () => {
-    const org = await createOrgWithMembers();
-    const memberUserId = localUserIdByToken.get(MEMBER_TOKEN);
+    const org = await createOrgWithGroupAdmin();
+    const adminUserId = localUserIdByToken.get(ADMIN_TOKEN);
     const created = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, org.id, {
+      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
         name: 'Detale',
-        memberUserIds: [memberUserId],
+        memberUserIds: [adminUserId],
       }).expect(201),
     );
 
@@ -703,11 +722,11 @@ describe('Recipient Groups (e2e)', () => {
     expect(detail.id).toBe(created.id);
     expect(detail.name).toBe('Detale');
     expect(detail.members).toHaveLength(1);
-    expect(detail.members[0].id).toBe(memberUserId);
+    expect(detail.members[0].id).toBe(adminUserId);
   });
 
   it('returns 404 for a nonexistent recipientGroupId on getById, update, activate, and deactivate', async () => {
-    const org = await createOrgWithMembers();
+    const org = await createOrgWithGroupAdmin();
     const fakeId = '00000000-0000-0000-0000-000000000000';
 
     await request(app.getHttpServer())
@@ -732,10 +751,10 @@ describe('Recipient Groups (e2e)', () => {
       .expect(404);
   });
 
-  it('returns 404, not 403, for a caller with no membership in this Group at all', async () => {
-    const org = await createOrgWithMembers();
+  it('returns 404, not 403, for a caller with no Role Assignment on this Group at all', async () => {
+    const org = await createOrgWithGroupAdmin();
     const created = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, org.id, {
+      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
         name: 'Prywatne',
       }).expect(201),
     );
@@ -750,18 +769,18 @@ describe('Recipient Groups (e2e)', () => {
       .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
       .expect(404);
 
-    await createRecipientGroup(OUTSIDER_TOKEN, org.id, {
+    await createRecipientGroup(OUTSIDER_TOKEN, `/api/v1/groups/${org.id}`, {
       name: 'Should not be created',
     }).expect(404);
   });
 
   it('deactivating or editing a Recipient Group already used by a published Announcement never affects that Announcement', async () => {
-    const org = await createOrgWithMembers();
-    const memberUserId = localUserIdByToken.get(MEMBER_TOKEN);
+    const org = await createOrgWithGroupAdmin();
+    const adminUserId = localUserIdByToken.get(ADMIN_TOKEN);
     const recipientGroup = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, org.id, {
+      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
         name: 'Grupa dla ogłoszenia',
-        memberUserIds: [memberUserId],
+        memberUserIds: [adminUserId],
       }).expect(201),
     );
 
@@ -773,7 +792,7 @@ describe('Recipient Groups (e2e)', () => {
     const snapshotBefore = await em.find(AnnouncementRecipient, {
       announcement: announcement.id,
     });
-    expect(snapshotBefore.map((row) => row.user.id)).toEqual([memberUserId]);
+    expect(snapshotBefore.map((row) => row.user.id)).toEqual([adminUserId]);
 
     // Editing the Recipient Group's members afterwards must not touch the
     // already-published Announcement's immutable snapshot.
@@ -788,13 +807,13 @@ describe('Recipient Groups (e2e)', () => {
       { announcement: announcement.id },
       { refresh: true },
     );
-    expect(snapshotAfterEdit.map((row) => row.user.id)).toEqual([memberUserId]);
+    expect(snapshotAfterEdit.map((row) => row.user.id)).toEqual([adminUserId]);
 
     // The snapshot member can still open/read the Announcement even though
     // the Recipient Group they were removed from no longer lists them.
     await request(app.getHttpServer())
       .get(`/api/v1/groups/${org.id}/announcements/${announcement.id}`)
-      .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
       .expect(200);
 
     // Deactivating the Recipient Group only blocks selecting it for a *new*
@@ -809,13 +828,13 @@ describe('Recipient Groups (e2e)', () => {
 
     await request(app.getHttpServer())
       .get(`/api/v1/groups/${org.id}/announcements/${announcement.id}`)
-      .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
       .expect(200);
 
     const list = await bodyOf<{ items: AnnouncementResponseDto[] }>(
       request(app.getHttpServer())
         .get(`/api/v1/groups/${org.id}/announcements`)
-        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
         .expect(200),
     );
     expect(list.items.some((item) => item.id === announcement.id)).toBe(true);
@@ -828,11 +847,16 @@ describe('Recipient Groups (e2e)', () => {
   });
 
   describe('GET .../recipient-groups/eligible-members', () => {
-    it('returns every eligible member of a root Group, minimally shaped, sorted deterministically, with no sensitive fields', async () => {
-      const org = await createOrgWithMembers();
+    it('for a Group, returns every user holding an active RoleAssignment there (only ever OWNER/ADMIN), minimally shaped, sorted deterministically', async () => {
+      const org = await createGroup(OWNER_TOKEN, {
+        name: `Eligible Group Org ${Date.now()}`,
+      });
       const ownerUserId = localUserIdByToken.get(OWNER_TOKEN);
+      // Two ADMINs alongside the OWNER - Group has no other Role tier.
+      await grantGroupRole(OWNER_TOKEN, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
+      await grantGroupRole(OWNER_TOKEN, org.id, MEMBER_TOKEN, GroupRole.ADMIN);
       const adminUserId = localUserIdByToken.get(ADMIN_TOKEN);
-      const memberUserId = localUserIdByToken.get(MEMBER_TOKEN);
+      const secondAdminUserId = localUserIdByToken.get(MEMBER_TOKEN);
 
       const result = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
         getEligibleMembers(OWNER_TOKEN, `/api/v1/groups/${org.id}`).expect(200),
@@ -841,7 +865,7 @@ describe('Recipient Groups (e2e)', () => {
       expect(result.total).toBe(3);
       expect(result.hasMore).toBe(false);
       expect(result.items.map((i) => i.id).sort()).toEqual(
-        [ownerUserId, adminUserId, memberUserId].sort(),
+        [ownerUserId, adminUserId, secondAdminUserId].sort(),
       );
 
       for (const item of result.items) {
@@ -861,20 +885,16 @@ describe('Recipient Groups (e2e)', () => {
       expect(result.items.map((i) => i.id)).toEqual(sorted.map((i) => i.id));
     });
 
-    it('for a Section, returns only members with a Role Assignment for that exact Section - a root-only Group member is excluded', async () => {
-      const org = await createOrgWithMembers();
+    it('for a Section, returns only users with an active/READ_ONLY membership in that exact Section - a Group-only OWNER/ADMIN is excluded unless they also joined', async () => {
+      const org = await createGroup(OWNER_TOKEN, {
+        name: `Eligible Section Org ${Date.now()}`,
+      });
+      await grantGroupRole(OWNER_TOKEN, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
       const section = await createSection(OWNER_TOKEN, org.id);
-      const memberMembershipId = await findMembershipId(
-        OWNER_TOKEN,
-        org.id,
-        localUserIdByToken.get(MEMBER_TOKEN),
-      );
-      await grantRole(
-        OWNER_TOKEN,
-        section.id,
-        memberMembershipId,
-        GroupRole.MEMBER,
-      );
+      // OWNER automatically became a member+OWNER of the Section by
+      // creating it. ADMIN is only a Group-level ADMIN, never joined the
+      // Section itself.
+      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
 
       const result = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
         getEligibleMembers(
@@ -884,22 +904,21 @@ describe('Recipient Groups (e2e)', () => {
       );
 
       const ids = result.items.map((i) => i.id);
-      // OWNER created the Section, so they hold OWNER there automatically;
-      // MEMBER was just granted a Role there explicitly.
       expect(ids.sort()).toEqual(
         [
           localUserIdByToken.get(OWNER_TOKEN),
           localUserIdByToken.get(MEMBER_TOKEN),
         ].sort(),
       );
-      // ADMIN is a root-org member but was never granted any Role for this
-      // exact Section - membership alone must not be enough (ADR-004).
+      // A Group ADMIN who never joined this exact Section is excluded -
+      // administering the Group grants nothing on the Section (no
+      // inheritance).
       expect(ids).not.toContain(localUserIdByToken.get(ADMIN_TOKEN));
       expect(result.total).toBe(2);
     });
 
     it('excludes a user outside the community, and returns 404 (not the candidate list) for a caller with no access at all', async () => {
-      const org = await createOrgWithMembers();
+      const org = await createOrgWithGroupAdmin();
 
       const result = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
         getEligibleMembers(OWNER_TOKEN, `/api/v1/groups/${org.id}`).expect(200),
@@ -915,9 +934,9 @@ describe('Recipient Groups (e2e)', () => {
     });
 
     it('supports search by displayName', async () => {
-      const org = await createOrgWithMembers();
-      const memberDisplayName = await getDisplayName(MEMBER_TOKEN);
-      const distinctiveFragment = memberDisplayName.slice(-4);
+      const org = await createOrgWithGroupAdmin();
+      const adminDisplayName = await getDisplayName(ADMIN_TOKEN);
+      const distinctiveFragment = adminDisplayName.slice(-4);
 
       const result = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
         getEligibleMembers(
@@ -935,12 +954,16 @@ describe('Recipient Groups (e2e)', () => {
         ),
       ).toBe(true);
       expect(result.items.map((i) => i.id)).toContain(
-        localUserIdByToken.get(MEMBER_TOKEN),
+        localUserIdByToken.get(ADMIN_TOKEN),
       );
     });
 
     it('paginates with a correct total/hasMore', async () => {
-      const org = await createOrgWithMembers();
+      const org = await createGroup(OWNER_TOKEN, {
+        name: `Paginate Org ${Date.now()}`,
+      });
+      await grantGroupRole(OWNER_TOKEN, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
+      await grantGroupRole(OWNER_TOKEN, org.id, MEMBER_TOKEN, GroupRole.ADMIN);
 
       const page1 = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
         getEligibleMembers(
@@ -969,7 +992,7 @@ describe('Recipient Groups (e2e)', () => {
     });
 
     it('rejects limit > 100 and a negative offset', async () => {
-      const org = await createOrgWithMembers();
+      const org = await createOrgWithGroupAdmin();
 
       await getEligibleMembers(
         OWNER_TOKEN,
@@ -984,34 +1007,23 @@ describe('Recipient Groups (e2e)', () => {
     });
 
     it('prevents cross-resource access - a member of one Group/Section cannot read another Group/Section eligible-members list', async () => {
-      const orgA = await createOrgWithMembers();
-      // orgB deliberately does NOT add ADMIN_TOKEN/MEMBER_TOKEN - they only
-      // belong to orgA.
+      const orgA = await createOrgWithGroupAdmin();
+      // orgB deliberately does NOT grant ADMIN_TOKEN/MEMBER_TOKEN anything -
+      // they only have standing in orgA.
       const orgB = await createGroup(OWNER_TOKEN, {
         name: `Recipient Groups Test Org B ${Date.now()}`,
       });
 
-      await getEligibleMembers(
-        MEMBER_TOKEN,
-        `/api/v1/groups/${orgB.id}`,
-      ).expect(404);
+      await getEligibleMembers(ADMIN_TOKEN, `/api/v1/groups/${orgB.id}`).expect(
+        404,
+      );
 
       const sectionA = await createSection(OWNER_TOKEN, orgA.id);
       const sectionB = await createSection(OWNER_TOKEN, orgB.id);
-      const memberMembershipIdInA = await findMembershipId(
-        OWNER_TOKEN,
-        orgA.id,
-        localUserIdByToken.get(MEMBER_TOKEN),
-      );
-      await grantRole(
-        OWNER_TOKEN,
-        sectionA.id,
-        memberMembershipIdInA,
-        GroupRole.MEMBER,
-      );
+      await addSectionMember(OWNER_TOKEN, sectionA.id, MEMBER_TOKEN);
 
-      // MEMBER_TOKEN holds a Role in sectionA but has no access to orgB or
-      // sectionB at all.
+      // MEMBER_TOKEN holds membership in sectionA but has no access to orgB
+      // or sectionB at all.
       await getEligibleMembers(
         MEMBER_TOKEN,
         `/api/v1/sections/${sectionB.id}`,
@@ -1019,7 +1031,7 @@ describe('Recipient Groups (e2e)', () => {
     });
 
     it('contract parity: every returned candidate is accepted by create/update, and a user missing from the list is still rejected', async () => {
-      const org = await createOrgWithMembers();
+      const org = await createOrgWithGroupAdmin();
 
       const eligible = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
         getEligibleMembers(OWNER_TOKEN, `/api/v1/groups/${org.id}`).expect(200),
@@ -1028,7 +1040,7 @@ describe('Recipient Groups (e2e)', () => {
       expect(eligibleIds.length).toBeGreaterThan(0);
 
       const created = await bodyOf<RecipientGroupResponseDto>(
-        createRecipientGroup(OWNER_TOKEN, org.id, {
+        createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
           name: 'Parity Check',
           memberUserIds: eligibleIds,
         }).expect(201),
@@ -1053,7 +1065,7 @@ describe('Recipient Groups (e2e)', () => {
       const outsiderId = localUserIdByToken.get(OUTSIDER_TOKEN);
       expect(eligibleIds).not.toContain(outsiderId);
 
-      await createRecipientGroup(OWNER_TOKEN, org.id, {
+      await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
         name: 'Should Fail',
         memberUserIds: [outsiderId],
       }).expect(400);

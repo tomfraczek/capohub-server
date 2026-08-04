@@ -10,12 +10,15 @@ import { Event } from './entities/event.entity';
 import { EventRole } from './enums/event-role.enum';
 import { EventStatus } from './enums/event-status.enum';
 import { EventRolesService } from './event-roles.service';
+import { Group } from '../groups/entities/group.entity';
 
 const ACTOR = { id: 'actor-1', displayName: 'Actor' } as never;
 
 function buildEvent(overrides: Partial<Event> = {}): Event {
   const event = new Event();
   event.id = 'event-1';
+  event.communityGroup = Object.assign(new Group(), { id: 'root-1' });
+  event.communitySection = null;
   return Object.assign(event, overrides);
 }
 

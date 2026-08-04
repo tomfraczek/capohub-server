@@ -4,68 +4,55 @@ import { User } from '../users/entities/user.entity';
 import { CommunityNotificationSettingsResponseDto } from './dto/community-notification-settings-response.dto';
 import { UpdateCommunityNotificationSettingsInput } from './dto/update-community-notification-settings.schema';
 import { CommunityNotificationSettings } from './entities/community-notification-settings.entity';
-import { Group } from './entities/group.entity';
-import { GroupHierarchyService } from './group-hierarchy.service';
-import { loadActiveMembership } from './group-membership.query';
+import { Section } from './entities/section.entity';
+import { loadActiveSectionMembership } from './section-membership.query';
 
 // Every read/write here is scoped to the caller's *own* row - there is no
 // membershipId/userId param anywhere in this service, unlike every
-// administrative action elsewhere in this module. This mirrors
-// GroupPermission.NOTIFICATION_SETTINGS_MANAGE being granted to every Role
-// (see group-role-permissions.map.ts): a plain MEMBER manages their own
-// preferences exactly the same way an OWNER does.
+// administrative action elsewhere in this module. A plain MEMBER manages
+// their own preferences exactly the same way an OWNER does.
 //
-// Deliberately does NOT go through GroupPermissionsGuard/RoleAssignment
-// resolution (unlike every other endpoint in this module): that guard
-// requires at least one Role Assignment to resolve authorization for a
-// Group at all (see RoleAssignmentsService.resolveAuthorization), which
-// would make this feature unreachable for the well-documented, valid case
-// of a Group Membership with zero Role Assignments
-// (organization-entities.md#membership) - exactly the member this feature
-// most needs to work for, since they still belong to the Group and
-// still receive its notifications. Authorization here is checked directly
-// against Membership instead (ACTIVE only, mirroring loadActiveMembership -
-// consistent with NOTIFICATION_SETTINGS_MANAGE being deliberately excluded
-// from READ_ONLY_SAFE_PERMISSIONS elsewhere).
-//
-// Settings are always resolved against the Root Group regardless of which
-// exact Group's id the caller passed (see CommunityNotificationSettings) -
-// there is one notification-preferences row per (user, Group), not
-// per Child Group.
+// Section-only: Group has no membership at all, so there is no "own"
+// notification-preferences row to manage there - a Group id 404s here, the
+// same way a non-Section id would 404 anywhere else in this module. This
+// deliberately does NOT go through GroupPermissionsGuard/RoleAssignment
+// resolution: that requires at least one active RoleAssignment to resolve
+// authorization at all, which would make this feature unreachable for a
+// plain member holding only the base MEMBER role with no additional Role -
+// exactly the member this feature most needs to work for, since they still
+// belong to the Section and still receive its notifications. Authorization
+// here is checked directly against SectionMembership instead (ACTIVE only).
 @Injectable()
 export class CommunityNotificationSettingsService {
-  constructor(
-    private readonly em: EntityManager,
-    private readonly groupHierarchyService: GroupHierarchyService,
-  ) {}
+  constructor(private readonly em: EntityManager) {}
 
   async get(
-    groupId: string,
+    sectionId: string,
     user: User,
   ): Promise<CommunityNotificationSettingsResponseDto> {
-    const rootGroup = await this.assertMemberOrFail(this.em, groupId, user.id);
+    const section = await this.assertMemberOrFail(this.em, sectionId, user.id);
     const settings = await this.em.findOne(CommunityNotificationSettings, {
-      community: rootGroup.id,
+      community: section.id,
       user: user.id,
     });
-    return toResponseDto(rootGroup.id, settings);
+    return toResponseDto(section.id, settings);
   }
 
   async update(
-    groupId: string,
+    sectionId: string,
     user: User,
     input: UpdateCommunityNotificationSettingsInput,
   ): Promise<CommunityNotificationSettingsResponseDto> {
     return this.em.transactional(async (em) => {
-      const rootGroup = await this.assertMemberOrFail(em, groupId, user.id);
+      const section = await this.assertMemberOrFail(em, sectionId, user.id);
 
       let settings = await em.findOne(CommunityNotificationSettings, {
-        community: rootGroup.id,
+        community: section.id,
         user: user.id,
       });
       if (!settings) {
         settings = new CommunityNotificationSettings();
-        settings.community = rootGroup;
+        settings.community = section;
         settings.user = user;
         em.persist(settings);
       }
@@ -73,40 +60,40 @@ export class CommunityNotificationSettingsService {
       Object.assign(settings, input);
       await em.flush();
 
-      return toResponseDto(rootGroup.id, settings);
+      return toResponseDto(section.id, settings);
     });
   }
 
-  // Confirms `groupId` is itself a root Group (see the Group/Section rename
-  // ADR - notification settings are one row per (user, Group), never per
-  // Section) and that the caller has an ACTIVE Membership there. A Section
-  // id 404s explicitly here rather than silently resolving to its Root
-  // Group's settings, which is what this used to do before it was made
-  // explicit. Never confirms the Group's existence to a non-member (404
-  // either way), same convention as GroupPermissionsGuard.
+  // Confirms `sectionId` is actually a Section (Group has no notification
+  // settings of its own - see the class comment) and that the caller has
+  // an ACTIVE SectionMembership there. Never confirms the Section's
+  // existence to a non-member (404 either way), same convention as
+  // GroupPermissionsGuard.
   private async assertMemberOrFail(
     em: EntityManager,
-    groupId: string,
+    sectionId: string,
     userId: string,
-  ): Promise<Group> {
-    const rootGroup = await this.groupHierarchyService.getRootGroup(
-      groupId,
+  ): Promise<Section> {
+    const section = await em.findOne(Section, { id: sectionId });
+    if (!section) {
+      throw this.sectionNotFound();
+    }
+    const membership = await loadActiveSectionMembership(
       em,
+      section.id,
+      userId,
     );
-    if (rootGroup.id !== groupId) {
-      throw new NotFoundException({
-        code: 'GROUP_NOT_FOUND',
-        message: 'Group not found',
-      });
-    }
-    const membership = await loadActiveMembership(em, rootGroup.id, userId);
     if (!membership) {
-      throw new NotFoundException({
-        code: 'GROUP_NOT_FOUND',
-        message: 'Group not found',
-      });
+      throw this.sectionNotFound();
     }
-    return rootGroup;
+    return section;
+  }
+
+  private sectionNotFound(): NotFoundException {
+    return new NotFoundException({
+      code: 'SECTION_NOT_FOUND',
+      message: 'Section not found',
+    });
   }
 }
 

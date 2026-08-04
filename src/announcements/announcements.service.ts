@@ -567,9 +567,10 @@ export class AnnouncementsService {
       const hasArchiveAccess =
         authorization !== null &&
         this.groupPermissionService.hasAllPermissionsForRoles(
+          authorization.community instanceof Group ? 'GROUP' : 'SECTION',
           roles,
           [GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW],
-          authorization.membership.status,
+          authorization.membership?.status ?? null,
         );
       if (!hasArchiveAccess) {
         throw this.announcementNotFound();

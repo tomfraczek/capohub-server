@@ -8,6 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { uuidSchema } from '../../songs/dto/song-validation.helpers';
 import { AuthenticatedRequest } from '../../auth/types/authenticated-request.type';
+import { Group } from '../../groups/entities/group.entity';
 import { GroupPermission } from '../../groups/permissions/group-permission.enum';
 import { GroupPermissionService } from '../../groups/permissions/group-permission.service';
 import { RoleAssignmentsService } from '../../groups/role-assignments.service';
@@ -88,11 +89,16 @@ export class EventPermissionsGuard implements CanActivate {
         const communityRoles = communityAuthorization.roleAssignments.map(
           (assignment) => assignment.role,
         );
+        const targetKind =
+          communityAuthorization.community instanceof Group
+            ? 'GROUP'
+            : 'SECTION';
         const hasOverride =
           this.groupPermissionService.hasAllPermissionsForRoles(
+            targetKind,
             communityRoles,
             [GroupPermission.EVENT_MODERATE],
-            communityAuthorization.membership.status,
+            communityAuthorization.membership?.status ?? null,
           );
         if (hasOverride) {
           return true;

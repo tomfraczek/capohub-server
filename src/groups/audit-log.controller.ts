@@ -1,20 +1,9 @@
-import {
-  Controller,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { PaginatedResponse } from '../common/pagination/pagination.types';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { AuditLogService } from './audit-log.service';
 import { AllowGroupStatuses } from './decorators/allow-group-statuses.decorator';
 import { RequireGroupPermission } from './decorators/require-group-permission.decorator';
-import {
-  RequireGroupKind,
-  GroupKind,
-} from './decorators/require-group-kind.decorator';
 import { AuditLogEntryResponseDto } from './dto/audit-log-entry-response.dto';
 import {
   AuditLogQueryDto,
@@ -33,24 +22,24 @@ const ANY_STATUS = [
 
 // One generic, paginated/filterable/sortable list endpoint for every
 // AuditAction (see AuditLogEntry) - never a dedicated endpoint per action
-// type. `:groupId` here always means the Group whose history is being read
-// - AuditLogEntry.community is always a root Group, even for entries about
-// a Section-level action (see AuditLogEntry). @RequireGroupKind(ROOT) makes
-// this explicit: a Section id 404s here instead of silently returning an
-// (always-empty) page, which is what happened before this was enforced.
-@Controller('groups/:groupId/audit-log')
+// type. Dual-mounted since every action is logged under its *exact*
+// Group-or-Section, never a resolved root (see AuditLogEntry's own dual-FK
+// comment and AuditLogService.record) - a Section-level action (e.g.
+// BAN/SUSPEND, which only ever happen on a Section) only ever appears in
+// that Section's own audit log, never its parent Group's.
+@Controller(['groups/:groupId/audit-log', 'sections/:sectionId/audit-log'])
 @UseGuards(GroupPermissionsGuard)
 export class AuditLogController {
   constructor(private readonly auditLogService: AuditLogService) {}
 
   @Get()
   @RequireGroupPermission(GroupPermission.AUDIT_LOG_VIEW)
-  @RequireGroupKind(GroupKind.ROOT)
   @AllowGroupStatuses(...ANY_STATUS)
   list(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
     @Query(new ZodValidationPipe(auditLogQuerySchema)) query: AuditLogQueryDto,
   ): Promise<PaginatedResponse<AuditLogEntryResponseDto>> {
-    return this.auditLogService.list(groupId, query);
+    return this.auditLogService.list(groupId ?? sectionId, query);
   }
 }

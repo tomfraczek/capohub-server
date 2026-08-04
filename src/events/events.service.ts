@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
 import { generateUniquePublicCode } from '../common/utils/public-code';
-import { GroupMembership } from '../groups/entities/group-membership.entity';
-import { GroupMembershipStatus } from '../groups/enums/group-membership-status.enum';
+import { Group } from '../groups/entities/group.entity';
+import { Section } from '../groups/entities/section.entity';
 import { GroupHierarchyService } from '../groups/group-hierarchy.service';
 import { GroupPermission } from '../groups/permissions/group-permission.enum';
 import { GroupPermissionService } from '../groups/permissions/group-permission.service';
@@ -233,11 +233,9 @@ export class EventsService {
       throw this.communityNotFound();
     }
 
-    const rootGroupId =
-      await this.eventAccessService.getRootGroupIdForCommunity(em, community);
     const isMember = await this.eventAccessService.isActiveCommunityMember(
       em,
-      rootGroupId,
+      community.id,
       viewer.id,
     );
     const oversight = await this.resolveCommunityOversight(
@@ -514,28 +512,32 @@ export class EventsService {
     visibilityAnd: FilterQuery<Event>[];
     rolesByEvent: Map<string, EventRole[]>;
   }> {
-    const memberships = await em.find(GroupMembership, {
-      user: viewer.id,
-      status: {
-        $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
-      },
-    });
+    // "My communities" - every Group where I hold an active RoleAssignment
+    // (Group's only participants are role holders) and every Section where
+    // I have an active membership. No inheritance: unlike the old
+    // root-Membership model, this never expands to a whole organization
+    // tree just because I belong to one Section or Group somewhere in it -
+    // see RoleAssignmentsService.getCommunityIdsWithAnyRole.
+    const participation =
+      await this.roleAssignmentsService.getCommunityIdsWithAnyRole(viewer.id);
     const myCommunityGroupIds = new Set<string>();
     const myCommunitySectionIds = new Set<string>();
-    for (const membership of memberships) {
-      const rootGroupId = membership.rootGroup.id;
-      myCommunityGroupIds.add(rootGroupId);
-      const descendants = await this.groupHierarchyService.getDescendants(
-        rootGroupId,
-        em,
+    if (participation.length > 0) {
+      // Sequential, not Promise.all - concurrent queries on the same
+      // EntityManager/connection race each other at the driver level.
+      const groups = await em.find(
+        Group,
+        { id: { $in: participation } },
+        { fields: ['id'] },
       );
-      for (const descendant of descendants) {
-        myCommunityGroupIds.add(descendant.id);
+      const sections = await em.find(
+        Section,
+        { id: { $in: participation } },
+        { fields: ['id'] },
+      );
+      for (const group of groups) {
+        myCommunityGroupIds.add(group.id);
       }
-      const sections = await this.groupHierarchyService.getDescendantSections(
-        rootGroupId,
-        em,
-      );
       for (const section of sections) {
         myCommunitySectionIds.add(section.id);
       }
@@ -670,11 +672,14 @@ export class EventsService {
       return { viewAll: false, moderate: false };
     }
     const roles = authorization.roleAssignments.map((a) => a.role);
+    const targetKind =
+      authorization.community instanceof Group ? 'GROUP' : 'SECTION';
     const has = (permission: GroupPermission): boolean =>
       this.groupPermissionService.hasAllPermissionsForRoles(
+        targetKind,
         roles,
         [permission],
-        authorization.membership.status,
+        authorization.membership?.status ?? null,
       );
     return {
       viewAll: has(GroupPermission.EVENT_VIEW_ALL),

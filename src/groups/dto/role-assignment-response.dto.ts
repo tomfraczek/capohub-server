@@ -1,13 +1,17 @@
 import { GroupRole } from '../enums/group-role.enum';
 
+export interface RoleAssignmentUserRefDto {
+  id: string;
+  displayName: string;
+}
+
 export interface RoleAssignmentResponseDto {
   id: string;
   groupId: string;
-  membershipId: string;
-  user: {
-    id: string;
-    displayName: string;
-  };
+  user: RoleAssignmentUserRefDto;
   role: GroupRole;
   grantedAt: string;
+  grantedBy: RoleAssignmentUserRefDto | null;
+  revokedAt: string | null;
+  revokedBy: RoleAssignmentUserRefDto | null;
 }

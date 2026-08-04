@@ -1,4 +1,11 @@
-import { Entity, Enum, Index, ManyToOne, Property } from '@mikro-orm/core';
+import {
+  Check,
+  Entity,
+  Enum,
+  Index,
+  ManyToOne,
+  Property,
+} from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { CohortStatus } from '../enums/cohort-status.enum';
 import { Group } from './group.entity';
@@ -12,6 +19,16 @@ import { Section } from './section.entity';
 // split - see GroupHierarchyService.findCommunityById. Assigning
 // Memberships to a Cohort is out of scope for this stage.
 @Entity({ tableName: 'cohorts' })
+// Exactly one of `group`/`section` must be set, never both, never neither -
+// mirrored here so migration:create/schema:update know this constraint is
+// intentional and never propose dropping it. Name matches the constraint
+// the migration creates verbatim - see
+// Migration20260802100200_AddPolymorphicCommunityReferences.
+@Check<Cohort>({
+  name: 'cohorts_group_or_section_check',
+  expression: (columns) =>
+    `("${columns.group}" is not null and "${columns.section}" is null) or ("${columns.group}" is null and "${columns.section}" is not null)`,
+})
 export class Cohort extends BaseEntity {
   // No delete cascade - Cohort is archived, never physically deleted (see
   // ADR-007).

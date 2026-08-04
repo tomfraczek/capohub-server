@@ -90,11 +90,15 @@ export class Group extends BaseEntity {
   memberInvitesAllowed: boolean = false;
 
   // Globally-unique, immutable, human-readable code for locating this Group
-  // without knowing its UUID. Generated once at creation and never changed.
+  // without knowing its UUID. Generated once at creation (see
+  // GroupsService.create/generateUniquePublicCode) and never changed - the
+  // DB column has always been NOT NULL (see
+  // Migration20260721_AddPublicCodeAndMembershipRequests); `nullable: true`
+  // here was metadata drift against that, not an intentional relaxation.
   // Not a secret - do NOT use it as an authorization token.
   @Unique()
-  @Property({ nullable: true, length: 15 })
-  publicCode: string | null = null;
+  @Property({ length: 15 })
+  publicCode!: string;
 
   @Index()
   @Enum({ items: () => Object.values(GroupStatus) })

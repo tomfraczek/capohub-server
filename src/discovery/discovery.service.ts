@@ -3,7 +3,6 @@ import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
 import { PaginatedResponse } from '../common/pagination/pagination.types';
 import { createPaginationMeta } from '../common/pagination/pagination.utils';
 import { Group } from '../groups/entities/group.entity';
-import { GroupMembership } from '../groups/entities/group-membership.entity';
 import { MembershipRequest } from '../groups/entities/membership-request.entity';
 import { Section } from '../groups/entities/section.entity';
 import { User } from '../users/entities/user.entity';
@@ -11,7 +10,7 @@ import {
   Community,
   GroupHierarchyService,
 } from '../groups/group-hierarchy.service';
-import { GroupMembershipStatus } from '../groups/enums/group-membership-status.enum';
+import { RoleAssignmentsService } from '../groups/role-assignments.service';
 import { GroupStatus } from '../groups/enums/group-status.enum';
 import { MembershipRequestStatus } from '../groups/enums/membership-request-status.enum';
 import {
@@ -27,6 +26,7 @@ export class DiscoveryService {
   constructor(
     private readonly em: EntityManager,
     private readonly groupHierarchyService: GroupHierarchyService,
+    private readonly roleAssignmentsService: RoleAssignmentsService,
   ) {}
 
   /**
@@ -203,25 +203,15 @@ export class DiscoveryService {
     community: Community,
     user: User,
   ): Promise<boolean> {
-    // For Root Groups: check Membership; for Child Groups/Sections: check
-    // MEMBER Role - resolveRootGroup centralizes both cases (a standalone
-    // Section with no parent has no Root Group, so it can never have a
-    // member either).
-    let rootGroupId: string;
-    try {
-      rootGroupId = (
-        await this.groupHierarchyService.resolveRootGroup(community)
-      ).id;
-    } catch {
-      return false;
-    }
-
-    const membership = await this.em.findOne(GroupMembership, {
-      rootGroup: rootGroupId,
-      user: user.id,
-      status: GroupMembershipStatus.ACTIVE,
-    });
-    return !!membership;
+    // Delegates to RoleAssignmentsService.isCommunityMember, which
+    // correctly checks the *exact* target (Group: any active
+    // RoleAssignment there; Section: an active SectionMembership) rather
+    // than a resolved root - no inheritance either way.
+    return this.roleAssignmentsService.isCommunityMember(
+      community.id,
+      user.id,
+      this.em,
+    );
   }
 
   private async checkPendingRequest(

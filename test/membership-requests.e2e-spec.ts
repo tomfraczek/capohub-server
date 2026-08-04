@@ -1,17 +1,26 @@
 /**
  * E2E tests for membership requests and discovery endpoints.
  *
+ * Under the Membership/RoleAssignments rebuild, a Group has no membership
+ * at all - join/invite/join-request only ever operate on a Section (see
+ * MembershipRequestsService.join/createInvitation, both of which reject a
+ * GROUP target outright with GROUP_HAS_NO_MEMBERSHIP). Every scenario below
+ * that used to join/invite directly on a Group now creates a Section under
+ * it first and targets that Section instead.
+ *
  * Scenarios:
- *  1. POST /groups/:id/join without targetType → 400
- *  2. POST /groups/:id/join for a public Group (isPublic=true) → auto-join
- *  3. POST /groups/:id/join for a private Group (isPublic=false) → JOIN_REQUEST
- *  4. POST /groups/:id/join for a hidden+private Group → JOIN_REQUEST (hidden does not block)
- *  5. GET  /discovery/resolve/:code for a Group → resourceType = GROUP
- *  6. GET  /discovery/resolve/:code for a hidden Group → returned (hidden bypass)
- *  7. GET  /discovery/search → hidden groups excluded from results
- *  8. POST /groups/:id/invitations/:id/cancel — inviter can cancel
- *  9. POST /groups/:id/invitations/:id/cancel — OWNER can cancel
- * 10. POST /groups/:id/invitations/:id/cancel — plain MEMBER cannot cancel someone else's
+ *  1. POST /sections/:id/join without targetType → 400
+ *  2. POST /sections/:id/join with an invalid targetType → 400
+ *  3. POST /groups/:id/join with targetType=GROUP → 422 GROUP_HAS_NO_MEMBERSHIP
+ *  4. POST /sections/:id/join for a public Section (isPublic=true) → auto-join
+ *  5. POST /sections/:id/join for a private Section (isPublic=false) → JOIN_REQUEST
+ *  6. POST /sections/:id/join for a hidden+private Section → JOIN_REQUEST (hidden does not block)
+ *  7. GET  /discovery/resolve/:code for a Group → resourceType = GROUP
+ *  8. GET  /discovery/resolve/:code for a hidden Group → returned (hidden bypass)
+ *  9. GET  /discovery/search → hidden groups excluded from results
+ * 10. POST /sections/:id/invitations/:id/cancel — inviter can cancel
+ * 11. POST /sections/:id/invitations/:id/cancel — OWNER can cancel
+ * 12. POST /sections/:id/invitations/:id/cancel — plain MEMBER cannot cancel someone else's
  */
 
 import {
@@ -29,9 +38,11 @@ import { CLERK_CLIENT } from '../src/auth/clerk/clerk-client.provider';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { closeE2eApp } from './close-e2e-app.helper';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { Group } from '../src/groups/entities/group.entity';
-import { GroupMembership } from '../src/groups/entities/group-membership.entity';
+import { Section } from '../src/groups/entities/section.entity';
+import { SectionMembership } from '../src/groups/entities/section-membership.entity';
 import { MembershipRequest } from '../src/groups/entities/membership-request.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { User } from '../src/users/entities/user.entity';
@@ -127,6 +138,7 @@ const fixtureClerkClient = {
 describe('MembershipRequests + Discovery (e2e)', () => {
   let app: INestApplication<App>;
   const createdGroupIds: string[] = [];
+  const createdSectionIds: string[] = [];
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -159,32 +171,38 @@ describe('MembershipRequests + Discovery (e2e)', () => {
   });
 
   afterAll(async () => {
-    const cleanup = app.get(EntityManager).fork();
-    if (createdGroupIds.length > 0) {
-      await cleanup.nativeDelete(MembershipRequest, {
-        $or: [
-          { targetGroup: { $in: createdGroupIds } },
-          { targetSection: { $in: createdGroupIds } },
-        ],
+    await closeE2eApp(app, async () => {
+      const cleanup = app.get(EntityManager).fork();
+      const allTargetIds = [...createdGroupIds, ...createdSectionIds];
+      if (allTargetIds.length > 0) {
+        await cleanup.nativeDelete(MembershipRequest, {
+          $or: [
+            { targetGroup: { $in: allTargetIds } },
+            { targetSection: { $in: allTargetIds } },
+          ],
+        });
+        await cleanup.nativeDelete(RoleAssignment, {
+          $or: [
+            { group: { $in: allTargetIds } },
+            { section: { $in: allTargetIds } },
+          ],
+        });
+        await cleanup.nativeDelete(SectionMembership, {
+          section: { $in: createdSectionIds },
+        });
+        await cleanup.nativeDelete(AuditLogEntry, {
+          $or: [
+            { group: { $in: allTargetIds } },
+            { section: { $in: allTargetIds } },
+          ],
+        });
+        await cleanup.nativeDelete(Section, { id: { $in: createdSectionIds } });
+        await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      }
+      await cleanup.nativeDelete(User, {
+        clerkUserId: { $in: TEST_CLERK_USER_IDS },
       });
-      await cleanup.nativeDelete(RoleAssignment, {
-        $or: [
-          { group: { $in: createdGroupIds } },
-          { section: { $in: createdGroupIds } },
-        ],
-      });
-      await cleanup.nativeDelete(GroupMembership, {
-        rootGroup: { $in: createdGroupIds },
-      });
-      await cleanup.nativeDelete(AuditLogEntry, {
-        community: { $in: createdGroupIds },
-      });
-      await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
-    }
-    await cleanup.nativeDelete(User, {
-      clerkUserId: { $in: TEST_CLERK_USER_IDS },
     });
-    await app.close();
   });
 
   function groupPayload(
@@ -224,16 +242,54 @@ describe('MembershipRequests + Discovery (e2e)', () => {
     return group;
   }
 
+  async function createSection(
+    token: string,
+    parentId: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<{ id: string; publicCode: string }> {
+    const res = await request(app.getHttpServer())
+      .post(`/api/v1/groups/${parentId}/sections`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Capoeira MR Test Section',
+        description: null,
+        logoUrl: null,
+        coverImageUrl: null,
+        contactEmail: null,
+        contactPhone: null,
+        websiteUrl: null,
+        facebookUrl: null,
+        instagramUrl: null,
+        youtubeUrl: null,
+        isPublic: true,
+        isHidden: false,
+        memberInvitesAllowed: false,
+        timezone: 'Europe/Warsaw',
+        currencyCode: 'PLN',
+        country: 'PL',
+        city: 'Poznań',
+        region: 'Greater Poland',
+        geonameId: 3088171,
+        ...overrides,
+      })
+      .expect(201);
+    const section = res.body as { id: string; publicCode: string };
+    createdSectionIds.push(section.id);
+    return section;
+  }
+
   // ──────────────────────────────────────────────────────────────────────────
-  // 1. POST /groups/:id/join — targetType is required
+  // 1. POST /sections/:id/join — targetType is required; GROUP has no
+  //    membership at all.
   // ──────────────────────────────────────────────────────────────────────────
 
-  describe('POST /groups/:id/join', () => {
+  describe('POST /sections/:id/join', () => {
     it('returns 400 when targetType is missing', async () => {
       const group = await createGroup(OWNER_TOKEN);
+      const section = await createSection(OWNER_TOKEN, group.id);
 
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/groups/${group.id}/join`)
+        .post(`/api/v1/sections/${section.id}/join`)
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .send({})
         .expect(400);
@@ -245,33 +301,64 @@ describe('MembershipRequests + Discovery (e2e)', () => {
 
     it('returns 400 when targetType is an invalid value', async () => {
       const group = await createGroup(OWNER_TOKEN);
+      const section = await createSection(OWNER_TOKEN, group.id);
 
-      await request(app.getHttpServer())
-        .post(`/api/v1/groups/${group.id}/join`)
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/sections/${section.id}/join`)
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
-        .send({ targetType: 'INVALID_TYPE' })
-        .expect(400);
+        .send({ targetType: 'INVALID_TYPE' });
+      // eslint-disable-next-line no-console
+      console.error(
+        'DIAG invalid-targetType',
+        'group.id=',
+        group.id,
+        'section.id=',
+        section.id,
+        'status=',
+        res.status,
+        'body=',
+        JSON.stringify(res.body),
+      );
+      expect(res.status).toBe(400);
     });
 
-    it('auto-joins a public Group and returns 200 with { joined: true }', async () => {
-      const group = await createGroup(OWNER_TOKEN, { isPublic: true });
+    it('rejects targetType=GROUP with GROUP_HAS_NO_MEMBERSHIP - a Group has no join flow at all', async () => {
+      const group = await createGroup(OWNER_TOKEN);
 
       const res = await request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/join`)
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .send({ targetType: 'GROUP' })
+        .expect(422);
+
+      expect(res.body).toMatchObject({ code: 'GROUP_HAS_NO_MEMBERSHIP' });
+    });
+
+    it('auto-joins a public Section and returns 200 with { joined: true }', async () => {
+      const group = await createGroup(OWNER_TOKEN);
+      const section = await createSection(OWNER_TOKEN, group.id, {
+        isPublic: true,
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/sections/${section.id}/join`)
+        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+        .send({ targetType: 'SECTION' })
         .expect(200);
 
       expect(res.body).toMatchObject({ joined: true });
     });
 
-    it('creates a PENDING JOIN_REQUEST for a private (isPublic=false) Group', async () => {
-      const group = await createGroup(OWNER_TOKEN, { isPublic: false });
+    it('creates a PENDING JOIN_REQUEST for a private (isPublic=false) Section', async () => {
+      const group = await createGroup(OWNER_TOKEN);
+      const section = await createSection(OWNER_TOKEN, group.id, {
+        isPublic: false,
+      });
 
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/groups/${group.id}/join`)
+        .post(`/api/v1/sections/${section.id}/join`)
         .set('Authorization', `Bearer ${SECOND_OUTSIDER_TOKEN}`)
-        .send({ targetType: 'GROUP' })
+        .send({ targetType: 'SECTION' })
         .expect(200);
 
       expect(res.body).toMatchObject({
@@ -280,17 +367,18 @@ describe('MembershipRequests + Discovery (e2e)', () => {
       });
     });
 
-    it('creates a JOIN_REQUEST for a hidden+private Group (isHidden does not block join)', async () => {
+    it('creates a JOIN_REQUEST for a hidden+private Section (isHidden does not block join)', async () => {
       // isHidden=true means "not in search results", not "unjoinable via direct link"
-      const group = await createGroup(OWNER_TOKEN, {
+      const group = await createGroup(OWNER_TOKEN);
+      const section = await createSection(OWNER_TOKEN, group.id, {
         isPublic: false,
         isHidden: true,
       });
 
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/groups/${group.id}/join`)
+        .post(`/api/v1/sections/${section.id}/join`)
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
-        .send({ targetType: 'GROUP' })
+        .send({ targetType: 'SECTION' })
         .expect(200);
 
       expect(res.body).toMatchObject({
@@ -301,13 +389,13 @@ describe('MembershipRequests + Discovery (e2e)', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // 2. GET /discovery/resolve/:code — Group vs Group vs hidden bypass
+  // 2. GET /discovery/resolve/:code — Group vs hidden bypass
   // ──────────────────────────────────────────────────────────────────────────
 
   describe('GET /discovery/resolve/:code', () => {
     it('resolves a Group as resourceType=GROUP with isRootGroup=true', async () => {
       const group = await createGroup(OWNER_TOKEN);
-      // A Group is always root-level - see the Group/Section rename ADR.
+      // A Group with no parent is always root-level.
 
       const res = await request(app.getHttpServer())
         .get(`/api/v1/discovery/resolve/${group.publicCode}`)
@@ -404,26 +492,28 @@ describe('MembershipRequests + Discovery (e2e)', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // 4. Cancel invitation — authorization rules
+  // 4. Cancel invitation — authorization rules (Section-scoped, Group has no
+  //    invitation flow at all).
   // ──────────────────────────────────────────────────────────────────────────
 
-  describe('POST /groups/:id/invitations/:invId/cancel — authorization', () => {
-    async function setupGroupAndInvitation(): Promise<{
-      groupId: string;
+  describe('POST /sections/:id/invitations/:invId/cancel — authorization', () => {
+    async function setupSectionAndInvitation(): Promise<{
+      sectionId: string;
       invitationId: string;
       memberId: string;
     }> {
-      // Owner creates the group
-      const group = await createGroup(OWNER_TOKEN, {
+      // Owner creates the group and a Section under it with invites allowed.
+      const group = await createGroup(OWNER_TOKEN);
+      const section = await createSection(OWNER_TOKEN, group.id, {
         memberInvitesAllowed: true,
       });
 
-      // Member joins the group with targetType=SECTION so they're granted a
-      // MEMBER Role Assignment for group.id (targetType=GROUP would only
-      // create a Membership, no Role - see MembershipRequestTarget), which
-      // this test needs for the GROUP_INVITE permission check below.
+      // Member joins the Section, which grants them a MEMBER Role
+      // Assignment for section.id - needed for the GROUP_INVITE permission
+      // check below (Group has no GROUP_INVITE at all - see
+      // group-role-permissions.map.ts).
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${group.id}/join`)
+        .post(`/api/v1/sections/${section.id}/join`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .send({ targetType: 'SECTION' })
         .expect(200);
@@ -438,52 +528,54 @@ describe('MembershipRequests + Discovery (e2e)', () => {
 
       // Member (with memberInvitesAllowed=true) invites the outsider
       const invRes = await request(app.getHttpServer())
-        .post(`/api/v1/groups/${group.id}/invitations`)
+        .post(`/api/v1/sections/${section.id}/invitations`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .send({
-          targetType: 'GROUP',
+          targetType: 'SECTION',
           invitedUserId: outsiderUser.id,
           invitedEmail: null,
         })
         .expect(201);
 
       return {
-        groupId: group.id,
+        sectionId: section.id,
         invitationId: (invRes.body as { id: string }).id,
         memberId: memberUser.id,
       };
     }
 
     it('allows the original inviter (MEMBER) to cancel their own invitation', async () => {
-      const { groupId, invitationId } = await setupGroupAndInvitation();
+      const { sectionId, invitationId } = await setupSectionAndInvitation();
 
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${groupId}/invitations/${invitationId}/cancel`)
+        .post(
+          `/api/v1/sections/${sectionId}/invitations/${invitationId}/cancel`,
+        )
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .expect(204);
     });
 
     it('allows the OWNER to cancel an invitation created by a MEMBER', async () => {
-      const { groupId, invitationId } = await setupGroupAndInvitation();
+      const { sectionId, invitationId } = await setupSectionAndInvitation();
 
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${groupId}/invitations/${invitationId}/cancel`)
+        .post(
+          `/api/v1/sections/${sectionId}/invitations/${invitationId}/cancel`,
+        )
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(204);
     });
 
     it('returns 403 when a plain MEMBER tries to cancel an invitation sent by a different MEMBER', async () => {
-      // Owner creates the group; member1 invites outsider; second_outsider (also MEMBER)
-      // tries to cancel member1's invitation.
-      const group = await createGroup(OWNER_TOKEN, {
+      // Owner creates the group+section; member1 invites outsider; second_outsider
+      // (also a plain MEMBER) tries to cancel member1's invitation.
+      const group = await createGroup(OWNER_TOKEN);
+      const section = await createSection(OWNER_TOKEN, group.id, {
         memberInvitesAllowed: true,
       });
 
-      // member joins with targetType=SECTION so they hold a MEMBER Role
-      // Assignment (needed for the GROUP_INVITE check below) - see the
-      // comment in setupGroupAndInvitation above.
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${group.id}/join`)
+        .post(`/api/v1/sections/${section.id}/join`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .send({ targetType: 'SECTION' })
         .expect(200);
@@ -491,7 +583,7 @@ describe('MembershipRequests + Discovery (e2e)', () => {
       // second_outsider also joins, same reasoning (needs a Role to be a
       // "plain MEMBER" for the 403 check below, not a 404 not-found).
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${group.id}/join`)
+        .post(`/api/v1/sections/${section.id}/join`)
         .set('Authorization', `Bearer ${SECOND_OUTSIDER_TOKEN}`)
         .send({ targetType: 'SECTION' })
         .expect(200);
@@ -503,10 +595,10 @@ describe('MembershipRequests + Discovery (e2e)', () => {
 
       // MEMBER creates an invitation for the outsider
       const invRes = await request(app.getHttpServer())
-        .post(`/api/v1/groups/${group.id}/invitations`)
+        .post(`/api/v1/sections/${section.id}/invitations`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .send({
-          targetType: 'GROUP',
+          targetType: 'SECTION',
           invitedUserId: outsiderUser.id,
           invitedEmail: null,
         })
@@ -516,7 +608,9 @@ describe('MembershipRequests + Discovery (e2e)', () => {
 
       // SECOND_OUTSIDER (also MEMBER, but NOT the inviter) tries to cancel
       const cancelRes = await request(app.getHttpServer())
-        .post(`/api/v1/groups/${group.id}/invitations/${invitationId}/cancel`)
+        .post(
+          `/api/v1/sections/${section.id}/invitations/${invitationId}/cancel`,
+        )
         .set('Authorization', `Bearer ${SECOND_OUTSIDER_TOKEN}`)
         .expect(403);
 

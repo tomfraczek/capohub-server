@@ -7,7 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { ALLOW_GROUP_STATUSES_KEY } from '../decorators/allow-group-statuses.decorator';
 import { GROUP_PERMISSIONS_KEY } from '../decorators/require-group-permission.decorator';
-import { GroupMembershipStatus } from '../enums/group-membership-status.enum';
+import { SectionMembershipStatus } from '../enums/section-membership-status.enum';
 import { GroupRole } from '../enums/group-role.enum';
 import { GroupStatus } from '../enums/group-status.enum';
 import { GroupPermission } from '../permissions/group-permission.enum';
@@ -38,7 +38,7 @@ describe('GroupPermissionsGuard', () => {
   function buildAuthorization(
     roles: GroupRole[],
     groupStatus: GroupStatus,
-    membershipStatus: GroupMembershipStatus = GroupMembershipStatus.ACTIVE,
+    membershipStatus: SectionMembershipStatus = SectionMembershipStatus.ACTIVE,
   ): ResolvedGroupAuthorization {
     return {
       community: { status: groupStatus } as never,
@@ -204,7 +204,7 @@ describe('GroupPermissionsGuard', () => {
     const realGroupPermissionService = new GroupPermissionService();
     const resolveAuthorization = jest.fn().mockResolvedValue({
       community: { status: GroupStatus.ACTIVE },
-      membership: { status: GroupMembershipStatus.ACTIVE },
+      membership: { status: SectionMembershipStatus.ACTIVE },
       roleAssignments: [{ role: GroupRole.MEMBER }, { role: GroupRole.ADMIN }],
     });
     const reflector = {
@@ -238,7 +238,7 @@ describe('GroupPermissionsGuard', () => {
         authorization: buildAuthorization(
           [GroupRole.ADMIN],
           GroupStatus.ACTIVE,
-          GroupMembershipStatus.READ_ONLY,
+          SectionMembershipStatus.READ_ONLY,
         ),
         hasAllPermissionsForRoles,
       });
@@ -246,9 +246,10 @@ describe('GroupPermissionsGuard', () => {
       await guard.canActivate(buildContext({ id: VALID_GROUP_ID }));
 
       expect(hasAllPermissionsForRoles).toHaveBeenCalledWith(
+        'SECTION',
         [GroupRole.ADMIN],
         [GroupPermission.GROUP_VIEW],
-        GroupMembershipStatus.READ_ONLY,
+        SectionMembershipStatus.READ_ONLY,
       );
     });
   });

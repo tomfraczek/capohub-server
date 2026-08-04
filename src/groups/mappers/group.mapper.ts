@@ -1,13 +1,16 @@
-import { GroupMembership } from '../entities/group-membership.entity';
+import { SectionMembership } from '../entities/section-membership.entity';
 import { Group } from '../entities/group.entity';
 import { RoleAssignment } from '../entities/role-assignment.entity';
 import { Cohort } from '../entities/cohort.entity';
 import { GroupResponseDto } from '../dto/group-response.dto';
-import { GroupMembershipResponseDto } from '../dto/group-membership-response.dto';
+import { SectionMembershipResponseDto } from '../dto/section-membership-response.dto';
 import { GroupRole } from '../enums/group-role.enum';
 import { GroupSummaryResponseDto } from '../dto/group-summary-response.dto';
 import { MembershipCohortRefDto } from '../dto/membership-cohort-ref.dto';
-import { RoleAssignmentResponseDto } from '../dto/role-assignment-response.dto';
+import {
+  RoleAssignmentResponseDto,
+  RoleAssignmentUserRefDto,
+} from '../dto/role-assignment-response.dto';
 
 export function toGroupResponseDto(
   group: Group,
@@ -56,23 +59,29 @@ export function toGroupSummaryResponseDto(
   };
 }
 
-export function toGroupMembershipResponseDto(
-  membership: GroupMembership,
-  rootRoles: GroupRole[],
+export function toSectionMembershipResponseDto(
+  membership: SectionMembership,
+  roles: GroupRole[],
   cohorts: MembershipCohortRefDto[],
-): GroupMembershipResponseDto {
+): SectionMembershipResponseDto {
   return {
     id: membership.id,
-    rootGroupId: membership.rootGroup.id,
+    sectionId: membership.section.id,
     user: {
       id: membership.user.id,
       displayName: membership.user.displayName,
     },
-    rootRoles,
+    roles,
     status: membership.status,
     joinedAt: membership.joinedAt.toISOString(),
     leftAt: membership.leftAt ? membership.leftAt.toISOString() : null,
     endReason: membership.endReason,
+    endedBy: membership.endedBy
+      ? {
+          id: membership.endedBy.id,
+          displayName: membership.endedBy.displayName,
+        }
+      : null,
     cohorts,
   };
 }
@@ -86,6 +95,12 @@ export function toMembershipCohortRefDto(
   };
 }
 
+function toRoleAssignmentUserRefDto(
+  user: { id: string; displayName: string } | null,
+): RoleAssignmentUserRefDto | null {
+  return user ? { id: user.id, displayName: user.displayName } : null;
+}
+
 export function toRoleAssignmentResponseDto(
   roleAssignment: RoleAssignment,
 ): RoleAssignmentResponseDto {
@@ -95,12 +110,16 @@ export function toRoleAssignmentResponseDto(
     // Group-or-Section reference (see role-assignment.entity.ts) - exactly
     // one is ever set.
     groupId: (roleAssignment.group ?? roleAssignment.section)!.id,
-    membershipId: roleAssignment.membership.id,
     user: {
-      id: roleAssignment.membership.user.id,
-      displayName: roleAssignment.membership.user.displayName,
+      id: roleAssignment.user.id,
+      displayName: roleAssignment.user.displayName,
     },
     role: roleAssignment.role,
     grantedAt: roleAssignment.grantedAt.toISOString(),
+    grantedBy: toRoleAssignmentUserRefDto(roleAssignment.grantedBy),
+    revokedAt: roleAssignment.revokedAt
+      ? roleAssignment.revokedAt.toISOString()
+      : null,
+    revokedBy: toRoleAssignmentUserRefDto(roleAssignment.revokedBy),
   };
 }

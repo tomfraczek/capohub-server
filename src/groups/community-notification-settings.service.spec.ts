@@ -3,16 +3,15 @@ import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
 import { CommunityNotificationSettingsService } from './community-notification-settings.service';
 import { CommunityNotificationSettings } from './entities/community-notification-settings.entity';
-import { Group } from './entities/group.entity';
-import { GroupMembership } from './entities/group-membership.entity';
-import { GroupMembershipStatus } from './enums/group-membership-status.enum';
-import { GroupHierarchyService } from './group-hierarchy.service';
+import { Section } from './entities/section.entity';
+import { SectionMembership } from './entities/section-membership.entity';
+import { SectionMembershipStatus } from './enums/section-membership-status.enum';
 
-function buildGroup(overrides: Partial<Group> = {}): Group {
-  const group = new Group();
-  group.id = 'root-1';
-  group.name = 'Cordão de Ouro';
-  return Object.assign(group, overrides);
+function buildSection(overrides: Partial<Section> = {}): Section {
+  const section = new Section();
+  section.id = 'section-1';
+  section.name = 'Cordão de Ouro Poznan';
+  return Object.assign(section, overrides);
 }
 
 function buildUser(overrides: Partial<User> = {}): User {
@@ -23,11 +22,11 @@ function buildUser(overrides: Partial<User> = {}): User {
 }
 
 function buildMembership(
-  overrides: Partial<GroupMembership> = {},
-): GroupMembership {
-  const membership = new GroupMembership();
+  overrides: Partial<SectionMembership> = {},
+): SectionMembership {
+  const membership = new SectionMembership();
   membership.id = 'membership-1';
-  membership.status = GroupMembershipStatus.ACTIVE;
+  membership.status = SectionMembershipStatus.ACTIVE;
   return Object.assign(membership, overrides);
 }
 
@@ -35,13 +34,14 @@ function buildSettings(
   overrides: Partial<CommunityNotificationSettings> = {},
 ): CommunityNotificationSettings {
   const settings = new CommunityNotificationSettings();
-  settings.community = buildGroup();
+  settings.community = buildSection();
   settings.user = buildUser();
   return Object.assign(settings, overrides);
 }
 
 interface MockRouting {
-  membership?: GroupMembership | null;
+  section?: Section | null;
+  membership?: SectionMembership | null;
   settings?: CommunityNotificationSettings | null;
 }
 
@@ -50,7 +50,12 @@ function buildMockEm(routing: MockRouting = {}) {
   const flush = jest.fn().mockResolvedValue(undefined);
 
   const findOne = jest.fn().mockImplementation((entity: unknown) => {
-    if (entity === GroupMembership) {
+    if (entity === Section) {
+      return Promise.resolve(
+        routing.section === undefined ? buildSection() : routing.section,
+      );
+    }
+    if (entity === SectionMembership) {
       return Promise.resolve(routing.membership ?? null);
     }
     if (entity === CommunityNotificationSettings) {
@@ -71,28 +76,16 @@ function buildMockEm(routing: MockRouting = {}) {
   return { em, findOne, persist, flush };
 }
 
-function buildGroupHierarchyService(rootGroup: Group) {
-  const getRootGroup = jest.fn().mockResolvedValue(rootGroup);
-  const groupHierarchyService = {
-    getRootGroup,
-  } as unknown as GroupHierarchyService;
-  return { groupHierarchyService, getRootGroup };
-}
-
 describe('CommunityNotificationSettingsService', () => {
   describe('get', () => {
     it('returns every default as true when no settings row exists yet', async () => {
-      const rootGroup = buildGroup();
       const { em } = buildMockEm({ membership: buildMembership() });
-      const service = new CommunityNotificationSettingsService(
-        em,
-        buildGroupHierarchyService(rootGroup).groupHierarchyService,
-      );
+      const service = new CommunityNotificationSettingsService(em);
 
-      const result = await service.get('root-1', buildUser());
+      const result = await service.get('section-1', buildUser());
 
       expect(result).toEqual({
-        communityId: 'root-1',
+        communityId: 'section-1',
         newJoinRequests: true,
         joinRequestApproved: true,
         newInvitations: true,
@@ -107,60 +100,42 @@ describe('CommunityNotificationSettingsService', () => {
     });
 
     it('returns the stored values when a settings row exists', async () => {
-      const rootGroup = buildGroup();
       const settings = buildSettings({
         newJoinRequests: false,
         roleChanges: false,
       });
       const { em } = buildMockEm({ membership: buildMembership(), settings });
-      const service = new CommunityNotificationSettingsService(
-        em,
-        buildGroupHierarchyService(rootGroup).groupHierarchyService,
-      );
+      const service = new CommunityNotificationSettingsService(em);
 
-      const result = await service.get('root-1', buildUser());
+      const result = await service.get('section-1', buildUser());
 
       expect(result.newJoinRequests).toBe(false);
       expect(result.roleChanges).toBe(false);
       expect(result.newInvitations).toBe(true);
     });
 
-    it('throws 404 GROUP_NOT_FOUND when the caller has no ACTIVE membership, never revealing the group exists', async () => {
-      const rootGroup = buildGroup();
+    it('throws 404 SECTION_NOT_FOUND when the caller has no ACTIVE membership, never revealing the section exists', async () => {
       const { em } = buildMockEm({ membership: null });
-      const service = new CommunityNotificationSettingsService(
-        em,
-        buildGroupHierarchyService(rootGroup).groupHierarchyService,
-      );
+      const service = new CommunityNotificationSettingsService(em);
 
-      await expect(service.get('root-1', buildUser())).rejects.toThrow(
+      await expect(service.get('section-1', buildUser())).rejects.toThrow(
         NotFoundException,
       );
-      await expect(service.get('root-1', buildUser())).rejects.toMatchObject({
-        response: { code: 'GROUP_NOT_FOUND' },
-      });
+      await expect(service.get('section-1', buildUser())).rejects.toMatchObject(
+        {
+          response: { code: 'SECTION_NOT_FOUND' },
+        },
+      );
     });
 
-    it('rejects with GROUP_NOT_FOUND when a Section id is passed - settings are per root Group only, never silently resolved', async () => {
-      // Section (a non-root Group) - resolving its Root Group id ('root-1')
-      // differs from the requested id ('child-1'), which is exactly what
-      // assertMemberOrFail rejects (see its own comment: this used to
-      // silently resolve to the Root Group's settings before it was made
-      // explicit).
-      const rootGroup = buildGroup({ id: 'root-1' });
-      const { em, findOne } = buildMockEm({ membership: buildMembership() });
-      const { groupHierarchyService, getRootGroup } =
-        buildGroupHierarchyService(rootGroup);
-      const service = new CommunityNotificationSettingsService(
-        em,
-        groupHierarchyService,
-      );
+    it('rejects with SECTION_NOT_FOUND when the id does not resolve to a Section at all - Group has no notification settings', async () => {
+      const { em, findOne } = buildMockEm({ section: null });
+      const service = new CommunityNotificationSettingsService(em);
 
-      await expect(service.get('child-1', buildUser())).rejects.toMatchObject({
-        response: { code: 'GROUP_NOT_FOUND' },
+      await expect(service.get('group-1', buildUser())).rejects.toMatchObject({
+        response: { code: 'SECTION_NOT_FOUND' },
       });
 
-      expect(getRootGroup).toHaveBeenCalledWith('child-1', em);
       expect(findOne).not.toHaveBeenCalledWith(
         CommunityNotificationSettings,
         expect.anything(),
@@ -170,31 +145,26 @@ describe('CommunityNotificationSettingsService', () => {
 
   describe('update', () => {
     it('creates a new settings row lazily on first update', async () => {
-      const rootGroup = buildGroup();
       const user = buildUser();
       const { em, persist, flush } = buildMockEm({
         membership: buildMembership(),
         settings: null,
       });
-      const service = new CommunityNotificationSettingsService(
-        em,
-        buildGroupHierarchyService(rootGroup).groupHierarchyService,
-      );
+      const service = new CommunityNotificationSettingsService(em);
 
-      const result = await service.update('root-1', user, {
+      const result = await service.update('section-1', user, {
         newJoinRequests: false,
       });
 
       expect(persist).toHaveBeenCalledTimes(1);
       const persisted = persist.mock.calls[0][0];
-      expect(persisted.community).toBe(rootGroup);
+      expect(persisted.community.id).toBe('section-1');
       expect(persisted.user).toBe(user);
       expect(flush).toHaveBeenCalledTimes(1);
       expect(result.newJoinRequests).toBe(false);
     });
 
     it('applies a partial patch, leaving every other field at its current value', async () => {
-      const rootGroup = buildGroup();
       const existing = buildSettings({
         newJoinRequests: false,
         roleChanges: false,
@@ -204,12 +174,9 @@ describe('CommunityNotificationSettingsService', () => {
         membership: buildMembership(),
         settings: existing,
       });
-      const service = new CommunityNotificationSettingsService(
-        em,
-        buildGroupHierarchyService(rootGroup).groupHierarchyService,
-      );
+      const service = new CommunityNotificationSettingsService(em);
 
-      const result = await service.update('root-1', buildUser(), {
+      const result = await service.update('section-1', buildUser(), {
         roleChanges: true,
       });
 
@@ -219,16 +186,12 @@ describe('CommunityNotificationSettingsService', () => {
       expect(result.archived).toBe(false);
     });
 
-    it('throws 404 GROUP_NOT_FOUND when the caller has no ACTIVE membership', async () => {
-      const rootGroup = buildGroup();
+    it('throws 404 SECTION_NOT_FOUND when the caller has no ACTIVE membership', async () => {
       const { em } = buildMockEm({ membership: null });
-      const service = new CommunityNotificationSettingsService(
-        em,
-        buildGroupHierarchyService(rootGroup).groupHierarchyService,
-      );
+      const service = new CommunityNotificationSettingsService(em);
 
       await expect(
-        service.update('root-1', buildUser(), { newJoinRequests: false }),
+        service.update('section-1', buildUser(), { newJoinRequests: false }),
       ).rejects.toThrow(NotFoundException);
     });
   });

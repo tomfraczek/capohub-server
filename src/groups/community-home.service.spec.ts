@@ -1,732 +1,275 @@
 /**
- * Unit tests for CommunityHomeService.
- *
- * Covers:
- *  - aggregating a user's active Groups and every Child Group they
- *    hold a Role in (including several Roles for the same Group),
- *  - excluding ARCHIVED communities, a user with no communities at all,
- *  - filtering pending invitations to the current user,
- *  - filtering pending join requests to communities where the caller holds
- *    GROUP_JOIN_REQUEST_REVIEW (never assuming ADMIN/OWNER is automatically
- *    enough - resolved through the real GroupPermissionService),
- *  - excluding READ_ONLY communities from join-request review capability
- *    (approve/reject require ACTIVE - see GroupPermissionsGuard defaults),
- *  - summary counts and capability flags.
+ * Unit tests for CommunityHomeService - the participation/capability
+ * resolver behind GET /community/home. Covers (post
+ * Membership/RoleAssignments/Permissions rebuild):
+ *  - capabilities split into ...GroupIds/...SectionIds pairs, never mixed
+ *  - a membership-lifecycle capability (canManageMembersInSectionIds) is
+ *    never populated for a Group, even when the caller is OWNER there
+ *  - canManageNotificationsInSectionIds is Section-only and ACTIVE-only
+ *  - myCommunities excludes ARCHIVED, but canRestore*Ids still includes it
+ *  - no inheritance: a Role held on a Group never adds any other community
  */
 
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
 import { CommunityHomeService } from './community-home.service';
-import { MembershipRequestResponseDto } from './dto/membership-request-response.dto';
-import { GroupMembership } from './entities/group-membership.entity';
 import { Group } from './entities/group.entity';
-import { GroupMembershipStatus } from './enums/group-membership-status.enum';
+import { Section } from './entities/section.entity';
+import { SectionMembership } from './entities/section-membership.entity';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
-import { MembershipRequestStatus } from './enums/membership-request-status.enum';
-import { MembershipRequestTarget } from './enums/membership-request-target.enum';
+import { SectionMembershipStatus } from './enums/section-membership-status.enum';
+import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupPermissionService } from './permissions/group-permission.service';
-import { MembershipRequestsService } from './membership-requests.service';
 import { RoleAssignmentsService } from './role-assignments.service';
+import { MembershipRequestsService } from './membership-requests.service';
 
 function buildUser(overrides: Partial<User> = {}): User {
   const user = new User();
   user.id = 'user-1';
-  user.email = 'test@example.com';
-  user.displayName = 'Test User';
   return Object.assign(user, overrides);
 }
 
 function buildGroup(overrides: Partial<Group> = {}): Group {
   const group = new Group();
   group.id = 'group-1';
-  group.name = 'Group';
-  group.description = null;
-  group.logoUrl = null;
-  group.coverImageUrl = null;
+  group.name = 'Cordão de Ouro';
   group.status = GroupStatus.ACTIVE;
   group.parentGroup = null;
   group.isPublic = true;
   group.isHidden = false;
+  group.memberInvitesAllowed = false;
   return Object.assign(group, overrides);
 }
 
+function buildSection(overrides: Partial<Section> = {}): Section {
+  const section = new Section();
+  section.id = 'section-1';
+  section.name = 'Cordão de Ouro Poznan';
+  section.status = GroupStatus.ACTIVE;
+  section.isPublic = true;
+  section.isHidden = false;
+  section.memberInvitesAllowed = false;
+  return Object.assign(section, overrides);
+}
+
 function buildMembership(
-  overrides: Partial<GroupMembership> = {},
-): GroupMembership {
-  const membership = new GroupMembership();
+  overrides: Partial<SectionMembership> = {},
+): SectionMembership {
+  const membership = new SectionMembership();
   membership.id = 'membership-1';
-  membership.status = GroupMembershipStatus.ACTIVE;
-  membership.rootGroup = buildGroup();
+  membership.status = SectionMembershipStatus.ACTIVE;
   return Object.assign(membership, overrides);
 }
 
-function buildInvitation(
-  overrides: Partial<MembershipRequestResponseDto> = {},
-): MembershipRequestResponseDto {
-  return {
-    id: 'invitation-1',
-    type: 'INVITATION' as never,
-    targetType: MembershipRequestTarget.GROUP,
-    targetGroupId: 'group-1',
-    status: MembershipRequestStatus.PENDING,
-    initiatedBy: { id: 'inviter-1', displayName: 'Inviter' },
-    invitedUser: { id: 'user-1', displayName: 'Test User' },
-    invitedEmail: null,
-    processedAt: null,
-    processedBy: null,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    ...overrides,
-  };
+interface Setup {
+  participation: { userId: string; groupId: string; roles: GroupRole[] }[];
+  groups?: Group[];
+  sections?: Section[];
+  sectionMemberships?: SectionMembership[];
 }
 
-interface MockRouting {
-  groupFindResults?: Group[];
-}
+function buildService(setup: Setup) {
+  const em = {
+    find: jest.fn((entity: unknown) => {
+      if (entity === Group) return Promise.resolve(setup.groups ?? []);
+      if (entity === Section) return Promise.resolve(setup.sections ?? []);
+      if (entity === SectionMembership) {
+        return Promise.resolve(setup.sectionMemberships ?? []);
+      }
+      return Promise.resolve([]);
+    }),
+  } as unknown as EntityManager;
 
-function buildMockEm(
-  memberships: GroupMembership[],
-  routing: MockRouting = {},
-) {
-  const find = jest.fn((entity: unknown) => {
-    if (entity === GroupMembership) return Promise.resolve(memberships);
-    if (entity === Group) {
-      return Promise.resolve(routing.groupFindResults ?? []);
-    }
-    return Promise.resolve([]);
-  });
-  return { em: { find } as unknown as EntityManager, find };
-}
-
-function buildService(
-  em: EntityManager,
-  options: {
-    participation?: {
-      membershipId: string;
-      groupId: string;
-      roles: GroupRole[];
-    }[];
-    invitations?: MembershipRequestResponseDto[];
-    joinRequests?: MembershipRequestResponseDto[];
-  } = {},
-) {
-  const getGroupParticipationForMemberships = jest
-    .fn()
-    .mockResolvedValue(options.participation ?? []);
   const roleAssignmentsService = {
-    getGroupParticipationForMemberships,
+    getGroupParticipationForUsers: jest
+      .fn()
+      .mockResolvedValue(setup.participation),
   } as unknown as RoleAssignmentsService;
 
-  const listReceivedInvitations = jest
-    .fn()
-    .mockResolvedValue(options.invitations ?? []);
-  const listJoinRequestsForGroups = jest
-    .fn()
-    .mockResolvedValue(options.joinRequests ?? []);
+  const groupHierarchyService = {
+    resolveRootGroup: jest.fn((community: Group | Section) =>
+      Promise.resolve(community instanceof Group ? community : buildGroup()),
+    ),
+  } as unknown as GroupHierarchyService;
+
   const membershipRequestsService = {
-    listReceivedInvitations,
-    listJoinRequestsForGroups,
+    listReceivedInvitations: jest.fn().mockResolvedValue([]),
+    listJoinRequestsForGroups: jest.fn().mockResolvedValue([]),
   } as unknown as MembershipRequestsService;
+
+  const groupPermissionService = new GroupPermissionService();
 
   const service = new CommunityHomeService(
     em,
-    new GroupPermissionService(),
+    groupPermissionService,
     roleAssignmentsService,
+    groupHierarchyService,
     membershipRequestsService,
   );
 
-  return {
-    service,
-    roleAssignmentsService,
-    membershipRequestsService,
-    listReceivedInvitations,
-    listJoinRequestsForGroups,
-  };
+  return { service, em };
 }
 
 describe('CommunityHomeService', () => {
-  describe('getHome() - My Communities', () => {
-    it('returns an empty dashboard for a user with no active memberships', async () => {
-      const { em } = buildMockEm([]);
-      const { service } = buildService(em);
-
-      const result = await service.getHome(buildUser());
-
-      expect(result.myCommunities).toEqual([]);
-      expect(result.summary).toEqual({
-        communitiesCount: 0,
-        pendingInvitationsCount: 0,
-        pendingJoinRequestsCount: 0,
-        actionableItemsCount: 0,
-      });
-      expect(result.capabilities.canCreateGroup).toBe(true);
-      expect(result.capabilities.canCreateSectionInCommunityIds).toEqual([]);
+  it('Group OWNER: capabilities land only in the ...GroupIds field, never ...SectionIds', async () => {
+    const group = buildGroup({ id: 'group-1' });
+    const { service } = buildService({
+      participation: [
+        { userId: 'user-1', groupId: 'group-1', roles: [GroupRole.OWNER] },
+      ],
+      groups: [group],
     });
 
-    it('includes the Group even when the Membership holds zero Role Assignments there', async () => {
-      const root = buildGroup({ id: 'root-1', name: 'Cordão de Ouro' });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const { service } = buildService(em, { participation: [] });
+    const home = await service.getHome(buildUser());
 
-      const result = await service.getHome(buildUser());
-
-      expect(result.myCommunities).toHaveLength(1);
-      expect(result.myCommunities[0]).toMatchObject({
-        id: 'root-1',
-        rootGroupId: 'root-1',
-        isRootGroup: true,
-        myRoles: [],
-      });
-    });
-
-    it('includes a Child Group the Membership holds Roles in, alongside its Group, with multiple Roles preserved as an array', async () => {
-      const root = buildGroup({ id: 'root-1', name: 'Cordão de Ouro' });
-      const child = buildGroup({
-        id: 'child-1',
-        name: 'Poznań',
-        parentGroup: root,
-      });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], {
-        groupFindResults: [root, child],
-      });
-      const { service } = buildService(em, {
-        participation: [
-          {
-            membershipId: 'm-1',
-            groupId: 'child-1',
-            roles: [GroupRole.MEMBER, GroupRole.INSTRUCTOR],
-          },
-        ],
-      });
-
-      const result = await service.getHome(buildUser());
-
-      expect(result.myCommunities).toHaveLength(2);
-      const childEntry = result.myCommunities.find((c) => c.id === 'child-1');
-      expect(childEntry).toMatchObject({
-        parentId: 'root-1',
-        rootGroupId: 'root-1',
-        isRootGroup: false,
-        myRoles: [GroupRole.MEMBER, GroupRole.INSTRUCTOR],
-      });
-    });
-
-    it('excludes an ARCHIVED community even though the Membership/Role Assignment still exists', async () => {
-      const root = buildGroup({
-        id: 'root-1',
-        name: 'Archived Org',
-        status: GroupStatus.ARCHIVED,
-      });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      // The Group query itself filters out ARCHIVED rows (status: {$ne: ARCHIVED}),
-      // so the mock simply returns nothing for it.
-      const { em } = buildMockEm([membership], { groupFindResults: [] });
-      const { service } = buildService(em, { participation: [] });
-
-      const result = await service.getHome(buildUser());
-
-      expect(result.myCommunities).toEqual([]);
-    });
+    expect(home.capabilities.canArchiveGroupIds).toEqual(['group-1']);
+    expect(home.capabilities.canArchiveSectionIds).toEqual([]);
+    expect(home.capabilities.canManageRolesInGroupIds).toEqual(['group-1']);
   });
 
-  // Regression coverage for the "Moje społeczności" business rule:
-  // Membership in a Section (Child Group) must never be treated as, or
-  // imply, membership/a Role in its parent Group (ADR-004: "no membership
-  // inheritance"). `GroupMembership.rootGroup` is always the Root Group
-  // (mandatory - see group-membership.entity.ts), so a Section-only
-  // participant's Membership row still points at the Group; these tests
-  // pin down that this never leaks a Role onto the Group's own
-  // `myRoles` - only an actual RoleAssignment for the Group itself does.
-  describe('getHome() - Group vs Section membership isolation (ADR-004)', () => {
-    it('shows only the Group when the caller holds a Role there and none in any Section', async () => {
-      const root = buildGroup({ id: 'root-1', name: 'Cordão de Ouro' });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const { service } = buildService(em, {
-        participation: [
-          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.MEMBER] },
-        ],
-      });
-
-      const result = await service.getHome(buildUser());
-
-      expect(result.myCommunities).toHaveLength(1);
-      expect(result.myCommunities[0]).toMatchObject({
-        id: 'root-1',
-        myRoles: [GroupRole.MEMBER],
-      });
+  it('a membership-lifecycle capability (manage members) is never populated for a Group, even for its OWNER', async () => {
+    const group = buildGroup({ id: 'group-1' });
+    const { service } = buildService({
+      participation: [
+        { userId: 'user-1', groupId: 'group-1', roles: [GroupRole.OWNER] },
+      ],
+      groups: [group],
     });
 
-    it('shows the Section the caller holds a Role in, and the Group only as organizational context with an empty myRoles (no derived Role)', async () => {
-      const root = buildGroup({ id: 'root-1', name: 'Cordão de Ouro' });
-      const section = buildGroup({
-        id: 'section-1',
-        name: 'Poznań',
-        parentGroup: root,
-      });
-      // Membership is always Root-Group-scoped (ADR-004) even for a
-      // Section-only participant - see group-membership.entity.ts.
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], {
-        groupFindResults: [root, section],
-      });
-      const { service } = buildService(em, {
-        // No participation row for 'root-1' at all - the caller has never
-        // been granted any Role there directly.
-        participation: [
-          {
-            membershipId: 'm-1',
-            groupId: 'section-1',
-            roles: [GroupRole.MEMBER],
-          },
-        ],
-      });
+    const home = await service.getHome(buildUser());
 
-      const result = await service.getHome(buildUser());
-
-      expect(result.myCommunities).toHaveLength(2);
-      const groupEntry = result.myCommunities.find((c) => c.id === 'root-1');
-      const sectionEntry = result.myCommunities.find(
-        (c) => c.id === 'section-1',
-      );
-      expect(groupEntry?.myRoles).toEqual([]);
-      expect(sectionEntry?.myRoles).toEqual([GroupRole.MEMBER]);
-    });
-
-    it('shows both the Group and the Section when the caller holds independent Roles in each', async () => {
-      const root = buildGroup({ id: 'root-1', name: 'Cordão de Ouro' });
-      const section = buildGroup({
-        id: 'section-1',
-        name: 'Poznań',
-        parentGroup: root,
-      });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], {
-        groupFindResults: [root, section],
-      });
-      const { service } = buildService(em, {
-        participation: [
-          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.ADMIN] },
-          {
-            membershipId: 'm-1',
-            groupId: 'section-1',
-            roles: [GroupRole.MEMBER],
-          },
-        ],
-      });
-
-      const result = await service.getHome(buildUser());
-
-      expect(result.myCommunities).toHaveLength(2);
-      const groupEntry = result.myCommunities.find((c) => c.id === 'root-1');
-      const sectionEntry = result.myCommunities.find(
-        (c) => c.id === 'section-1',
-      );
-      expect(groupEntry?.myRoles).toEqual([GroupRole.ADMIN]);
-      expect(sectionEntry?.myRoles).toEqual([GroupRole.MEMBER]);
-    });
-
-    it('never derives a Role (or any myRoles entry) for the Group from Roles held only in its Section - even multiple/elevated ones', async () => {
-      const root = buildGroup({ id: 'root-1', name: 'Cordão de Ouro' });
-      const section = buildGroup({
-        id: 'section-1',
-        name: 'Poznań',
-        parentGroup: root,
-      });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], {
-        groupFindResults: [root, section],
-      });
-      const { service } = buildService(em, {
-        participation: [
-          {
-            membershipId: 'm-1',
-            groupId: 'section-1',
-            roles: [GroupRole.ADMIN, GroupRole.OWNER],
-          },
-        ],
-      });
-
-      const result = await service.getHome(buildUser());
-
-      const groupEntry = result.myCommunities.find((c) => c.id === 'root-1');
-      expect(groupEntry?.myRoles).toEqual([]);
-      // The elevated capabilities that come with ADMIN/OWNER apply to
-      // 'section-1' (where they were actually granted) but must never leak
-      // onto 'root-1' merely because Membership happens to be scoped there
-      // (see ADR-013 "no permission inheritance").
-      expect(result.capabilities.canArchiveCommunityIds).toEqual(['section-1']);
-      expect(result.capabilities.canCreateSectionInCommunityIds).toEqual([
-        'section-1',
-      ]);
-    });
+    expect(home.capabilities.canManageMembersInSectionIds).toEqual([]);
+    // There is no canManageMembersInGroupIds field at all - Group has no
+    // membership-lifecycle capability, structurally.
+    expect(
+      (home.capabilities as unknown as Record<string, unknown>)[
+        'canManageMembersInGroupIds'
+      ],
+    ).toBeUndefined();
   });
 
-  describe('getHome() - capabilities', () => {
-    it('grants canCreateSectionInCommunityIds only where the union of held Roles includes GROUP_EDIT (Admin/Owner)', async () => {
-      const root = buildGroup({ id: 'root-1' });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const { service } = buildService(em, {
-        participation: [
-          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.ADMIN] },
-        ],
-      });
-
-      const result = await service.getHome(buildUser());
-
-      expect(result.capabilities.canCreateSectionInCommunityIds).toEqual([
-        'root-1',
-      ]);
-      expect(result.capabilities.canManageAnyCommunity).toBe(true);
+  it('Section OWNER: membership-lifecycle capabilities land in ...SectionIds', async () => {
+    const section = buildSection({ id: 'section-1' });
+    const membership = buildMembership({ section, user: buildUser() });
+    const { service } = buildService({
+      participation: [
+        { userId: 'user-1', groupId: 'section-1', roles: [GroupRole.OWNER] },
+      ],
+      sections: [section],
+      sectionMemberships: [membership],
     });
 
-    it('does not grant canCreateSectionInCommunityIds for a plain MEMBER', async () => {
-      const root = buildGroup({ id: 'root-1' });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const { service } = buildService(em, {
-        participation: [
-          {
-            membershipId: 'm-1',
-            groupId: 'root-1',
-            roles: [GroupRole.MEMBER],
-          },
-        ],
-      });
+    const home = await service.getHome(buildUser());
 
-      const result = await service.getHome(buildUser());
-
-      expect(result.capabilities.canCreateSectionInCommunityIds).toEqual([]);
-      expect(result.capabilities.canManageAnyCommunity).toBe(false);
-    });
-
-    it('grants canCreateEventInCommunityIds only where the union of held Roles includes EVENT_CREATE (Admin/Owner) and the community is ACTIVE', async () => {
-      const root = buildGroup({ id: 'root-1' });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const { service } = buildService(em, {
-        participation: [
-          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.ADMIN] },
-        ],
-      });
-
-      const result = await service.getHome(buildUser());
-
-      expect(result.capabilities.canCreateEventInCommunityIds).toEqual([
-        'root-1',
-      ]);
-    });
-
-    it('does not grant canCreateEventInCommunityIds for a plain MEMBER, nor while the community is READ_ONLY (even for an OWNER)', async () => {
-      const memberRoot = buildGroup({ id: 'root-1' });
-      const memberMembership = buildMembership({
-        id: 'm-1',
-        rootGroup: memberRoot,
-      });
-      const { em: memberEm } = buildMockEm([memberMembership], {
-        groupFindResults: [memberRoot],
-      });
-      const { service: memberService } = buildService(memberEm, {
-        participation: [
-          {
-            membershipId: 'm-1',
-            groupId: 'root-1',
-            roles: [GroupRole.MEMBER],
-          },
-        ],
-      });
-      const memberResult = await memberService.getHome(buildUser());
-      expect(memberResult.capabilities.canCreateEventInCommunityIds).toEqual(
-        [],
-      );
-
-      const readOnlyRoot = buildGroup({
-        id: 'root-2',
-        status: GroupStatus.READ_ONLY,
-      });
-      const ownerMembership = buildMembership({
-        id: 'm-2',
-        rootGroup: readOnlyRoot,
-      });
-      const { em: ownerEm } = buildMockEm([ownerMembership], {
-        groupFindResults: [readOnlyRoot],
-      });
-      const { service: ownerService } = buildService(ownerEm, {
-        participation: [
-          { membershipId: 'm-2', groupId: 'root-2', roles: [GroupRole.OWNER] },
-        ],
-      });
-      const ownerResult = await ownerService.getHome(buildUser());
-      expect(ownerResult.capabilities.canCreateEventInCommunityIds).toEqual([]);
-    });
-
-    it('excludes a READ_ONLY community from canReviewJoinRequestsInCommunityIds even for an OWNER (approve/reject require ACTIVE)', async () => {
-      const root = buildGroup({ id: 'root-1', status: GroupStatus.READ_ONLY });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const { service } = buildService(em, {
-        participation: [
-          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.OWNER] },
-        ],
-      });
-
-      const result = await service.getHome(buildUser());
-
-      expect(result.capabilities.canReviewJoinRequestsInCommunityIds).toEqual(
-        [],
-      );
-      // GROUP_EDIT is still allowed while READ_ONLY-parented child creation
-      // is concerned - only ARCHIVED parents are rejected, see
-      // GroupsService.loadUsableParentForCreation.
-      expect(result.capabilities.canCreateSectionInCommunityIds).toEqual([
-        'root-1',
-      ]);
-    });
-
-    it('does not grant canReviewJoinRequestsInCommunityIds for an INSTRUCTOR (lacks GROUP_JOIN_REQUEST_REVIEW)', async () => {
-      const root = buildGroup({ id: 'root-1' });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const { service } = buildService(em, {
-        participation: [
-          {
-            membershipId: 'm-1',
-            groupId: 'root-1',
-            roles: [GroupRole.INSTRUCTOR],
-          },
-        ],
-      });
-
-      const result = await service.getHome(buildUser());
-
-      expect(result.capabilities.canReviewJoinRequestsInCommunityIds).toEqual(
-        [],
-      );
-    });
+    expect(home.capabilities.canManageMembersInSectionIds).toEqual([
+      'section-1',
+    ]);
+    expect(home.capabilities.canBanMembersInSectionIds).toEqual(['section-1']);
+    expect(home.capabilities.canSuspendMembersInSectionIds).toEqual([
+      'section-1',
+    ]);
   });
 
-  describe('getHome() - Pending Invitations', () => {
-    it("lists the caller's own pending invitations with a community reference, even for a community they do not belong to yet", async () => {
-      const targetGroup = buildGroup({ id: 'target-1', name: 'New Group' });
-      const { em } = buildMockEm([], { groupFindResults: [targetGroup] });
-      const invitation = buildInvitation({ targetGroupId: 'target-1' });
-      const { service } = buildService(em, { invitations: [invitation] });
-
-      const result = await service.getHome(buildUser());
-
-      expect(result.pendingInvitations.total).toBe(1);
-      expect(result.pendingInvitations.items).toHaveLength(1);
-      expect(result.pendingInvitations.items[0].community).toMatchObject({
-        id: 'target-1',
-        name: 'New Group',
-      });
-      expect(result.pendingInvitations.hasMore).toBe(false);
-      expect(result.summary.pendingInvitationsCount).toBe(1);
+  it('canManageNotificationsInSectionIds requires ACTIVE - a READ_ONLY (suspended) membership does not get it', async () => {
+    const section = buildSection({ id: 'section-1' });
+    const membership = buildMembership({
+      section,
+      user: buildUser(),
+      status: SectionMembershipStatus.READ_ONLY,
+    });
+    const { service } = buildService({
+      participation: [
+        { userId: 'user-1', groupId: 'section-1', roles: [GroupRole.MEMBER] },
+      ],
+      sections: [section],
+      sectionMemberships: [membership],
     });
 
-    it('does not issue a second Group query when the invitation targets a community already in My Communities', async () => {
-      const root = buildGroup({ id: 'root-1' });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em, find } = buildMockEm([membership], {
-        groupFindResults: [root],
-      });
-      const invitation = buildInvitation({ targetGroupId: 'root-1' });
-      const { service } = buildService(em, {
-        participation: [],
-        invitations: [invitation],
-      });
+    const home = await service.getHome(buildUser());
 
-      await service.getHome(buildUser());
-
-      // One find(GroupMembership) + one find(Group) for My Communities - no
-      // extra find(Group) for the invitation, since root-1 is already known.
-      const groupFindCalls = find.mock.calls.filter(
-        ([entity]) => entity === Group,
-      );
-      expect(groupFindCalls).toHaveLength(1);
-    });
+    expect(home.capabilities.canManageNotificationsInSectionIds).toEqual([]);
   });
 
-  describe('getHome() - Pending Join Requests', () => {
-    it('only queries join requests for communities the caller can review, using GroupPermissionService rather than a role name check', async () => {
-      const root = buildGroup({ id: 'root-1' });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const joinRequest = buildInvitation({
-        id: 'jr-1',
-        targetGroupId: 'root-1',
-      });
-      const { service, listJoinRequestsForGroups } = buildService(em, {
-        participation: [
-          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.ADMIN] },
-        ],
-        joinRequests: [joinRequest],
-      });
-
-      const result = await service.getHome(buildUser());
-
-      expect(listJoinRequestsForGroups).toHaveBeenCalledWith(['root-1']);
-      expect(result.pendingJoinRequests.total).toBe(1);
-      expect(result.summary.pendingJoinRequestsCount).toBe(1);
+  it('myCommunities excludes ARCHIVED communities, but canRestoreGroupIds still includes it for the OWNER', async () => {
+    const archivedGroup = buildGroup({
+      id: 'group-1',
+      status: GroupStatus.ARCHIVED,
+    });
+    const { service } = buildService({
+      participation: [
+        { userId: 'user-1', groupId: 'group-1', roles: [GroupRole.OWNER] },
+      ],
+      groups: [archivedGroup],
     });
 
-    it('never calls listJoinRequestsForGroups when the caller cannot review any community', async () => {
-      const root = buildGroup({ id: 'root-1' });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const { service, listJoinRequestsForGroups } = buildService(em, {
-        participation: [
-          {
-            membershipId: 'm-1',
-            groupId: 'root-1',
-            roles: [GroupRole.MEMBER],
-          },
-        ],
-      });
+    const home = await service.getHome(buildUser());
 
-      const result = await service.getHome(buildUser());
-
-      expect(listJoinRequestsForGroups).not.toHaveBeenCalled();
-      expect(result.pendingJoinRequests).toEqual({
-        items: [],
-        total: 0,
-        hasMore: false,
-      });
-    });
+    expect(home.myCommunities).toEqual([]);
+    expect(home.capabilities.canRestoreGroupIds).toEqual(['group-1']);
   });
 
-  describe('getHome() - expanded capability flags', () => {
-    it('grants the ADMIN-tier capability lists (view/manage members, invite, manage invitations/roles) only where the union of Roles includes them', async () => {
-      const root = buildGroup({ id: 'root-1' });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const { service } = buildService(em, {
-        participation: [
-          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.ADMIN] },
-        ],
-      });
-
-      const result = await service.getHome(buildUser());
-
-      expect(result.capabilities.canViewMembersInCommunityIds).toEqual([
-        'root-1',
-      ]);
-      expect(result.capabilities.canManageMembersInCommunityIds).toEqual([
-        'root-1',
-      ]);
-      expect(result.capabilities.canManageInvitationsInCommunityIds).toEqual([
-        'root-1',
-      ]);
-      expect(result.capabilities.canManageRolesInCommunityIds).toEqual([
-        'root-1',
-      ]);
-      expect(result.capabilities.canBanMembersInCommunityIds).toEqual([
-        'root-1',
-      ]);
-      expect(result.capabilities.canSuspendMembersInCommunityIds).toEqual([
-        'root-1',
-      ]);
-      // OWNER-only actions remain empty for a plain ADMIN.
-      expect(result.capabilities.canTransferOwnershipInCommunityIds).toEqual(
-        [],
-      );
-      expect(result.capabilities.canArchiveCommunityIds).toEqual([]);
-      expect(result.capabilities.canDeleteCommunityIds).toEqual([]);
+  it('no inheritance: a Role held only on a Group never adds any Section to any capability list', async () => {
+    const group = buildGroup({ id: 'group-1' });
+    const { service } = buildService({
+      participation: [
+        { userId: 'user-1', groupId: 'group-1', roles: [GroupRole.OWNER] },
+      ],
+      groups: [group],
     });
 
-    it('grants OWNER-only capabilities (transfer ownership, archive, delete) only for an OWNER', async () => {
-      const root = buildGroup({ id: 'root-1' });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const { service } = buildService(em, {
-        participation: [
-          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.OWNER] },
-        ],
-      });
+    const home = await service.getHome(buildUser());
 
-      const result = await service.getHome(buildUser());
+    for (const [key, value] of Object.entries(home.capabilities)) {
+      if (key.endsWith('SectionIds')) {
+        expect(value).toEqual([]);
+      }
+    }
+  });
 
-      expect(result.capabilities.canTransferOwnershipInCommunityIds).toEqual([
-        'root-1',
-      ]);
-      expect(result.capabilities.canArchiveCommunityIds).toEqual(['root-1']);
-      expect(result.capabilities.canDeleteCommunityIds).toEqual(['root-1']);
+  it('a plain MEMBER (Section) never receives any admin capability', async () => {
+    const section = buildSection({ id: 'section-1' });
+    const membership = buildMembership({ section, user: buildUser() });
+    const { service } = buildService({
+      participation: [
+        { userId: 'user-1', groupId: 'section-1', roles: [GroupRole.MEMBER] },
+      ],
+      sections: [section],
+      sectionMemberships: [membership],
     });
 
-    it('grants canViewMembersInCommunityIds and canViewAuditLogInCommunityIds for a READ_ONLY (suspended) Membership - both are READ_ONLY-safe - but not the operational lists', async () => {
-      const root = buildGroup({ id: 'root-1' });
-      const membership = buildMembership({
-        id: 'm-1',
-        rootGroup: root,
-        status: GroupMembershipStatus.READ_ONLY,
-      });
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const { service } = buildService(em, {
-        participation: [
-          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.OWNER] },
-        ],
-      });
+    const home = await service.getHome(buildUser());
 
-      const result = await service.getHome(buildUser());
+    expect(home.capabilities.canManageMembersInSectionIds).toEqual([]);
+    expect(home.capabilities.canArchiveSectionIds).toEqual([]);
+    expect(home.capabilities.canTransferOwnershipInSectionIds).toEqual([]);
+    // MEMBER does get view-tier capabilities.
+    expect(home.capabilities.canViewMembersInSectionIds).toEqual(['section-1']);
+  });
 
-      // The suspended member's community remains visible on the dashboard.
-      expect(result.myCommunities).toHaveLength(1);
-      expect(result.capabilities.canViewMembersInCommunityIds).toEqual([
-        'root-1',
-      ]);
-      expect(result.capabilities.canViewAuditLogInCommunityIds).toEqual([
-        'root-1',
-      ]);
-      // Every operational (non READ_ONLY-safe) capability is withheld, even
-      // for an OWNER, while suspended.
-      expect(result.capabilities.canManageMembersInCommunityIds).toEqual([]);
-      expect(result.capabilities.canArchiveCommunityIds).toEqual([]);
-      expect(result.capabilities.canBanMembersInCommunityIds).toEqual([]);
-      expect(result.capabilities.canSuspendMembersInCommunityIds).toEqual([]);
-      expect(result.capabilities.canManageNotificationsInCommunityIds).toEqual(
-        [],
-      );
+  it('canManageAnyCommunity is true iff canCreateSectionIn{Group,Section}Ids is non-empty', async () => {
+    const group = buildGroup({ id: 'group-1' });
+    const { service } = buildService({
+      participation: [
+        { userId: 'user-1', groupId: 'group-1', roles: [GroupRole.ADMIN] },
+      ],
+      groups: [group],
     });
 
-    it('grants canManageNotificationsInCommunityIds for every ACTIVE Membership regardless of Role (including zero Roles)', async () => {
-      const root = buildGroup({ id: 'root-1' });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const { service } = buildService(em, { participation: [] });
+    const home = await service.getHome(buildUser());
 
-      const result = await service.getHome(buildUser());
+    expect(home.capabilities.canCreateSectionInGroupIds).toEqual(['group-1']);
+    expect(home.capabilities.canManageAnyCommunity).toBe(true);
+  });
 
-      expect(result.capabilities.canManageNotificationsInCommunityIds).toEqual([
-        'root-1',
-      ]);
-    });
+  it('returns an empty dashboard when the user participates in nothing', async () => {
+    const { service } = buildService({ participation: [] });
 
-    it('grants canRestoreCommunityIds and canDeleteCommunityIds for an ARCHIVED community the caller owns - even though it is excluded from myCommunities', async () => {
-      const root = buildGroup({
-        id: 'root-1',
-        status: GroupStatus.ARCHIVED,
-      });
-      const membership = buildMembership({ id: 'm-1', rootGroup: root });
-      // Unlike the myCommunities-only tests above, the wider capability
-      // query now fetches ARCHIVED groups too (only DELETED is excluded).
-      const { em } = buildMockEm([membership], { groupFindResults: [root] });
-      const { service } = buildService(em, {
-        participation: [
-          { membershipId: 'm-1', groupId: 'root-1', roles: [GroupRole.OWNER] },
-        ],
-      });
+    const home = await service.getHome(buildUser());
 
-      const result = await service.getHome(buildUser());
-
-      expect(result.myCommunities).toEqual([]);
-      expect(result.capabilities.canRestoreCommunityIds).toEqual(['root-1']);
-      expect(result.capabilities.canDeleteCommunityIds).toEqual(['root-1']);
-      // Archive itself only applies from ACTIVE/READ_ONLY, never ARCHIVED.
-      expect(result.capabilities.canArchiveCommunityIds).toEqual([]);
-    });
+    expect(home.myCommunities).toEqual([]);
+    expect(home.summary.communitiesCount).toBe(0);
+    expect(home.capabilities.canCreateGroup).toBe(true);
+    expect(home.capabilities.canManageAnyCommunity).toBe(false);
   });
 });

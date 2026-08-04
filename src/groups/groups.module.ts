@@ -12,7 +12,7 @@ import { CommunityNotificationSettingsService } from './community-notification-s
 import { GroupsController } from './groups.controller';
 import { GroupsService } from './groups.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
-import { GroupMembershipsService } from './group-memberships.service';
+import { SectionMembershipsService } from './section-memberships.service';
 import { GroupPermissionsGuard } from './guards/group-permissions.guard';
 import { GroupPermissionService } from './permissions/group-permission.service';
 import { InvitationsController } from './invitations.controller';
@@ -50,7 +50,7 @@ import { SectionsService } from './sections.service';
     GroupsService,
     SectionsService,
     GroupHierarchyService,
-    GroupMembershipsService,
+    SectionMembershipsService,
     AcademiesService,
     CohortsService,
     GroupPermissionService,

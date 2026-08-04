@@ -62,9 +62,13 @@ export class User extends BaseEntity {
   lastLoginAt: Date | null = null;
 
   // Globally-unique, immutable, human-readable code for locating this User
-  // without knowing their UUID.  Generated once at account creation, never
-  // changed and never used as an authorization token.
+  // without knowing their UUID.  Generated once at account creation (see
+  // UserService.create/generateUniquePublicCode) and never changed - the DB
+  // column has always been NOT NULL (see
+  // Migration20260721_AddPublicCodeAndMembershipRequests); `nullable: true`
+  // here was metadata drift against that, not an intentional relaxation.
+  // Never used as an authorization token.
   @Unique()
-  @Property({ nullable: true, length: 15 })
-  publicCode: string | null = null;
+  @Property({ length: 15 })
+  publicCode!: string;
 }

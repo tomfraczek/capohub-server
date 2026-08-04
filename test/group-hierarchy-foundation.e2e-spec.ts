@@ -24,6 +24,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { randomUUID } from 'node:crypto';
 import { AppModule } from '../src/app.module';
+import { closeE2eApp } from './close-e2e-app.helper';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { GroupStatus } from '../src/groups/enums/group-status.enum';
@@ -60,15 +61,16 @@ describe('Group/Section foundation (e2e)', () => {
   });
 
   afterAll(async () => {
-    const cleanup = app.get(EntityManager).fork();
-    await cleanup.nativeDelete(Section, { id: { $in: createdSectionIds } });
-    await cleanup.nativeUpdate(
-      Group,
-      { id: { $in: createdGroupIds } },
-      { parentGroup: null },
-    );
-    await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
-    await app.close();
+    await closeE2eApp(app, async () => {
+      const cleanup = app.get(EntityManager).fork();
+      await cleanup.nativeDelete(Section, { id: { $in: createdSectionIds } });
+      await cleanup.nativeUpdate(
+        Group,
+        { id: { $in: createdGroupIds } },
+        { parentGroup: null },
+      );
+      await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+    });
   });
 
   async function makeGroup(

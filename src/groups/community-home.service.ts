@@ -8,11 +8,11 @@ import {
 } from './dto/community-home-response.dto';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
-import { GroupMembership } from './entities/group-membership.entity';
-import { GroupMembershipStatus } from './enums/group-membership-status.enum';
+import { SectionMembership } from './entities/section-membership.entity';
+import { SectionMembershipStatus } from './enums/section-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
-import { Community } from './group-hierarchy.service';
+import { Community, GroupHierarchyService } from './group-hierarchy.service';
 import {
   toCommunityHomeCommunityDto,
   toCommunityHomeCommunityRefDto,
@@ -25,8 +25,7 @@ import { GroupPermissionService } from './permissions/group-permission.service';
 import { RoleAssignmentsService } from './role-assignments.service';
 
 // Dashboard sections are capped, not paginated (Community Home is not a
-// management screen - see PAD-001 §10 "Community Home should not contain
-// full member lists"). `total`/`hasMore` always describe the full matching
+// management screen). `total`/`hasMore` always describe the full matching
 // set so the frontend can render a "See all" link without a second request
 // just to learn whether one is needed.
 const PENDING_SECTION_LIMIT = 20;
@@ -51,6 +50,7 @@ export class CommunityHomeService {
     private readonly em: EntityManager,
     private readonly groupPermissionService: GroupPermissionService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
+    private readonly groupHierarchyService: GroupHierarchyService,
     private readonly membershipRequestsService: MembershipRequestsService,
   ) {}
 
@@ -62,7 +62,7 @@ export class CommunityHomeService {
       await this.membershipRequestsService.listReceivedInvitations(user);
     const { communities, communityMap, capabilityLists } = participation;
     const joinRequestReviewableIds =
-      capabilityLists.canReviewJoinRequestsInCommunityIds;
+      capabilityLists.canReviewJoinRequestsInSectionIds;
 
     const allJoinRequests =
       joinRequestReviewableIds.length > 0
@@ -93,9 +93,10 @@ export class CommunityHomeService {
       .slice(0, PENDING_SECTION_LIMIT)
       .flatMap((invitation) => {
         const community = communityMap.get(invitation.targetGroupId);
-        // The target Group was hard-deleted or is otherwise unresolvable
-        // (never expected in practice - Groups are soft-deleted, never
-        // removed - but skip defensively rather than crash the dashboard).
+        // The target Group/Section was hard-deleted or is otherwise
+        // unresolvable (never expected in practice - communities are
+        // soft-deleted, never removed - but skip defensively rather than
+        // crash the dashboard).
         if (!community) return [];
         return [
           toCommunityHomeInvitationDto(
@@ -146,87 +147,43 @@ export class CommunityHomeService {
         canCreateGroup: true,
         ...capabilityLists,
         canManageAnyCommunity:
-          capabilityLists.canCreateSectionInCommunityIds.length > 0,
+          capabilityLists.canCreateSectionInGroupIds.length > 0 ||
+          capabilityLists.canCreateSectionInSectionIds.length > 0,
       },
     };
   }
 
-  /**
-   * Resolves every community (Group or Section, at any hierarchy depth) the
-   * caller currently participates in, batched into a fixed number of
-   * queries regardless of how many communities that turns out to be, and
-   * every capability-flag id-list alongside it in the same pass:
-   *   1. the caller's ACTIVE or READ_ONLY (suspended) Memberships (one Group
-   *      each) - READ_ONLY is included so a suspended member's communities
-   *      remain visible (organization-entities.md#membership: "remains
-   *      visible... but loses operational permissions"), exactly like a
-   *      READ_ONLY Group already does,
-   *   2. every Role Assignment any of those Memberships holds, for any
-   *      Group or Section (root or descendant),
-   *   3. the Group rows themselves, excluding only DELETED ones - ARCHIVED
-   *      Groups ARE fetched here (unlike before) because
-   *      canRestoreCommunityIds/canDeleteCommunityIds need to see them, even
-   *      though an ARCHIVED Group is still excluded from `communities`
-   *      (myCommunities) itself, same as before.
-   * A Group always appears even with zero Role Assignments there - an
-   * ACTIVE Membership with no Role anywhere is a normal, valid state (see
-   * organization-entities.md#membership) and Membership itself is what
-   * "belonging to this Group" means.
-   */
-  // Role Assignment participation can point at a Group or a Section (see
-  // group-hierarchy.service.ts) - resolves a batch of ids against both
-  // tables, sequentially (not Promise.all - see this file's other queries).
+  // Role Assignment participation can point at a Group or a Section - see
+  // group-hierarchy.service.ts - resolves a batch of ids against both
+  // tables, sequentially (not Promise.all - see this file's other
+  // queries).
   private async findCommunitiesByIds(ids: string[]): Promise<Community[]> {
     const groups = await this.em.find(Group, { id: { $in: ids } });
     const sections = await this.em.find(Section, { id: { $in: ids } });
     return [...groups, ...sections];
   }
 
+  /**
+   * Resolves every community (Group or Section) the caller currently holds
+   * any active Role Assignment for, batched into a fixed number of queries,
+   * and every capability-flag id-list alongside it in the same pass. No
+   * inheritance anywhere: a Role held on one Group/Section never adds any
+   * other community to this list, and each capability list only ever
+   * contains ids where the underlying permission was computed directly
+   * against that exact community (see
+   * RoleAssignmentsService.getCommunityIdsWithAnyRole's own comment).
+   */
   private async buildParticipation(
     userId: string,
   ): Promise<ParticipationResult> {
-    const memberships = await this.em.find(
-      GroupMembership,
-      {
-        user: userId,
-        status: {
-          $in: [GroupMembershipStatus.ACTIVE, GroupMembershipStatus.READ_ONLY],
-        },
-      },
-      { populate: ['rootGroup'] },
-    );
-
-    const groupIdsByMembership = new Map<string, Set<string>>();
-    for (const membership of memberships) {
-      groupIdsByMembership.set(
-        membership.id,
-        new Set([membership.rootGroup.id]),
-      );
-    }
-
-    const rolesByMembershipAndGroup = new Map<string, GroupRole[]>();
-    if (memberships.length > 0) {
-      const participation =
-        await this.roleAssignmentsService.getGroupParticipationForMemberships(
-          memberships.map((membership) => membership.id),
-        );
-      for (const row of participation) {
-        groupIdsByMembership.get(row.membershipId)?.add(row.groupId);
-        rolesByMembershipAndGroup.set(
-          `${row.membershipId}:${row.groupId}`,
-          row.roles,
-        );
-      }
-    }
-
-    const allGroupIds = new Set<string>();
-    for (const ids of groupIdsByMembership.values()) {
-      for (const id of ids) allGroupIds.add(id);
-    }
+    const participation =
+      await this.roleAssignmentsService.getGroupParticipationForUsers([userId]);
 
     const communityList =
-      allGroupIds.size > 0
-        ? await this.findCommunitiesByIds([...allGroupIds])
+      participation.length > 0
+        ? await this.findCommunitiesByIds(
+            participation.map((row) => row.groupId),
+          )
         : [];
     const communityMap = new Map(
       communityList
@@ -234,169 +191,268 @@ export class CommunityHomeService {
         .map((community) => [community.id, community]),
     );
 
+    // Section membership statuses - needed to gate Section capabilities
+    // (ACTIVE vs READ_ONLY) the same way GroupPermissionsGuard does. Group
+    // participation has no membership/status to look up at all.
+    const sectionIds = participation
+      .map((row) => row.groupId)
+      .filter((id) => communityMap.get(id) instanceof Section);
+    const sectionMembershipBysection = new Map<string, SectionMembership>();
+    if (sectionIds.length > 0) {
+      const memberships = await this.em.find(SectionMembership, {
+        user: userId,
+        section: { $in: sectionIds },
+        status: {
+          $in: [
+            SectionMembershipStatus.ACTIVE,
+            SectionMembershipStatus.READ_ONLY,
+          ],
+        },
+      });
+      for (const membership of memberships) {
+        sectionMembershipBysection.set(membership.section.id, membership);
+      }
+    }
+
     const communities: CommunityHomeCommunityDto[] = [];
     const capabilityLists: Record<CapabilityListKey, string[]> = {
-      canCreateSectionInCommunityIds: [],
-      canCreateEventInCommunityIds: [],
-      canReviewJoinRequestsInCommunityIds: [],
-      canViewMembersInCommunityIds: [],
-      canManageMembersInCommunityIds: [],
-      canInviteMembersInCommunityIds: [],
-      canManageInvitationsInCommunityIds: [],
-      canManageRolesInCommunityIds: [],
-      canTransferOwnershipInCommunityIds: [],
-      canArchiveCommunityIds: [],
-      canRestoreCommunityIds: [],
-      canDeleteCommunityIds: [],
-      canViewAuditLogInCommunityIds: [],
-      canManageNotificationsInCommunityIds: [],
-      canBanMembersInCommunityIds: [],
-      canSuspendMembersInCommunityIds: [],
-      canManageAnnouncementsInCommunityIds: [],
-      canViewAnnouncementArchiveInCommunityIds: [],
-      canViewRecipientGroupsInCommunityIds: [],
-      canManageRecipientGroupsInCommunityIds: [],
+      canCreateSectionInGroupIds: [],
+      canCreateSectionInSectionIds: [],
+      canCreateEventInGroupIds: [],
+      canCreateEventInSectionIds: [],
+      canReviewJoinRequestsInSectionIds: [],
+      canViewMembersInSectionIds: [],
+      canManageMembersInSectionIds: [],
+      canInviteMembersInSectionIds: [],
+      canManageInvitationsInSectionIds: [],
+      canBanMembersInSectionIds: [],
+      canSuspendMembersInSectionIds: [],
+      canManageRolesInGroupIds: [],
+      canManageRolesInSectionIds: [],
+      canTransferOwnershipInGroupIds: [],
+      canTransferOwnershipInSectionIds: [],
+      canArchiveGroupIds: [],
+      canArchiveSectionIds: [],
+      canRestoreGroupIds: [],
+      canRestoreSectionIds: [],
+      canDeleteGroupIds: [],
+      canDeleteSectionIds: [],
+      canViewAuditLogInGroupIds: [],
+      canViewAuditLogInSectionIds: [],
+      canManageNotificationsInSectionIds: [],
+      canManageAnnouncementsInGroupIds: [],
+      canManageAnnouncementsInSectionIds: [],
+      canViewAnnouncementArchiveInGroupIds: [],
+      canViewAnnouncementArchiveInSectionIds: [],
+      canViewRecipientGroupsInGroupIds: [],
+      canViewRecipientGroupsInSectionIds: [],
+      canManageRecipientGroupsInGroupIds: [],
+      canManageRecipientGroupsInSectionIds: [],
     };
 
-    for (const membership of memberships) {
-      const rootGroupId = membership.rootGroup.id;
-      const groupIds = groupIdsByMembership.get(membership.id) ?? new Set();
+    const rootGroupIdCache = new Map<string, string>();
+    const resolveRootGroupId = async (
+      community: Community,
+    ): Promise<string> => {
+      const cached = rootGroupIdCache.get(community.id);
+      if (cached) return cached;
+      let rootId: string;
+      try {
+        rootId = (
+          await this.groupHierarchyService.resolveRootGroup(community, this.em)
+        ).id;
+      } catch {
+        // A standalone Section with no parent yet has no root Group -
+        // group it under itself rather than failing the whole dashboard.
+        rootId = community.id;
+      }
+      rootGroupIdCache.set(community.id, rootId);
+      return rootId;
+    };
 
-      for (const groupId of groupIds) {
-        const group = communityMap.get(groupId);
-        if (!group) continue; // hard-deleted or otherwise unresolvable
+    for (const row of participation) {
+      const community = communityMap.get(row.groupId);
+      if (!community) continue; // hard-deleted or otherwise unresolvable
 
-        const roles =
-          rolesByMembershipAndGroup.get(`${membership.id}:${groupId}`) ?? [];
-        const has = (permission: GroupPermission): boolean =>
-          this.groupPermissionService.hasAllPermissionsForRoles(
-            roles,
-            [permission],
-            membership.status,
-          );
-        const hasAdminOrOwner =
-          roles.includes(GroupRole.ADMIN) || roles.includes(GroupRole.OWNER);
+      const isGroup = community instanceof Group;
+      const membership = isGroup
+        ? null
+        : (sectionMembershipBysection.get(community.id) ?? null);
+      // A Section row only appears in `participation` at all when an
+      // active RoleAssignment exists, which (per the atomic
+      // membership+MEMBER pairing invariant) implies an active membership
+      // too - `membership === null` here would mean that invariant broke,
+      // so skip defensively rather than crash the dashboard.
+      if (!isGroup && !membership) continue;
 
-        if (group.status !== GroupStatus.ARCHIVED) {
-          communities.push(
-            toCommunityHomeCommunityDto(group, rootGroupId, roles),
-          );
-        }
+      const has = (permission: GroupPermission): boolean =>
+        this.groupPermissionService.hasAllPermissionsForRoles(
+          isGroup ? 'GROUP' : 'SECTION',
+          row.roles,
+          [permission],
+          membership?.status ?? null,
+        );
+      const hasAdminOrOwner =
+        row.roles.includes(GroupRole.ADMIN) ||
+        row.roles.includes(GroupRole.OWNER);
+      const push = (key: CapabilityListKey): void => {
+        capabilityLists[key].push(community.id);
+      };
 
-        // Every one of these mirrors the exact @AllowGroupStatuses (or lack
-        // thereof, defaulting to ACTIVE-only) on the corresponding endpoint -
-        // see groups.controller.ts / audit-log.controller.ts.
-        if (has(GroupPermission.GROUP_EDIT)) {
-          capabilityLists.canCreateSectionInCommunityIds.push(groupId);
-        }
-        if (
-          group.status === GroupStatus.ACTIVE &&
-          has(GroupPermission.EVENT_CREATE)
-        ) {
-          capabilityLists.canCreateEventInCommunityIds.push(groupId);
-        }
-        if (
-          group.status === GroupStatus.ACTIVE &&
-          has(GroupPermission.GROUP_JOIN_REQUEST_REVIEW)
-        ) {
-          capabilityLists.canReviewJoinRequestsInCommunityIds.push(groupId);
-        }
-        if (has(GroupPermission.MEMBERSHIP_VIEW)) {
-          capabilityLists.canViewMembersInCommunityIds.push(groupId);
-        }
-        if (
-          group.status === GroupStatus.ACTIVE &&
-          has(GroupPermission.MEMBERSHIP_REMOVE)
-        ) {
-          capabilityLists.canManageMembersInCommunityIds.push(groupId);
-        }
-        if (
-          group.status === GroupStatus.ACTIVE &&
-          has(GroupPermission.GROUP_INVITE) &&
-          (hasAdminOrOwner || group.memberInvitesAllowed)
-        ) {
-          capabilityLists.canInviteMembersInCommunityIds.push(groupId);
-        }
-        if (
-          group.status === GroupStatus.ACTIVE &&
-          has(GroupPermission.MEMBERSHIP_INVITE)
-        ) {
-          capabilityLists.canManageInvitationsInCommunityIds.push(groupId);
-        }
-        if (
-          group.status === GroupStatus.ACTIVE &&
-          has(GroupPermission.MEMBERSHIP_ROLE_CHANGE)
-        ) {
-          capabilityLists.canManageRolesInCommunityIds.push(groupId);
-        }
-        if (
-          group.status === GroupStatus.ACTIVE &&
-          has(GroupPermission.GROUP_OWNERSHIP_TRANSFER)
-        ) {
-          capabilityLists.canTransferOwnershipInCommunityIds.push(groupId);
-        }
-        if (
-          (group.status === GroupStatus.ACTIVE ||
-            group.status === GroupStatus.READ_ONLY) &&
-          has(GroupPermission.GROUP_ARCHIVE)
-        ) {
-          capabilityLists.canArchiveCommunityIds.push(groupId);
-        }
-        if (
-          group.status === GroupStatus.ARCHIVED &&
-          has(GroupPermission.GROUP_UNARCHIVE)
-        ) {
-          capabilityLists.canRestoreCommunityIds.push(groupId);
-        }
-        if (
-          group.status !== GroupStatus.DELETED &&
-          has(GroupPermission.GROUP_DELETE)
-        ) {
-          capabilityLists.canDeleteCommunityIds.push(groupId);
-        }
-        if (has(GroupPermission.AUDIT_LOG_VIEW)) {
-          capabilityLists.canViewAuditLogInCommunityIds.push(groupId);
-        }
-        // Deliberately Role/Permission-independent - every ACTIVE Membership
-        // manages its own notification settings regardless of Role (see
-        // CommunityNotificationSettingsService) - a suspended (READ_ONLY)
-        // Membership does not, consistent with every other operational
-        // capability here.
-        if (membership.status === GroupMembershipStatus.ACTIVE) {
-          capabilityLists.canManageNotificationsInCommunityIds.push(groupId);
-        }
-        if (
-          group.status === GroupStatus.ACTIVE &&
-          has(GroupPermission.MEMBERSHIP_BAN)
-        ) {
-          capabilityLists.canBanMembersInCommunityIds.push(groupId);
-        }
-        if (
-          group.status === GroupStatus.ACTIVE &&
-          has(GroupPermission.MEMBERSHIP_SUSPEND)
-        ) {
-          capabilityLists.canSuspendMembersInCommunityIds.push(groupId);
-        }
-        if (
-          group.status === GroupStatus.ACTIVE &&
-          has(GroupPermission.ANNOUNCEMENT_MANAGE)
-        ) {
-          capabilityLists.canManageAnnouncementsInCommunityIds.push(groupId);
-        }
-        if (has(GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW)) {
-          capabilityLists.canViewAnnouncementArchiveInCommunityIds.push(
-            groupId,
-          );
-        }
-        if (has(GroupPermission.RECIPIENT_GROUP_VIEW)) {
-          capabilityLists.canViewRecipientGroupsInCommunityIds.push(groupId);
-        }
-        if (
-          group.status === GroupStatus.ACTIVE &&
-          has(GroupPermission.RECIPIENT_GROUP_MANAGE)
-        ) {
-          capabilityLists.canManageRecipientGroupsInCommunityIds.push(groupId);
-        }
+      if (community.status !== GroupStatus.ARCHIVED) {
+        const rootGroupId = await resolveRootGroupId(community);
+        communities.push(
+          toCommunityHomeCommunityDto(community, rootGroupId, row.roles),
+        );
+      }
+
+      // Every one of these mirrors the exact @AllowGroupStatuses (or lack
+      // thereof, defaulting to ACTIVE-only) on the corresponding endpoint.
+      if (has(GroupPermission.GROUP_EDIT)) {
+        push(
+          isGroup
+            ? 'canCreateSectionInGroupIds'
+            : 'canCreateSectionInSectionIds',
+        );
+      }
+      if (
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.EVENT_CREATE)
+      ) {
+        push(
+          isGroup ? 'canCreateEventInGroupIds' : 'canCreateEventInSectionIds',
+        );
+      }
+      if (
+        !isGroup &&
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.GROUP_JOIN_REQUEST_REVIEW)
+      ) {
+        push('canReviewJoinRequestsInSectionIds');
+      }
+      if (!isGroup && has(GroupPermission.MEMBERSHIP_VIEW)) {
+        push('canViewMembersInSectionIds');
+      }
+      if (
+        !isGroup &&
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.MEMBERSHIP_REMOVE)
+      ) {
+        push('canManageMembersInSectionIds');
+      }
+      if (
+        !isGroup &&
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.GROUP_INVITE) &&
+        (hasAdminOrOwner ||
+          (community instanceof Section && community.memberInvitesAllowed))
+      ) {
+        push('canInviteMembersInSectionIds');
+      }
+      if (
+        !isGroup &&
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.MEMBERSHIP_INVITE)
+      ) {
+        push('canManageInvitationsInSectionIds');
+      }
+      if (
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.GROUP_EDIT)
+      ) {
+        push(
+          isGroup ? 'canManageRolesInGroupIds' : 'canManageRolesInSectionIds',
+        );
+      }
+      if (
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.GROUP_OWNERSHIP_TRANSFER)
+      ) {
+        push(
+          isGroup
+            ? 'canTransferOwnershipInGroupIds'
+            : 'canTransferOwnershipInSectionIds',
+        );
+      }
+      if (
+        (community.status === GroupStatus.ACTIVE ||
+          community.status === GroupStatus.READ_ONLY) &&
+        has(GroupPermission.GROUP_ARCHIVE)
+      ) {
+        push(isGroup ? 'canArchiveGroupIds' : 'canArchiveSectionIds');
+      }
+      if (
+        community.status === GroupStatus.ARCHIVED &&
+        has(GroupPermission.GROUP_UNARCHIVE)
+      ) {
+        push(isGroup ? 'canRestoreGroupIds' : 'canRestoreSectionIds');
+      }
+      if (
+        community.status !== GroupStatus.DELETED &&
+        has(GroupPermission.GROUP_DELETE)
+      ) {
+        push(isGroup ? 'canDeleteGroupIds' : 'canDeleteSectionIds');
+      }
+      if (has(GroupPermission.AUDIT_LOG_VIEW)) {
+        push(
+          isGroup ? 'canViewAuditLogInGroupIds' : 'canViewAuditLogInSectionIds',
+        );
+      }
+      // Deliberately Role/Permission-independent - every ACTIVE
+      // SectionMembership manages its own notification settings
+      // regardless of Role (see CommunityNotificationSettingsService) - a
+      // suspended (READ_ONLY) membership does not. Group has no
+      // membership, so never appears here.
+      if (!isGroup && membership?.status === SectionMembershipStatus.ACTIVE) {
+        push('canManageNotificationsInSectionIds');
+      }
+      if (
+        !isGroup &&
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.MEMBERSHIP_BAN)
+      ) {
+        push('canBanMembersInSectionIds');
+      }
+      if (
+        !isGroup &&
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.MEMBERSHIP_SUSPEND)
+      ) {
+        push('canSuspendMembersInSectionIds');
+      }
+      if (
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.ANNOUNCEMENT_MANAGE)
+      ) {
+        push(
+          isGroup
+            ? 'canManageAnnouncementsInGroupIds'
+            : 'canManageAnnouncementsInSectionIds',
+        );
+      }
+      if (has(GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW)) {
+        push(
+          isGroup
+            ? 'canViewAnnouncementArchiveInGroupIds'
+            : 'canViewAnnouncementArchiveInSectionIds',
+        );
+      }
+      if (has(GroupPermission.RECIPIENT_GROUP_VIEW)) {
+        push(
+          isGroup
+            ? 'canViewRecipientGroupsInGroupIds'
+            : 'canViewRecipientGroupsInSectionIds',
+        );
+      }
+      if (
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.RECIPIENT_GROUP_MANAGE)
+      ) {
+        push(
+          isGroup
+            ? 'canManageRecipientGroupsInGroupIds'
+            : 'canManageRecipientGroupsInSectionIds',
+        );
       }
     }
 
@@ -404,7 +460,7 @@ export class CommunityHomeService {
       const rootA = communityMap.get(a.rootGroupId)?.name ?? '';
       const rootB = communityMap.get(b.rootGroupId)?.name ?? '';
       if (rootA !== rootB) return rootA.localeCompare(rootB);
-      if (a.isRootGroup !== b.isRootGroup) return a.isRootGroup ? -1 : 1;
+      if (a.isGroup !== b.isGroup) return a.isGroup ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
 

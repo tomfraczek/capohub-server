@@ -9,12 +9,17 @@ import {
 } from './dto/audit-log-entry-response.dto';
 import { AuditLogQuery } from './dto/audit-log-query.schema';
 import { AuditLogEntry } from './entities/audit-log-entry.entity';
-import { Group } from './entities/group.entity';
+import { Section } from './entities/section.entity';
+import { Community, communityIdFilter } from './group-hierarchy.service';
 import { AuditAction } from './enums/audit-action.enum';
 import { AuditTargetType } from './enums/audit-target-type.enum';
 
 export interface RecordAuditEntryParams {
-  community: Group | string;
+  // Always the *exact* entity the action occurred on - never a resolved
+  // root Group (see AuditLogEntry's own comment: "no inheritance" applies
+  // to audit trails too, a Section's history is never filed under its
+  // parent).
+  community: Community;
   action: AuditAction;
   // null only for a hypothetical future system-initiated entry - every
   // current caller passes the actor performing the action.
@@ -46,10 +51,11 @@ export class AuditLogService {
   // this call without issue.
   record(em: EntityManager, params: RecordAuditEntryParams): void {
     const entry = new AuditLogEntry();
-    entry.community =
-      typeof params.community === 'string'
-        ? em.getReference(Group, params.community)
-        : params.community;
+    if (params.community instanceof Section) {
+      entry.section = params.community;
+    } else {
+      entry.group = params.community;
+    }
     entry.action = params.action;
     entry.actor = params.actor;
     entry.targetType = params.targetType ?? null;
@@ -66,7 +72,9 @@ export class AuditLogService {
     communityId: string,
     query: AuditLogQuery,
   ): Promise<PaginatedResponse<AuditLogEntryResponseDto>> {
-    const where: Record<string, unknown> = { community: communityId };
+    const where: Record<string, unknown> = {
+      ...communityIdFilter(communityId),
+    };
     if (query.action) {
       where.action = query.action;
     }
@@ -109,7 +117,7 @@ function toAuditLogEntryResponseDto(
 
   return {
     id: entry.id,
-    communityId: entry.community.id,
+    communityId: (entry.group ?? entry.section)!.id,
     action: entry.action,
     actor: entry.actor
       ? { id: entry.actor.id, displayName: entry.actor.displayName }

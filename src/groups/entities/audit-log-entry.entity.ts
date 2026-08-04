@@ -1,4 +1,5 @@
 import {
+  Check,
   Entity,
   Enum,
   Index,
@@ -11,32 +12,44 @@ import { User } from '../../users/entities/user.entity';
 import { AuditAction } from '../enums/audit-action.enum';
 import { AuditTargetType } from '../enums/audit-target-type.enum';
 import { Group } from './group.entity';
+import { Section } from './section.entity';
 
 // Deliberately does NOT extend BaseEntity: an audit log entry is immutable
 // once written (no `updatedAt` makes sense for a fact that, by definition,
 // never changes after it happened) - see AuditLogService.record(), the only
-// place that ever creates a row here, and organization-domain.md#auditability.
+// place that ever creates a row here.
 //
 // One entity for every action type (see AuditAction), not a table per
 // action - this is what lets GET /groups/:groupId/audit-log be a single,
 // generic, paginated/filterable/sortable endpoint (see AuditLogController)
 // instead of 21 separate ones.
 //
-// `community` is always the Root Group the event is filed under - even for
-// an action on a Child Group (e.g. CREATE_CHILD_GROUP, ADD_ROLE for a Child
-// Group's Role Assignment), so that "this Group's Audit Log" is a
-// single, complete query regardless of which exact Group within it was
-// acted on. No delete cascade: Groups/Users are soft-deleted, never
-// physically removed (ADR-007), so a Group being archived/deleted must not
+// `group`/`section` is always the *exact* entity the action occurred on -
+// never a resolved root Group - matching the "no inheritance" rule: a
+// Section's audit trail is its own, never filed under its parent Group,
+// and a Group's audit trail never includes its children's actions. No
+// delete cascade: Groups/Sections/Users are soft-deleted, never physically
+// removed (ADR-007), so a community being archived/deleted must not
 // silently erase its own history.
 @Entity({ tableName: 'audit_log_entries' })
+// Exactly one of `group`/`section` must be set, never both, never neither -
+// same XOR pattern as RoleAssignment/Announcement/Event.
+@Check<AuditLogEntry>({
+  name: 'audit_log_entries_group_or_section_check',
+  expression: (columns) =>
+    `("${columns.group}" is not null and "${columns.section}" is null) or ("${columns.group}" is null and "${columns.section}" is not null)`,
+})
 export class AuditLogEntry {
   @PrimaryKey({ type: 'uuid' })
   id: string = randomUUID();
 
   @Index()
-  @ManyToOne(() => Group, { deleteRule: 'no action' })
-  community!: Group;
+  @ManyToOne(() => Group, { nullable: true, deleteRule: 'no action' })
+  group: Group | null = null;
+
+  @Index()
+  @ManyToOne(() => Section, { nullable: true, deleteRule: 'no action' })
+  section: Section | null = null;
 
   @Index()
   @Enum({ items: () => Object.values(AuditAction) })

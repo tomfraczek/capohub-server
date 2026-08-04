@@ -21,6 +21,7 @@ function buildUser(): User {
   user.avatarType = AvatarType.CLERK;
   user.avatarUrl = 'https://img.clerk.com/ada.png';
   user.presetAvatarId = null;
+  user.publicCode = 'ADA00001';
   user.theme = 'system';
   user.notificationsEnabled = true;
   user.globalRole = GlobalRole.USER;
@@ -52,7 +53,7 @@ describe('UsersController', () => {
         theme: 'system',
         notificationsEnabled: true,
         globalRole: GlobalRole.USER,
-        publicCode: null,
+        publicCode: 'ADA00001',
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-02-01T00:00:00.000Z',
       });

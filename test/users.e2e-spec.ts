@@ -13,14 +13,14 @@ import { CLERK_CLIENT } from '../src/auth/clerk/clerk-client.provider';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { closeE2eApp } from './close-e2e-app.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
-import { GroupMembershipResponseDto } from '../src/groups/dto/group-membership-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { RoleAssignmentResponseDto } from '../src/groups/dto/role-assignment-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
-import { GroupMembership } from '../src/groups/entities/group-membership.entity';
+import { SectionMembership } from '../src/groups/entities/section-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
@@ -158,34 +158,38 @@ describe('Users (e2e)', () => {
   });
 
   afterAll(async () => {
-    const cleanup = app.get(EntityManager).fork();
-    await cleanup.nativeDelete(RoleAssignment, {
-      $or: [
-        { group: { $in: createdGroupIds } },
-        { section: { $in: createdGroupIds } },
-      ],
+    await closeE2eApp(app, async () => {
+      const cleanup = app.get(EntityManager).fork();
+      await cleanup.nativeDelete(RoleAssignment, {
+        $or: [
+          { group: { $in: createdGroupIds } },
+          { section: { $in: createdGroupIds } },
+        ],
+      });
+      await cleanup.nativeDelete(SectionMembership, {
+        section: { $in: createdGroupIds },
+      });
+      await cleanup.nativeDelete(AuditLogEntry, {
+        $or: [
+          { group: { $in: createdGroupIds } },
+          { section: { $in: createdGroupIds } },
+        ],
+      });
+      // Sections must be removed before their parent Groups to satisfy the
+      // parent_group_id foreign key (no cascade - see section.entity.ts).
+      await cleanup.nativeDelete(Section, { id: { $in: createdGroupIds } });
+      // Child Groups must be nulled before their parents to satisfy the
+      // parent_group_id self-FK (no cascade - see group.entity.ts).
+      await cleanup.nativeUpdate(
+        Group,
+        { id: { $in: createdGroupIds } },
+        { parentGroup: null },
+      );
+      await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      await cleanup.nativeDelete(User, {
+        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+      });
     });
-    await cleanup.nativeDelete(GroupMembership, {
-      rootGroup: { $in: createdGroupIds },
-    });
-    await cleanup.nativeDelete(AuditLogEntry, {
-      community: { $in: createdGroupIds },
-    });
-    // Sections must be removed before their parent Groups to satisfy the
-    // parent_group_id foreign key (no cascade - see section.entity.ts).
-    await cleanup.nativeDelete(Section, { id: { $in: createdGroupIds } });
-    // Child Groups must be nulled before their parents to satisfy the
-    // parent_group_id self-FK (no cascade - see group.entity.ts).
-    await cleanup.nativeUpdate(
-      Group,
-      { id: { $in: createdGroupIds } },
-      { parentGroup: null },
-    );
-    await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
-    await cleanup.nativeDelete(User, {
-      clerkUserId: { $in: TEST_CLERK_USER_IDS },
-    });
-    await app.close();
   });
 
   function groupPayload(
@@ -263,55 +267,88 @@ describe('Users (e2e)', () => {
     return created;
   }
 
-  async function addMember(
+  // Joining a Section always grants MEMBER atomically - `role`, if given,
+  // grants that additional Role alongside MEMBER in the same call (see
+  // SectionMembershipsService.addMember). There is no Section-membership
+  // equivalent for Group - Group has no members at all.
+  async function joinSection(
     ownerToken: string,
-    rootGroupId: string,
+    sectionId: string,
     memberToken: string,
-    role: GroupRole,
-  ): Promise<GroupMembershipResponseDto> {
-    return bodyOf<GroupMembershipResponseDto>(
-      request(app.getHttpServer())
-        .post(`/api/v1/groups/${rootGroupId}/members`)
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .send({ userId: localUserIdByToken.get(memberToken), role })
-        .expect(201),
-    );
+    role?: GroupRole,
+  ): Promise<void> {
+    await request(app.getHttpServer())
+      .post(`/api/v1/sections/${sectionId}/members`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ userId: localUserIdByToken.get(memberToken), role })
+      .expect(201);
   }
 
-  async function grantRole(
+  async function grantGroupRole(
     ownerToken: string,
     groupId: string,
-    membershipId: string,
+    memberToken: string,
     role: GroupRole,
   ): Promise<void> {
     await request(app.getHttpServer())
       .post(`/api/v1/groups/${groupId}/role-assignments`)
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ membershipId, role })
+      .send({ userId: localUserIdByToken.get(memberToken), role })
+      .expect(201);
+  }
+
+  async function grantSectionRole(
+    ownerToken: string,
+    sectionId: string,
+    memberToken: string,
+    role: GroupRole,
+  ): Promise<void> {
+    await request(app.getHttpServer())
+      .post(`/api/v1/sections/${sectionId}/role-assignments`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ userId: localUserIdByToken.get(memberToken), role })
+      .expect(201);
+  }
+
+  async function transferSectionOwnership(
+    ownerToken: string,
+    sectionId: string,
+    newOwnerToken: string,
+  ): Promise<void> {
+    await request(app.getHttpServer())
+      .post(`/api/v1/sections/${sectionId}/transfer-ownership`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ newOwnerUserId: localUserIdByToken.get(newOwnerToken) })
       .expect(201);
   }
 
   describe('DELETE /users/me - regular user', () => {
-    it('deletes the account of a user who is MEMBER/INSTRUCTOR/ADMIN in a Root and a Child Group, without a 500 or FK error, leaving the Groups and their OWNER untouched', async () => {
+    it('deletes the account of a user who holds ADMIN on a Group and MEMBER/INSTRUCTOR/ADMIN on a Section under it, without a 500 or FK error, leaving the Group/Section and their OWNER untouched', async () => {
       const root = await createGroup(ADMIN_TOKEN, {
         name: 'Delete Account Root',
       });
       const child = await createSection(ADMIN_TOKEN, root.id, {
         name: 'Delete Account Child',
       });
-      const membership = await addMember(
+      await grantGroupRole(
         ADMIN_TOKEN,
         root.id,
         REGULAR_TOKEN,
-        GroupRole.MEMBER,
+        GroupRole.ADMIN,
       );
-      await grantRole(
+      await joinSection(ADMIN_TOKEN, child.id, REGULAR_TOKEN);
+      await grantSectionRole(
         ADMIN_TOKEN,
         child.id,
-        membership.id,
+        REGULAR_TOKEN,
         GroupRole.INSTRUCTOR,
       );
-      await grantRole(ADMIN_TOKEN, child.id, membership.id, GroupRole.ADMIN);
+      await grantSectionRole(
+        ADMIN_TOKEN,
+        child.id,
+        REGULAR_TOKEN,
+        GroupRole.ADMIN,
+      );
 
       const regularUserId = localUserIdByToken.get(REGULAR_TOKEN) as string;
 
@@ -326,15 +363,15 @@ describe('Users (e2e)', () => {
       const survivingUser = await em.findOne(User, { id: regularUserId });
       expect(survivingUser).toBeNull();
 
-      // Every Membership of theirs is gone.
-      const survivingMemberships = await em.count(GroupMembership, {
+      // Every SectionMembership of theirs is gone.
+      const survivingMemberships = await em.count(SectionMembership, {
         user: regularUserId,
       });
       expect(survivingMemberships).toBe(0);
 
-      // Every RoleAssignment tied to that (now-deleted) Membership is gone.
+      // Every RoleAssignment they held (Group and Section) is gone.
       const survivingRoleAssignments = await em.count(RoleAssignment, {
-        membership: membership.id,
+        user: regularUserId,
       });
       expect(survivingRoleAssignments).toBe(0);
 
@@ -357,7 +394,7 @@ describe('Users (e2e)', () => {
 
       const childOwners = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
-          .get(`/api/v1/groups/${child.id}/role-assignments`)
+          .get(`/api/v1/sections/${child.id}/role-assignments`)
           .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
           .expect(200),
       );
@@ -366,18 +403,18 @@ describe('Users (e2e)', () => {
       ).toHaveLength(1);
     });
 
-    it('allows a user with a Membership but no RoleAssignment at all to delete the account', async () => {
+    it('allows a user with only the base MEMBER role (no additional role) to delete the account', async () => {
       const root = await createGroup(ADMIN_TOKEN, {
         name: 'Delete Account Bare Membership Root',
       });
+      const child = await createSection(ADMIN_TOKEN, root.id, {
+        name: 'Delete Account Bare Membership Section',
+      });
 
-      // addMember with no `role` creates only the Membership itself - no
-      // Role Assignment, not even MEMBER (see ADR-028/ADR-004).
-      await request(app.getHttpServer())
-        .post(`/api/v1/groups/${root.id}/members`)
-        .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
-        .send({ userId: localUserIdByToken.get(SECOND_TOKEN) })
-        .expect(201);
+      // Joining with no additional `role` still atomically grants MEMBER -
+      // there is no "membership with zero roles" under the new model (see
+      // SectionMembershipsService.addMember).
+      await joinSection(ADMIN_TOKEN, child.id, SECOND_TOKEN);
 
       await request(app.getHttpServer())
         .delete('/api/v1/users/me')
@@ -393,26 +430,18 @@ describe('Users (e2e)', () => {
   });
 
   describe('DELETE /users/me - OWNER', () => {
-    it('blocks deleting the account while the user owns a Child Group, and allows it once ownership has been transferred - the Child Group keeps exactly one OWNER throughout', async () => {
+    it('blocks deleting the account while the user owns a Section, and allows it once ownership has been transferred - the Section keeps exactly one OWNER throughout', async () => {
       const root = await createGroup(ADMIN_TOKEN, {
         name: 'Delete Account Owner Root',
       });
       const child = await createSection(ADMIN_TOKEN, root.id, {
         name: 'Delete Account Owner Child',
       });
-      await addMember(
-        ADMIN_TOKEN,
-        root.id,
-        CHILD_OWNER_TOKEN,
-        GroupRole.MEMBER,
-      );
+      // Must be an ACTIVE Section member before ownership can be
+      // transferred to them (see RoleAssignmentsService.transferOwnership).
+      await joinSection(ADMIN_TOKEN, child.id, CHILD_OWNER_TOKEN);
 
-      // Hand the Child Group's ownership to CHILD_OWNER_TOKEN.
-      await request(app.getHttpServer())
-        .post(`/api/v1/sections/${child.id}/transfer-ownership`)
-        .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
-        .send({ newOwnerUserId: localUserIdByToken.get(CHILD_OWNER_TOKEN) })
-        .expect(201);
+      await transferSectionOwnership(ADMIN_TOKEN, child.id, CHILD_OWNER_TOKEN);
 
       const blocked = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
@@ -432,12 +461,10 @@ describe('Users (e2e)', () => {
       );
       expect(stillThere.id).toBe(localUserIdByToken.get(CHILD_OWNER_TOKEN));
 
-      // Transfer the Child Group's ownership away, back to ADMIN_TOKEN.
-      await request(app.getHttpServer())
-        .post(`/api/v1/sections/${child.id}/transfer-ownership`)
-        .set('Authorization', `Bearer ${CHILD_OWNER_TOKEN}`)
-        .send({ newOwnerUserId: localUserIdByToken.get(ADMIN_TOKEN) })
-        .expect(201);
+      // Transfer the Section's ownership away, back to ADMIN_TOKEN - who
+      // is already an ACTIVE member of it (the creator, from createSection
+      // above).
+      await transferSectionOwnership(CHILD_OWNER_TOKEN, child.id, ADMIN_TOKEN);
 
       await request(app.getHttpServer())
         .delete('/api/v1/users/me')
@@ -452,7 +479,7 @@ describe('Users (e2e)', () => {
 
       const childOwners = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
-          .get(`/api/v1/groups/${child.id}/role-assignments`)
+          .get(`/api/v1/sections/${child.id}/role-assignments`)
           .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
           .expect(200),
       );

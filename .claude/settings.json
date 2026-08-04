@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(psql \"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_clean\" -c \"\\\\d group_memberships\")",
+      "Bash(psql \"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_clean\" -c \"\\\\d role_assignments\")",
+      "Bash(DATABASE_URL=\"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_clean\" npx mikro-orm schema:update --dump)",
+      "Bash(DATABASE_URL=\"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_migtest\" npx mikro-orm migration:pending)",
+      "Bash(DATABASE_URL=\"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_migtest\" npx mikro-orm migration:up)",
+      "Bash(DATABASE_URL=\"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_migtest\" npx mikro-orm migration:down)",
+      "Bash(DATABASE_URL=\"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_migtest\" npx mikro-orm schema:update --dump)",
+      "Bash(psql \"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_clean\" -c \"alter table audit_log_entries rename constraint audit_log_entries_community_id_foreign to audit_log_entries_group_id_foreign;\" -c \"alter table role_assignments drop constraint role_assignments_role_matches_target_check;\" -c \"alter table role_assignments add constraint role_assignments_role_matches_target_check check\\(\\(\\\\\"group_id\\\\\" is not null and \\\\\"role\\\\\" in \\('OWNER','ADMIN'\\)\\) or \\(\\\\\"section_id\\\\\" is not null and \\\\\"role\\\\\" in \\('OWNER','ADMIN','INSTRUCTOR','ASSISTANT','MEMBER'\\)\\)\\);\")",
+      "Bash(psql \"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_clean\" -c \"select conname, pg_get_constraintdef\\(oid\\) from pg_constraint where conname = 'role_assignments_role_matches_target_check';\")",
+      "Bash(psql \"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_clean\" -c \"select conname, pg_get_constraintdef\\(oid\\) from pg_constraint where conname = 'role_assignments_group_or_section_check';\")",
+      "Bash(psql \"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_clean\" -c \"alter table role_assignments drop constraint role_assignments_role_matches_target_check;\" -c \"alter table role_assignments add constraint role_assignments_role_matches_target_check check\\(\\(\\\\\"group_id\\\\\" is not null and \\(\\\\\"role\\\\\" = 'OWNER' or \\\\\"role\\\\\" = 'ADMIN'\\)\\) or \\(\\\\\"section_id\\\\\" is not null and \\(\\\\\"role\\\\\" = 'OWNER' or \\\\\"role\\\\\" = 'ADMIN' or \\\\\"role\\\\\" = 'INSTRUCTOR' or \\\\\"role\\\\\" = 'ASSISTANT' or \\\\\"role\\\\\" = 'MEMBER'\\)\\)\\);\")",
+      "Bash(DATABASE_URL=\"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_migtest\" npx mikro-orm migration:up --to Migration20260802100200_AddPolymorphicCommunityReferences)",
+      "Bash(psql \"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_migtest\")",
+      "Bash(psql \"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_migtest\" -c \"select id, section_id, user_id, status from section_memberships order by id;\" -c \"select id, user_id, group_id, section_id, role, granted_by_id, revoked_at from role_assignments order by role, id;\")",
+      "Bash(psql \"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_migtest\" -c \"select id, root_group_id, user_id, status from group_memberships order by id;\" -c \"select id, membership_id, group_id, section_id, role from role_assignments order by role, id;\")",
+      "Bash(psql postgresql://tomaszfraczek@localhost:5432/postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='capoeira_hub_clean'\")",
+      "Bash(psql \"postgresql://tomaszfraczek@localhost:5432/capoeira_hub\" -c \"select count\\(*\\) from group_memberships\" -c \"select count\\(*\\) from groups\" -c \"select count\\(*\\) from sections\" -c \"select count\\(*\\) from group_bans\" -c \"select count\\(*\\) from community_notification_settings\")",
+      "Bash(psql \"postgresql://tomaszfraczek@localhost:5432/capoeira_hub\" -c \"select id, root_group_id, user_id, status from group_memberships order by id\" -c \"select id, membership_id, group_id, section_id, role from role_assignments order by id\")",
+      "Bash(DATABASE_URL=\"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_clean\" npx jest --config test/jest-e2e.json section-membership-lifecycle)",
+      "Bash(psql \"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_clean\" -c \"select count\\(*\\) from sections\" -c \"select count\\(*\\) from users where clerk_user_id like 'user_lifecycle_%'\" -c \"select count\\(*\\) from role_assignments\" -c \"select count\\(*\\) from section_memberships\")",
+      "Bash(psql postgresql://tomaszfraczek@localhost:5432/capoeira_hub_clean -c 'delete from audit_log_entries where section_id in \\(select id from sections where name like '\\\\''Lifecycle Section%'\\\\''\\)' -c 'delete from sections where name like '\\\\''Lifecycle Section%'\\\\''' -c 'delete from users where clerk_user_id like '\\\\''user_lifecycle_%'\\\\''')",
+      "Bash(psql \"postgresql://tomaszfraczek@localhost:5432/capoeira_hub_clean\" -c \"select count\\(*\\) from sections\" -c \"select count\\(*\\) from users where clerk_user_id like 'user_lifecycle_%'\")"
+    ]
+  }
+}

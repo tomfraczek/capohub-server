@@ -1,4 +1,11 @@
-import { Entity, Index, ManyToOne, Property, Unique } from '@mikro-orm/core';
+import {
+  Check,
+  Entity,
+  Index,
+  ManyToOne,
+  Property,
+  Unique,
+} from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { Group } from './group.entity';
@@ -41,6 +48,16 @@ export const RECIPIENT_GROUPS_ACTIVE_NAME_UNIQUE_INDEX =
   // historical row (task requirement).
   expression: (table, columns, indexName) =>
     `create unique index "${indexName}" on ${table.toString()} (coalesce("${columns.group}", "${columns.section}"), lower("${columns.name}")) where ("${columns.isActive}" = true)`,
+})
+// Exactly one of `group`/`section` must be set, never both, never neither -
+// mirrored here so migration:create/schema:update know this constraint is
+// intentional and never propose dropping it. Name matches the constraint
+// the migration creates verbatim - see
+// Migration20260802100200_AddPolymorphicCommunityReferences.
+@Check<RecipientGroup>({
+  name: 'recipient_groups_group_or_section_check',
+  expression: (columns) =>
+    `("${columns.group}" is not null and "${columns.section}" is null) or ("${columns.group}" is null and "${columns.section}" is not null)`,
 })
 export class RecipientGroup extends BaseEntity {
   // No delete cascade - Group/Section rows are archived, never physically

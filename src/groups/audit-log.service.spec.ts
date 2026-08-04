@@ -4,6 +4,7 @@ import { AuditLogService } from './audit-log.service';
 import { AuditLogQuery } from './dto/audit-log-query.schema';
 import { AuditLogEntry } from './entities/audit-log-entry.entity';
 import { Group } from './entities/group.entity';
+import { Section } from './entities/section.entity';
 import { AuditAction } from './enums/audit-action.enum';
 import { AuditTargetType } from './enums/audit-target-type.enum';
 
@@ -12,6 +13,13 @@ function buildGroup(overrides: Partial<Group> = {}): Group {
   group.id = 'group-1';
   group.name = 'Cordão de Ouro';
   return Object.assign(group, overrides);
+}
+
+function buildSection(overrides: Partial<Section> = {}): Section {
+  const section = new Section();
+  section.id = 'section-1';
+  section.name = 'Cordão de Ouro Poznan';
+  return Object.assign(section, overrides);
 }
 
 function buildUser(overrides: Partial<User> = {}): User {
@@ -24,7 +32,8 @@ function buildUser(overrides: Partial<User> = {}): User {
 function buildEntry(overrides: Partial<AuditLogEntry> = {}): AuditLogEntry {
   const entry = new AuditLogEntry();
   entry.id = 'entry-1';
-  entry.community = buildGroup();
+  entry.group = buildGroup();
+  entry.section = null;
   entry.action = AuditAction.REMOVE_MEMBER;
   entry.actor = buildUser();
   entry.targetType = AuditTargetType.USER;
@@ -42,22 +51,18 @@ function buildQuery(overrides: Partial<AuditLogQuery> = {}): AuditLogQuery {
 function buildMockEm(findAndCountResult: [AuditLogEntry[], number] = [[], 0]) {
   const persist = jest.fn<void, [AuditLogEntry]>();
   const findAndCount = jest.fn().mockResolvedValue(findAndCountResult);
-  const getReference = jest
-    .fn()
-    .mockImplementation((_entity: unknown, id: string) => ({ id }));
 
   const em = {
     persist,
     findAndCount,
-    getReference,
   } as unknown as EntityManager;
 
-  return { em, persist, findAndCount, getReference };
+  return { em, persist, findAndCount };
 }
 
 describe('AuditLogService', () => {
   describe('record', () => {
-    it('persists a new AuditLogEntry with every given field', () => {
+    it('persists a new AuditLogEntry with every given field, under `group` for a Group community', () => {
       const { em, persist } = buildMockEm();
       const service = new AuditLogService(em);
       const community = buildGroup();
@@ -75,7 +80,8 @@ describe('AuditLogService', () => {
 
       expect(persist).toHaveBeenCalledTimes(1);
       const persisted = persist.mock.calls[0][0];
-      expect(persisted.community).toBe(community);
+      expect(persisted.group).toBe(community);
+      expect(persisted.section).toBeNull();
       expect(persisted.action).toBe(AuditAction.BAN);
       expect(persisted.actor).toBe(actor);
       expect(persisted.targetType).toBe(AuditTargetType.USER);
@@ -84,19 +90,20 @@ describe('AuditLogService', () => {
       expect(persisted.metadata).toEqual({ reason: 'spam' });
     });
 
-    it('resolves a string community id via em.getReference instead of requiring the full entity', () => {
-      const { em, persist, getReference } = buildMockEm();
+    it('persists under `section`, not `group`, for a Section community - no inheritance to any resolved root', () => {
+      const { em, persist } = buildMockEm();
       const service = new AuditLogService(em);
+      const community = buildSection();
 
       service.record(em, {
-        community: 'root-1',
+        community,
         action: AuditAction.LEAVE_COMMUNITY,
         actor: buildUser(),
       });
 
-      expect(getReference).toHaveBeenCalledWith(Group, 'root-1');
       const persisted = persist.mock.calls[0][0];
-      expect(persisted.community).toEqual({ id: 'root-1' });
+      expect(persisted.section).toBe(community);
+      expect(persisted.group).toBeNull();
     });
 
     it('defaults every optional field to null when omitted', () => {
@@ -169,7 +176,17 @@ describe('AuditLogService', () => {
       expect(result.data[0].target).toBeNull();
     });
 
-    it('scopes the query to the given community id', async () => {
+    it('resolves communityId from `section` when the entry is Section-scoped', async () => {
+      const entry = buildEntry({ group: null, section: buildSection() });
+      const { em } = buildMockEm([[entry], 1]);
+      const service = new AuditLogService(em);
+
+      const result = await service.list('section-1', buildQuery());
+
+      expect(result.data[0].communityId).toBe('section-1');
+    });
+
+    it('scopes the query to the given community id (Group or Section, via $or)', async () => {
       const { em, findAndCount } = buildMockEm();
       const service = new AuditLogService(em);
 
@@ -177,7 +194,9 @@ describe('AuditLogService', () => {
 
       expect(findAndCount).toHaveBeenCalledWith(
         AuditLogEntry,
-        expect.objectContaining({ community: 'group-1' }),
+        expect.objectContaining({
+          $or: [{ group: 'group-1' }, { section: 'group-1' }],
+        }),
         expect.anything(),
       );
     });
@@ -191,7 +210,7 @@ describe('AuditLogService', () => {
       expect(findAndCount).toHaveBeenCalledWith(
         AuditLogEntry,
         expect.objectContaining({
-          community: 'group-1',
+          $or: [{ group: 'group-1' }, { section: 'group-1' }],
           action: AuditAction.BAN,
         }),
         expect.anything(),
@@ -206,7 +225,10 @@ describe('AuditLogService', () => {
 
       expect(findAndCount).toHaveBeenCalledWith(
         AuditLogEntry,
-        expect.objectContaining({ community: 'group-1', actor: 'user-2' }),
+        expect.objectContaining({
+          $or: [{ group: 'group-1' }, { section: 'group-1' }],
+          actor: 'user-2',
+        }),
         expect.anything(),
       );
     });

@@ -2,11 +2,9 @@ import { NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
 import { CreateGroupInput } from './dto/create-group.schema';
-import { GroupMembership } from './entities/group-membership.entity';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
-import { GroupMembershipStatus } from './enums/group-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
 import { AuditLogService } from './audit-log.service';
@@ -52,23 +50,13 @@ function buildGroup(overrides: Partial<Group> = {}): Group {
   return Object.assign(group, overrides);
 }
 
-function buildMembership(
-  overrides: Partial<GroupMembership> = {},
-): GroupMembership {
-  const membership = new GroupMembership();
-  membership.id = 'membership-1';
-  membership.status = GroupMembershipStatus.ACTIVE;
-  membership.rootGroup = buildGroup({ id: 'parent-1' });
-  return Object.assign(membership, overrides);
-}
-
 function buildRoleAssignment(
   overrides: Partial<RoleAssignment> = {},
 ): RoleAssignment {
   const assignment = new RoleAssignment();
   assignment.id = 'role-assignment-1';
   assignment.role = GroupRole.MEMBER;
-  assignment.membership = buildMembership();
+  assignment.user = buildUser();
   assignment.group = buildGroup({ id: 'parent-1' });
   assignment.grantedAt = new Date('2026-01-01T00:00:00.000Z');
   return Object.assign(assignment, overrides);
@@ -76,17 +64,15 @@ function buildRoleAssignment(
 
 interface MockRouting {
   groupResults?: (Group | null)[];
-  membershipResults?: (GroupMembership | null)[];
   roleAssignmentResults?: (RoleAssignment | null)[];
-  memberships?: GroupMembership[];
   roleAssignmentFindResults?: RoleAssignment[];
+  groupFindResults?: Group[];
   children?: Group[];
   sections?: Section[];
 }
 
 function buildMockEm(routing: MockRouting = {}) {
   const groupQueue = [...(routing.groupResults ?? [])];
-  const membershipQueue = [...(routing.membershipResults ?? [])];
   const roleAssignmentQueue = [...(routing.roleAssignmentResults ?? [])];
 
   const flush = jest.fn().mockResolvedValue(undefined);
@@ -107,9 +93,6 @@ function buildMockEm(routing: MockRouting = {}) {
     if (entity === Group) {
       return Promise.resolve(groupQueue.shift() ?? null);
     }
-    if (entity === GroupMembership) {
-      return Promise.resolve(membershipQueue.shift() ?? null);
-    }
     if (entity === RoleAssignment) {
       return Promise.resolve(roleAssignmentQueue.shift() ?? null);
     }
@@ -124,14 +107,13 @@ function buildMockEm(routing: MockRouting = {}) {
   });
 
   const find = jest.fn((entity: unknown) => {
-    if (entity === GroupMembership) {
-      return Promise.resolve(routing.memberships ?? []);
-    }
     if (entity === RoleAssignment) {
       return Promise.resolve(routing.roleAssignmentFindResults ?? []);
     }
     if (entity === Group) {
-      return Promise.resolve(routing.children ?? []);
+      return Promise.resolve(
+        routing.groupFindResults ?? routing.children ?? [],
+      );
     }
     if (entity === Section) {
       return Promise.resolve(routing.sections ?? []);
@@ -178,61 +160,37 @@ function buildService(em: EntityManager) {
 
 describe('GroupsService', () => {
   describe('create', () => {
-    it('creates a Root Group, a Membership, and MEMBER + OWNER Role Assignments', async () => {
-      const { em, persist } = buildMockEm({
-        // ensureMemberRole's existence check - no MEMBER row yet.
-        roleAssignmentResults: [null],
-      });
+    it('creates a Root Group and grants the creator OWNER directly - no membership, no MEMBER role at all', async () => {
+      const { em, persist } = buildMockEm();
       const { service } = buildService(em);
       const user = buildUser();
 
       await service.create(user, buildCreateInput());
 
-      const persistedEntities = persist.mock.calls[0][0] as unknown[];
-      const persistedGroup = (
-        Array.isArray(persistedEntities)
-          ? persistedEntities
-          : [persistedEntities]
-      ).find((entity) => entity instanceof Group) as Group;
-      const persistedMembership = (
-        Array.isArray(persistedEntities)
-          ? persistedEntities
-          : [persistedEntities]
-      ).find((entity) => entity instanceof GroupMembership) as GroupMembership;
-      const persistedMemberRole = persist.mock.calls[1][0] as RoleAssignment;
-      const persistedOwnerRole = persist.mock.calls[2][0] as RoleAssignment;
-
+      const persistedGroup = persist.mock.calls[0][0] as Group;
+      expect(persistedGroup).toBeInstanceOf(Group);
       expect(persistedGroup.name).toBe('Capoeira Angola SP');
       expect(persistedGroup.parentGroup).toBeNull();
-      expect(persistedMembership.user).toBe(user);
-      expect(persistedMembership.rootGroup).toBe(persistedGroup);
-      expect(persistedMemberRole.role).toBe(GroupRole.MEMBER);
+
+      // insertRoleAssignment is the only other persist() call - a single
+      // OWNER RoleAssignment, no membership, no MEMBER.
+      const persistedOwnerRole = persist.mock.calls[1][0] as RoleAssignment;
       expect(persistedOwnerRole.role).toBe(GroupRole.OWNER);
-      expect(persistedOwnerRole.membership).toBe(persistedMembership);
+      expect(persistedOwnerRole.user).toBe(user);
       expect(persistedOwnerRole.group).toBe(persistedGroup);
+      expect(persist).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('listMine', () => {
-    it('maps each active membership to a summary with myRoles set from every Root Group Role Assignment it holds', async () => {
+    it('maps each Group the user holds any Role for to a summary with myRoles set from that Role Assignment', async () => {
       const rootGroup = buildGroup({ id: 'group-1', name: 'Grupo Axé' });
-      const membership = buildMembership({
-        id: 'membership-1',
-        rootGroup,
-      });
-      const memberRole = buildRoleAssignment({
-        membership,
-        group: rootGroup,
-        role: GroupRole.MEMBER,
-      });
-      const adminRole = buildRoleAssignment({
-        membership,
-        group: rootGroup,
-        role: GroupRole.ADMIN,
-      });
       const { em } = buildMockEm({
-        memberships: [membership],
-        roleAssignmentFindResults: [memberRole, adminRole],
+        roleAssignmentFindResults: [
+          buildRoleAssignment({ group: rootGroup, role: GroupRole.ADMIN }),
+          buildRoleAssignment({ group: rootGroup, role: GroupRole.OWNER }),
+        ],
+        groupFindResults: [rootGroup],
       });
       const { service } = buildService(em);
 
@@ -241,42 +199,37 @@ describe('GroupsService', () => {
       expect(result).toEqual([
         expect.objectContaining({
           name: 'Grupo Axé',
-          myRoles: [GroupRole.MEMBER, GroupRole.ADMIN],
+          myRoles: [GroupRole.ADMIN, GroupRole.OWNER],
         }),
       ]);
     });
 
-    it('sets myRoles to an empty array when no Role Assignment is found for the Root Group', async () => {
-      const rootGroup = buildGroup({ id: 'group-1', name: 'Grupo Axé' });
-      const membership = buildMembership({ id: 'membership-1', rootGroup });
-      const { em } = buildMockEm({
-        memberships: [membership],
-        roleAssignmentFindResults: [],
-      });
+    it('returns an empty array when the user holds no Role Assignment anywhere', async () => {
+      const { em, find } = buildMockEm({ roleAssignmentFindResults: [] });
       const { service } = buildService(em);
 
       const result = await service.listMine('user-1');
 
-      expect(result).toEqual([
-        expect.objectContaining({ name: 'Grupo Axé', myRoles: [] }),
-      ]);
+      expect(result).toEqual([]);
+      // No RoleAssignment participation at all - never even queries Group.
+      expect(find).not.toHaveBeenCalledWith(
+        Group,
+        expect.anything(),
+        expect.anything(),
+      );
     });
 
-    it('includes groups with status ARCHIVED - archiving never touches membership', async () => {
+    it('includes groups with status ARCHIVED - archiving never touches RoleAssignments', async () => {
       const rootGroup = buildGroup({
         id: 'group-1',
         name: 'Archived Group',
         status: GroupStatus.ARCHIVED,
       });
-      const membership = buildMembership({ id: 'membership-1', rootGroup });
-      const roleAssignment = buildRoleAssignment({
-        membership,
-        group: rootGroup,
-        role: GroupRole.OWNER,
-      });
       const { em } = buildMockEm({
-        memberships: [membership],
-        roleAssignmentFindResults: [roleAssignment],
+        roleAssignmentFindResults: [
+          buildRoleAssignment({ group: rootGroup, role: GroupRole.OWNER }),
+        ],
+        groupFindResults: [rootGroup],
       });
       const { service } = buildService(em);
 
@@ -290,25 +243,26 @@ describe('GroupsService', () => {
       ]);
     });
 
-    it('queries both ACTIVE and READ_ONLY memberships - a suspended Membership must not silently vanish from this list', async () => {
-      const { em, find } = buildMockEm({ memberships: [] });
+    it('never includes a Section id in the Group list - participation rows that resolve to a Section are filtered out', async () => {
+      // getGroupParticipationForUsers returns every target (Group or
+      // Section) the user holds a role for - listMine only ever queries
+      // Group by those ids, so a Section-only participation row simply
+      // finds no match and is dropped.
+      const { em } = buildMockEm({
+        roleAssignmentFindResults: [
+          buildRoleAssignment({
+            group: null,
+            section: Object.assign({}, { id: 'section-1' }) as never,
+            role: GroupRole.MEMBER,
+          }),
+        ],
+        groupFindResults: [],
+      });
       const { service } = buildService(em);
 
-      await service.listMine('user-1');
+      const result = await service.listMine('user-1');
 
-      expect(find).toHaveBeenCalledWith(
-        GroupMembership,
-        expect.objectContaining({
-          user: 'user-1',
-          status: {
-            $in: [
-              GroupMembershipStatus.ACTIVE,
-              GroupMembershipStatus.READ_ONLY,
-            ],
-          },
-        }),
-        expect.anything(),
-      );
+      expect(result).toEqual([]);
     });
   });
 

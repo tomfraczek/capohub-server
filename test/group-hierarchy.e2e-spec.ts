@@ -13,6 +13,7 @@ import { CLERK_CLIENT } from '../src/auth/clerk/clerk-client.provider';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { closeE2eApp } from './close-e2e-app.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { AcademyResponseDto } from '../src/groups/dto/academy-response.dto';
@@ -21,7 +22,6 @@ import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { CohortResponseDto } from '../src/groups/dto/cohort-response.dto';
 import { Academy } from '../src/groups/entities/academy.entity';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
-import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
@@ -160,46 +160,47 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
   });
 
   afterAll(async () => {
-    const cleanup = app.get(EntityManager).fork();
-    await cleanup.nativeDelete(Academy, {
-      $or: [
-        { group: { $in: createdGroupIds } },
-        { section: { $in: createdGroupIds } },
-      ],
+    await closeE2eApp(app, async () => {
+      const cleanup = app.get(EntityManager).fork();
+      await cleanup.nativeDelete(Academy, {
+        $or: [
+          { group: { $in: createdGroupIds } },
+          { section: { $in: createdGroupIds } },
+        ],
+      });
+      await cleanup.nativeDelete(Cohort, {
+        $or: [
+          { group: { $in: createdGroupIds } },
+          { section: { $in: createdGroupIds } },
+        ],
+      });
+      await cleanup.nativeDelete(RoleAssignment, {
+        $or: [
+          { group: { $in: createdGroupIds } },
+          { section: { $in: createdGroupIds } },
+        ],
+      });
+      // Sections must be removed before their parent Groups to satisfy the
+      // parent_group_id foreign key (no cascade - see section.entity.ts).
+      await cleanup.nativeDelete(Section, { id: { $in: createdGroupIds } });
+      // Children Groups must be nulled/removed before their parents to
+      // satisfy the parent_group_id self-FK (no cascade - see group.entity.ts).
+      await cleanup.nativeUpdate(
+        Group,
+        { id: { $in: createdGroupIds } },
+        { parentGroup: null },
+      );
+      await cleanup.nativeDelete(AuditLogEntry, {
+        $or: [
+          { group: { $in: createdGroupIds } },
+          { section: { $in: createdGroupIds } },
+        ],
+      });
+      await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      await cleanup.nativeDelete(User, {
+        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+      });
     });
-    await cleanup.nativeDelete(Cohort, {
-      $or: [
-        { group: { $in: createdGroupIds } },
-        { section: { $in: createdGroupIds } },
-      ],
-    });
-    await cleanup.nativeDelete(RoleAssignment, {
-      $or: [
-        { group: { $in: createdGroupIds } },
-        { section: { $in: createdGroupIds } },
-      ],
-    });
-    await cleanup.nativeDelete(GroupMembership, {
-      rootGroup: { $in: createdGroupIds },
-    });
-    // Sections must be removed before their parent Groups to satisfy the
-    // parent_group_id foreign key (no cascade - see section.entity.ts).
-    await cleanup.nativeDelete(Section, { id: { $in: createdGroupIds } });
-    // Children Groups must be nulled/removed before their parents to
-    // satisfy the parent_group_id self-FK (no cascade - see group.entity.ts).
-    await cleanup.nativeUpdate(
-      Group,
-      { id: { $in: createdGroupIds } },
-      { parentGroup: null },
-    );
-    await cleanup.nativeDelete(AuditLogEntry, {
-      community: { $in: createdGroupIds },
-    });
-    await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
-    await cleanup.nativeDelete(User, {
-      clerkUserId: { $in: TEST_CLERK_USER_IDS },
-    });
-    await app.close();
   });
 
   function groupPayload(
@@ -288,14 +289,17 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
     return created;
   }
 
-  async function addMember(
+  // Group has no membership/MEMBER role at all (see the Membership/
+  // RoleAssignments rebuild) - the only Roles it ever grants are
+  // OWNER/ADMIN, via a direct RoleAssignment.
+  async function grantGroupRole(
     ownerToken: string,
     groupId: string,
     memberToken: string,
     role: GroupRole,
   ): Promise<void> {
     await request(app.getHttpServer())
-      .post(`/api/v1/groups/${groupId}/members`)
+      .post(`/api/v1/groups/${groupId}/role-assignments`)
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ userId: localUserIdByToken.get(memberToken), role })
       .expect(201);
@@ -373,19 +377,21 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
       expect((response.body as HttpErrorResponse).code).toBe('GROUP_NOT_FOUND');
     });
 
-    it('rejects creating a Section when the caller only has MEMBER in the parent', async () => {
-      const root = await createGroup(OWNER_TOKEN, { name: 'Guarded Org' });
-      await addMember(OWNER_TOKEN, root.id, MEMBER_TOKEN, GroupRole.MEMBER);
+    // Group only ever grants OWNER/ADMIN (no MEMBER at all - see the
+    // Membership/RoleAssignments rebuild), so the weakest possible
+    // authorization for a Group is "no RoleAssignment at all", already
+    // covered by the 404/non-member case above. This proves the
+    // SECTION_CREATE permission check is keyed off the actual Role (ADMIN
+    // has it, same as OWNER), not merely "some RoleAssignment exists".
+    it('allows a Group ADMIN (not just OWNER) to create a Section', async () => {
+      const root = await createGroup(OWNER_TOKEN, { name: 'Admin Create Org' });
+      await grantGroupRole(OWNER_TOKEN, root.id, ADMIN_TOKEN, GroupRole.ADMIN);
 
-      const response = await request(app.getHttpServer())
-        .post(`/api/v1/groups/${root.id}/sections`)
-        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-        .send(sectionPayload({ name: 'Blocked Section' }))
-        .expect(403);
+      const section = await createSection(ADMIN_TOKEN, root.id, {
+        name: 'Admin-created Section',
+      });
 
-      expect((response.body as HttpErrorResponse).code).toBe(
-        'INSUFFICIENT_GROUP_PERMISSIONS',
-      );
+      expect(section.parentGroupId).toBe(root.id);
     });
 
     it('rejects creating a Section under a non-existent parent', async () => {

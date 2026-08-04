@@ -20,6 +20,7 @@ import { Section } from '../groups/entities/section.entity';
 import { User } from '../users/entities/user.entity';
 import { GroupStatus } from '../groups/enums/group-status.enum';
 import { GroupHierarchyService } from '../groups/group-hierarchy.service';
+import { RoleAssignmentsService } from '../groups/role-assignments.service';
 import { DiscoveryService } from './discovery.service';
 import { DiscoverySearchQuery } from './dto/discovery-search-query.schema';
 
@@ -117,7 +118,14 @@ function buildGroupHierarchyService(em: EntityManager): GroupHierarchyService {
 }
 
 function buildService(em: EntityManager) {
-  return new DiscoveryService(em, buildGroupHierarchyService(em));
+  const roleAssignmentsService = {
+    isCommunityMember: jest.fn().mockResolvedValue(false),
+  } as unknown as RoleAssignmentsService;
+  return new DiscoveryService(
+    em,
+    buildGroupHierarchyService(em),
+    roleAssignmentsService,
+  );
 }
 
 function buildQuery(

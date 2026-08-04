@@ -10,9 +10,10 @@ import { CLERK_CLIENT } from '../auth/clerk/clerk-client.provider';
 import { AuthContext } from '../auth/types/auth-context.type';
 import { generateUniquePublicCode } from '../common/utils/public-code';
 import { EventRolesService } from '../events/event-roles.service';
-import { GroupMembership } from '../groups/entities/group-membership.entity';
+import { SectionMembership } from '../groups/entities/section-membership.entity';
 import { RoleAssignment } from '../groups/entities/role-assignment.entity';
-import { RoleAssignmentsService } from '../groups/role-assignments.service';
+import { GroupRole } from '../groups/enums/group-role.enum';
+import { GroupStatus } from '../groups/enums/group-status.enum';
 import { ClerkProfile } from './clerk-profile.type';
 import { AvatarType } from './enums/avatar-type.enum';
 import { User, Theme } from './entities/user.entity';
@@ -32,7 +33,6 @@ export class UserService {
     private readonly userRepository: EntityRepository<User>,
     @Inject(CLERK_CLIENT)
     private readonly clerkClient: ClerkClient,
-    private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly eventRolesService: EventRolesService,
   ) {}
 
@@ -86,46 +86,30 @@ export class UserService {
   /**
    * Wipes every local trace of this User in a single transaction:
    *
-   * 1. Re-checks the Group-ownership invariant (every Group must always
-   *    have exactly one OWNER - see ADR-028) against every Membership this
-   *    User ever held, active or archived - not just ACTIVE ones, since an
-   *    OWNER RoleAssignment row can in principle outlive its Membership's
-   *    ACTIVE status and must still block deletion.
-   * 2. If the check passes, deletes every RoleAssignment belonging to any
-   *    of those Memberships, then the Memberships themselves, then the
-   *    User row.
+   * 1. Re-checks the ownership invariant (every Group/Section must always
+   *    have exactly one active OWNER) directly against every currently
+   *    active (revokedAt === null) OWNER RoleAssignment this User holds -
+   *    Group or Section, queried directly by `user`, no membership
+   *    indirection needed at all (see role-assignment.entity.ts). Archived
+   *    communities are excluded - an archived Group/Section can never
+   *    accept writes again short of unarchiving it first, so its OWNER row
+   *    does not block account deletion.
+   * 2. If the check passes, deletes every RoleAssignment and every
+   *    SectionMembership this User holds, then the User row itself.
    *
-   * RoleAssignments are deleted explicitly, never left to an FK cascade -
-   * RoleAssignment.membership has no delete rule at all (see the
-   * RoleAssignment entity), so relying on GroupMembership.user's cascade to
-   * reach it would surface as a raw Postgres FK violation (500) instead of
-   * either succeeding cleanly or failing with a domain error. Memberships
-   * are hard-deleted, not archived: GroupMembership.user is a required,
-   * cascade-delete relation (unlike the optional, set-null User references
-   * on Song/SongMedia - see Scenario 16), so a Membership cannot survive
-   * without its User, only disappear alongside it.
+   * Deleted explicitly, never left to an FK cascade to discover on its
+   * own: both RoleAssignment.user and SectionMembership.user are `cascade`
+   * on delete, so this is not strictly required for referential integrity,
+   * but keeps the deletion order predictable and explicit rather than
+   * implicit, consistent with how this method already treats the
+   * ownership check as something that must run - and be lockable - before
+   * anything is removed.
    *
-   * Every Membership row is locked PESSIMISTIC_WRITE before the ownership
-   * re-check, so a concurrent transferOwnership naming one of them the new
-   * owner of some Group is serialized against this transaction - whichever
-   * commits first is the state the other observes. The User row itself is
-   * also locked PESSIMISTIC_WRITE first, which additionally blocks a
-   * concurrent addMember from inserting a *new* Membership for this User
-   * mid-deletion (Postgres takes an implicit FOR KEY SHARE lock on the
-   * referenced `users` row for every FK-checked insert into
-   * group_memberships, which conflicts with FOR UPDATE here).
-   *
-   * This does not close every conceivable race: a grantRole call granting
-   * some non-OWNER Role (MEMBER/ADMIN/INSTRUCTOR/ASSISTANT) to one of
-   * these Memberships in the exact same instant this transaction is
-   * deleting it is not itself locked against here, since grantRole does
-   * not take a lock on the Membership row. In that narrow window, the
-   * grantRole request can surface its own raw FK error rather than a clean
-   * response - a pre-existing gap in grantRole, not something this method
-   * can fix without changing that code path, and not a violation of the
-   * OWNER invariant (grantRole can never grant OWNER - see
-   * RoleAssignmentsService.grantRole), so no Group is ever left ownerless
-   * because of it.
+   * The User row itself is locked PESSIMISTIC_WRITE first, which
+   * additionally blocks a concurrent addMember/grantRole from inserting a
+   * *new* row referencing this User mid-deletion (Postgres takes an
+   * implicit FOR KEY SHARE lock on the referenced `users` row for every
+   * FK-checked insert, which conflicts with FOR UPDATE here).
    */
   private async deleteLocalAccountData(user: User): Promise<void> {
     await this.em.transactional(async (em) => {
@@ -135,8 +119,8 @@ export class UserService {
         { lockMode: LockMode.PESSIMISTIC_WRITE },
       );
 
-      // Mirrors the Group-ownership check just below, for the same reason:
-      // an Event must never be left ownerless (see
+      // Mirrors the ownership check just below, for the same reason: an
+      // Event must never be left ownerless (see
       // EVENT_ROLE_ASSIGNMENTS_OWNER_UNIQUE_INDEX). Only DRAFT/PUBLISHED
       // Events block deletion - CANCELLED/FINISHED are terminal/historical,
       // see EventRolesService.findOwnedActiveEvents.
@@ -153,37 +137,30 @@ export class UserService {
         });
       }
 
-      const memberships = await em.find(
-        GroupMembership,
-        { user: user.id },
-        { lockMode: LockMode.PESSIMISTIC_WRITE },
+      const ownedAssignments = await em.find(
+        RoleAssignment,
+        { user: user.id, role: GroupRole.OWNER, revokedAt: null },
+        { populate: ['group', 'section'] },
       );
-
-      for (const membership of memberships) {
-        const ownedGroups =
-          await this.roleAssignmentsService.findOwnedActiveGroups(
-            em,
-            membership.id,
-            membership.rootGroup.id,
-          );
-        if (ownedGroups.length > 0) {
-          throw new ConflictException({
-            code: 'CANNOT_DELETE_ACCOUNT_OWNS_GROUPS',
-            message:
-              'This account owns one or more Groups - transfer ownership of each before deleting the account',
-            ownedGroupIds: ownedGroups.map((group) => group.id),
-          });
-        }
-      }
-
-      if (memberships.length > 0) {
-        const membershipIds = memberships.map((membership) => membership.id);
-        await em.nativeDelete(RoleAssignment, {
-          membership: { $in: membershipIds },
+      const ownedActiveCommunities = ownedAssignments
+        .map((assignment) => assignment.group ?? assignment.section)
+        .filter(
+          (community): community is NonNullable<typeof community> =>
+            community !== null && community.status !== GroupStatus.ARCHIVED,
+        );
+      if (ownedActiveCommunities.length > 0) {
+        throw new ConflictException({
+          code: 'CANNOT_DELETE_ACCOUNT_OWNS_GROUPS',
+          message:
+            'This account owns one or more Groups/Sections - transfer ownership of each before deleting the account',
+          ownedGroupIds: ownedActiveCommunities.map(
+            (community) => community.id,
+          ),
         });
-        await em.nativeDelete(GroupMembership, { id: { $in: membershipIds } });
       }
 
+      await em.nativeDelete(RoleAssignment, { user: user.id });
+      await em.nativeDelete(SectionMembership, { user: user.id });
       await em.nativeDelete(User, { id: user.id });
     });
   }

@@ -16,6 +16,7 @@ import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
+import { SectionMembership } from './entities/section-membership.entity';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { toSectionResponseDto } from './mappers/section.mapper';
 import { RoleAssignmentsService } from './role-assignments.service';
@@ -39,10 +40,12 @@ export class SectionsService {
   // The parent's existence and the caller's SECTION_CREATE permission there
   // are already established by GroupPermissionsGuard before this ever runs
   // (see SectionsController - the parent is always the route's :groupId).
-  // This only needs the caller's Membership in the parent's Root Group, to
-  // attach the new Section's initial MEMBER/OWNER Role Assignments to it -
-  // mirrors GroupsService.create, one level down. Unlike creating a new
-  // Group, creating a Section never creates a second Membership.
+  // A role on the parent Group only ever grants the *capability to create*
+  // here - it is a deliberate, one-time bootstrap action, not inherited
+  // membership: the new Section gets a brand-new SectionMembership for the
+  // creator, created atomically with MEMBER+OWNER, exactly like joining any
+  // other Section - never reusing anything from the parent (Group has no
+  // membership to reuse in the first place - see RoleAssignmentsService).
   async create(
     parentId: string,
     actor: User,
@@ -77,24 +80,33 @@ export class SectionsService {
       section.parentGroup = parent;
       em.persist(section);
 
-      await this.roleAssignmentsService.ensureMemberRole(
+      const membership = new SectionMembership();
+      membership.section = section;
+      membership.user = actor;
+      membership.joinedAt = new Date();
+      em.persist(membership);
+
+      await this.roleAssignmentsService.insertRoleAssignment(
         em,
-        authorization.membership,
+        actor,
         section,
+        GroupRole.MEMBER,
+        actor,
       );
       await this.roleAssignmentsService.insertRoleAssignment(
         em,
-        authorization.membership,
+        actor,
         section,
         GroupRole.OWNER,
+        actor,
       );
 
-      const community = await this.groupHierarchyService.resolveRootGroup(
-        section,
-        em,
-      );
+      // Logged under the immediate parent, not a resolved root - "no
+      // inheritance" applies to audit trails too (see AuditLogEntry's own
+      // comment): CREATE_CHILD_GROUP describes something that happened to
+      // *this exact* parent, not to whatever root sits above it.
       this.auditLogService.record(em, {
-        community,
+        community: parent,
         action: AuditAction.CREATE_CHILD_GROUP,
         actor,
         targetType: AuditTargetType.COMMUNITY,
@@ -126,7 +138,7 @@ export class SectionsService {
     return this.em.transactional(async (em) => {
       const section = await this.loadOrFail(sectionId, em);
       this.applyFields(section, input);
-      await this.recordCommunityAudit(
+      this.recordCommunityAudit(
         em,
         section,
         AuditAction.UPDATE_COMMUNITY,
@@ -173,7 +185,7 @@ export class SectionsService {
     return this.em.transactional(async (em) => {
       const section = await this.loadOrFail(sectionId, em);
       section.status = GroupStatus.DELETED;
-      await this.recordCommunityAudit(em, section, AuditAction.DELETE, actor);
+      this.recordCommunityAudit(em, section, AuditAction.DELETE, actor);
       await em.flush();
       return toSectionResponseDto(section);
     });
@@ -189,29 +201,27 @@ export class SectionsService {
       const section = await this.loadOrFail(sectionId, em);
       section.status = target;
       if (auditAction) {
-        await this.recordCommunityAudit(em, section, auditAction, actor);
+        this.recordCommunityAudit(em, section, auditAction, actor);
       }
       await em.flush();
       return toSectionResponseDto(section);
     });
   }
 
-  // Unlike GroupsService's version, this always resolves the parent Group's
-  // own root (a Section is never its own Root Group) - throws if the
-  // Section currently has no parent (a standalone Section has no Root
-  // Group to file audit history under yet).
-  private async recordCommunityAudit(
+  // Logged under the Section itself, never a resolved root - "no
+  // inheritance" applies to audit trails too: a Section's own lifecycle
+  // actions (archive/restore/delete/...) belong to its own history, not
+  // its parent's (see AuditLogEntry's own comment). This also means a
+  // standalone Section with no parent at all can be audited fine - there
+  // is no root to resolve in the first place.
+  private recordCommunityAudit(
     em: EntityManager,
     section: Section,
     action: AuditAction,
     actor: User,
-  ): Promise<void> {
-    const community = await this.groupHierarchyService.resolveRootGroup(
-      section,
-      em,
-    );
+  ): void {
     this.auditLogService.record(em, {
-      community,
+      community: section,
       action,
       actor,
       targetType: AuditTargetType.COMMUNITY,

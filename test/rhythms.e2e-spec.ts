@@ -15,6 +15,7 @@ import { GlobalRole } from '../src/auth/permissions/global-role.enum';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { closeE2eApp } from './close-e2e-app.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { InstrumentDetailsResponseDto } from '../src/instruments/dto/instrument-details-response.dto';
@@ -178,18 +179,19 @@ describe('Rhythms (e2e)', () => {
   });
 
   afterAll(async () => {
-    const cleanup = app.get(EntityManager).fork();
-    await cleanup.nativeDelete(SongRhythm, {});
-    await cleanup.nativeDelete(Song, { category: category.id });
-    await cleanup.nativeDelete(SongCategory, { id: category.id });
-    await cleanup.nativeDelete(Rhythm, { id: { $in: createdRhythmIds } });
-    await cleanup.nativeDelete(Instrument, {
-      id: { $in: createdInstrumentIds },
+    await closeE2eApp(app, async () => {
+      const cleanup = app.get(EntityManager).fork();
+      await cleanup.nativeDelete(SongRhythm, {});
+      await cleanup.nativeDelete(Song, { category: category.id });
+      await cleanup.nativeDelete(SongCategory, { id: category.id });
+      await cleanup.nativeDelete(Rhythm, { id: { $in: createdRhythmIds } });
+      await cleanup.nativeDelete(Instrument, {
+        id: { $in: createdInstrumentIds },
+      });
+      await cleanup.nativeDelete(User, {
+        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+      });
     });
-    await cleanup.nativeDelete(User, {
-      clerkUserId: { $in: TEST_CLERK_USER_IDS },
-    });
-    await app.close();
   });
 
   afterEach(async () => {
@@ -294,13 +296,22 @@ describe('Rhythms (e2e)', () => {
   async function createRhythm(
     payload: Record<string, unknown>,
   ): Promise<RhythmDetailsResponseDto> {
-    const created = await bodyOf<RhythmDetailsResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/admin/rhythms')
-        .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
-        .send(payload)
-        .expect(201),
-    );
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/admin/rhythms')
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+      .send(payload);
+    if (res.status !== 201) {
+      // eslint-disable-next-line no-console
+      console.error(
+        'DIAG createRhythm failed',
+        res.status,
+        JSON.stringify(res.body),
+        'payload=',
+        JSON.stringify(payload),
+      );
+    }
+    expect(res.status).toBe(201);
+    const created = res.body as RhythmDetailsResponseDto;
     createdRhythmIds.push(created.id);
     return created;
   }

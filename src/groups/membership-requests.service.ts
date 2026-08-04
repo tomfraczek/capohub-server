@@ -14,30 +14,24 @@ import { CreateInvitationInput } from './dto/create-invitation.schema';
 import { MembershipRequestResponseDto } from './dto/membership-request-response.dto';
 import { AuditAction } from './enums/audit-action.enum';
 import { AuditTargetType } from './enums/audit-target-type.enum';
-import { GroupBan } from './entities/group-ban.entity';
-import { Group } from './entities/group.entity';
+import { SectionBan } from './entities/section-ban.entity';
 import { Section } from './entities/section.entity';
-import { GroupMembership } from './entities/group-membership.entity';
+import { SectionMembership } from './entities/section-membership.entity';
 import {
   MEMBERSHIP_REQUEST_PENDING_EMAIL_IDX,
   MEMBERSHIP_REQUEST_PENDING_JOIN_IDX,
   MEMBERSHIP_REQUEST_PENDING_USER_IDX,
   MembershipRequest,
 } from './entities/membership-request.entity';
-import { GROUP_MEMBERSHIPS_ACTIVE_UNIQUE_INDEX } from './entities/group-membership.entity';
-import { RoleAssignment } from './entities/role-assignment.entity';
-import { GroupMembershipStatus } from './enums/group-membership-status.enum';
+import { SECTION_MEMBERSHIPS_ACTIVE_UNIQUE_INDEX } from './entities/section-membership.entity';
+import { SectionMembershipStatus } from './enums/section-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
 import { MembershipRequestStatus } from './enums/membership-request-status.enum';
 import { MembershipRequestTarget } from './enums/membership-request-target.enum';
 import { MembershipRequestType } from './enums/membership-request-type.enum';
-import {
-  Community,
-  communityFilter,
-  GroupHierarchyService,
-} from './group-hierarchy.service';
-import { loadActiveMembership } from './group-membership.query';
+import { Community } from './group-hierarchy.service';
+import { loadActiveSectionMembership } from './section-membership.query';
 import { RoleAssignmentsService } from './role-assignments.service';
 
 // The Group-or-Section a MembershipRequest targets, whichever of
@@ -56,25 +50,36 @@ function assignTarget(request: MembershipRequest, community: Community): void {
   }
 }
 
+function groupHasNoMembership(): UnprocessableEntityException {
+  return new UnprocessableEntityException({
+    code: 'GROUP_HAS_NO_MEMBERSHIP',
+    message:
+      'A Group has no membership and no join/invitation flow - it is administered exclusively through RoleAssignments (grantRole for ADMIN, transferOwnership for OWNER)',
+  });
+}
+
 /**
- * Handles the full lifecycle of invitations and join requests for both
- * Groups and specific Sections.
+ * Handles the full lifecycle of invitations and join requests for Sections
+ * only - a Group has no membership at all, so GROUP-targeted requests are
+ * rejected outright here (see groupHasNoMembership()); the only way to
+ * obtain a Role on a Group is a direct RoleAssignmentsController grant
+ * (ADMIN) or RoleAssignmentsService.transferOwnership (OWNER) - never
+ * through this invitation/join-request mechanism, which would conflate
+ * "membership" with "administrative role", and would collide with the
+ * separate, not-yet-built "invite a Group/Section into the hierarchy"
+ * mechanism planned for a later stage.
  *
  * Key domain invariants enforced here:
- *  - Group ownership does NOT grant any permissions in its Sections.
- *  - Accepting a GROUP-level request creates only a Membership; no
- *    RoleAssignment is created anywhere.
- *  - Accepting a SECTION-level request ensures Membership in the Group AND
- *    grants MEMBER in the exact targetGroup only.
- *  - Accepting is idempotent: duplicate Membership or duplicate MEMBER Role is
- *    treated as ALREADY_MEMBER / ALREADY_GROUP_MEMBER (not silently duplicated).
+ *  - Accepting a request creates a SectionMembership AND grants MEMBER in
+ *    the exact target Section, atomically (see fulfillJoin).
+ *  - Accepting is idempotent: an already-active membership is surfaced as
+ *    ALREADY_MEMBER, never silently duplicated.
  *  - Terminal requests (ACCEPTED/REJECTED/CANCELLED) cannot be re-processed.
  */
 @Injectable()
 export class MembershipRequestsService {
   constructor(
     private readonly em: EntityManager,
-    private readonly groupHierarchyService: GroupHierarchyService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly auditLogService: AuditLogService,
   ) {}
@@ -84,59 +89,42 @@ export class MembershipRequestsService {
   /**
    * "Join" button pressed by the authenticated user.
    *
-   * - isPublic = true  → immediately creates Membership / MEMBER Role.
+   * - isPublic = true  → immediately creates SectionMembership + MEMBER.
    * - isPublic = false → creates a PENDING JOIN_REQUEST.
    *
-   * isHidden has NO effect here.  A hidden Group is simply one that does not
-   * appear in discovery searches — it is still joinable via a direct link,
-   * publicCode, or QR code.  Being hidden and private (isPublic=false)
-   * together means the Group is invite-only but still reachable by code.
+   * isHidden has NO effect here.  A hidden Section is simply one that does
+   * not appear in discovery searches — it is still joinable via a direct
+   * link, publicCode, or QR code.
    *
-   * targetType decides the acceptance effect (Membership only vs
-   * Membership + MEMBER Role).  It is required — the backend never infers
-   * the caller's intent.  If omitted or invalid the ZodValidationPipe
-   * returns 400 before this method is called.
-   *
-   * The GROUP path requires targetGroup to be a root Group.
+   * GROUP target is always rejected - see groupHasNoMembership().
    */
   async join(
     targetGroupId: string,
     targetType: MembershipRequestTarget,
     requestingUser: User,
   ): Promise<MembershipRequestResponseDto | { joined: true }> {
+    if (targetType === MembershipRequestTarget.GROUP) {
+      throw groupHasNoMembership();
+    }
+
     return this.em.transactional(async (em) => {
-      const targetGroup = await this.loadActiveCommunityOrFail(
+      const targetSection = await this.loadActiveSectionOrFail(
         em,
         targetGroupId,
       );
 
-      if (targetType === MembershipRequestTarget.GROUP) {
-        this.assertIsRootGroup(targetGroup);
-      }
+      await this.assertNotBanned(em, targetSection.id, requestingUser.id);
+      await this.assertNotAlreadyJoined(em, targetSection, requestingUser);
 
-      const rootGroup = await this.groupHierarchyService.resolveRootGroup(
-        targetGroup,
-        em,
-      );
-      await this.assertNotBanned(em, rootGroup.id, requestingUser.id);
-
-      // Check if already a member (GROUP or SECTION level)
-      await this.assertNotAlreadyJoined(
-        em,
-        targetGroup,
-        targetType,
-        requestingUser,
-      );
-
-      if (targetGroup.isPublic) {
+      if (targetSection.isPublic) {
         // Auto-join path
-        await this.fulfillJoin(em, targetGroup, targetType, requestingUser);
+        await this.fulfillJoin(em, targetSection, requestingUser);
         this.auditLogService.record(em, {
-          community: rootGroup,
+          community: targetSection,
           action: AuditAction.JOIN_REQUEST,
           actor: requestingUser,
           targetType: AuditTargetType.COMMUNITY,
-          targetId: targetGroup.id,
+          targetId: targetSection.id,
           metadata: { targetType, autoApproved: true },
         });
         await em.flush();
@@ -146,7 +134,7 @@ export class MembershipRequestsService {
         const request = new MembershipRequest();
         request.type = MembershipRequestType.JOIN_REQUEST;
         request.targetType = targetType;
-        assignTarget(request, targetGroup);
+        assignTarget(request, targetSection);
         request.initiatedBy = requestingUser;
 
         try {
@@ -156,14 +144,15 @@ export class MembershipRequestsService {
           if (isUniqueViolationOn(error, MEMBERSHIP_REQUEST_PENDING_JOIN_IDX)) {
             throw new ConflictException({
               code: 'JOIN_REQUEST_ALREADY_PENDING',
-              message: 'You already have a pending join request for this group',
+              message:
+                'You already have a pending join request for this section',
             });
           }
           throw error;
         }
 
         this.auditLogService.record(em, {
-          community: rootGroup,
+          community: targetSection,
           action: AuditAction.JOIN_REQUEST,
           actor: requestingUser,
           targetType: AuditTargetType.MEMBERSHIP_REQUEST,
@@ -244,38 +233,31 @@ export class MembershipRequestsService {
   /**
    * Create an Invitation.  Authorization is pre-checked by the caller
    * (GroupPermissionsGuard for GROUP_INVITE + service-level
-   * memberInvitesAllowed check for MEMBER callers).
-   *
-   * The `callerRoles` array is needed to enforce that MEMBER may only invite
-   * when Group.memberInvitesAllowed is true; ADMIN and OWNER bypass that
-   * setting entirely.
+   * memberInvitesAllowed check for MEMBER callers). GROUP target is always
+   * rejected - see groupHasNoMembership().
    */
   async createInvitation(
     targetGroupId: string,
     input: CreateInvitationInput,
     inviter: User,
     callerRoles: GroupRole[],
-    callerMembershipStatus: GroupMembershipStatus,
+    callerMembershipStatus: SectionMembershipStatus,
   ): Promise<MembershipRequestResponseDto> {
+    if (input.targetType === MembershipRequestTarget.GROUP) {
+      throw groupHasNoMembership();
+    }
+
     return this.em.transactional(async (em) => {
-      const targetGroup = await this.loadActiveCommunityOrFail(
+      const targetSection = await this.loadActiveSectionOrFail(
         em,
         targetGroupId,
       );
 
-      if (input.targetType === MembershipRequestTarget.GROUP) {
-        this.assertIsRootGroup(targetGroup);
-        // For GROUP-level invitations the caller needs MEMBERSHIP_INVITE,
-        // which only ADMIN/OWNER have.  Guard already enforced it, but we
-        // double-check the targetType matches the guard's expectation.
-      } else {
-        // SECTION-level invitation: check memberInvitesAllowed for plain MEMBERs
-        this.assertCanInviteToGroup(
-          targetGroup,
-          callerRoles,
-          callerMembershipStatus,
-        );
-      }
+      this.assertCanInviteToGroup(
+        targetSection,
+        callerRoles,
+        callerMembershipStatus,
+      );
 
       // Validate input: exactly one of invitedUserId / invitedEmail
       if (!input.invitedUserId && !input.invitedEmail) {
@@ -305,12 +287,7 @@ export class MembershipRequestsService {
         invitedUser = found;
 
         // Already a member?
-        await this.assertNotAlreadyJoined(
-          em,
-          targetGroup,
-          input.targetType,
-          invitedUser,
-        );
+        await this.assertNotAlreadyJoined(em, targetSection, invitedUser);
       } else {
         invitedEmail = input.invitedEmail!;
 
@@ -319,30 +296,21 @@ export class MembershipRequestsService {
         if (existing) {
           invitedUser = existing;
           invitedEmail = null; // treat as user-based invitation
-          await this.assertNotAlreadyJoined(
-            em,
-            targetGroup,
-            input.targetType,
-            invitedUser,
-          );
+          await this.assertNotAlreadyJoined(em, targetSection, invitedUser);
         }
       }
 
-      const rootGroup = await this.groupHierarchyService.resolveRootGroup(
-        targetGroup,
-        em,
-      );
       // Only checkable once an actual account is identified - an
       // email-only invitee with no account yet cannot have been banned
-      // (banning requires having held a Membership first).
+      // (banning requires having held a membership first).
       if (invitedUser) {
-        await this.assertNotBanned(em, rootGroup.id, invitedUser.id);
+        await this.assertNotBanned(em, targetSection.id, invitedUser.id);
       }
 
       const request = new MembershipRequest();
       request.type = MembershipRequestType.INVITATION;
       request.targetType = input.targetType;
-      assignTarget(request, targetGroup);
+      assignTarget(request, targetSection);
       request.initiatedBy = inviter;
       request.invitedUser = invitedUser;
       request.invitedEmail = invitedEmail;
@@ -365,7 +333,7 @@ export class MembershipRequestsService {
       }
 
       this.auditLogService.record(em, {
-        community: rootGroup,
+        community: targetSection,
         action: AuditAction.INVITE_MEMBER,
         actor: inviter,
         targetType: AuditTargetType.MEMBERSHIP_REQUEST,
@@ -388,15 +356,15 @@ export class MembershipRequestsService {
    * Only three principals may cancel:
    *   1. The original inviter (initiatedBy) — regardless of their current
    *      role, they always own the invitation they sent.
-   *   2. ADMIN of the target Group — can clean up any invitation for their
-   *      Group.
-   *   3. OWNER of the target Group — same as ADMIN, always allowed.
+   *   2. ADMIN of the target Section — can clean up any invitation for
+   *      their Section.
+   *   3. OWNER of the target Section — same as ADMIN, always allowed.
    *
    * A plain MEMBER (who is NOT the inviter) cannot cancel someone else's
-   * invitation even if Group.memberInvitesAllowed is true.
+   * invitation even if Section.memberInvitesAllowed is true.
    *
    * `callerRoles` must be the resolved Role Assignments of `actor` in the
-   * target Group, supplied by the controller via resolveCallerContext().
+   * target Section, supplied by the controller via resolveCallerContext().
    */
   async cancelInvitation(
     requestId: string,
@@ -491,13 +459,11 @@ export class MembershipRequestsService {
   // ─── ACCEPT / REJECT (by the invitee) ────────────────────────────────────
 
   /**
-   * The invitee accepts their PENDING INVITATION.
+   * The invitee accepts their PENDING INVITATION - creates the
+   * SectionMembership and grants MEMBER atomically (see fulfillJoin).
    *
-   * For GROUP target: creates/reactivates a Membership only.
-   * For SECTION target: ensures Membership in Root Group AND grants MEMBER.
-   *
-   * Idempotent at the Membership/Role level: if the invitee is somehow
-   * already an active member (e.g. accepted through a different path
+   * Idempotent at the membership level: if the invitee is somehow already
+   * an active member (e.g. accepted through a different path
    * concurrently), a ConflictException is thrown rather than creating a
    * duplicate.
    */
@@ -540,18 +506,17 @@ export class MembershipRequestsService {
         });
       }
 
-      await this.fulfillJoin(
-        em,
-        requestTarget(request),
-        request.targetType,
-        acceptingUser,
-      );
+      const target = requestTarget(request);
+      if (!(target instanceof Section)) {
+        throw groupHasNoMembership();
+      }
+      await this.fulfillJoin(em, target, acceptingUser);
 
       request.status = MembershipRequestStatus.ACCEPTED;
       request.processedAt = new Date();
       request.processedBy = acceptingUser;
 
-      await this.recordRequestAudit(
+      this.recordRequestAudit(
         em,
         request,
         AuditAction.ACCEPT_INVITATION,
@@ -598,7 +563,7 @@ export class MembershipRequestsService {
       request.processedAt = new Date();
       request.processedBy = rejectingUser;
 
-      await this.recordRequestAudit(
+      this.recordRequestAudit(
         em,
         request,
         AuditAction.DECLINE_INVITATION,
@@ -634,18 +599,17 @@ export class MembershipRequestsService {
       }
       this.assertPending(request);
 
-      await this.fulfillJoin(
-        em,
-        requestTarget(request),
-        request.targetType,
-        request.initiatedBy,
-      );
+      const target = requestTarget(request);
+      if (!(target instanceof Section)) {
+        throw groupHasNoMembership();
+      }
+      await this.fulfillJoin(em, target, request.initiatedBy);
 
       request.status = MembershipRequestStatus.ACCEPTED;
       request.processedAt = new Date();
       request.processedBy = actor;
 
-      await this.recordRequestAudit(
+      this.recordRequestAudit(
         em,
         request,
         AuditAction.APPROVE_JOIN_REQUEST,
@@ -679,7 +643,7 @@ export class MembershipRequestsService {
       request.processedAt = new Date();
       request.processedBy = actor;
 
-      await this.recordRequestAudit(
+      this.recordRequestAudit(
         em,
         request,
         AuditAction.REJECT_JOIN_REQUEST,
@@ -800,158 +764,120 @@ export class MembershipRequestsService {
   // ─── Private helpers ──────────────────────────────────────────────────────
 
   /**
-   * Creates or reactivates membership for an auto-join or accepted request.
-   *
-   * GROUP target: only creates a Membership (no Role anywhere).
-   * SECTION target: ensures Membership in Root Group + MEMBER Role in targetGroup.
+   * Creates the SectionMembership and grants MEMBER atomically for an
+   * auto-join or accepted request - the single place (alongside
+   * SectionMembershipsService.addMember and SectionsService.create) that
+   * ever creates a membership.
    */
   private async fulfillJoin(
     em: EntityManager,
-    targetGroup: Community,
-    targetType: MembershipRequestTarget,
+    targetSection: Section,
     user: User,
   ): Promise<void> {
-    const rootGroup = await this.groupHierarchyService.resolveRootGroup(
-      targetGroup,
-      em,
-    );
-
     // Re-checked here (not just at Join/Invite creation time) since this is
     // also reached by acceptInvitation/approveJoinRequest, which can run
     // well after the underlying request was created - a ban imposed in the
     // meantime must still block the membership from actually being created.
-    await this.assertNotBanned(em, rootGroup.id, user.id);
+    await this.assertNotBanned(em, targetSection.id, user.id);
 
-    // Ensure Membership in Root Group
-    let membership = await loadActiveMembership(em, rootGroup.id, user.id);
-    if (!membership) {
-      // Check for ALREADY_MEMBER before creating to surface a clean error
-      // (also guarded by the partial unique index).
-      membership = new GroupMembership();
-      membership.rootGroup = rootGroup;
-      membership.user = user;
-      membership.joinedAt = new Date();
-
-      try {
-        em.persist(membership);
-        await em.flush();
-      } catch (error) {
-        if (isUniqueViolationOn(error, GROUP_MEMBERSHIPS_ACTIVE_UNIQUE_INDEX)) {
-          // Re-read the now-committed membership
-          const existing = await loadActiveMembership(
-            em,
-            rootGroup.id,
-            user.id,
-          );
-          if (existing) {
-            membership = existing;
-          } else {
-            throw error;
-          }
-        } else {
-          throw error;
-        }
-      }
-    }
-
-    if (targetType === MembershipRequestTarget.GROUP) {
-      // Group invitation/join: no Role is granted (see ADR-004).
-      return;
-    }
-
-    // SECTION target: grant MEMBER in the exact targetGroup
-    await this.roleAssignmentsService.ensureMemberRole(
+    const existing = await loadActiveSectionMembership(
       em,
-      membership,
-      targetGroup,
+      targetSection.id,
+      user.id,
     );
+    if (existing) {
+      throw new ConflictException({
+        code: 'ALREADY_MEMBER',
+        message: 'You are already a member of this section',
+      });
+    }
+
+    const membership = new SectionMembership();
+    membership.section = targetSection;
+    membership.user = user;
+    membership.joinedAt = new Date();
+
+    try {
+      em.persist(membership);
+      await this.roleAssignmentsService.insertRoleAssignment(
+        em,
+        user,
+        targetSection,
+        GroupRole.MEMBER,
+        user,
+      );
+    } catch (error) {
+      if (isUniqueViolationOn(error, SECTION_MEMBERSHIPS_ACTIVE_UNIQUE_INDEX)) {
+        throw new ConflictException({
+          code: 'ALREADY_MEMBER',
+          message: 'You are already a member of this section',
+        });
+      }
+      throw error;
+    }
   }
 
   /**
-   * Throws if the user is already a member of the target (at the correct
-   * level - Membership for GROUP, MEMBER Role for SECTION).
+   * Throws if the user already has an active SectionMembership for the
+   * target Section.
    */
   private async assertNotAlreadyJoined(
     em: EntityManager,
-    targetGroup: Community,
-    targetType: MembershipRequestTarget,
+    targetSection: Section,
     user: User,
   ): Promise<void> {
-    const rootGroup = await this.groupHierarchyService.resolveRootGroup(
-      targetGroup,
+    const membership = await loadActiveSectionMembership(
       em,
+      targetSection.id,
+      user.id,
     );
-
-    const membership = await loadActiveMembership(em, rootGroup.id, user.id);
-
-    if (targetType === MembershipRequestTarget.GROUP) {
-      if (membership) {
-        throw new ConflictException({
-          code: 'ALREADY_MEMBER',
-          message: 'You are already a member of this organization',
-        });
-      }
-    } else {
-      // SECTION: check MEMBER Role Assignment in the specific group
-      if (membership) {
-        const memberRole = await em.findOne(RoleAssignment, {
-          membership: membership.id,
-          ...communityFilter(targetGroup),
-          role: GroupRole.MEMBER,
-        });
-        if (memberRole) {
-          throw new ConflictException({
-            code: 'ALREADY_GROUP_MEMBER',
-            message: 'You are already a member of this group',
-          });
-        }
-      }
+    if (membership) {
+      throw new ConflictException({
+        code: 'ALREADY_MEMBER',
+        message: 'You are already a member of this section',
+      });
     }
   }
 
   /**
-   * Throws if `userId` currently holds an active (unlifted) GroupBan for
-   * `rootGroupId` - see GroupBan. Called from every path that would create
-   * or reactivate a Membership (join, and - via fulfillJoin -
+   * Throws if `userId` currently holds an active (unlifted) SectionBan for
+   * `sectionId` - see SectionBan. Called from every path that would create
+   * or reactivate a membership (join, and - via fulfillJoin -
    * acceptInvitation/approveJoinRequest) and from createInvitation (so a
    * banned user cannot even be re-invited).
    */
   private async assertNotBanned(
     em: EntityManager,
-    rootGroupId: string,
+    sectionId: string,
     userId: string,
   ): Promise<void> {
-    const ban = await em.findOne(GroupBan, {
-      rootGroup: rootGroupId,
+    const ban = await em.findOne(SectionBan, {
+      section: sectionId,
       user: userId,
       liftedAt: null,
     });
     if (ban) {
       throw new ForbiddenException({
         code: 'USER_BANNED',
-        message: 'This user is banned from this organization',
+        message: 'This user is banned from this section',
       });
     }
   }
 
   /**
-   * Resolves the Root Group to file the entry under (AuditLogEntry.community
-   * is always a Root Group, even when `request.targetGroup` is a Child
-   * Group) and records it. Shared by accept/decline Invitation and
+   * Records the audit entry under the *exact* request target - never a
+   * resolved root - matching the "no inheritance" rule applied to audit
+   * trails elsewhere. Shared by accept/decline Invitation and
    * approve/reject Join Request.
    */
-  private async recordRequestAudit(
+  private recordRequestAudit(
     em: EntityManager,
     request: MembershipRequest,
     action: AuditAction,
     actor: User,
-  ): Promise<void> {
-    const community = await this.groupHierarchyService.resolveRootGroup(
-      requestTarget(request),
-      em,
-    );
+  ): void {
     this.auditLogService.record(em, {
-      community,
+      community: requestTarget(request),
       action,
       actor,
       targetType: AuditTargetType.MEMBERSHIP_REQUEST,
@@ -961,9 +887,9 @@ export class MembershipRequestsService {
 
   /** Enforces that a MEMBER may only invite when memberInvitesAllowed=true. */
   private assertCanInviteToGroup(
-    targetGroup: Community,
+    targetSection: Section,
     callerRoles: GroupRole[],
-    callerMembershipStatus: GroupMembershipStatus,
+    callerMembershipStatus: SectionMembershipStatus,
   ): void {
     const hasAdminOrOwner = callerRoles.some(
       (r) => r === GroupRole.ADMIN || r === GroupRole.OWNER,
@@ -971,27 +897,17 @@ export class MembershipRequestsService {
     if (hasAdminOrOwner) return; // ADMIN/OWNER always allowed
 
     // MEMBER (or INSTRUCTOR/ASSISTANT) path - require setting
-    if (!targetGroup.memberInvitesAllowed) {
+    if (!targetSection.memberInvitesAllowed) {
       throw new ForbiddenException({
         code: 'MEMBER_INVITES_NOT_ALLOWED',
         message:
-          'Member invitations are disabled for this group; only ADMIN and OWNER may invite',
+          'Member invitations are disabled for this section; only ADMIN and OWNER may invite',
       });
     }
-    if (callerMembershipStatus !== GroupMembershipStatus.ACTIVE) {
+    if (callerMembershipStatus !== SectionMembershipStatus.ACTIVE) {
       throw new ForbiddenException({
         code: 'MEMBERSHIP_NOT_ACTIVE',
         message: 'Only active members may send invitations',
-      });
-    }
-  }
-
-  private assertIsRootGroup(community: Community): void {
-    if (!(community instanceof Group) || community.parentGroup !== null) {
-      throw new UnprocessableEntityException({
-        code: 'NOT_A_ROOT_GROUP',
-        message:
-          'GROUP-level invitations and join requests require a root Group as target',
       });
     }
   }
@@ -1005,27 +921,25 @@ export class MembershipRequestsService {
     }
   }
 
-  private async loadActiveCommunityOrFail(
+  private async loadActiveSectionOrFail(
     em: EntityManager,
-    groupId: string,
-  ): Promise<Community> {
-    const community = await this.groupHierarchyService.findCommunityById(
-      groupId,
-      em,
-    );
-    if (!community) {
+    sectionId: string,
+  ): Promise<Section> {
+    const section = await em.findOne(Section, { id: sectionId });
+    if (!section) {
       throw new NotFoundException({
-        code: 'GROUP_NOT_FOUND',
-        message: 'Group not found',
+        code: 'SECTION_NOT_FOUND',
+        message: 'Section not found',
       });
     }
-    if (community.status === GroupStatus.ARCHIVED) {
+    if (section.status === GroupStatus.ARCHIVED) {
       throw new ConflictException({
         code: 'GROUP_ARCHIVED',
-        message: 'This group is archived and is read-only until it is restored',
+        message:
+          'This section is archived and is read-only until it is restored',
       });
     }
-    return community;
+    return section;
   }
 
   private async loadRequestByIdOrFail(

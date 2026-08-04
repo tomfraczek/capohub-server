@@ -1,7 +1,7 @@
 import { Entity, Index, ManyToOne, Property, Unique } from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
-import { GroupMembership } from './group-membership.entity';
+import { SectionMembership } from './section-membership.entity';
 
 export const MEMBERSHIP_SUSPENSIONS_ACTIVE_UNIQUE_INDEX =
   'membership_suspensions_membership_id_active_unique';
@@ -55,8 +55,8 @@ export const MEMBERSHIP_SUSPENSIONS_ACTIVE_UNIQUE_INDEX =
 })
 export class MembershipSuspension extends BaseEntity {
   @Index()
-  @ManyToOne(() => GroupMembership, { deleteRule: 'cascade' })
-  membership!: GroupMembership;
+  @ManyToOne(() => SectionMembership, { deleteRule: 'cascade' })
+  membership!: SectionMembership;
 
   @ManyToOne(() => User, { nullable: true, deleteRule: 'set null' })
   suspendedBy: User | null = null;

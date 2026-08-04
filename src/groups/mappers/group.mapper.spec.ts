@@ -1,12 +1,13 @@
-import { GroupMembership } from '../entities/group-membership.entity';
+import { SectionMembership } from '../entities/section-membership.entity';
 import { Group } from '../entities/group.entity';
+import { Section } from '../entities/section.entity';
 import { RoleAssignment } from '../entities/role-assignment.entity';
-import { GroupMembershipStatus } from '../enums/group-membership-status.enum';
+import { SectionMembershipStatus } from '../enums/section-membership-status.enum';
 import { GroupRole } from '../enums/group-role.enum';
 import { GroupStatus } from '../enums/group-status.enum';
 import { MembershipEndReason } from '../enums/membership-end-reason.enum';
 import {
-  toGroupMembershipResponseDto,
+  toSectionMembershipResponseDto,
   toGroupResponseDto,
   toGroupSummaryResponseDto,
   toRoleAssignmentResponseDto,
@@ -24,6 +25,20 @@ function buildGroup(overrides: Partial<Group> = {}): Group {
   group.timezone = 'Europe/Warsaw';
   group.currencyCode = 'PLN';
   return Object.assign(group, overrides);
+}
+
+function buildSection(overrides: Partial<Section> = {}): Section {
+  const section = new Section();
+  section.id = 'section-1';
+  section.name = 'Capoeira Angola SP - Kids';
+  section.isPublic = true;
+  section.isHidden = false;
+  section.memberInvitesAllowed = false;
+  section.publicCode = 'ABCD-KIDS';
+  section.status = GroupStatus.ACTIVE;
+  section.timezone = 'Europe/Warsaw';
+  section.currencyCode = 'PLN';
+  return Object.assign(section, overrides);
 }
 
 describe('group.mapper', () => {
@@ -60,8 +75,8 @@ describe('group.mapper', () => {
       const group = buildGroup();
 
       const dto = toGroupSummaryResponseDto(group, [
-        GroupRole.MEMBER,
         GroupRole.ADMIN,
+        GroupRole.OWNER,
       ]);
 
       expect(dto).toEqual({
@@ -72,7 +87,7 @@ describe('group.mapper', () => {
         isHidden: false,
         publicCode: 'ABCD-1234',
         status: GroupStatus.ACTIVE,
-        myRoles: [GroupRole.MEMBER, GroupRole.ADMIN],
+        myRoles: [GroupRole.ADMIN, GroupRole.OWNER],
       });
     });
 
@@ -85,21 +100,22 @@ describe('group.mapper', () => {
     });
   });
 
-  describe('toGroupMembershipResponseDto', () => {
-    it('maps the membership, every Root Group Role it holds, its minimal user reference, and assigned cohorts', () => {
-      const membership = new GroupMembership();
+  describe('toSectionMembershipResponseDto', () => {
+    it('maps the membership, every Role it holds for the Section, its minimal user reference, and assigned cohorts', () => {
+      const membership = new SectionMembership();
       membership.id = 'membership-1';
-      membership.rootGroup = buildGroup({ id: 'root-1' });
+      membership.section = buildSection({ id: 'section-1' });
       membership.user = {
         id: 'user-1',
         displayName: 'Mestre Bimba',
       } as never;
-      membership.status = GroupMembershipStatus.ACTIVE;
+      membership.status = SectionMembershipStatus.ACTIVE;
       membership.joinedAt = new Date('2026-01-01T00:00:00.000Z');
       membership.leftAt = null;
       membership.endReason = null;
+      membership.endedBy = null;
 
-      const dto = toGroupMembershipResponseDto(
+      const dto = toSectionMembershipResponseDto(
         membership,
         [GroupRole.MEMBER, GroupRole.OWNER],
         [{ id: 'cohort-1', name: 'Kids' }],
@@ -107,28 +123,33 @@ describe('group.mapper', () => {
 
       expect(dto).toEqual({
         id: 'membership-1',
-        rootGroupId: 'root-1',
+        sectionId: 'section-1',
         user: { id: 'user-1', displayName: 'Mestre Bimba' },
-        rootRoles: [GroupRole.MEMBER, GroupRole.OWNER],
-        status: GroupMembershipStatus.ACTIVE,
+        roles: [GroupRole.MEMBER, GroupRole.OWNER],
+        status: SectionMembershipStatus.ACTIVE,
         joinedAt: '2026-01-01T00:00:00.000Z',
         leftAt: null,
         endReason: null,
+        endedBy: null,
         cohorts: [{ id: 'cohort-1', name: 'Kids' }],
       });
     });
 
-    it('maps leftAt and endReason once the membership has ended', () => {
-      const membership = new GroupMembership();
+    it('maps leftAt, endReason and endedBy once the membership has ended', () => {
+      const membership = new SectionMembership();
       membership.id = 'membership-1';
-      membership.rootGroup = buildGroup({ id: 'root-1' });
+      membership.section = buildSection({ id: 'section-1' });
       membership.user = { id: 'user-1', displayName: 'Mestre Bimba' } as never;
-      membership.status = GroupMembershipStatus.ARCHIVED;
+      membership.status = SectionMembershipStatus.ARCHIVED;
       membership.joinedAt = new Date('2026-01-01T00:00:00.000Z');
       membership.leftAt = new Date('2026-02-01T00:00:00.000Z');
       membership.endReason = MembershipEndReason.LEFT;
+      membership.endedBy = {
+        id: 'user-1',
+        displayName: 'Mestre Bimba',
+      } as never;
 
-      const dto = toGroupMembershipResponseDto(
+      const dto = toSectionMembershipResponseDto(
         membership,
         [GroupRole.MEMBER],
         [],
@@ -136,45 +157,87 @@ describe('group.mapper', () => {
 
       expect(dto.leftAt).toBe('2026-02-01T00:00:00.000Z');
       expect(dto.endReason).toBe(MembershipEndReason.LEFT);
+      expect(dto.endedBy).toEqual({
+        id: 'user-1',
+        displayName: 'Mestre Bimba',
+      });
     });
 
-    it('sets rootRoles to an empty array when the membership has no Role Assignment for its Root Group', () => {
-      const membership = new GroupMembership();
+    it('sets roles to an empty array when passed none, and endedBy to null when the membership never ended', () => {
+      const membership = new SectionMembership();
       membership.id = 'membership-1';
-      membership.rootGroup = buildGroup({ id: 'root-1' });
+      membership.section = buildSection({ id: 'section-1' });
       membership.user = { id: 'user-1', displayName: 'Mestre Bimba' } as never;
-      membership.status = GroupMembershipStatus.ACTIVE;
+      membership.status = SectionMembershipStatus.ACTIVE;
       membership.joinedAt = new Date('2026-01-01T00:00:00.000Z');
       membership.leftAt = null;
       membership.endReason = null;
+      membership.endedBy = null;
 
-      const dto = toGroupMembershipResponseDto(membership, [], []);
+      const dto = toSectionMembershipResponseDto(membership, [], []);
 
-      expect(dto.rootRoles).toEqual([]);
+      expect(dto.roles).toEqual([]);
+      expect(dto.endedBy).toBeNull();
     });
   });
 
   describe('toRoleAssignmentResponseDto', () => {
-    it('maps a Role Assignment, including the exact Group it targets and the Membership it belongs to', () => {
+    it('maps a Role Assignment, including the exact target it applies to, directly off `user` (no membership relation)', () => {
       const roleAssignment = new RoleAssignment();
       roleAssignment.id = 'role-assignment-1';
-      roleAssignment.group = buildGroup({ id: 'child-1' });
+      roleAssignment.group = buildGroup({ id: 'group-1' });
       roleAssignment.role = GroupRole.ADMIN;
       roleAssignment.grantedAt = new Date('2026-01-01T00:00:00.000Z');
-      const membership = new GroupMembership();
-      membership.id = 'membership-1';
-      membership.user = { id: 'user-1', displayName: 'Mestre Bimba' } as never;
-      roleAssignment.membership = membership;
+      roleAssignment.user = {
+        id: 'user-1',
+        displayName: 'Mestre Bimba',
+      } as never;
+      roleAssignment.grantedBy = {
+        id: 'owner-1',
+        displayName: 'Ana Silva',
+      } as never;
+      roleAssignment.revokedAt = null;
+      roleAssignment.revokedBy = null;
 
       const dto = toRoleAssignmentResponseDto(roleAssignment);
 
       expect(dto).toEqual({
         id: 'role-assignment-1',
-        groupId: 'child-1',
-        membershipId: 'membership-1',
+        groupId: 'group-1',
         user: { id: 'user-1', displayName: 'Mestre Bimba' },
         role: GroupRole.ADMIN,
         grantedAt: '2026-01-01T00:00:00.000Z',
+        grantedBy: { id: 'owner-1', displayName: 'Ana Silva' },
+        revokedAt: null,
+        revokedBy: null,
+      });
+    });
+
+    it('maps revokedAt/revokedBy once the role has been revoked', () => {
+      const roleAssignment = new RoleAssignment();
+      roleAssignment.id = 'role-assignment-1';
+      roleAssignment.section = buildSection({ id: 'section-1' });
+      roleAssignment.role = GroupRole.INSTRUCTOR;
+      roleAssignment.grantedAt = new Date('2026-01-01T00:00:00.000Z');
+      roleAssignment.user = {
+        id: 'user-1',
+        displayName: 'Mestre Bimba',
+      } as never;
+      roleAssignment.grantedBy = null;
+      roleAssignment.revokedAt = new Date('2026-03-01T00:00:00.000Z');
+      roleAssignment.revokedBy = {
+        id: 'owner-1',
+        displayName: 'Ana Silva',
+      } as never;
+
+      const dto = toRoleAssignmentResponseDto(roleAssignment);
+
+      expect(dto.groupId).toBe('section-1');
+      expect(dto.grantedBy).toBeNull();
+      expect(dto.revokedAt).toBe('2026-03-01T00:00:00.000Z');
+      expect(dto.revokedBy).toEqual({
+        id: 'owner-1',
+        displayName: 'Ana Silva',
       });
     });
   });

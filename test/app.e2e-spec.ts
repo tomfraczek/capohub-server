@@ -14,6 +14,7 @@ import { GlobalRole } from './../src/auth/permissions/global-role.enum';
 import { AuthContext } from './../src/auth/types/auth-context.type';
 import { AppConfigService } from './../src/config/app.config';
 import { HttpExceptionFilter } from './../src/common/filters/http-exception.filter';
+import { closeE2eApp } from './close-e2e-app.helper';
 import { User } from './../src/users/entities/user.entity';
 import { AvatarType } from './../src/users/enums/avatar-type.enum';
 
@@ -293,16 +294,29 @@ describe('App (e2e)', () => {
   });
 
   it('PATCH /api/v1/users/me cannot change globalRole', async () => {
-    await request(app.getHttpServer())
+    const getRes = await request(app.getHttpServer())
       .get('/api/v1/users/me')
-      .set('Authorization', 'Bearer valid-flow-token')
-      .expect(200);
+      .set('Authorization', 'Bearer valid-flow-token');
+    // eslint-disable-next-line no-console
+    console.error(
+      'DIAG globalRole GET',
+      getRes.status,
+      JSON.stringify(getRes.body),
+    );
+    expect(getRes.status).toBe(200);
 
-    const patchResponse = await request(app.getHttpServer())
+    const patchRes = await request(app.getHttpServer())
       .patch('/api/v1/users/me')
       .set('Authorization', 'Bearer valid-flow-token')
-      .send({ displayName: 'Still Just A User', globalRole: 'SUPER_ADMIN' })
-      .expect(200);
+      .send({ displayName: 'Still Just A User', globalRole: 'SUPER_ADMIN' });
+    // eslint-disable-next-line no-console
+    console.error(
+      'DIAG globalRole PATCH',
+      patchRes.status,
+      JSON.stringify(patchRes.body),
+    );
+    expect(patchRes.status).toBe(200);
+    const patchResponse = patchRes;
 
     expect(patchResponse.body).toMatchObject({
       displayName: 'Still Just A User',
@@ -511,8 +525,11 @@ describe('App (e2e)', () => {
   });
 
   afterAll(async () => {
-    const em = app.get(EntityManager).fork();
-    await em.nativeDelete(User, { clerkUserId: { $in: TEST_CLERK_USER_IDS } });
-    await app.close();
+    await closeE2eApp(app, async () => {
+      const em = app.get(EntityManager).fork();
+      await em.nativeDelete(User, {
+        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+      });
+    });
   });
 });

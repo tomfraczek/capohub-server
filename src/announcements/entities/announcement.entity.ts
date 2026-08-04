@@ -1,4 +1,11 @@
-import { Entity, Enum, Index, ManyToOne, Property } from '@mikro-orm/core';
+import {
+  Check,
+  Entity,
+  Enum,
+  Index,
+  ManyToOne,
+  Property,
+} from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { Group } from '../../groups/entities/group.entity';
 import { Section } from '../../groups/entities/section.entity';
@@ -40,6 +47,16 @@ import { AnnouncementRecipientType } from '../enums/announcement-recipient-type.
 // already driving the plan) - see isPinned's own comment below.
 @Entity({ tableName: 'announcements' })
 @Index({ properties: ['isPinned', 'createdAt'] })
+// Exactly one of `communityGroup`/`communitySection` must be set, never
+// both, never neither - mirrored here so migration:create/schema:update
+// know this constraint is intentional and never propose dropping it. Name
+// matches the constraint the migration creates verbatim - see
+// Migration20260802100200_AddPolymorphicCommunityReferences.
+@Check<Announcement>({
+  name: 'announcements_community_group_or_section_check',
+  expression: (columns) =>
+    `("${columns.communityGroup}" is not null and "${columns.communitySection}" is null) or ("${columns.communityGroup}" is null and "${columns.communitySection}" is not null)`,
+})
 export class Announcement extends BaseEntity {
   // The Group-or-Section this Announcement belongs to, represented by two
   // nullable FKs (exactly one set) since the Group/Section physical split -

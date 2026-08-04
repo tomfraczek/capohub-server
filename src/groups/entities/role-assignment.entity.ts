@@ -1,4 +1,5 @@
 import {
+  Check,
   Entity,
   Index,
   ManyToOne,
@@ -7,79 +8,99 @@ import {
   Unique,
 } from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
+import { User } from '../../users/entities/user.entity';
 import { GroupRole } from '../enums/group-role.enum';
 import { Group } from './group.entity';
 import { Section } from './section.entity';
-import { GroupMembership } from './group-membership.entity';
 
 export const ROLE_ASSIGNMENTS_UNIQUE_INDEX =
-  'role_assignments_membership_id_group_id_role_unique';
+  'role_assignments_user_id_group_id_role_unique';
 
 export const ROLE_ASSIGNMENTS_OWNER_UNIQUE_INDEX =
   'role_assignments_group_id_owner_unique';
 
-// A Role, granted to a Membership, for exactly one Group (Root or Child) -
-// entirely independent of Membership's own fields (see ADR-028: Variant B).
-// Role is a fixed system enum (GroupRole) - never organization-defined.
+// A Role, granted directly to a User, for exactly one Group (Root or Child)
+// or one Section. No FK to any membership: authority for a Group-target
+// row comes only from this row existing (Group has no membership at all);
+// authority for a Section-target row additionally requires an active
+// SectionMembership for the same (user, section), correlated by that
+// composite key, never by a stored relation - see
+// RoleAssignmentsService.resolveAuthorization. This also means a Group
+// never inherits/loses authority through anything membership-shaped, since
+// there is nothing to point at.
 //
-// A Membership may hold *multiple* Roles for the same Group at once (e.g.
-// MEMBER + INSTRUCTOR + ADMIN all at the same time) - each is its own row.
-// The unique constraint below only prevents holding the *same* Role twice
-// for the same (Membership, Group) pair; it does not limit how many
-// distinct Roles a Membership may hold there. Effective permissions for a
-// Group are the union of every currently-active RoleAssignment's
-// permissions (see GroupPermissionService.hasAllPermissionsForRoles) - not
-// a single Role lookup.
+// A user may hold *multiple* Roles for the same target at once (e.g.
+// MEMBER + INSTRUCTOR + ADMIN all at the same time on a Section) - each is
+// its own row. The unique constraint below only prevents holding the *same*
+// Role twice for the same (user, target) pair while active.
 //
-// No `status` field: a RoleAssignment has no independent lifecycle state of
-// its own. Whether it currently grants authority is resolved dynamically by
-// checking its Membership's status (ACTIVE/READ_ONLY/INVITED/ARCHIVED) at
-// evaluation time - see GroupPermissionsGuard. "Changing" a specific Role
-// Assignment (via RoleAssignmentsService.changeRole) updates `role` on that
-// one row in place; granting an additional Role creates a new, separate
-// row; revoking a Role is a hard delete of that one row - there is no
-// documented requirement to keep a history of past Roles.
+// `revokedAt`/`revokedBy` make this a soft-revoke, not a hard delete -
+// needed to correctly disambiguate SectionMembership "stints": a user may
+// leave and rejoin a Section many times, and a historical ADMIN grant from
+// a since-ended stint must never silently regain authority just because the
+// same (user, section) has a new, unrelated active membership later. A
+// fresh RoleAssignment row is always inserted for a fresh grant instead of
+// resurrecting an old one.
+//
+// `grantedBy`/`revokedBy` are optional and `set null` on delete: knowing
+// who granted/revoked a Role is useful, but must never block or cascade
+// from that actor's own account deletion, and cannot always be known for
+// historical data (see the migration that introduces this shape).
 //
 // OWNER is the one Role that is not "just another Role" alongside the
-// others: every Group must have exactly one active OWNER (see ADR-028) -
+// others: every Group/Section must have exactly one active OWNER -
 // enforced by ROLE_ASSIGNMENTS_OWNER_UNIQUE_INDEX, a partial unique index
-// on `group` where `role = 'OWNER'`, independent of which Membership holds
-// it. Ownership moves only via an atomic transfer (delete the previous
-// OWNER row, insert a new one, same transaction - see
-// GroupMembershipsService.transferOwnership) - the previous owner loses
+// on `group`/`section` where `role = 'OWNER' and revoked_at is null`.
+// Ownership moves only via an atomic transfer (revoke the previous OWNER
+// row, insert a new one, same transaction - see
+// SectionMembershipsService.transferOwnership) - the previous owner loses
 // only the OWNER row; every other RoleAssignment they hold is untouched.
-//
-// No delete cascade on either FK - Membership and Group are archived, never
-// physically deleted (ADR-007), so there is never a delete to cascade from
-// in practice.
 @Entity({ tableName: 'role_assignments' })
 @Unique({
   name: ROLE_ASSIGNMENTS_UNIQUE_INDEX,
-  properties: ['membership', 'group', 'section', 'role'],
+  properties: ['user', 'group', 'section', 'role'],
   // `coalesce` folds the two nullable community FKs into one comparison
-  // key, since exactly one of them is ever set for a given row (see the
-  // Group/Section physical-split ADR).
+  // key, since exactly one of them is ever set for a given row. Partial on
+  // `revoked_at is null` so a user may hold a fresh grant of a Role they
+  // previously held and had revoked, without colliding with the historical
+  // row.
   expression: (table, columns, indexName) =>
-    `create unique index "${indexName}" on ${table.toString()} ("${columns.membership}", coalesce("${columns.group}", "${columns.section}"), "${columns.role}")`,
+    `create unique index "${indexName}" on ${table.toString()} ("${columns.user}", coalesce("${columns.group}", "${columns.section}"), "${columns.role}") where ("${columns.revokedAt}" is null)`,
 })
 @Unique({
   name: ROLE_ASSIGNMENTS_OWNER_UNIQUE_INDEX,
   properties: ['group', 'section'],
-  // Partial unique index (only rows where role = OWNER) - same `expression`
-  // technique as GROUP_MEMBERSHIPS_ACTIVE_UNIQUE_INDEX, required because a
-  // plain @Unique() cannot express a WHERE predicate.
+  // Partial unique index (only active rows where role = OWNER).
   expression: (table, columns, indexName) =>
-    `create unique index "${indexName}" on ${table.toString()} (coalesce("${columns.group}", "${columns.section}")) where ("${columns.role}" = 'OWNER')`,
+    `create unique index "${indexName}" on ${table.toString()} (coalesce("${columns.group}", "${columns.section}")) where ("${columns.role}" = 'OWNER' and "${columns.revokedAt}" is null)`,
+})
+// Exactly one of `group`/`section` must be set, never both, never neither.
+@Check<RoleAssignment>({
+  name: 'role_assignments_group_or_section_check',
+  expression: (columns) =>
+    `("${columns.group}" is not null and "${columns.section}" is null) or ("${columns.group}" is null and "${columns.section}" is not null)`,
+})
+// Group only ever holds OWNER/ADMIN; Section may hold any of the 5 roles -
+// enforced here, not just in service-layer validation, since a raw DB
+// write must never be able to produce an invalid combination.
+// Written as explicit OR-chains, not `role IN (...)`: Postgres always
+// canonicalizes an IN-list into `= ANY (ARRAY[...])` when storing a CHECK
+// constraint, which MikroORM's schema comparator does not reliably
+// recognize as equivalent to the original expression - producing a
+// perpetual, spurious diff in `schema:update --dump`. An OR-chain of `=`
+// comparisons round-trips cleanly instead.
+@Check<RoleAssignment>({
+  name: 'role_assignments_role_matches_target_check',
+  expression: (columns) =>
+    `("${columns.group}" is not null and ("${columns.role}" = 'OWNER' or "${columns.role}" = 'ADMIN')) or ("${columns.section}" is not null and ("${columns.role}" = 'OWNER' or "${columns.role}" = 'ADMIN' or "${columns.role}" = 'INSTRUCTOR' or "${columns.role}" = 'ASSISTANT' or "${columns.role}" = 'MEMBER'))`,
 })
 export class RoleAssignment extends BaseEntity {
   @Index()
-  @ManyToOne(() => GroupMembership)
-  membership!: GroupMembership;
+  @ManyToOne(() => User, { deleteRule: 'cascade' })
+  user!: User;
 
   // The Group-or-Section this Role Assignment targets, represented by two
-  // nullable FKs (exactly one set) since the Group/Section physical split -
-  // see GroupHierarchyService.findCommunityById for resolving whichever one
-  // is populated.
+  // nullable FKs (exactly one set).
   @Index()
   @ManyToOne(() => Group, { nullable: true, deleteRule: 'no action' })
   group: Group | null = null;
@@ -93,4 +114,13 @@ export class RoleAssignment extends BaseEntity {
 
   @Property({ type: 'timestamptz' })
   grantedAt: Date = new Date();
+
+  @ManyToOne(() => User, { nullable: true, deleteRule: 'set null' })
+  grantedBy: User | null = null;
+
+  @Property({ type: 'timestamptz', nullable: true })
+  revokedAt: Date | null = null;
+
+  @ManyToOne(() => User, { nullable: true, deleteRule: 'set null' })
+  revokedBy: User | null = null;
 }

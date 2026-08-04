@@ -28,6 +28,10 @@ describe('RoleAssignmentsController', () => {
     expect(guards).toEqual([GroupPermissionsGuard]);
   });
 
+  // Gated on GROUP_EDIT/GROUP_VIEW, not MEMBERSHIP_ROLE_CHANGE/
+  // MEMBERSHIP_VIEW - this controller is dual-mounted on both Group and
+  // Section routes, and the membership-lifecycle permissions do not exist
+  // for a Group target at all (see group-role-permissions.map.ts).
   describe.each<
     [
       keyof RoleAssignmentsController,
@@ -35,10 +39,10 @@ describe('RoleAssignmentsController', () => {
       GroupStatus[] | undefined,
     ]
   >([
-    ['create', [GroupPermission.MEMBERSHIP_ROLE_CHANGE], undefined],
-    ['list', [GroupPermission.MEMBERSHIP_VIEW], undefined],
-    ['getById', [GroupPermission.MEMBERSHIP_VIEW], undefined],
-    ['revoke', [GroupPermission.MEMBERSHIP_ROLE_CHANGE], undefined],
+    ['create', [GroupPermission.GROUP_EDIT], undefined],
+    ['list', [GroupPermission.GROUP_VIEW], undefined],
+    ['getById', [GroupPermission.GROUP_VIEW], undefined],
+    ['revoke', [GroupPermission.GROUP_EDIT], undefined],
   ])('%s', (method, expectedPermissions, expectedAllowedStatuses) => {
     it(`requires ${expectedPermissions.join(', ')}`, () => {
       const reflector = new Reflector();
@@ -66,11 +70,14 @@ describe('RoleAssignmentsController', () => {
   });
 
   describe('create', () => {
-    it('delegates to RoleAssignmentsService.grantRole', async () => {
+    it('delegates to RoleAssignmentsService.grantRole with a userId-based body for a Group route', async () => {
       const dto = { id: 'role-assignment-1' } as never;
       const grantRole = jest.fn().mockResolvedValue(dto);
       const controller = buildController({ grantRole });
-      const body = { membershipId: 'membership-1', role: 'ADMIN' } as never;
+      const body = {
+        userId: '22222222-2222-4222-8222-222222222222',
+        role: 'ADMIN',
+      };
       const user = { id: 'user-1' } as never;
 
       const response = await controller.create(
@@ -82,6 +89,42 @@ describe('RoleAssignmentsController', () => {
 
       expect(grantRole).toHaveBeenCalledWith('group-1', body, user);
       expect(response).toBe(dto);
+    });
+
+    it('delegates to RoleAssignmentsService.grantRole for a Section route, accepting a Section-only role', async () => {
+      const dto = { id: 'role-assignment-1' } as never;
+      const grantRole = jest.fn().mockResolvedValue(dto);
+      const controller = buildController({ grantRole });
+      const body = {
+        userId: '22222222-2222-4222-8222-222222222222',
+        role: 'INSTRUCTOR',
+      };
+      const user = { id: 'user-1' } as never;
+
+      const response = await controller.create(
+        undefined as never,
+        'section-1',
+        body,
+        user,
+      );
+
+      expect(grantRole).toHaveBeenCalledWith('section-1', body, user);
+      expect(response).toBe(dto);
+    });
+
+    it('rejects a Section-only role (e.g. INSTRUCTOR) on a Group route with a validation error', async () => {
+      const grantRole = jest.fn();
+      const controller = buildController({ grantRole });
+      const body = {
+        userId: '22222222-2222-4222-8222-222222222222',
+        role: 'INSTRUCTOR',
+      };
+      const user = { id: 'user-1' } as never;
+
+      await expect(
+        controller.create('group-1', undefined as never, body, user),
+      ).rejects.toMatchObject({ response: { code: 'VALIDATION_ERROR' } });
+      expect(grantRole).not.toHaveBeenCalled();
     });
   });
 

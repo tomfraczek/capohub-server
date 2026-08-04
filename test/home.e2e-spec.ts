@@ -34,10 +34,10 @@ import { CLERK_CLIENT } from '../src/auth/clerk/clerk-client.provider';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { closeE2eApp } from './close-e2e-app.helper';
 import { HomeResponseDto } from '../src/home/dto/home-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
-import { GroupMembership } from '../src/groups/entities/group-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
@@ -195,55 +195,56 @@ describe('Home (e2e)', () => {
   });
 
   afterAll(async () => {
-    const cleanup = app.get(EntityManager).fork();
-    await cleanup.nativeDelete(Song, { category: category.id });
-    await cleanup.nativeDelete(SongCategory, { id: category.id });
-    const eventInCommunity = {
-      event: {
+    await closeE2eApp(app, async () => {
+      const cleanup = app.get(EntityManager).fork();
+      await cleanup.nativeDelete(Song, { category: category.id });
+      await cleanup.nativeDelete(SongCategory, { id: category.id });
+      const eventInCommunity = {
+        event: {
+          $or: [
+            { communityGroup: { $in: createdGroupIds } },
+            { communitySection: { $in: createdGroupIds } },
+          ],
+        },
+      };
+      await cleanup.nativeDelete(EventGuardianAssignment, eventInCommunity);
+      await cleanup.nativeDelete(EventAttendee, eventInCommunity);
+      await cleanup.nativeDelete(EventInvitation, eventInCommunity);
+      await cleanup.nativeDelete(EventRoleAssignment, eventInCommunity);
+      await cleanup.nativeDelete(EventStatusHistory, eventInCommunity);
+      await cleanup.nativeDelete(Event, {
         $or: [
           { communityGroup: { $in: createdGroupIds } },
           { communitySection: { $in: createdGroupIds } },
         ],
-      },
-    };
-    await cleanup.nativeDelete(EventGuardianAssignment, eventInCommunity);
-    await cleanup.nativeDelete(EventAttendee, eventInCommunity);
-    await cleanup.nativeDelete(EventInvitation, eventInCommunity);
-    await cleanup.nativeDelete(EventRoleAssignment, eventInCommunity);
-    await cleanup.nativeDelete(EventStatusHistory, eventInCommunity);
-    await cleanup.nativeDelete(Event, {
-      $or: [
-        { communityGroup: { $in: createdGroupIds } },
-        { communitySection: { $in: createdGroupIds } },
-      ],
+      });
+      const announcementCommunityInIds = {
+        $or: [
+          { communityGroup: { $in: createdGroupIds } },
+          { communitySection: { $in: createdGroupIds } },
+        ],
+      };
+      await cleanup.nativeDelete(AnnouncementRead, {
+        announcement: announcementCommunityInIds,
+      });
+      await cleanup.nativeDelete(Announcement, announcementCommunityInIds);
+      await cleanup.nativeDelete(RoleAssignment, {
+        $or: [
+          { group: { $in: createdGroupIds } },
+          { section: { $in: createdGroupIds } },
+        ],
+      });
+      await cleanup.nativeDelete(AuditLogEntry, {
+        $or: [
+          { group: { $in: createdGroupIds } },
+          { section: { $in: createdGroupIds } },
+        ],
+      });
+      await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      await cleanup.nativeDelete(User, {
+        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+      });
     });
-    const announcementCommunityInIds = {
-      $or: [
-        { communityGroup: { $in: createdGroupIds } },
-        { communitySection: { $in: createdGroupIds } },
-      ],
-    };
-    await cleanup.nativeDelete(AnnouncementRead, {
-      announcement: announcementCommunityInIds,
-    });
-    await cleanup.nativeDelete(Announcement, announcementCommunityInIds);
-    await cleanup.nativeDelete(RoleAssignment, {
-      $or: [
-        { group: { $in: createdGroupIds } },
-        { section: { $in: createdGroupIds } },
-      ],
-    });
-    await cleanup.nativeDelete(GroupMembership, {
-      rootGroup: { $in: createdGroupIds },
-    });
-    await cleanup.nativeDelete(AuditLogEntry, {
-      community: { $in: createdGroupIds },
-    });
-    await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
-    await cleanup.nativeDelete(User, {
-      clerkUserId: { $in: TEST_CLERK_USER_IDS },
-    });
-    await app.close();
   });
 
   function groupPayload(
@@ -284,6 +285,11 @@ describe('Home (e2e)', () => {
     return created;
   }
 
+  // Group has no membership/MEMBER role at all (see the Membership/
+  // RoleAssignments rebuild) - the only way to associate another user with
+  // a Group is a direct ADMIN grant, which is also sufficient for
+  // `isCommunityMember`/COMMUNITY_MEMBERS visibility (any held
+  // RoleAssignment counts - see RoleAssignmentsService.isCommunityMember).
   async function addMember(
     ownerToken: string,
     groupId: string,
@@ -296,9 +302,9 @@ describe('Home (e2e)', () => {
         .expect(200),
     );
     await request(app.getHttpServer())
-      .post(`/api/v1/groups/${groupId}/members`)
+      .post(`/api/v1/groups/${groupId}/role-assignments`)
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ userId: memberUser.id, role: GroupRole.MEMBER })
+      .send({ userId: memberUser.id, role: GroupRole.ADMIN })
       .expect(201);
   }
 

@@ -5,21 +5,23 @@ import { MembershipRequestStatus } from '../enums/membership-request-status.enum
 import { GroupUserRefDto } from './group-user-ref.dto';
 
 // Minimal community reference used inside dashboard cards (invitations,
-// join requests) - never the full GroupResponseDto. `isRootGroup` lets the
-// frontend label the card "Group" vs "Section" without re-deriving it
-// from a `parentId` the caller may not even have loaded (see PAD-001
-// §3.3 Shared Screens).
+// join requests) - never the full GroupResponseDto/SectionResponseDto.
+// `isGroup` lets the frontend label the card "Group" vs "Section" without
+// re-deriving it from a `parentId` the caller may not even have loaded.
+// Computed directly from the entity's own type (`instanceof Group`), never
+// from `parentGroup === null` - a non-root child Group is still a Group,
+// not a Section (the old `isRootGroup` name conflated the two).
 export interface CommunityHomeCommunityRefDto {
   id: string;
   name: string;
   logoUrl: string | null;
-  isRootGroup: boolean;
+  isGroup: boolean;
 }
 
 // Row shape for the "My Communities" section. Deliberately excludes
-// `memberCount` (not implemented - see PAD-001 §19.1) and never collapses
-// `myRoles` into a single `role` (a Membership may hold several Roles for
-// the same Group at once - ADR-028).
+// `memberCount` (not implemented) and never collapses `myRoles` into a
+// single `role` (a user may hold several Roles for the same target at
+// once).
 export interface CommunityHomeCommunityDto {
   id: string;
   name: string;
@@ -30,9 +32,9 @@ export interface CommunityHomeCommunityDto {
   // The Group this community belongs to - itself, when this row already
   // *is* the Group. Needed to group Sections under their Group in the UI
   // even when they are not immediate children of it (hierarchy depth is
-  // unlimited - ADR-002).
+  // unlimited).
   rootGroupId: string;
-  isRootGroup: boolean;
+  isGroup: boolean;
   myRoles: GroupRole[];
   isPublic: boolean;
   isHidden: boolean;
@@ -57,10 +59,9 @@ export interface CommunityHomeJoinRequestDto {
   createdAt: string;
 }
 
-// Generic shape for a capped dashboard section - see docs/api-conventions.md
-// ("Dashboard section shape"). `total` and `hasMore` always describe the
-// full matching set, not just `items`, so summary counts stay consistent
-// with what was actually returned.
+// Generic shape for a capped dashboard section. `total` and `hasMore`
+// always describe the full matching set, not just `items`, so summary
+// counts stay consistent with what was actually returned.
 export interface CommunityHomeBoundedSectionDto<T> {
   items: T[];
   total: number;
@@ -76,98 +77,67 @@ export interface CommunityHomeSummaryDto {
 
 // Contextual capability data. `canCreateGroup` is a real global boolean
 // (creating a Group requires no permission - see GroupsService.create).
-// Every other field is a list of community ids, NOT a global boolean -
-// which action is available always depends on which specific community
-// (Group or Section) the user holds the underlying permission for, so the
-// frontend always receives the exact set of ids rather than a
-// lie-by-omission boolean (see PAD-001 §17.4 "Permission Transparency").
+// Every other capability is a *pair* of community-id lists - `...GroupIds`
+// and `...SectionIds` - never one mixed list: Group and Section have
+// genuinely different, non-inheriting authorization (Group has no
+// membership at all), and this codebase's established convention for "a
+// Group-or-Section reference" is always two explicit, disjoint fields,
+// never a single field carrying a type tag (see RoleAssignment/
+// Announcement/Event's own dual-FK pattern). Capabilities that are
+// structurally Section-only (membership-lifecycle: ban/suspend/invite/
+// join-request-review/manage-members) still declare both fields for
+// uniformity, but `...GroupIds` for those is always empty - itself
+// meaningful ("this can never apply to a Group"), not a gap.
+//
 // The frontend must never compute any of these from
 // `myRoles`/`myCommunities` - always read them from here.
 export interface CommunityHomeCapabilitiesDto {
   canCreateGroup: boolean;
-  canCreateSectionInCommunityIds: string[];
-  // Create an Event under this community (GroupPermission.EVENT_CREATE,
-  // Admin/Owner tier) - requires the community to be ACTIVE, mirroring
-  // EventsController's route guard (no @AllowGroupStatuses override there,
-  // so the default ACTIVE-only policy applies). Lets the frontend show a
-  // "Create Event" action per community without guessing eligibility from
-  // `myRoles`/GroupRole.
-  canCreateEventInCommunityIds: string[];
-  canReviewJoinRequestsInCommunityIds: string[];
-  // Read access to a community's member list (GET .../members) - works in
-  // any Group status.
-  canViewMembersInCommunityIds: string[];
-  // Add/remove a member (MEMBERSHIP_ADD/MEMBERSHIP_REMOVE tier) - requires
-  // the Group to be ACTIVE.
-  canManageMembersInCommunityIds: string[];
-  // Send a new Invitation for this community - requires ACTIVE, and, for a
-  // caller whose only roles are MEMBER/ASSISTANT/INSTRUCTOR,
-  // Group.memberInvitesAllowed === true (ADMIN/OWNER bypass that setting -
-  // see docs "Role → Permission reference" footnote).
-  canInviteMembersInCommunityIds: string[];
-  // Cancel/resend an existing Invitation on another member's behalf
-  // (MEMBERSHIP_INVITE tier) - requires ACTIVE.
-  canManageInvitationsInCommunityIds: string[];
-  // Grant/revoke a Role Assignment (MEMBERSHIP_ROLE_CHANGE) - requires
-  // ACTIVE.
-  canManageRolesInCommunityIds: string[];
-  // Transfer ownership (GROUP_OWNERSHIP_TRANSFER, OWNER-only) - requires
-  // ACTIVE.
-  canTransferOwnershipInCommunityIds: string[];
-  // Archive (GROUP_ARCHIVE, OWNER-only) - valid from ACTIVE or READ_ONLY.
-  canArchiveCommunityIds: string[];
-  // Unarchive/"Restore" (GROUP_UNARCHIVE, OWNER-only) - valid only from
-  // ARCHIVED. Unlike every other list here, communities that qualify are
-  // NOT necessarily present in `myCommunities` (ARCHIVED communities are
-  // excluded from it - see myCommunities below) - resolve the community's
-  // own name/logo via GET /groups/:id if you need to display it.
-  canRestoreCommunityIds: string[];
-  // Permanently delete (GROUP_DELETE, OWNER-only, see ADR-029) - valid from
-  // ACTIVE, READ_ONLY, or ARCHIVED. Same "may not be in myCommunities" note
-  // as canRestoreCommunityIds applies to any ARCHIVED community here.
-  canDeleteCommunityIds: string[];
-  // Read this community's Audit Log (AUDIT_LOG_VIEW) - works in any Group
-  // status, including DELETED (historical data remains visible - ADR-007).
-  canViewAuditLogInCommunityIds: string[];
-  // Manage the caller's own Community Notification settings - available to
-  // every community with an ACTIVE Membership, independent of Role (see
-  // CommunityNotificationSettingsService) - deliberately not a
-  // Role/Permission-gated capability like every other one here.
-  canManageNotificationsInCommunityIds: string[];
-  // Ban/unban a member (MEMBERSHIP_BAN/MEMBERSHIP_UNBAN tier) - requires
-  // ACTIVE.
-  canBanMembersInCommunityIds: string[];
-  // Suspend/unsuspend a member (MEMBERSHIP_SUSPEND/MEMBERSHIP_UNSUSPEND
-  // tier) - requires ACTIVE.
-  canSuspendMembersInCommunityIds: string[];
-  // Create/edit/pin/delete an Announcement under this community
-  // (GroupPermission.ANNOUNCEMENT_MANAGE, Admin/Owner tier) - requires
-  // ACTIVE, mirroring AnnouncementsController's Create/Update/Delete routes
-  // (no @AllowGroupStatuses override there, so the default ACTIVE-only
-  // policy applies). Lets the frontend gate the whole Announcements admin
-  // panel without deriving it from `myRoles` itself.
-  canManageAnnouncementsInCommunityIds: string[];
-  // Read this community's expired-Announcement archive
-  // (GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW) - works in any Group
-  // status, mirroring AnnouncementsController's archive route
-  // (@AllowGroupStatuses(...ANY_STATUS), same reasoning as
-  // canViewAuditLogInCommunityIds above).
-  canViewAnnouncementArchiveInCommunityIds: string[];
-  // Read this community's Recipient Groups (GroupPermission.RECIPIENT_GROUP_VIEW,
-  // Member tier and up) - works in any Group status, mirroring
-  // RecipientGroupsController's list/get routes
-  // (@AllowGroupStatuses(...ANY_STATUS)), same reasoning as
-  // canViewAuditLogInCommunityIds above.
-  canViewRecipientGroupsInCommunityIds: string[];
-  // Create/edit/activate/deactivate a Recipient Group under this community
-  // (GroupPermission.RECIPIENT_GROUP_MANAGE, Admin/Owner tier) - requires
-  // ACTIVE, mirroring RecipientGroupsController's
-  // create/update/activate/deactivate routes (no @AllowGroupStatuses
-  // override there, so the default ACTIVE-only policy applies).
-  canManageRecipientGroupsInCommunityIds: string[];
-  // True iff canCreateSectionInCommunityIds is non-empty - i.e. the user
-  // holds GROUP_EDIT (Admin/Owner) in at least one community, Group or
-  // Section. A convenience aggregate, not an independent business rule.
+  canCreateSectionInGroupIds: string[];
+  canCreateSectionInSectionIds: string[];
+  canCreateEventInGroupIds: string[];
+  canCreateEventInSectionIds: string[];
+  // Section-only (Group has no membership/join-request flow at all).
+  canReviewJoinRequestsInSectionIds: string[];
+  canViewMembersInSectionIds: string[];
+  canManageMembersInSectionIds: string[];
+  canInviteMembersInSectionIds: string[];
+  canManageInvitationsInSectionIds: string[];
+  canBanMembersInSectionIds: string[];
+  canSuspendMembersInSectionIds: string[];
+  // Grant/revoke a Role Assignment - both Group and Section support this.
+  canManageRolesInGroupIds: string[];
+  canManageRolesInSectionIds: string[];
+  canTransferOwnershipInGroupIds: string[];
+  canTransferOwnershipInSectionIds: string[];
+  canArchiveGroupIds: string[];
+  canArchiveSectionIds: string[];
+  // Communities that qualify are NOT necessarily present in
+  // `myCommunities` (ARCHIVED communities are excluded from it) - resolve
+  // the community's own name/logo via GET /groups/:id or
+  // GET /sections/:id if you need to display it.
+  canRestoreGroupIds: string[];
+  canRestoreSectionIds: string[];
+  canDeleteGroupIds: string[];
+  canDeleteSectionIds: string[];
+  canViewAuditLogInGroupIds: string[];
+  canViewAuditLogInSectionIds: string[];
+  // Manage the caller's own Community Notification settings - Section-only
+  // (Group has no membership, so no "own" notification row - see
+  // CommunityNotificationSettingsService), available to every Section with
+  // an ACTIVE membership, independent of Role.
+  canManageNotificationsInSectionIds: string[];
+  canManageAnnouncementsInGroupIds: string[];
+  canManageAnnouncementsInSectionIds: string[];
+  canViewAnnouncementArchiveInGroupIds: string[];
+  canViewAnnouncementArchiveInSectionIds: string[];
+  canViewRecipientGroupsInGroupIds: string[];
+  canViewRecipientGroupsInSectionIds: string[];
+  canManageRecipientGroupsInGroupIds: string[];
+  canManageRecipientGroupsInSectionIds: string[];
+  // True iff canCreateSectionIn{Group,Section}Ids is non-empty - i.e. the
+  // user holds GROUP_EDIT (Admin/Owner) in at least one community. A
+  // convenience aggregate, not an independent business rule.
   canManageAnyCommunity: boolean;
 }
 

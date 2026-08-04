@@ -1,25 +1,23 @@
 import { GroupRole } from '../enums/group-role.enum';
 import { GroupPermission } from './group-permission.enum';
 
-// Built hierarchically, same convention as ROLE_PERMISSIONS
-// (auth/permissions/role-permissions.map.ts) - each tier spreads the one
-// below it and adds only what's new. This map answers "can this Role, in
-// this Group, take this kind of action" - nothing more; it never expresses
-// target-specific rules (an ADMIN may change another member's Role in
-// general, but not the OWNER's; nobody may grant OWNER through the
-// role-change endpoint; the OWNER cannot leave without transferring first).
-// Those invariants depend on which member is being acted on, not just the
-// actor's Role, so they're enforced in GroupMembershipsService/
-// RoleAssignmentsService instead.
+// Two separate maps, not one - a Role's permission set now depends on
+// *what kind of target* it was granted on, not just the Role name. Group
+// only ever grants OWNER/ADMIN (no membership, no ordinary members - see
+// RoleAssignment's role-matches-target CHECK constraint), so
+// GROUP_TARGET_ROLE_PERMISSIONS deliberately excludes every
+// membership-lifecycle permission (MEMBERSHIP_*, GROUP_INVITE,
+// GROUP_JOIN_REQUEST_REVIEW) - not because the route doesn't exist, but
+// because a Group-context authorization check must never even have the
+// chance to grant them. Section keeps the full, richer role set (all 5
+// roles, every permission) under SECTION_TARGET_ROLE_PERMISSIONS.
 //
-// This is the single, deterministic source of truth for Role -> Permission.
-// GroupPermissionsGuard (and anything else checking authorization) must go
-// through GroupPermissionService, never compare Role names directly -
-// ownership-transfer is the one documented exception, since "is this
-// membership currently the OWNER" is an identity check, not a capability
-// check.
+// This is the single, deterministic source of truth for (target kind,
+// Role) -> Permission. GroupPermissionsGuard (and anything else checking
+// authorization) must go through GroupPermissionService, never compare
+// Role names directly.
 
-const MEMBER_PERMISSIONS: readonly GroupPermission[] = [
+const SECTION_MEMBER_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.GROUP_VIEW,
   GroupPermission.MEMBERSHIP_VIEW,
   GroupPermission.ACADEMY_VIEW,
@@ -28,9 +26,9 @@ const MEMBER_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.RECIPIENT_GROUP_VIEW,
   GroupPermission.ANNOUNCEMENT_VIEW,
   // GROUP_INVITE is intentionally included here even though service-layer
-  // logic additionally gates it on Group.memberInvitesAllowed.  This allows
-  // the GroupPermissionsGuard to let MEMBER requests through to the service;
-  // the service then rejects them when the setting is off.  ADMIN and OWNER
+  // logic additionally gates it on Section.memberInvitesAllowed. This
+  // allows the guard to let MEMBER requests through to the service; the
+  // service then rejects them when the setting is off. ADMIN and OWNER
   // always pass regardless of the setting.
   GroupPermission.GROUP_INVITE,
 ];
@@ -38,16 +36,16 @@ const MEMBER_PERMISSIONS: readonly GroupPermission[] = [
 // INSTRUCTOR and ASSISTANT have no extra permissions yet - they carry no
 // functional weight until training/attendance modules land in a later
 // stage.
-const ASSISTANT_PERMISSIONS: readonly GroupPermission[] = [
-  ...MEMBER_PERMISSIONS,
+const SECTION_ASSISTANT_PERMISSIONS: readonly GroupPermission[] = [
+  ...SECTION_MEMBER_PERMISSIONS,
 ];
 
-const INSTRUCTOR_PERMISSIONS: readonly GroupPermission[] = [
-  ...MEMBER_PERMISSIONS,
+const SECTION_INSTRUCTOR_PERMISSIONS: readonly GroupPermission[] = [
+  ...SECTION_MEMBER_PERMISSIONS,
 ];
 
-const ADMIN_PERMISSIONS: readonly GroupPermission[] = [
-  ...MEMBER_PERMISSIONS,
+const SECTION_ADMIN_PERMISSIONS: readonly GroupPermission[] = [
+  ...SECTION_MEMBER_PERMISSIONS,
   GroupPermission.GROUP_EDIT,
   GroupPermission.GROUP_SETTINGS_MANAGE,
   GroupPermission.AUDIT_LOG_VIEW,
@@ -85,12 +83,10 @@ const ADMIN_PERMISSIONS: readonly GroupPermission[] = [
 
 // Every lifecycle-status permission (ARCHIVE, UNARCHIVE, SET_READ_ONLY,
 // ACTIVATE, DELETE) plus OWNERSHIP_TRANSFER is deliberately withheld from
-// ADMIN and reserved for OWNER (spec: admin cannot change the group's
-// lifecycle status or transfer/grant ownership, cannot remove/replace the
-// owner). DELETE is grouped with these since it is a Group-lifecycle
-// action, and the most severe/irreversible one - see ADR-029.
-const OWNER_PERMISSIONS: readonly GroupPermission[] = [
-  ...ADMIN_PERMISSIONS,
+// ADMIN and reserved for OWNER. DELETE is grouped with these since it is a
+// lifecycle action, and the most severe/irreversible one.
+const SECTION_OWNER_PERMISSIONS: readonly GroupPermission[] = [
+  ...SECTION_ADMIN_PERMISSIONS,
   GroupPermission.GROUP_ARCHIVE,
   GroupPermission.GROUP_UNARCHIVE,
   GroupPermission.GROUP_SET_READ_ONLY,
@@ -99,23 +95,80 @@ const OWNER_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.GROUP_OWNERSHIP_TRANSFER,
 ];
 
-export const GROUP_ROLE_PERMISSIONS: Readonly<
+export const SECTION_TARGET_ROLE_PERMISSIONS: Readonly<
   Record<GroupRole, readonly GroupPermission[]>
 > = {
-  [GroupRole.MEMBER]: MEMBER_PERMISSIONS,
-  [GroupRole.ASSISTANT]: ASSISTANT_PERMISSIONS,
-  [GroupRole.INSTRUCTOR]: INSTRUCTOR_PERMISSIONS,
-  [GroupRole.ADMIN]: ADMIN_PERMISSIONS,
-  [GroupRole.OWNER]: OWNER_PERMISSIONS,
+  [GroupRole.MEMBER]: SECTION_MEMBER_PERMISSIONS,
+  [GroupRole.ASSISTANT]: SECTION_ASSISTANT_PERMISSIONS,
+  [GroupRole.INSTRUCTOR]: SECTION_INSTRUCTOR_PERMISSIONS,
+  [GroupRole.ADMIN]: SECTION_ADMIN_PERMISSIONS,
+  [GroupRole.OWNER]: SECTION_OWNER_PERMISSIONS,
 };
 
-// Subset of GroupPermission that remains available while a Membership is
-// READ_ONLY (see organization-entities.md#membership: "remains visible...
-// but the user loses operational permissions"). Every other permission
-// requires the Membership to be ACTIVE. Kept as an explicit allow-list,
-// not a naming-convention check (e.g. "ends with _VIEW"), so adding a new
-// permission can never accidentally become READ_ONLY-safe by naming
-// coincidence.
+// Group never has ordinary members - only OWNER/ADMIN administer it. Every
+// membership-lifecycle permission (MEMBERSHIP_*, GROUP_INVITE,
+// GROUP_JOIN_REQUEST_REVIEW) is deliberately absent: there is no route
+// that could ever request them for a Group target (see groups.controller.ts
+// - member/join/leave/ban/suspend routes only exist on SectionController),
+// but keeping the map itself free of them means a coding mistake can't
+// accidentally grant them either.
+const GROUP_ADMIN_PERMISSIONS: readonly GroupPermission[] = [
+  GroupPermission.GROUP_VIEW,
+  GroupPermission.GROUP_EDIT,
+  GroupPermission.GROUP_SETTINGS_MANAGE,
+  GroupPermission.AUDIT_LOG_VIEW,
+  GroupPermission.ACADEMY_VIEW,
+  GroupPermission.ACADEMY_CREATE,
+  GroupPermission.ACADEMY_EDIT,
+  GroupPermission.ACADEMY_ARCHIVE,
+  GroupPermission.COHORT_VIEW,
+  GroupPermission.COHORT_CREATE,
+  GroupPermission.COHORT_EDIT,
+  GroupPermission.COHORT_ARCHIVE,
+  GroupPermission.SECTION_VIEW,
+  GroupPermission.SECTION_CREATE,
+  GroupPermission.EVENT_CREATE,
+  GroupPermission.EVENT_VIEW_ALL,
+  GroupPermission.EVENT_MODERATE,
+  GroupPermission.RECIPIENT_GROUP_VIEW,
+  GroupPermission.RECIPIENT_GROUP_MANAGE,
+  GroupPermission.ANNOUNCEMENT_VIEW,
+  GroupPermission.ANNOUNCEMENT_MANAGE,
+  GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW,
+];
+
+const GROUP_OWNER_PERMISSIONS: readonly GroupPermission[] = [
+  ...GROUP_ADMIN_PERMISSIONS,
+  GroupPermission.GROUP_ARCHIVE,
+  GroupPermission.GROUP_UNARCHIVE,
+  GroupPermission.GROUP_SET_READ_ONLY,
+  GroupPermission.GROUP_ACTIVATE,
+  GroupPermission.GROUP_DELETE,
+  GroupPermission.GROUP_OWNERSHIP_TRANSFER,
+];
+
+// MEMBER/INSTRUCTOR/ASSISTANT map to an empty set here - defense in depth
+// alongside the DB CHECK constraint (role_assignments_role_matches_target_check)
+// and DTO-level validation (assignable-group-role.schema.ts): even if one
+// of those were ever bypassed, a Group-target authorization check for one
+// of these roles grants nothing.
+export const GROUP_TARGET_ROLE_PERMISSIONS: Readonly<
+  Record<GroupRole, readonly GroupPermission[]>
+> = {
+  [GroupRole.MEMBER]: [],
+  [GroupRole.ASSISTANT]: [],
+  [GroupRole.INSTRUCTOR]: [],
+  [GroupRole.ADMIN]: GROUP_ADMIN_PERMISSIONS,
+  [GroupRole.OWNER]: GROUP_OWNER_PERMISSIONS,
+};
+
+// Subset of GroupPermission that remains available while a SectionMembership
+// is READ_ONLY. Every other permission requires the membership to be
+// ACTIVE. Kept as an explicit allow-list, not a naming-convention check
+// (e.g. "ends with _VIEW"), so adding a new permission can never
+// accidentally become READ_ONLY-safe by naming coincidence. Group has no
+// membership/READ_ONLY concept at all, so this list only ever applies to
+// Section-target checks.
 export const READ_ONLY_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> = new Set(
   [
     GroupPermission.GROUP_VIEW,
@@ -126,8 +179,8 @@ export const READ_ONLY_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> = new Set(
     GroupPermission.RECIPIENT_GROUP_VIEW,
     GroupPermission.ANNOUNCEMENT_VIEW,
     // Reading history poses no operational risk and matches "remains
-    // visible" for READ_ONLY (see organization-entities.md#membership) -
-    // deliberately added here explicitly, not because of its "_VIEW" name.
+    // visible" for READ_ONLY - deliberately added here explicitly, not
+    // because of its "_VIEW" name.
     GroupPermission.AUDIT_LOG_VIEW,
   ],
 );

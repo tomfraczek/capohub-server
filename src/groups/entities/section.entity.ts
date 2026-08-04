@@ -1,4 +1,5 @@
 import {
+  Check,
   Entity,
   Enum,
   Index,
@@ -25,6 +26,17 @@ import { Group } from './group.entity';
 // a Group is an organizational container that may span many places (or
 // none), while a Section always operates in one specific place.
 @Entity({ tableName: 'sections' })
+// Mirrors the identically-named, identically-defined constraint the old
+// Group entity carried before the physical split (see
+// Migration20260728140000_AddGroupCountryAndCity) - kept in metadata here
+// too so migration:create/schema:update know it's intentional and never
+// propose dropping it. Name matches the constraint the migration creates
+// verbatim - see Migration20260802100000_SplitGroupsAndSections.
+@Check<Section>({
+  name: 'sections_country_check',
+  expression: (columns) =>
+    `"${columns.country}" is null or "${columns.country}" ~ '^[A-Z]{2}$'`,
+})
 export class Section extends BaseEntity {
   @Index()
   @ManyToOne(() => Group, { nullable: true, deleteRule: 'no action' })
@@ -72,7 +84,12 @@ export class Section extends BaseEntity {
   @Property({ nullable: true, length: 100 })
   region: string | null = null;
 
-  @Property({ nullable: true })
+  // `type: 'number'` is explicit, not redundant: TS's emitDecoratorMetadata
+  // erases a `T | null` union to `Object` at the reflection level (the same
+  // reason Academy.latitude/longitude declare `type: 'float'` explicitly),
+  // so leaving this implicit silently fell back to a generic string column
+  // instead of the `integer` column the migration actually creates.
+  @Property({ nullable: true, type: 'number' })
   geonameId: number | null = null;
 
   @Property()

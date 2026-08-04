@@ -25,7 +25,7 @@ import { AllowGroupStatuses } from './decorators/allow-group-statuses.decorator'
 import { GroupStatus } from './enums/group-status.enum';
 import { MembershipRequestsService } from './membership-requests.service';
 import { RoleAssignmentsService } from './role-assignments.service';
-import { GroupMembershipStatus } from './enums/group-membership-status.enum';
+import { SectionMembershipStatus } from './enums/section-membership-status.enum';
 import { GroupRole } from './enums/group-role.enum';
 
 const ANY_STATUS = [
@@ -270,15 +270,19 @@ export class MembershipRequestsController {
   private async resolveCallerContext(
     targetId: string,
     userId: string,
-  ): Promise<{ roles: GroupRole[]; membershipStatus: GroupMembershipStatus }> {
+  ): Promise<{
+    roles: GroupRole[];
+    membershipStatus: SectionMembershipStatus;
+  }> {
     const authorization =
       await this.roleAssignmentsService.resolveAuthorization(targetId, userId);
     if (!authorization) {
-      return { roles: [], membershipStatus: GroupMembershipStatus.ARCHIVED };
+      return { roles: [], membershipStatus: SectionMembershipStatus.ARCHIVED };
     }
     return {
       roles: authorization.roleAssignments.map((ra) => ra.role),
-      membershipStatus: authorization.membership.status,
+      membershipStatus:
+        authorization.membership?.status ?? SectionMembershipStatus.ARCHIVED,
     };
   }
 }

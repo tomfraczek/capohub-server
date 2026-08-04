@@ -16,13 +16,15 @@ import {
   updateCommunityNotificationSettingsSchema,
 } from './dto/update-community-notification-settings.schema';
 
-// Deliberately no GroupPermissionsGuard here (unlike every other controller
-// in this module) - see CommunityNotificationSettingsService's own comment
-// for why: that guard requires at least one Role Assignment to resolve
-// authorization at all, which would make this unreachable for a valid,
-// documented zero-Role Group Membership. Authorization is a direct
-// Membership check inside the service instead.
-@Controller('groups/:groupId/notification-settings')
+// Section-only: Group has no membership, so it has no "own" notification
+// preferences to manage - see CommunityNotificationSettingsService's own
+// comment. Deliberately no GroupPermissionsGuard here (unlike every other
+// controller in this module): that guard requires at least one Role
+// Assignment to resolve authorization at all, which would make this
+// unreachable for a valid, documented zero-extra-Role member (base MEMBER
+// only). Authorization is a direct SectionMembership check inside the
+// service instead.
+@Controller('sections/:sectionId/notification-settings')
 export class CommunityNotificationSettingsController {
   constructor(
     private readonly communityNotificationSettingsService: CommunityNotificationSettingsService,
@@ -30,19 +32,23 @@ export class CommunityNotificationSettingsController {
 
   @Get()
   get(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
     @CurrentUser() user: User,
   ): Promise<CommunityNotificationSettingsResponseDto> {
-    return this.communityNotificationSettingsService.get(groupId, user);
+    return this.communityNotificationSettingsService.get(sectionId, user);
   }
 
   @Patch()
   update(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
     @Body(new ZodValidationPipe(updateCommunityNotificationSettingsSchema))
     dto: UpdateCommunityNotificationSettingsDto,
     @CurrentUser() user: User,
   ): Promise<CommunityNotificationSettingsResponseDto> {
-    return this.communityNotificationSettingsService.update(groupId, user, dto);
+    return this.communityNotificationSettingsService.update(
+      sectionId,
+      user,
+      dto,
+    );
   }
 }

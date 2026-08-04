@@ -13,11 +13,12 @@ import { CLERK_CLIENT } from '../src/auth/clerk/clerk-client.provider';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { closeE2eApp } from './close-e2e-app.helper';
 import { User } from '../src/users/entities/user.entity';
 import { UserResponseDto } from '../src/users/dto/user-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
-import { GroupMembership } from '../src/groups/entities/group-membership.entity';
+import { SectionMembership } from '../src/groups/entities/section-membership.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
@@ -181,51 +182,55 @@ describe('Events (e2e)', () => {
   });
 
   afterAll(async () => {
-    const cleanup = app.get(EntityManager).fork();
-    const eventInCommunity = {
-      event: {
+    await closeE2eApp(app, async () => {
+      const cleanup = app.get(EntityManager).fork();
+      const eventInCommunity = {
+        event: {
+          $or: [
+            { communityGroup: { $in: createdGroupIds } },
+            { communitySection: { $in: createdGroupIds } },
+          ],
+        },
+      };
+      await cleanup.nativeDelete(EventGuardianAssignment, eventInCommunity);
+      await cleanup.nativeDelete(EventAttendee, eventInCommunity);
+      await cleanup.nativeDelete(EventInvitation, eventInCommunity);
+      await cleanup.nativeDelete(EventRoleAssignment, eventInCommunity);
+      await cleanup.nativeDelete(EventStatusHistory, eventInCommunity);
+      await cleanup.nativeDelete(Event, {
         $or: [
           { communityGroup: { $in: createdGroupIds } },
           { communitySection: { $in: createdGroupIds } },
         ],
-      },
-    };
-    await cleanup.nativeDelete(EventGuardianAssignment, eventInCommunity);
-    await cleanup.nativeDelete(EventAttendee, eventInCommunity);
-    await cleanup.nativeDelete(EventInvitation, eventInCommunity);
-    await cleanup.nativeDelete(EventRoleAssignment, eventInCommunity);
-    await cleanup.nativeDelete(EventStatusHistory, eventInCommunity);
-    await cleanup.nativeDelete(Event, {
-      $or: [
-        { communityGroup: { $in: createdGroupIds } },
-        { communitySection: { $in: createdGroupIds } },
-      ],
+      });
+      await cleanup.nativeDelete(RoleAssignment, {
+        $or: [
+          { group: { $in: createdGroupIds } },
+          { section: { $in: createdGroupIds } },
+        ],
+      });
+      await cleanup.nativeDelete(SectionMembership, {
+        section: { $in: createdGroupIds },
+      });
+      await cleanup.nativeDelete(AuditLogEntry, {
+        $or: [
+          { group: { $in: createdGroupIds } },
+          { section: { $in: createdGroupIds } },
+        ],
+      });
+      await cleanup.nativeDelete(Section, {
+        parentGroup: { $in: createdGroupIds },
+      });
+      await cleanup.nativeUpdate(
+        Group,
+        { id: { $in: createdGroupIds } },
+        { parentGroup: null },
+      );
+      await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      await cleanup.nativeDelete(User, {
+        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+      });
     });
-    await cleanup.nativeDelete(RoleAssignment, {
-      $or: [
-        { group: { $in: createdGroupIds } },
-        { section: { $in: createdGroupIds } },
-      ],
-    });
-    await cleanup.nativeDelete(GroupMembership, {
-      rootGroup: { $in: createdGroupIds },
-    });
-    await cleanup.nativeDelete(AuditLogEntry, {
-      community: { $in: createdGroupIds },
-    });
-    await cleanup.nativeDelete(Section, {
-      parentGroup: { $in: createdGroupIds },
-    });
-    await cleanup.nativeUpdate(
-      Group,
-      { id: { $in: createdGroupIds } },
-      { parentGroup: null },
-    );
-    await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
-    await cleanup.nativeDelete(User, {
-      clerkUserId: { $in: TEST_CLERK_USER_IDS },
-    });
-    await app.close();
   });
 
   function groupPayload(
@@ -266,26 +271,44 @@ describe('Events (e2e)', () => {
     return created;
   }
 
-  async function addMember(
+  // Group has no membership/MEMBER role at all (see the Membership/
+  // RoleAssignments rebuild) - the only Roles it ever grants are
+  // OWNER/ADMIN, via a direct RoleAssignment. Every "is this user a
+  // community member" fixture below uses ADMIN - sufficient for
+  // isCommunityMember()/COMMUNITY_MEMBERS visibility, which is all these
+  // three tokens need at the Group level (their actual Event-level
+  // standing is granted separately, per-Event, via /events/:id/roles).
+  async function grantGroupRole(
     ownerToken: string,
     groupId: string,
     memberToken: string,
+    role: GroupRole = GroupRole.ADMIN,
   ): Promise<void> {
     await request(app.getHttpServer())
-      .post(`/api/v1/groups/${groupId}/members`)
+      .post(`/api/v1/groups/${groupId}/role-assignments`)
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({
-        userId: localUserIdByToken.get(memberToken),
-        role: GroupRole.MEMBER,
-      })
+      .send({ userId: localUserIdByToken.get(memberToken), role })
+      .expect(201);
+  }
+
+  // Section has real membership - joining always grants MEMBER atomically.
+  async function addSectionMember(
+    ownerToken: string,
+    sectionId: string,
+    memberToken: string,
+  ): Promise<void> {
+    await request(app.getHttpServer())
+      .post(`/api/v1/sections/${sectionId}/members`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ userId: localUserIdByToken.get(memberToken) })
       .expect(201);
   }
 
   async function createCommunityWithMembers(): Promise<GroupResponseDto> {
     const community = await createGroup(OWNER_TOKEN);
-    await addMember(OWNER_TOKEN, community.id, ORGANIZER_TOKEN);
-    await addMember(OWNER_TOKEN, community.id, MODERATOR_TOKEN);
-    await addMember(OWNER_TOKEN, community.id, MEMBER_TOKEN);
+    await grantGroupRole(OWNER_TOKEN, community.id, ORGANIZER_TOKEN);
+    await grantGroupRole(OWNER_TOKEN, community.id, MODERATOR_TOKEN);
+    await grantGroupRole(OWNER_TOKEN, community.id, MEMBER_TOKEN);
     return community;
   }
 
@@ -355,12 +378,29 @@ describe('Events (e2e)', () => {
       });
     });
 
-    it('rejects creation by a plain MEMBER - 403 INSUFFICIENT_GROUP_PERMISSIONS', async () => {
-      const community = await createCommunityWithMembers();
+    it('rejects creation by a plain MEMBER - 403 INSUFFICIENT_GROUP_PERMISSIONS (a Group has no MEMBER tier at all, so this is exercised on a Section)', async () => {
+      const community = await createGroup(OWNER_TOKEN);
+      const section = await bodyOf<{ id: string }>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${community.id}/sections`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({
+            name: 'Plain Member Cannot Create Events Section',
+            timezone: 'Europe/Warsaw',
+            currencyCode: 'PLN',
+            country: 'PL',
+            city: 'Poznań',
+            region: 'Greater Poland',
+            geonameId: 3088171,
+          })
+          .expect(201),
+      );
+      createdGroupIds.push(section.id);
+      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
-          .post(`/api/v1/groups/${community.id}/events`)
+          .post(`/api/v1/sections/${section.id}/events`)
           .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
           .send(eventPayload())
           .expect(403),
@@ -1297,7 +1337,7 @@ describe('Events (e2e)', () => {
       expect(feed.some((e) => e.id === event.id)).toBe(true);
     });
 
-    it('includes a Section-scoped event for an active member of the parent Group, with no per-Section request', async () => {
+    it('includes a Section-scoped event for an active member of that exact Section, but not for a Group-level participant who never joined it (no inheritance)', async () => {
       const community = await createCommunityWithMembers();
       const section = await bodyOf<{ id: string }>(
         request(app.getHttpServer())
@@ -1315,6 +1355,7 @@ describe('Events (e2e)', () => {
           .expect(201),
       );
       createdGroupIds.push(section.id);
+      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
 
       const event = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
@@ -1330,9 +1371,15 @@ describe('Events (e2e)', () => {
       );
       await publishEvent(OWNER_TOKEN, event.id);
 
+      // MEMBER_TOKEN actually joined the Section - sees it.
       const feed = await fetchGlobalFeed(MEMBER_TOKEN);
-
       expect(feed.some((e) => e.id === event.id)).toBe(true);
+
+      // ORGANIZER_TOKEN only holds Group-level ADMIN (from
+      // createCommunityWithMembers) and never joined this Section - a
+      // Group Role grants nothing on a Section (no inheritance).
+      const organizerFeed = await fetchGlobalFeed(ORGANIZER_TOKEN);
+      expect(organizerFeed.some((e) => e.id === event.id)).toBe(false);
     });
 
     it('excludes a DRAFT event for someone with no Event role, but includes it for its own Owner via their Event role', async () => {

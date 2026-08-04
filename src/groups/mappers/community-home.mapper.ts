@@ -9,13 +9,6 @@ import {
 } from '../dto/community-home-response.dto';
 import { GroupRole } from '../enums/group-role.enum';
 
-// Type-based, not a `parentGroup === null` check - see the
-// organizational-domain rebuild, stage 1: a Section is never "root"
-// regardless of whether it currently has a parent.
-function isRootGroup(community: Community): boolean {
-  return community instanceof Group && community.parentGroup === null;
-}
-
 export function toCommunityHomeCommunityRefDto(
   community: Community,
 ): CommunityHomeCommunityRefDto {
@@ -23,7 +16,7 @@ export function toCommunityHomeCommunityRefDto(
     id: community.id,
     name: community.name,
     logoUrl: community.logoUrl,
-    isRootGroup: isRootGroup(community),
+    isGroup: community instanceof Group,
   };
 }
 
@@ -40,7 +33,7 @@ export function toCommunityHomeCommunityDto(
     coverImageUrl: community.coverImageUrl,
     parentId: community.parentGroup ? community.parentGroup.id : null,
     rootGroupId,
-    isRootGroup: isRootGroup(community),
+    isGroup: community instanceof Group,
     myRoles,
     isPublic: community.isPublic,
     isHidden: community.isHidden,

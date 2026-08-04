@@ -1,23 +1,41 @@
 import { z } from 'zod';
 import { createZodDto } from '../../common/dto/create-zod-dto';
 import { uuidSchema } from '../../songs/dto/song-validation.helpers';
-import { assignableGroupRoleSchema } from './assignable-group-role.schema';
+import {
+  assignableGroupRoleSchema,
+  assignableSectionRoleSchema,
+} from './assignable-group-role.schema';
 
-// membershipId, not userId: a Role Assignment always references a
-// Membership (see organization-entities.md#roleassignment) - the caller
-// looks up the target member's Membership id via GET
-// /groups/:rootGroupId/members first (the same Membership used across all
-// of that user's Role Assignments in this organization). OWNER is
-// deliberately excluded - see assignable-group-role.schema.ts.
-export const createRoleAssignmentSchema = z.object({
-  membershipId: uuidSchema,
+// userId, not membershipId: RoleAssignment has no membership relation at
+// all (see role-assignment.entity.ts) - a Role is granted directly to a
+// user for a target. Two variants so an invalid role for the target kind
+// is rejected at request-validation time, not only by the service/DB
+// constraint.
+export const createGroupRoleAssignmentSchema = z.object({
+  userId: uuidSchema,
   role: assignableGroupRoleSchema,
 });
 
-export class CreateRoleAssignmentDto extends createZodDto(
-  createRoleAssignmentSchema,
+export class CreateGroupRoleAssignmentDto extends createZodDto(
+  createGroupRoleAssignmentSchema,
 ) {}
 
-export type CreateRoleAssignmentInput = z.infer<
-  typeof createRoleAssignmentSchema
+export type CreateGroupRoleAssignmentInput = z.infer<
+  typeof createGroupRoleAssignmentSchema
 >;
+
+export const createSectionRoleAssignmentSchema = z.object({
+  userId: uuidSchema,
+  role: assignableSectionRoleSchema,
+});
+
+export class CreateSectionRoleAssignmentDto extends createZodDto(
+  createSectionRoleAssignmentSchema,
+) {}
+
+export type CreateSectionRoleAssignmentInput = z.infer<
+  typeof createSectionRoleAssignmentSchema
+>;
+
+export type CreateRoleAssignmentInput =
+  CreateGroupRoleAssignmentInput | CreateSectionRoleAssignmentInput;

@@ -46,7 +46,7 @@ export class Migration20260802100200_AddPolymorphicCommunityReferences extends M
     `);
     this.addSql(`
       alter table "role_assignments" add constraint "role_assignments_group_or_section_check"
-        check ((("group_id" is not null))::int + (("section_id" is not null))::int = 1);
+        check (("group_id" is not null and "section_id" is null) or ("group_id" is null and "section_id" is not null));
     `);
 
     // ---- academies ----
@@ -63,7 +63,7 @@ export class Migration20260802100200_AddPolymorphicCommunityReferences extends M
     `);
     this.addSql(`
       alter table "academies" add constraint "academies_group_or_section_check"
-        check ((("group_id" is not null))::int + (("section_id" is not null))::int = 1);
+        check (("group_id" is not null and "section_id" is null) or ("group_id" is null and "section_id" is not null));
     `);
 
     // ---- cohorts ----
@@ -80,7 +80,7 @@ export class Migration20260802100200_AddPolymorphicCommunityReferences extends M
     `);
     this.addSql(`
       alter table "cohorts" add constraint "cohorts_group_or_section_check"
-        check ((("group_id" is not null))::int + (("section_id" is not null))::int = 1);
+        check (("group_id" is not null and "section_id" is null) or ("group_id" is null and "section_id" is not null));
     `);
 
     // ---- recipient_groups ----
@@ -102,7 +102,7 @@ export class Migration20260802100200_AddPolymorphicCommunityReferences extends M
     `);
     this.addSql(`
       alter table "recipient_groups" add constraint "recipient_groups_group_or_section_check"
-        check ((("group_id" is not null))::int + (("section_id" is not null))::int = 1);
+        check (("group_id" is not null and "section_id" is null) or ("group_id" is null and "section_id" is not null));
     `);
 
     // ---- membership_requests ----
@@ -137,7 +137,7 @@ export class Migration20260802100200_AddPolymorphicCommunityReferences extends M
     `);
     this.addSql(`
       alter table "membership_requests" add constraint "membership_requests_target_group_or_section_check"
-        check ((("target_group_id" is not null))::int + (("target_section_id" is not null))::int = 1);
+        check (("target_group_id" is not null and "target_section_id" is null) or ("target_group_id" is null and "target_section_id" is not null));
     `);
 
     // ---- announcements ----
@@ -162,7 +162,7 @@ export class Migration20260802100200_AddPolymorphicCommunityReferences extends M
     `);
     this.addSql(`
       alter table "announcements" add constraint "announcements_community_group_or_section_check"
-        check ((("community_group_id" is not null))::int + (("community_section_id" is not null))::int = 1);
+        check (("community_group_id" is not null and "community_section_id" is null) or ("community_group_id" is null and "community_section_id" is not null));
     `);
 
     // ---- events ----
@@ -190,7 +190,7 @@ export class Migration20260802100200_AddPolymorphicCommunityReferences extends M
     `);
     this.addSql(`
       alter table "events" add constraint "events_community_group_or_section_check"
-        check ((("community_group_id" is not null))::int + (("community_section_id" is not null))::int = 1);
+        check (("community_group_id" is not null and "community_section_id" is null) or ("community_group_id" is null and "community_section_id" is not null));
     `);
 
     // ---- finally: remove the moved rows from `groups` now that every

@@ -15,6 +15,7 @@ import { GlobalRole } from '../src/auth/permissions/global-role.enum';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { closeE2eApp } from './close-e2e-app.helper';
 import { PaginatedResponse } from '../src/common/pagination/pagination.types';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
@@ -204,17 +205,18 @@ describe('Songs (e2e)', () => {
   });
 
   afterAll(async () => {
-    const cleanup = app.get(EntityManager).fork();
-    await cleanup.nativeDelete(Song, {
-      category: { $in: [category.id, secondCategory.id] },
+    await closeE2eApp(app, async () => {
+      const cleanup = app.get(EntityManager).fork();
+      await cleanup.nativeDelete(Song, {
+        category: { $in: [category.id, secondCategory.id] },
+      });
+      await cleanup.nativeDelete(SongCategory, {
+        id: { $in: [category.id, secondCategory.id] },
+      });
+      await cleanup.nativeDelete(User, {
+        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+      });
     });
-    await cleanup.nativeDelete(SongCategory, {
-      id: { $in: [category.id, secondCategory.id] },
-    });
-    await cleanup.nativeDelete(User, {
-      clerkUserId: { $in: TEST_CLERK_USER_IDS },
-    });
-    await app.close();
   });
 
   afterEach(async () => {
