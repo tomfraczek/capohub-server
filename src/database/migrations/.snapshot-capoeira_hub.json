@@ -1088,7 +1088,14 @@
             "BAN",
             "UNBAN",
             "SUSPEND",
-            "UNSUSPEND"
+            "UNSUSPEND",
+            "INVITE_CHILD",
+            "ACCEPT_CHILD_INVITATION",
+            "REJECT_CHILD_INVITATION",
+            "CANCEL_CHILD_INVITATION",
+            "ATTACH_CHILD",
+            "DETACH_CHILD",
+            "MOVE_CHILD"
           ],
           "mappedType": "enum"
         },
@@ -1125,7 +1132,8 @@
             "COMMUNITY",
             "USER",
             "ROLE_ASSIGNMENT",
-            "MEMBERSHIP_REQUEST"
+            "MEMBERSHIP_REQUEST",
+            "HIERARCHY_INVITATION"
           ],
           "mappedType": "enum"
         },
@@ -4339,6 +4347,324 @@
           "constraintName": "groups_parent_group_id_foreign",
           "localTableName": "public.groups",
           "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "parent_group_id": {
+          "name": "parent_group_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "target_group_id": {
+          "name": "target_group_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "target_section_id": {
+          "name": "target_section_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "invited_by_id": {
+          "name": "invited_by_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'PENDING'",
+          "comment": null,
+          "enumItems": [
+            "PENDING",
+            "ACCEPTED",
+            "REJECTED",
+            "CANCELLED"
+          ],
+          "mappedType": "enum"
+        },
+        "responded_at": {
+          "name": "responded_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "responded_by_id": {
+          "name": "responded_by_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        }
+      },
+      "name": "hierarchy_invitations",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "invited_by_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "hierarchy_invitations_invited_by_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "parent_group_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "hierarchy_invitations_parent_group_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "parent_group_id",
+            "COALESCE(target_group_id, target_section_id)"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "hierarchy_invitations_pending_relation_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX hierarchy_invitations_pending_relation_unique ON public.hierarchy_invitations USING btree (parent_group_id, COALESCE(target_group_id, target_section_id)) WHERE (status = 'PENDING'::text)"
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "hierarchy_invitations_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "target_group_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "hierarchy_invitations_target_group_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "target_section_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "hierarchy_invitations_target_section_id_index",
+          "unique": false,
+          "primary": false
+        }
+      ],
+      "checks": [
+        {
+          "name": "hierarchy_invitations_no_self_parent_check",
+          "columnName": "parent_group_id",
+          "definition": "CHECK ((parent_group_id <> target_group_id))",
+          "expression": "parent_group_id <> target_group_id"
+        },
+        {
+          "name": "hierarchy_invitations_target_group_or_section_check",
+          "columnName": "target_group_id",
+          "definition": "CHECK ((((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))))",
+          "expression": "((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))"
+        }
+      ],
+      "foreignKeys": {
+        "hierarchy_invitations_invited_by_id_foreign": {
+          "columnNames": [
+            "invited_by_id"
+          ],
+          "constraintName": "hierarchy_invitations_invited_by_id_foreign",
+          "localTableName": "public.hierarchy_invitations",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "hierarchy_invitations_parent_group_id_foreign": {
+          "columnNames": [
+            "parent_group_id"
+          ],
+          "constraintName": "hierarchy_invitations_parent_group_id_foreign",
+          "localTableName": "public.hierarchy_invitations",
+          "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "hierarchy_invitations_responded_by_id_foreign": {
+          "columnNames": [
+            "responded_by_id"
+          ],
+          "constraintName": "hierarchy_invitations_responded_by_id_foreign",
+          "localTableName": "public.hierarchy_invitations",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "hierarchy_invitations_target_group_id_foreign": {
+          "columnNames": [
+            "target_group_id"
+          ],
+          "constraintName": "hierarchy_invitations_target_group_id_foreign",
+          "localTableName": "public.hierarchy_invitations",
+          "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "hierarchy_invitations_target_section_id_foreign": {
+          "columnNames": [
+            "target_section_id"
+          ],
+          "constraintName": "hierarchy_invitations_target_section_id_foreign",
+          "localTableName": "public.hierarchy_invitations",
+          "referencedTableName": "public.sections",
           "referencedColumnNames": [
             "id"
           ],

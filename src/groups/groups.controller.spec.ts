@@ -5,6 +5,7 @@ import { GROUP_PERMISSIONS_KEY } from './decorators/require-group-permission.dec
 import { GroupStatus } from './enums/group-status.enum';
 import { GroupsController } from './groups.controller';
 import { GroupPermissionsGuard } from './guards/group-permissions.guard';
+import { HierarchyManagementService } from './hierarchy-management.service';
 import { GroupPermission } from './permissions/group-permission.enum';
 import { GroupsService } from './groups.service';
 import { RoleAssignmentsService } from './role-assignments.service';
@@ -17,10 +18,12 @@ import { RoleAssignmentsService } from './role-assignments.service';
 function buildController(
   groupsService: Partial<GroupsService> = {},
   roleAssignmentsService: Partial<RoleAssignmentsService> = {},
+  hierarchyManagementService: Partial<HierarchyManagementService> = {},
 ): GroupsController {
   return new GroupsController(
     groupsService as GroupsService,
     roleAssignmentsService as RoleAssignmentsService,
+    hierarchyManagementService as HierarchyManagementService,
   );
 }
 

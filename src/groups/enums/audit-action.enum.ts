@@ -28,4 +28,17 @@ export enum AuditAction {
   UNBAN = 'UNBAN',
   SUSPEND = 'SUSPEND',
   UNSUSPEND = 'UNSUSPEND',
+
+  // Hierarchy - Group <-> Group / Group <-> Section structural
+  // relationships (see HierarchyInvitation and GroupHierarchyService).
+  // Always logged under the *parent* Group whose child-set changed -
+  // mirroring the CREATE_CHILD_GROUP precedent above - never under a
+  // resolved root.
+  INVITE_CHILD = 'INVITE_CHILD',
+  ACCEPT_CHILD_INVITATION = 'ACCEPT_CHILD_INVITATION',
+  REJECT_CHILD_INVITATION = 'REJECT_CHILD_INVITATION',
+  CANCEL_CHILD_INVITATION = 'CANCEL_CHILD_INVITATION',
+  ATTACH_CHILD = 'ATTACH_CHILD',
+  DETACH_CHILD = 'DETACH_CHILD',
+  MOVE_CHILD = 'MOVE_CHILD',
 }

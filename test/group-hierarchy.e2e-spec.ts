@@ -565,11 +565,15 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
   });
 
   describe('hierarchy: immutability', () => {
-    // GroupHierarchyService.attachSection/detachSection exist internally
-    // (see group-hierarchy.service.ts) but are deliberately not exposed as
-    // public endpoints yet at this stage - so there is still no HTTP way
-    // to move a Section.
-    it("has no move endpoint - a Section's parentGroupId cannot be changed via the API yet", async () => {
+    // GroupHierarchyService.attachSection/detachSection are now exposed as
+    // public endpoints (see hierarchy-management.service.ts /
+    // section.controller.ts) - a Section's parentGroupId can be changed via
+    // POST /sections/:id/parent by an actor holding HIERARCHY_MANAGE on
+    // both the Section and the new parent Group. Dedicated coverage for
+    // attach/move/detach/invitations lives in hierarchy.e2e-spec.ts; this
+    // is kept here only as a smoke check that the field genuinely persists
+    // through GET after a successful move.
+    it("moves a Section's parentGroupId via POST /sections/:id/parent", async () => {
       const root = await createGroup(OWNER_TOKEN, { name: 'Immutable Root' });
       const section = await createSection(OWNER_TOKEN, root.id, {
         name: 'Immutable Section',
@@ -579,10 +583,10 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
       });
 
       await request(app.getHttpServer())
-        .post(`/api/v1/sections/${section.id}/move`)
+        .post(`/api/v1/sections/${section.id}/parent`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-        .send({ newParentGroupId: otherRoot.id })
-        .expect(404);
+        .send({ parentGroupId: otherRoot.id })
+        .expect(201);
 
       const fetched = await bodyOf<SectionResponseDto>(
         request(app.getHttpServer())
@@ -590,7 +594,7 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(200),
       );
-      expect(fetched.parentGroupId).toBe(root.id);
+      expect(fetched.parentGroupId).toBe(otherRoot.id);
     });
 
     it('rejects an unknown field on a Group update with 400 instead of silently ignoring it', async () => {

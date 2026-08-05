@@ -93,6 +93,11 @@ const SECTION_OWNER_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.GROUP_ACTIVATE,
   GroupPermission.GROUP_DELETE,
   GroupPermission.GROUP_OWNERSHIP_TRANSFER,
+  // A Section can be a hierarchy child (never a parent - see
+  // HIERARCHY_INVITE's own comment) - only its OWNER may attach/move/detach
+  // it under a parent Group, or accept/reject an invitation proposing that
+  // on its behalf.
+  GroupPermission.HIERARCHY_MANAGE,
 ];
 
 export const SECTION_TARGET_ROLE_PERMISSIONS: Readonly<
@@ -135,6 +140,13 @@ const GROUP_ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.ANNOUNCEMENT_VIEW,
   GroupPermission.ANNOUNCEMENT_MANAGE,
   GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW,
+  // Propose attaching a child Group/Section this ADMIN does not directly
+  // control - the recipient's own OWNER still has to accept (see
+  // HierarchyInvitation), so this never mutates anything by itself and can
+  // safely sit at the same tier as GROUP_INVITE/MEMBERSHIP_INVITE. Only a
+  // Group may be the parent side of a hierarchy relationship, so this is
+  // deliberately absent from SECTION_ADMIN_PERMISSIONS above.
+  GroupPermission.HIERARCHY_INVITE,
 ];
 
 const GROUP_OWNER_PERMISSIONS: readonly GroupPermission[] = [
@@ -145,6 +157,10 @@ const GROUP_OWNER_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.GROUP_ACTIVATE,
   GroupPermission.GROUP_DELETE,
   GroupPermission.GROUP_OWNERSHIP_TRANSFER,
+  // A Group can be both a hierarchy parent and a hierarchy child - only its
+  // OWNER may attach/move/detach it under another Group, attach/detach its
+  // own children directly, or accept/reject an invitation targeting it.
+  GroupPermission.HIERARCHY_MANAGE,
 ];
 
 // MEMBER/INSTRUCTOR/ASSISTANT map to an empty set here - defense in depth

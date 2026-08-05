@@ -120,11 +120,15 @@ export class GroupPermissionsGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
     if (requiredKind) {
-      // Type-based, not a `parentGroup === null` check: a Section is never
-      // a ROOT kind regardless of whether it currently has a parent.
-      const isRoot =
-        community instanceof Group && community.parentGroup === null;
-      const matches = requiredKind === GroupKind.ROOT ? isRoot : !isRoot;
+      // Purely type-based (`instanceof Group`), never a `parentGroup ===
+      // null` check: since the Group/Section physical split, a Group with a
+      // parent (attached via the hierarchy - see GroupHierarchyService) is
+      // still a Group, reachable through GroupsController exactly like a
+      // root Group - only its physical table determines its kind, never its
+      // position in the hierarchy.
+      const isGroupKind = community instanceof Group;
+      const matches =
+        requiredKind === GroupKind.ROOT ? isGroupKind : !isGroupKind;
       if (!matches) {
         throw this.groupNotFound();
       }

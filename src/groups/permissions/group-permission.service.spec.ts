@@ -244,10 +244,18 @@ describe('GroupPermissionService', () => {
   });
 
   describe('getPermissionsForRole (SECTION target)', () => {
-    it('returns every GroupPermission for OWNER', () => {
+    it('returns every GroupPermission for OWNER except HIERARCHY_INVITE', () => {
+      // HIERARCHY_INVITE only ever applies to a Group target - only a Group
+      // may be the parent side of a hierarchy relationship (a Section can
+      // never have children), so it is deliberately absent from
+      // SECTION_TARGET_ROLE_PERMISSIONS even for OWNER (see
+      // group-role-permissions.map.ts).
+      const everyPermissionExceptHierarchyInvite = Object.values(
+        GroupPermission,
+      ).filter((permission) => permission !== GroupPermission.HIERARCHY_INVITE);
       expect(
         [...service.getPermissionsForRole('SECTION', GroupRole.OWNER)].sort(),
-      ).toEqual([...Object.values(GroupPermission)].sort());
+      ).toEqual(everyPermissionExceptHierarchyInvite.sort());
     });
   });
 

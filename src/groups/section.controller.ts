@@ -15,6 +15,11 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { User } from '../users/entities/user.entity';
 import { AddMemberDto, addMemberSchema } from './dto/add-member.schema';
 import { BanMemberDto, banMemberSchema } from './dto/ban-member.schema';
+import { HierarchyEntityRefDto } from './dto/hierarchy-response.dto';
+import {
+  SetHierarchyParentDto,
+  setHierarchyParentSchema,
+} from './dto/set-hierarchy-parent.schema';
 import { SectionMembershipResponseDto } from './dto/section-membership-response.dto';
 import { SectionResponseDto } from './dto/section-response.dto';
 import {
@@ -38,6 +43,7 @@ import {
 } from './decorators/require-group-kind.decorator';
 import { GroupStatus } from './enums/group-status.enum';
 import { GroupPermissionsGuard } from './guards/group-permissions.guard';
+import { HierarchyManagementService } from './hierarchy-management.service';
 import { GroupPermission } from './permissions/group-permission.enum';
 import { RoleAssignmentsService } from './role-assignments.service';
 import { SectionMembershipsService } from './section-memberships.service';
@@ -66,6 +72,7 @@ export class SectionController {
     private readonly sectionsService: SectionsService,
     private readonly sectionMembershipsService: SectionMembershipsService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
+    private readonly hierarchyManagementService: HierarchyManagementService,
   ) {}
 
   @Get()
@@ -345,5 +352,61 @@ export class SectionController {
       membershipId,
       cohortId,
     );
+  }
+
+  // ─── Hierarchy: parent / breadcrumbs ─────────────────────────────────────
+  // A Section can never have children (see GroupHierarchyService) - there is
+  // no .../children route here.
+
+  @Get('parent')
+  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupKind(GroupKind.SECTION)
+  @AllowGroupStatuses(...ANY_STATUS)
+  getParent(
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+  ): Promise<HierarchyEntityRefDto | null> {
+    return this.hierarchyManagementService.getParent(sectionId);
+  }
+
+  @Get('breadcrumbs')
+  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupKind(GroupKind.SECTION)
+  @AllowGroupStatuses(...ANY_STATUS)
+  getBreadcrumbs(
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+  ): Promise<HierarchyEntityRefDto[]> {
+    return this.hierarchyManagementService.getBreadcrumbs(sectionId);
+  }
+
+  // Attaches (no previous parent) or moves (had a different parent) this
+  // Section under :parentGroupId - same primitive either way, see
+  // HierarchyManagementService.setSectionParent. Requires HIERARCHY_MANAGE
+  // on both this Section and parentGroupId.
+  @Post('parent')
+  @RequireGroupPermission(GroupPermission.HIERARCHY_MANAGE)
+  @RequireGroupKind(GroupKind.SECTION)
+  setParent(
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+    @Body(new ZodValidationPipe(setHierarchyParentSchema))
+    dto: SetHierarchyParentDto,
+    @CurrentUser() user: User,
+  ): Promise<SectionResponseDto> {
+    return this.hierarchyManagementService.setSectionParent(
+      sectionId,
+      dto.parentGroupId,
+      user,
+    );
+  }
+
+  // Detaches this Section from its current parent, leaving it standalone.
+  // Never touches membership or Role Assignments.
+  @Delete('parent')
+  @RequireGroupPermission(GroupPermission.HIERARCHY_MANAGE)
+  @RequireGroupKind(GroupKind.SECTION)
+  detachParent(
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+    @CurrentUser() user: User,
+  ): Promise<SectionResponseDto> {
+    return this.hierarchyManagementService.detachSection(sectionId, user);
   }
 }

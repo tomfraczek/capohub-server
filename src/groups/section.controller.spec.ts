@@ -5,6 +5,7 @@ import { GROUP_PERMISSIONS_KEY } from './decorators/require-group-permission.dec
 import { GroupStatus } from './enums/group-status.enum';
 import { SectionController } from './section.controller';
 import { GroupPermissionsGuard } from './guards/group-permissions.guard';
+import { HierarchyManagementService } from './hierarchy-management.service';
 import { GroupPermission } from './permissions/group-permission.enum';
 import { SectionsService } from './sections.service';
 import { SectionMembershipsService } from './section-memberships.service';
@@ -18,11 +19,13 @@ function buildController(
   sectionsService: Partial<SectionsService> = {},
   sectionMembershipsService: Partial<SectionMembershipsService> = {},
   roleAssignmentsService: Partial<RoleAssignmentsService> = {},
+  hierarchyManagementService: Partial<HierarchyManagementService> = {},
 ): SectionController {
   return new SectionController(
     sectionsService as SectionsService,
     sectionMembershipsService as SectionMembershipsService,
     roleAssignmentsService as RoleAssignmentsService,
+    hierarchyManagementService as HierarchyManagementService,
   );
 }
 

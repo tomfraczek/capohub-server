@@ -1,10 +1,12 @@
 import { SetMetadata } from '@nestjs/common';
 
-// A Group row is presented as "Group" (root, parentGroup === null) or
-// "Section" (non-root, any depth) at the API layer, even though both are
-// the same underlying entity (see the Group/Section rename ADR - there is
-// deliberately no physical split, mirroring ADR-001's "no separate
-// Group entity" philosophy one level down).
+// A row is either a Group or a Section - two physically distinct entity
+// types since the Group/Section physical split (see group.entity.ts /
+// section.entity.ts). `ROOT` here names "the Group table", not "a
+// parentless Group" - a Group keeps this kind regardless of whether it has
+// been attached under a parent via GroupHierarchyService (see
+// group-permissions.guard.ts's kind check, which is purely
+// `instanceof Group`).
 export enum GroupKind {
   ROOT = 'ROOT',
   SECTION = 'SECTION',

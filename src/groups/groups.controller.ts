@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -13,8 +14,18 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { User } from '../users/entities/user.entity';
 import { CreateGroupDto, createGroupSchema } from './dto/create-group.schema';
+import {
+  CreateHierarchyInvitationDto,
+  createHierarchyInvitationSchema,
+} from './dto/create-hierarchy-invitation.schema';
 import { GroupResponseDto } from './dto/group-response.dto';
 import { GroupSummaryResponseDto } from './dto/group-summary-response.dto';
+import { HierarchyInvitationResponseDto } from './dto/hierarchy-invitation-response.dto';
+import { HierarchyEntityRefDto } from './dto/hierarchy-response.dto';
+import {
+  SetHierarchyParentDto,
+  setHierarchyParentSchema,
+} from './dto/set-hierarchy-parent.schema';
 import { TransferOwnershipResponseDto } from './dto/transfer-ownership-response.dto';
 import {
   TransferOwnershipDto,
@@ -29,6 +40,7 @@ import {
 } from './decorators/require-group-kind.decorator';
 import { GroupStatus } from './enums/group-status.enum';
 import { GroupPermissionsGuard } from './guards/group-permissions.guard';
+import { HierarchyManagementService } from './hierarchy-management.service';
 import { GroupPermission } from './permissions/group-permission.enum';
 import { GroupsService } from './groups.service';
 import { RoleAssignmentsService } from './role-assignments.service';
@@ -61,6 +73,7 @@ export class GroupsController {
   constructor(
     private readonly groupsService: GroupsService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
+    private readonly hierarchyManagementService: HierarchyManagementService,
   ) {}
 
   @Post()
@@ -178,6 +191,116 @@ export class GroupsController {
       id,
       user.id,
       dto.newOwnerUserId,
+      user,
+    );
+  }
+
+  // ─── Hierarchy: parent / children / breadcrumbs ─────────────────────────
+
+  @Get(':id/parent')
+  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupKind(GroupKind.ROOT)
+  @AllowGroupStatuses(...ANY_STATUS)
+  getParent(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<HierarchyEntityRefDto | null> {
+    return this.hierarchyManagementService.getParent(id);
+  }
+
+  // Direct child Groups and direct Sections combined - a Section can never
+  // have children, so there is no equivalent route on SectionController.
+  @Get(':id/children')
+  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupKind(GroupKind.ROOT)
+  @AllowGroupStatuses(...ANY_STATUS)
+  listChildren(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<HierarchyEntityRefDto[]> {
+    return this.hierarchyManagementService.listChildren(id);
+  }
+
+  @Get(':id/breadcrumbs')
+  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupKind(GroupKind.ROOT)
+  @AllowGroupStatuses(...ANY_STATUS)
+  getBreadcrumbs(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<HierarchyEntityRefDto[]> {
+    return this.hierarchyManagementService.getBreadcrumbs(id);
+  }
+
+  // Attaches (no previous parent) or moves (had a different parent) this
+  // Group under :parentGroupId - same primitive either way, see
+  // HierarchyManagementService.setGroupParent. Requires HIERARCHY_MANAGE on
+  // both this Group and parentGroupId.
+  @Post(':id/parent')
+  @RequireGroupPermission(GroupPermission.HIERARCHY_MANAGE)
+  @RequireGroupKind(GroupKind.ROOT)
+  setParent(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(setHierarchyParentSchema))
+    dto: SetHierarchyParentDto,
+    @CurrentUser() user: User,
+  ): Promise<GroupResponseDto> {
+    return this.hierarchyManagementService.setGroupParent(
+      id,
+      dto.parentGroupId,
+      user,
+    );
+  }
+
+  // Detaches this Group from its current parent, making it a root Group
+  // again. Never touches membership or Role Assignments.
+  @Delete(':id/parent')
+  @RequireGroupPermission(GroupPermission.HIERARCHY_MANAGE)
+  @RequireGroupKind(GroupKind.ROOT)
+  detachParent(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<GroupResponseDto> {
+    return this.hierarchyManagementService.detachGroup(id, user);
+  }
+
+  // ─── Hierarchy: invitations sent by this Group (parent side) ────────────
+  // Only a Group may be the parent side of a hierarchy relationship - see
+  // GroupPermission.HIERARCHY_INVITE's own comment - so these routes have no
+  // SectionController equivalent.
+
+  @Post(':id/child-invitations')
+  @HttpCode(201)
+  @RequireGroupPermission(GroupPermission.HIERARCHY_INVITE)
+  @RequireGroupKind(GroupKind.ROOT)
+  createChildInvitation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(createHierarchyInvitationSchema))
+    dto: CreateHierarchyInvitationDto,
+    @CurrentUser() user: User,
+  ): Promise<HierarchyInvitationResponseDto> {
+    return this.hierarchyManagementService.createInvitation(id, dto, user);
+  }
+
+  @Get(':id/child-invitations')
+  @RequireGroupPermission(GroupPermission.HIERARCHY_INVITE)
+  @RequireGroupKind(GroupKind.ROOT)
+  @AllowGroupStatuses(...ANY_STATUS)
+  listChildInvitations(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<HierarchyInvitationResponseDto[]> {
+    return this.hierarchyManagementService.listSentInvitations(id);
+  }
+
+  @Post(':id/child-invitations/:invitationId/cancel')
+  @HttpCode(204)
+  @RequireGroupPermission(GroupPermission.HIERARCHY_INVITE)
+  @RequireGroupKind(GroupKind.ROOT)
+  async cancelChildInvitation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('invitationId', ParseUUIDPipe) invitationId: string,
+    @CurrentUser() user: User,
+  ): Promise<void> {
+    await this.hierarchyManagementService.cancelInvitation(
+      id,
+      invitationId,
       user,
     );
   }

@@ -219,6 +219,43 @@ export class GroupHierarchyService {
   }
 
   /**
+   * Dry-run validation for whether `childId` could be attached under
+   * `parentGroupId` right now - self-parent, cycle, and parent
+   * existence/status checks only, no mutation. Used by
+   * HierarchyManagementService when creating a HierarchyInvitation, so a
+   * doomed invitation (self-parent/cycle) is rejected immediately instead
+   * of sitting PENDING until someone tries to accept it.
+   * attachChildGroup unconditionally re-validates the same rules again at
+   * the moment of the actual mutation, regardless of whether this was
+   * called first - this is a convenience for early feedback, never the
+   * sole guard.
+   */
+  async assertCanAttachChildGroup(
+    childId: string,
+    parentGroupId: string,
+    em: EntityManager = this.em,
+  ): Promise<void> {
+    if (childId === parentGroupId) {
+      throw this.selfParent();
+    }
+    const parent = await this.resolveUsableParentGroup(em, parentGroupId);
+    await this.assertNotAncestorOrSelf(em, childId, parent);
+  }
+
+  /**
+   * Dry-run counterpart for a Section target - a Section can never be an
+   * ancestor of anything (it can never have children), so there is no
+   * cycle to check beyond the parent Group itself existing and being
+   * usable (not archived).
+   */
+  async assertCanAttachSection(
+    parentGroupId: string,
+    em: EntityManager = this.em,
+  ): Promise<void> {
+    await this.resolveUsableParentGroup(em, parentGroupId);
+  }
+
+  /**
    * Attaches `sectionId` under `groupId`. A Section can only ever be
    * attached to a Group (never to another Section), and can never itself
    * gain children - both are structural, not just validated here: nothing

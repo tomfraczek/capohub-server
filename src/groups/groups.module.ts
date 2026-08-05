@@ -12,6 +12,8 @@ import { CommunityNotificationSettingsService } from './community-notification-s
 import { GroupsController } from './groups.controller';
 import { GroupsService } from './groups.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
+import { HierarchyInvitationsController } from './hierarchy-invitations.controller';
+import { HierarchyManagementService } from './hierarchy-management.service';
 import { SectionMembershipsService } from './section-memberships.service';
 import { GroupPermissionsGuard } from './guards/group-permissions.guard';
 import { GroupPermissionService } from './permissions/group-permission.service';
@@ -45,11 +47,13 @@ import { SectionsService } from './sections.service';
     AuditLogController,
     CommunityNotificationSettingsController,
     RecipientGroupsController,
+    HierarchyInvitationsController,
   ],
   providers: [
     GroupsService,
     SectionsService,
     GroupHierarchyService,
+    HierarchyManagementService,
     SectionMembershipsService,
     AcademiesService,
     CohortsService,

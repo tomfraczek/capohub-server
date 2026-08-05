@@ -153,4 +153,21 @@ export enum GroupPermission {
   ANNOUNCEMENT_VIEW = 'ANNOUNCEMENT_VIEW',
   ANNOUNCEMENT_MANAGE = 'ANNOUNCEMENT_MANAGE',
   ANNOUNCEMENT_ARCHIVE_VIEW = 'ANNOUNCEMENT_ARCHIVE_VIEW',
+
+  // Hierarchy - attaching/detaching/moving a whole Group or Section in or
+  // out of a parent Group (see HierarchyInvitation and
+  // GroupHierarchyService). HIERARCHY_MANAGE gates the structural mutation
+  // itself (direct attach/detach/move, and accepting/rejecting an
+  // invitation on the target side) - deliberately the same OWNER-only trust
+  // tier as GROUP_OWNERSHIP_TRANSFER, not ADMIN like GROUP_EDIT: moving an
+  // entire community's position in the organization is a stewardship
+  // decision, not an ordinary edit. HIERARCHY_INVITE is the lower-risk
+  // half - proposing a relationship the other side must still accept never
+  // mutates anything by itself, so it sits at the same ADMIN+OWNER tier as
+  // GROUP_INVITE/MEMBERSHIP_INVITE, and only ever applies on the parent
+  // side (only a Group can have children). There is deliberately no
+  // HIERARCHY_VIEW - reading a community's parent/children/breadcrumbs is
+  // answered by the GROUP_VIEW every role already holds.
+  HIERARCHY_MANAGE = 'HIERARCHY_MANAGE',
+  HIERARCHY_INVITE = 'HIERARCHY_INVITE',
 }
