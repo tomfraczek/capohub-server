@@ -183,4 +183,20 @@ export enum GroupPermission {
   // any real distinction (same reasoning as RECIPIENT_GROUP_MANAGE).
   GRADUATION_SYSTEM_VIEW = 'GRADUATION_SYSTEM_VIEW',
   GRADUATION_SYSTEM_MANAGE = 'GRADUATION_SYSTEM_MANAGE',
+
+  // Formal rank correction workflow (see FormalRankCorrectionRequest) -
+  // exact-Section-only, deliberately absent from GROUP_TARGET_ROLE_PERMISSIONS:
+  // a formal rank is corrected in the context of the exact Section the
+  // target belongs to, never at the Group level, and never inherited
+  // through the hierarchy (see the module spec). Not GRADUATION_SYSTEM_MANAGE
+  // - that permission governs the *catalog* (Group-only); this one governs
+  // *who currently holds which catalog Rank* (Section-only), a distinct
+  // capability at a distinct scope. REQUEST/VIEW are granted identically to
+  // OWNER and ADMIN; REVIEW is granted to both here too, but the finer
+  // "ADMIN may only review their own report" rule (variant C) is a
+  // row-level condition the permission-map system cannot express, so it is
+  // enforced in FormalRankCorrectionService itself, not here.
+  FORMAL_RANK_CORRECTION_REQUEST = 'FORMAL_RANK_CORRECTION_REQUEST',
+  FORMAL_RANK_CORRECTION_REVIEW = 'FORMAL_RANK_CORRECTION_REVIEW',
+  FORMAL_RANK_CORRECTION_VIEW = 'FORMAL_RANK_CORRECTION_VIEW',
 }

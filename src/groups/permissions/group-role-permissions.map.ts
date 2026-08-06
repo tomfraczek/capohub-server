@@ -79,6 +79,14 @@ const SECTION_ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.RECIPIENT_GROUP_MANAGE,
   GroupPermission.ANNOUNCEMENT_MANAGE,
   GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW,
+  // Formal rank correction workflow - ADMIN may request/view freely, and
+  // may review (approve/reject), but only its own reports (see
+  // GroupPermission.FORMAL_RANK_CORRECTION_REVIEW's own comment - the
+  // reportedBy-must-match-actor restriction is enforced in
+  // FormalRankCorrectionService, not expressible here).
+  GroupPermission.FORMAL_RANK_CORRECTION_REQUEST,
+  GroupPermission.FORMAL_RANK_CORRECTION_REVIEW,
+  GroupPermission.FORMAL_RANK_CORRECTION_VIEW,
 ];
 
 // Every lifecycle-status permission (ARCHIVE, UNARCHIVE, SET_READ_ONLY,
@@ -204,5 +212,6 @@ export const READ_ONLY_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> = new Set(
     // visible" for READ_ONLY - deliberately added here explicitly, not
     // because of its "_VIEW" name.
     GroupPermission.AUDIT_LOG_VIEW,
+    GroupPermission.FORMAL_RANK_CORRECTION_VIEW,
   ],
 );

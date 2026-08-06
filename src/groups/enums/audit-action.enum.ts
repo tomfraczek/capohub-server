@@ -53,4 +53,16 @@ export enum AuditAction {
   REORDER_RANK = 'REORDER_RANK',
   ARCHIVE_RANK = 'ARCHIVE_RANK',
   RESTORE_RANK = 'RESTORE_RANK',
+
+  // Formal rank correction workflow (see FormalRankCorrectionRequest) -
+  // always logged under the exact Section the workflow belongs to, never
+  // the parent Group (see the module spec). Submitting a correction is
+  // logged even though it's the target user's own action, not an admin
+  // action - it happens within a workflow the Section's administration
+  // opened, so it belongs in that Section's own record (see
+  // FormalRankCorrectionService.submit's own comment).
+  REQUEST_FORMAL_RANK_CORRECTION = 'REQUEST_FORMAL_RANK_CORRECTION',
+  SUBMIT_FORMAL_RANK_CORRECTION = 'SUBMIT_FORMAL_RANK_CORRECTION',
+  APPROVE_FORMAL_RANK_CORRECTION = 'APPROVE_FORMAL_RANK_CORRECTION',
+  REJECT_FORMAL_RANK_CORRECTION = 'REJECT_FORMAL_RANK_CORRECTION',
 }
