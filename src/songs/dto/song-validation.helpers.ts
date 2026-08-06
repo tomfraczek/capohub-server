@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
-export const uuidSchema = z.string().trim().uuid('Must be a valid UUID');
+// Re-exported from the neutral common module - this module is not the
+// canonical owner, just one of several importers (see uuid.schema.ts).
+export { uuidSchema } from '../../common/validation/uuid.schema';
 
 // pt-BR-style codes: 2-3 lowercase letters, optionally a region subtag.
 export const LANGUAGE_CODE_PATTERN = /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/;

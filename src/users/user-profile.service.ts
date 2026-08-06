@@ -1,0 +1,403 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { EntityManager } from '@mikro-orm/postgresql';
+import { isUniqueViolationOn } from '../common/utils/db-errors';
+import { Group } from '../groups/entities/group.entity';
+import { Section } from '../groups/entities/section.entity';
+import {
+  FORMAL_GROUP_AFFILIATIONS_ACTIVE_UNIQUE_INDEX,
+  FormalGroupAffiliation,
+} from '../groups/entities/formal-group-affiliation.entity';
+import { RoleAssignment } from '../groups/entities/role-assignment.entity';
+import { SectionMembership } from '../groups/entities/section-membership.entity';
+import { GroupHierarchyService } from '../groups/group-hierarchy.service';
+import { GroupRole } from '../groups/enums/group-role.enum';
+import { GroupStatus } from '../groups/enums/group-status.enum';
+import { SectionMembershipStatus } from '../groups/enums/section-membership-status.enum';
+import { EventRoleAssignment } from '../events/entities/event-role-assignment.entity';
+import { EventRole } from '../events/enums/event-role.enum';
+import { EventRsvpStatus } from '../events/enums/event-rsvp-status.enum';
+import { FormalGroupResponseDto } from './dto/formal-group-response.dto';
+import { PublicUserProfileResponseDto } from './dto/public-user-profile-response.dto';
+import { UpdateUserProfileInput } from './dto/update-user-profile.schema';
+import { UserProfileResponseDto } from './dto/user-profile-response.dto';
+import { User } from './entities/user.entity';
+import {
+  toFormalGroupResponseDto,
+  toPublicUserProfileResponseDto,
+  toUserProfileResponseDto,
+} from './user-profile.mapper';
+
+const ACTIVE_MEMBERSHIP_STATUSES = [
+  SectionMembershipStatus.ACTIVE,
+  SectionMembershipStatus.READ_ONLY,
+];
+
+function startOfTodayUtc(): Date {
+  const now = new Date();
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+}
+
+function parseDateOnly(value: string): Date {
+  return new Date(`${value}T00:00:00.000Z`);
+}
+
+/**
+ * Owns the User Profile Stage 1 surface (see the plan): the caller's own
+ * profile (GET/PATCH /users/me/profile), another user's filtered public
+ * profile (GET /users/:userId/profile), and the single formal Group
+ * affiliation (PUT/DELETE /users/me/formal-group). Queries
+ * SectionMembership/RoleAssignment/EventAttendee/EventRoleAssignment
+ * directly via EntityManager, the same way RoleAssignmentsService already
+ * queries SectionMembership directly rather than through
+ * SectionMembershipsService - none of those services expose the
+ * user-keyed/cross-entity queries this needs.
+ */
+@Injectable()
+export class UserProfileService {
+  constructor(
+    private readonly em: EntityManager,
+    private readonly groupHierarchyService: GroupHierarchyService,
+  ) {}
+
+  async getOwnProfile(user: User): Promise<UserProfileResponseDto> {
+    const formalGroup = await this.loadActiveFormalGroup(user.id);
+    return toUserProfileResponseDto(user, formalGroup);
+  }
+
+  async updateOwnProfile(
+    user: User,
+    changes: UpdateUserProfileInput,
+  ): Promise<UserProfileResponseDto> {
+    if (changes.firstName !== undefined) {
+      user.firstName = changes.firstName;
+    }
+    if (changes.lastName !== undefined) {
+      user.lastName = changes.lastName;
+    }
+    if (changes.apelido !== undefined) {
+      user.apelido = changes.apelido;
+    }
+    if (changes.city !== undefined) {
+      user.city = changes.city;
+    }
+    if (changes.country !== undefined) {
+      user.country = changes.country;
+    }
+    if (changes.capoeiraStartedAt !== undefined) {
+      user.capoeiraStartedAt = changes.capoeiraStartedAt
+        ? parseDateOnly(changes.capoeiraStartedAt)
+        : null;
+    }
+    if (changes.showFullName !== undefined) {
+      user.showFullName = changes.showFullName;
+    }
+    if (changes.showApelido !== undefined) {
+      user.showApelido = changes.showApelido;
+    }
+    if (changes.showLocation !== undefined) {
+      user.showLocation = changes.showLocation;
+    }
+    if (changes.showCapoeiraStartedAt !== undefined) {
+      user.showCapoeiraStartedAt = changes.showCapoeiraStartedAt;
+    }
+    if (changes.showSections !== undefined) {
+      user.showSections = changes.showSections;
+    }
+    if (changes.showFormalGroup !== undefined) {
+      user.showFormalGroup = changes.showFormalGroup;
+    }
+    await this.em.flush();
+
+    return this.getOwnProfile(user);
+  }
+
+  /**
+   * Every field is `null` unless the viewer is allowed to see it - either
+   * because they own the profile, the corresponding privacy toggle is on,
+   * or (firstName/lastName only) they hold exact-Section-admin or
+   * Event-organizer access to the target - see canSeeFullName.
+   */
+  async getPublicProfile(
+    viewer: User,
+    targetUserId: string,
+  ): Promise<PublicUserProfileResponseDto> {
+    const target = await this.em.findOne(User, { id: targetUserId });
+    if (!target) {
+      throw this.userNotFound();
+    }
+
+    const isOwner = viewer.id === target.id;
+
+    // Sequential, not concurrent - concurrent queries on the same
+    // EntityManager corrupt the underlying pg connection (see
+    // SectionMembershipsService for the same constraint).
+    const canSeeFullName =
+      isOwner || (await this.canSeeFullName(viewer.id, target));
+    const canSeeApelido = isOwner || target.showApelido;
+    const canSeeLocation = isOwner || target.showLocation;
+    const canSeeCapoeiraStartedAt = isOwner || target.showCapoeiraStartedAt;
+    const canSeeSections = isOwner || target.showSections;
+    const canSeeFormalGroup = isOwner || target.showFormalGroup;
+
+    const sections = canSeeSections
+      ? await this.loadActiveSections(target.id)
+      : null;
+    const formalGroup = canSeeFormalGroup
+      ? await this.loadActiveFormalGroup(target.id)
+      : null;
+
+    return toPublicUserProfileResponseDto(target, {
+      canSeeFullName,
+      canSeeApelido,
+      canSeeLocation,
+      canSeeCapoeiraStartedAt,
+      sections,
+      formalGroup,
+    });
+  }
+
+  /**
+   * Sets/changes the caller's single formal Group affiliation, atomically
+   * ending the current one (if any) and inserting a fresh row - see
+   * formal-group-affiliation.entity.ts. Validated at set/change time only:
+   * the Group itself must be ACTIVE, and the user must hold an
+   * ACTIVE/READ_ONLY SectionMembership in at least one ACTIVE Section
+   * anywhere in the Group's hierarchy (direct or under a nested child
+   * Group - see GroupHierarchyService.getDescendantSections). None of this
+   * is re-checked later - see the entity's own comment on why an
+   * affiliation never ends itself automatically.
+   */
+  async setFormalGroup(
+    user: User,
+    groupId: string,
+    startedOnInput?: string,
+  ): Promise<FormalGroupResponseDto> {
+    const startedOn = startedOnInput ? parseDateOnly(startedOnInput) : null;
+    if (startedOn && startedOn.getTime() > startOfTodayUtc().getTime()) {
+      throw new BadRequestException({
+        code: 'FORMAL_GROUP_STARTED_ON_IN_FUTURE',
+        message: 'startedOn cannot be in the future',
+      });
+    }
+
+    return this.em.transactional(async (em) => {
+      const group = await em.findOne(Group, { id: groupId });
+      if (!group) {
+        throw this.formalGroupNotFound();
+      }
+      if (group.status !== GroupStatus.ACTIVE) {
+        throw new ConflictException({
+          code: 'FORMAL_GROUP_NOT_ACTIVE',
+          message: 'This group is not currently active',
+        });
+      }
+
+      const descendantSections =
+        await this.groupHierarchyService.getDescendantSections(groupId, em);
+      const activeSectionIds = descendantSections
+        .filter((section) => section.status === GroupStatus.ACTIVE)
+        .map((section) => section.id);
+
+      const hasQualifyingMembership =
+        activeSectionIds.length > 0 &&
+        (await em.count(SectionMembership, {
+          user: user.id,
+          section: { $in: activeSectionIds },
+          status: { $in: ACTIVE_MEMBERSHIP_STATUSES },
+        })) > 0;
+
+      if (!hasQualifyingMembership) {
+        throw new ConflictException({
+          code: 'FORMAL_GROUP_REQUIRES_ACTIVE_SECTION_MEMBERSHIP',
+          message:
+            'You must have an active section membership within this group (or one of its active sections) to set it as your formal group',
+        });
+      }
+
+      const current = await em.findOne(
+        FormalGroupAffiliation,
+        { user: user.id, endedOn: null },
+        { populate: ['group'] },
+      );
+
+      if (current && current.group.id === groupId) {
+        if (startedOn) {
+          current.startedOn = startedOn;
+          await em.flush();
+        }
+        return toFormalGroupResponseDto(current);
+      }
+
+      if (current) {
+        current.endedOn = startOfTodayUtc();
+        // Flushed before the new row is inserted below - MikroORM's
+        // UnitOfWork applies inserts before updates within a single flush,
+        // which would otherwise insert the new active row while the
+        // previous one is still active, transiently violating
+        // FORMAL_GROUP_AFFILIATIONS_ACTIVE_UNIQUE_INDEX (same reasoning as
+        // RoleAssignmentsService.transferOwnership's revoke-before-insert
+        // ordering).
+        await em.flush();
+      }
+
+      const affiliation = new FormalGroupAffiliation();
+      affiliation.user = user;
+      affiliation.group = group;
+      affiliation.startedOn = startedOn;
+
+      try {
+        em.persist(affiliation);
+        await em.flush();
+      } catch (error) {
+        // Race backstop - see the equivalent comment in
+        // SectionMembershipsService.addMember().
+        if (
+          isUniqueViolationOn(
+            error,
+            FORMAL_GROUP_AFFILIATIONS_ACTIVE_UNIQUE_INDEX,
+          )
+        ) {
+          throw new ConflictException({
+            code: 'FORMAL_GROUP_ALREADY_SET',
+            message: 'A concurrent change already set an active formal group',
+          });
+        }
+        throw error;
+      }
+
+      return toFormalGroupResponseDto(affiliation);
+    });
+  }
+
+  async endFormalGroup(user: User): Promise<void> {
+    const current = await this.em.findOne(FormalGroupAffiliation, {
+      user: user.id,
+      endedOn: null,
+    });
+    if (!current) {
+      throw new NotFoundException({
+        code: 'FORMAL_GROUP_NOT_SET',
+        message: 'No active formal group affiliation to end',
+      });
+    }
+    current.endedOn = startOfTodayUtc();
+    await this.em.flush();
+  }
+
+  private async loadActiveFormalGroup(
+    userId: string,
+  ): Promise<FormalGroupAffiliation | null> {
+    return this.em.findOne(
+      FormalGroupAffiliation,
+      { user: userId, endedOn: null },
+      { populate: ['group'] },
+    );
+  }
+
+  private async loadActiveSections(userId: string): Promise<Section[]> {
+    const memberships = await this.em.find(
+      SectionMembership,
+      { user: userId, status: { $in: ACTIVE_MEMBERSHIP_STATUSES } },
+      { populate: ['section'] },
+    );
+    return memberships.map((membership) => membership.section);
+  }
+
+  /**
+   * Full name is visible beyond the owner's own showFullName toggle to:
+   *  - a viewer holding an active OWNER/ADMIN RoleAssignment on a Section,
+   *    who *also* currently has their own active SectionMembership on that
+   *    exact Section, where the target *also* currently has an active
+   *    SectionMembership on that exact Section - the same full shape
+   *    RoleAssignmentsService.resolveAuthorization already requires for
+   *    "current Section authorization" (role alone is not enough), reused
+   *    here rather than re-derived as "role only". No inheritance from a
+   *    parent Group.
+   *  - a viewer holding EventRole.OWNER/ORGANIZER on an Event the target
+   *    currently attends (EventAttendee.subjectUser = target, rsvpStatus
+   *    GOING/MAYBE). MODERATOR and plain attendees never qualify.
+   *    EventRoleAssignment has no revokedAt/status field - the row's mere
+   *    existence is "currently holds" (see that entity).
+   * Two bounded queries total, each a single EXISTS-backed QueryBuilder
+   * query - never per-Section/per-Event iteration.
+   */
+  private async canSeeFullName(
+    viewerId: string,
+    target: User,
+  ): Promise<boolean> {
+    if (target.showFullName) {
+      return true;
+    }
+    if (await this.viewerHasSectionAdminAccess(viewerId, target.id)) {
+      return true;
+    }
+    return this.viewerHasEventOrganizerAccess(viewerId, target.id);
+  }
+
+  private async viewerHasSectionAdminAccess(
+    viewerId: string,
+    targetId: string,
+  ): Promise<boolean> {
+    const rows = await this.em
+      .createQueryBuilder(RoleAssignment, 'ra')
+      .select('ra.id')
+      .andWhere({
+        user: viewerId,
+        role: { $in: [GroupRole.OWNER, GroupRole.ADMIN] },
+        revokedAt: null,
+        section: { $ne: null },
+      })
+      .andWhere(
+        `exists (select 1 from section_memberships vsm where vsm.section_id = ra.section_id and vsm.user_id = ? and vsm.status in (?, ?))`,
+        [viewerId, ...ACTIVE_MEMBERSHIP_STATUSES],
+      )
+      .andWhere(
+        `exists (select 1 from section_memberships tsm where tsm.section_id = ra.section_id and tsm.user_id = ? and tsm.status in (?, ?))`,
+        [targetId, ...ACTIVE_MEMBERSHIP_STATUSES],
+      )
+      .limit(1)
+      .execute<{ id: string }[]>('all');
+    return rows.length > 0;
+  }
+
+  private async viewerHasEventOrganizerAccess(
+    viewerId: string,
+    targetId: string,
+  ): Promise<boolean> {
+    const rows = await this.em
+      .createQueryBuilder(EventRoleAssignment, 'era')
+      .select('era.id')
+      .andWhere({
+        user: viewerId,
+        role: { $in: [EventRole.OWNER, EventRole.ORGANIZER] },
+      })
+      .andWhere(
+        `exists (select 1 from event_attendees ea where ea.event_id = era.event_id and ea.subject_user_id = ? and ea.rsvp_status in (?, ?))`,
+        [targetId, EventRsvpStatus.GOING, EventRsvpStatus.MAYBE],
+      )
+      .limit(1)
+      .execute<{ id: string }[]>('all');
+    return rows.length > 0;
+  }
+
+  private userNotFound(): NotFoundException {
+    return new NotFoundException({
+      code: 'USER_NOT_FOUND',
+      message: 'User not found',
+    });
+  }
+
+  private formalGroupNotFound(): NotFoundException {
+    return new NotFoundException({
+      code: 'FORMAL_GROUP_NOT_FOUND',
+      message: 'Group not found',
+    });
+  }
+}

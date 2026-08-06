@@ -5,6 +5,7 @@ import { EventsModule } from '../events/events.module';
 import { GroupsModule } from '../groups/groups.module';
 import { SongLibraryModule } from '../song-library/song-library.module';
 import { User } from './entities/user.entity';
+import { UserProfileService } from './user-profile.service';
 import { UserService } from './user.service';
 import { UsersController } from './users.controller';
 
@@ -14,8 +15,11 @@ import { UsersController } from './users.controller';
   // imports UsersModule back. GroupsModule is imported so UserService can
   // check whether the account owns any Group before DELETE /users/me hard-
   // deletes it - also one-directional (see GroupsModule's exports comment).
-  // EventsModule likewise, so UserService can check whether the account
-  // solely owns any live Event first (see EventRolesService.findOwnedActiveEvents).
+  // UserProfileService additionally depends on GroupsModule's exported
+  // GroupHierarchyService (walking a formal Group's Section subtree - see
+  // UserProfileService.setFormalGroup). EventsModule likewise, so
+  // UserService can check whether the account solely owns any live Event
+  // first (see EventRolesService.findOwnedActiveEvents).
   imports: [
     MikroOrmModule.forFeature([User]),
     ClerkModule,
@@ -24,7 +28,7 @@ import { UsersController } from './users.controller';
     EventsModule,
   ],
   controllers: [UsersController],
-  providers: [UserService],
+  providers: [UserService, UserProfileService],
   exports: [UserService],
 })
 export class UsersModule {}

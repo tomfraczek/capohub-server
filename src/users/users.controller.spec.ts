@@ -2,15 +2,16 @@ import { GlobalRole } from '../auth/permissions/global-role.enum';
 import { FavoriteSongsService } from '../song-library/favorite-songs.service';
 import { LearningStatusService } from '../song-library/learning-status.service';
 import { AvatarType } from './enums/avatar-type.enum';
+import { UserProfileService } from './user-profile.service';
 import { UserService } from './user.service';
 import { User } from './entities/user.entity';
 import { UsersController } from './users.controller';
 
-// Unused by the getMe/updateMe/avatar/deleteMe tests below - only the
-// dedicated "getFavoriteSongs"/"getLearningSongs" describe blocks pass
-// their own mocks.
+// Unused by every describe block below - none of these tests exercise the
+// profile/formal-group routes (see user-profile.service.spec.ts instead).
 const favoriteSongsService = {} as unknown as FavoriteSongsService;
 const learningStatusService = {} as unknown as LearningStatusService;
+const userProfileService = {} as unknown as UserProfileService;
 
 function buildUser(): User {
   const user = new User();
@@ -38,6 +39,7 @@ describe('UsersController', () => {
       const userService = {} as unknown as UserService;
       const controller = new UsersController(
         userService,
+        userProfileService,
         favoriteSongsService,
         learningStatusService,
       );
@@ -63,6 +65,7 @@ describe('UsersController', () => {
       const userService = {} as unknown as UserService;
       const controller = new UsersController(
         userService,
+        userProfileService,
         favoriteSongsService,
         learningStatusService,
       );
@@ -85,6 +88,7 @@ describe('UsersController', () => {
       const userService = { updateProfile } as unknown as UserService;
       const controller = new UsersController(
         userService,
+        userProfileService,
         favoriteSongsService,
         learningStatusService,
       );
@@ -112,6 +116,7 @@ describe('UsersController', () => {
       const userService = { setAvatarPreset } as unknown as UserService;
       const controller = new UsersController(
         userService,
+        userProfileService,
         favoriteSongsService,
         learningStatusService,
       );
@@ -139,6 +144,7 @@ describe('UsersController', () => {
       const userService = { resetAvatarToClerk } as unknown as UserService;
       const controller = new UsersController(
         userService,
+        userProfileService,
         favoriteSongsService,
         learningStatusService,
       );
@@ -159,6 +165,7 @@ describe('UsersController', () => {
       const userService = { deleteAccount } as unknown as UserService;
       const controller = new UsersController(
         userService,
+        userProfileService,
         favoriteSongsService,
         learningStatusService,
       );
@@ -180,6 +187,7 @@ describe('UsersController', () => {
       } as unknown as FavoriteSongsService;
       const controller = new UsersController(
         userService,
+        userProfileService,
         favoritesService,
         learningStatusService,
       );
@@ -202,6 +210,7 @@ describe('UsersController', () => {
       } as unknown as LearningStatusService;
       const controller = new UsersController(
         userService,
+        userProfileService,
         favoriteSongsService,
         learningService,
       );
