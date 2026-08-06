@@ -41,4 +41,16 @@ export enum AuditAction {
   ATTACH_CHILD = 'ATTACH_CHILD',
   DETACH_CHILD = 'DETACH_CHILD',
   MOVE_CHILD = 'MOVE_CHILD',
+
+  // Graduation catalog (see graduation/entities and
+  // GroupPermission.GRADUATION_SYSTEM_MANAGE). A user changing their own
+  // rank is deliberately NOT logged here - see FormalRankService's own
+  // comment: it is a profile operation, not a community action.
+  CREATE_GRADUATION_SYSTEM = 'CREATE_GRADUATION_SYSTEM',
+  UPDATE_GRADUATION_SYSTEM = 'UPDATE_GRADUATION_SYSTEM',
+  CREATE_RANK = 'CREATE_RANK',
+  UPDATE_RANK = 'UPDATE_RANK',
+  REORDER_RANK = 'REORDER_RANK',
+  ARCHIVE_RANK = 'ARCHIVE_RANK',
+  RESTORE_RANK = 'RESTORE_RANK',
 }

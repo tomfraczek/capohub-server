@@ -483,7 +483,7 @@ describe('Recipient Groups (e2e)', () => {
       `/api/v1/groups/${org.id}`,
       { name: 'Rodzice' },
     );
-    // eslint-disable-next-line no-console
+
     console.error(
       'DIAG createRes',
       createRes.status,
@@ -493,9 +493,11 @@ describe('Recipient Groups (e2e)', () => {
     const created = createRes.body as RecipientGroupResponseDto;
 
     const deactivateRes = await request(app.getHttpServer())
-      .post(`/api/v1/groups/${org.id}/recipient-groups/${created.id}/deactivate`)
+      .post(
+        `/api/v1/groups/${org.id}/recipient-groups/${created.id}/deactivate`,
+      )
       .set('Authorization', `Bearer ${OWNER_TOKEN}`);
-    // eslint-disable-next-line no-console
+
     console.error(
       'DIAG deactivateRes',
       deactivateRes.status,

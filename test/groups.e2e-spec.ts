@@ -1033,7 +1033,6 @@ describe('Groups (e2e)', () => {
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .send({ userId: secondUserId, role: 'ADMIN' });
       if (res.status !== 409) {
-        // eslint-disable-next-line no-console
         console.error(
           'DIAG grant-role-readonly failed',
           res.status,

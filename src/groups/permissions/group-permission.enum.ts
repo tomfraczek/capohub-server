@@ -170,4 +170,17 @@ export enum GroupPermission {
   // answered by the GROUP_VIEW every role already holds.
   HIERARCHY_MANAGE = 'HIERARCHY_MANAGE',
   HIERARCHY_INVITE = 'HIERARCHY_INVITE',
+
+  // Graduation catalog (GraduationSystem/Rank - see graduation/entities) -
+  // exact-Group-only, deliberately absent from
+  // SECTION_TARGET_ROLE_PERMISSIONS: a Section never defines its own
+  // catalog, and Section OWNER/ADMIN gain no catalog rights through
+  // membership or hierarchy (see the module spec). One combined _MANAGE
+  // permission covers every mutation (create/edit system, create/edit/
+  // reorder/archive/restore Rank) - unlike Academy/Cohort, every one of
+  // these actions sits at the exact same OWNER-and-ADMIN trust tier per
+  // the spec, so splitting them would add permissions without expressing
+  // any real distinction (same reasoning as RECIPIENT_GROUP_MANAGE).
+  GRADUATION_SYSTEM_VIEW = 'GRADUATION_SYSTEM_VIEW',
+  GRADUATION_SYSTEM_MANAGE = 'GRADUATION_SYSTEM_MANAGE',
 }

@@ -313,7 +313,6 @@ describe('Role Assignments (e2e)', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ userId, role });
     if (res.status !== 201) {
-      // eslint-disable-next-line no-console
       console.error(
         'DIAG grantSectionRole failed',
         'status=',

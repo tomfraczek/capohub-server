@@ -264,7 +264,6 @@ describe('Section Membership (e2e)', () => {
         ...overrides,
       });
     if (res.status !== 201) {
-      // eslint-disable-next-line no-console
       console.error(
         'DIAG createSection failed',
         'status=',

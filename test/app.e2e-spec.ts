@@ -297,7 +297,7 @@ describe('App (e2e)', () => {
     const getRes = await request(app.getHttpServer())
       .get('/api/v1/users/me')
       .set('Authorization', 'Bearer valid-flow-token');
-    // eslint-disable-next-line no-console
+
     console.error(
       'DIAG globalRole GET',
       getRes.status,
@@ -309,7 +309,7 @@ describe('App (e2e)', () => {
       .patch('/api/v1/users/me')
       .set('Authorization', 'Bearer valid-flow-token')
       .send({ displayName: 'Still Just A User', globalRole: 'SUPER_ADMIN' });
-    // eslint-disable-next-line no-console
+
     console.error(
       'DIAG globalRole PATCH',
       patchRes.status,

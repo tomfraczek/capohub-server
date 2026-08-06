@@ -5,6 +5,7 @@ import { ConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { DiscoveryModule } from './discovery/discovery.module';
 import { EventsModule } from './events/events.module';
+import { GraduationModule } from './graduation/graduation.module';
 import { GroupsModule } from './groups/groups.module';
 import { HealthModule } from './health/health.module';
 import { HomeModule } from './home/home.module';
@@ -28,6 +29,7 @@ import { UsersModule } from './users/users.module';
     RhythmsModule,
     GroupsModule,
     EventsModule,
+    GraduationModule,
     DiscoveryModule,
     HealthModule,
     HomeModule,

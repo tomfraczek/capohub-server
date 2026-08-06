@@ -1095,7 +1095,14 @@
             "CANCEL_CHILD_INVITATION",
             "ATTACH_CHILD",
             "DETACH_CHILD",
-            "MOVE_CHILD"
+            "MOVE_CHILD",
+            "CREATE_GRADUATION_SYSTEM",
+            "UPDATE_GRADUATION_SYSTEM",
+            "CREATE_RANK",
+            "UPDATE_RANK",
+            "REORDER_RANK",
+            "ARCHIVE_RANK",
+            "RESTORE_RANK"
           ],
           "mappedType": "enum"
         },
@@ -1133,7 +1140,9 @@
             "USER",
             "ROLE_ASSIGNMENT",
             "MEMBERSHIP_REQUEST",
-            "HIERARCHY_INVITATION"
+            "HIERARCHY_INVITATION",
+            "GRADUATION_SYSTEM",
+            "RANK"
           ],
           "mappedType": "enum"
         },
@@ -1860,6 +1869,377 @@
           ],
           "constraintName": "community_notification_settings_user_id_foreign",
           "localTableName": "public.community_notification_settings",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "custom_rank_id": {
+          "name": "custom_rank_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "position": {
+          "name": "position",
+          "type": "int2",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 16,
+          "scale": 0,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "smallint"
+        },
+        "color_hex": {
+          "name": "color_hex",
+          "type": "varchar(7)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 7,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "proportion": {
+          "name": "proportion",
+          "type": "float4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 24,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "float"
+        }
+      },
+      "name": "custom_user_rank_cord_segments",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "custom_rank_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "custom_user_rank_cord_segments_custom_rank_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "custom_rank_id",
+            "position"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "custom_user_rank_cord_segments_custom_rank_id_position_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX custom_user_rank_cord_segments_custom_rank_id_position_unique ON public.custom_user_rank_cord_segments USING btree (custom_rank_id, \"position\")"
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "custom_user_rank_cord_segments_pkey",
+          "unique": true,
+          "primary": true
+        }
+      ],
+      "checks": [
+        {
+          "name": "custom_user_rank_cord_segments_color_hex_check",
+          "columnName": "color_hex",
+          "definition": "CHECK (((color_hex)::text ~ '^#[0-9A-Fa-f]{6}$'::text))",
+          "expression": "color_hex ~ '^#[0-9A-Fa-f]{6}$'::text"
+        },
+        {
+          "name": "custom_user_rank_cord_segments_proportion_positive_check",
+          "columnName": "proportion",
+          "definition": "CHECK ((proportion > (0)::double precision))",
+          "expression": "proportion > 0 precision"
+        }
+      ],
+      "foreignKeys": {
+        "custom_user_rank_cord_segments_custom_rank_id_foreign": {
+          "columnNames": [
+            "custom_rank_id"
+          ],
+          "constraintName": "custom_user_rank_cord_segments_custom_rank_id_foreign",
+          "localTableName": "public.custom_user_rank_cord_segments",
+          "referencedTableName": "public.custom_user_ranks",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(150)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 150,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "track": {
+          "name": "track",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "CHILD",
+            "ADULT"
+          ],
+          "mappedType": "enum"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        }
+      },
+      "name": "custom_user_ranks",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "custom_user_ranks_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "user_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "custom_user_ranks_user_id_active_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX custom_user_ranks_user_id_active_unique ON public.custom_user_ranks USING btree (user_id) WHERE (is_active IS TRUE)"
+        },
+        {
+          "columnNames": [
+            "user_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "custom_user_ranks_user_id_index",
+          "unique": false,
+          "primary": false
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "custom_user_ranks_user_id_foreign": {
+          "columnNames": [
+            "user_id"
+          ],
+          "constraintName": "custom_user_ranks_user_id_foreign",
+          "localTableName": "public.custom_user_ranks",
           "referencedTableName": "public.users",
           "referencedColumnNames": [
             "id"
@@ -4137,6 +4517,413 @@
           ],
           "updateRule": "cascade",
           "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "rank_id": {
+          "name": "rank_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "source_group_id": {
+          "name": "source_group_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "started_on": {
+          "name": "started_on",
+          "type": "date",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 0,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "date"
+        },
+        "ended_on": {
+          "name": "ended_on",
+          "type": "date",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 0,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "date"
+        },
+        "awarded_by_name": {
+          "name": "awarded_by_name",
+          "type": "varchar(150)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 150,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        }
+      },
+      "name": "formal_rank_assignments",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "formal_rank_assignments_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "rank_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "formal_rank_assignments_rank_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "source_group_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "formal_rank_assignments_source_group_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "user_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "formal_rank_assignments_user_id_active_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX formal_rank_assignments_user_id_active_unique ON public.formal_rank_assignments USING btree (user_id) WHERE (ended_on IS NULL)"
+        },
+        {
+          "columnNames": [
+            "user_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "formal_rank_assignments_user_id_index",
+          "unique": false,
+          "primary": false
+        }
+      ],
+      "checks": [
+        {
+          "name": "formal_rank_assignments_ended_on_after_started_on_check",
+          "columnName": "ended_on",
+          "definition": "CHECK (((started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)))",
+          "expression": "(started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)"
+        }
+      ],
+      "foreignKeys": {
+        "formal_rank_assignments_rank_id_foreign": {
+          "columnNames": [
+            "rank_id"
+          ],
+          "constraintName": "formal_rank_assignments_rank_id_foreign",
+          "localTableName": "public.formal_rank_assignments",
+          "referencedTableName": "public.ranks",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "formal_rank_assignments_source_group_id_foreign": {
+          "columnNames": [
+            "source_group_id"
+          ],
+          "constraintName": "formal_rank_assignments_source_group_id_foreign",
+          "localTableName": "public.formal_rank_assignments",
+          "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "formal_rank_assignments_user_id_foreign": {
+          "columnNames": [
+            "user_id"
+          ],
+          "constraintName": "formal_rank_assignments_user_id_foreign",
+          "localTableName": "public.formal_rank_assignments",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "group_id": {
+          "name": "group_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(150)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 150,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        }
+      },
+      "name": "graduation_systems",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "group_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "graduation_systems_group_id_active_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX graduation_systems_group_id_active_unique ON public.graduation_systems USING btree (group_id) WHERE (is_active IS TRUE)"
+        },
+        {
+          "columnNames": [
+            "group_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "graduation_systems_group_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "graduation_systems_pkey",
+          "unique": true,
+          "primary": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "graduation_systems_group_id_foreign": {
+          "columnNames": [
+            "group_id"
+          ],
+          "constraintName": "graduation_systems_group_id_foreign",
+          "localTableName": "public.graduation_systems",
+          "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
         }
       },
       "nativeEnums": {},
@@ -6712,6 +7499,445 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
+        "rank_id": {
+          "name": "rank_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "position": {
+          "name": "position",
+          "type": "int2",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 16,
+          "scale": 0,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "smallint"
+        },
+        "color_hex": {
+          "name": "color_hex",
+          "type": "varchar(7)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 7,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "proportion": {
+          "name": "proportion",
+          "type": "float4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 24,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "float"
+        }
+      },
+      "name": "rank_cord_segments",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "rank_cord_segments_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "rank_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "rank_cord_segments_rank_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "rank_id",
+            "position"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "rank_cord_segments_rank_id_position_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX rank_cord_segments_rank_id_position_unique ON public.rank_cord_segments USING btree (rank_id, \"position\")"
+        }
+      ],
+      "checks": [
+        {
+          "name": "rank_cord_segments_color_hex_check",
+          "columnName": "color_hex",
+          "definition": "CHECK (((color_hex)::text ~ '^#[0-9A-Fa-f]{6}$'::text))",
+          "expression": "color_hex ~ '^#[0-9A-Fa-f]{6}$'::text"
+        },
+        {
+          "name": "rank_cord_segments_proportion_positive_check",
+          "columnName": "proportion",
+          "definition": "CHECK ((proportion > (0)::double precision))",
+          "expression": "proportion > 0 precision"
+        }
+      ],
+      "foreignKeys": {
+        "rank_cord_segments_rank_id_foreign": {
+          "columnNames": [
+            "rank_id"
+          ],
+          "constraintName": "rank_cord_segments_rank_id_foreign",
+          "localTableName": "public.rank_cord_segments",
+          "referencedTableName": "public.ranks",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "system_id": {
+          "name": "system_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "track": {
+          "name": "track",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "CHILD",
+            "ADULT"
+          ],
+          "mappedType": "enum"
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(150)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 150,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "previous_rank_id": {
+          "name": "previous_rank_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "is_archived": {
+          "name": "is_archived",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        }
+      },
+      "name": "ranks",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "ranks_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "previous_rank_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "ranks_previous_rank_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "previous_rank_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "ranks_previous_rank_id_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX ranks_previous_rank_id_unique ON public.ranks USING btree (previous_rank_id) WHERE (previous_rank_id IS NOT NULL)"
+        },
+        {
+          "columnNames": [
+            "system_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "ranks_system_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "system_id",
+            "track"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "ranks_system_id_track_first_rank_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX ranks_system_id_track_first_rank_unique ON public.ranks USING btree (system_id, track) WHERE (previous_rank_id IS NULL)"
+        },
+        {
+          "columnNames": [
+            "track"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "ranks_track_index",
+          "unique": false,
+          "primary": false
+        }
+      ],
+      "checks": [
+        {
+          "name": "ranks_previous_rank_not_self_check",
+          "columnName": "previous_rank_id",
+          "definition": "CHECK (((previous_rank_id IS NULL) OR (previous_rank_id <> id)))",
+          "expression": "(previous_rank_id IS NULL) OR (previous_rank_id <> id)"
+        }
+      ],
+      "foreignKeys": {
+        "ranks_previous_rank_id_foreign": {
+          "columnNames": [
+            "previous_rank_id"
+          ],
+          "constraintName": "ranks_previous_rank_id_foreign",
+          "localTableName": "public.ranks",
+          "referencedTableName": "public.ranks",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "ranks_system_id_foreign": {
+          "columnNames": [
+            "system_id"
+          ],
+          "constraintName": "ranks_system_id_foreign",
+          "localTableName": "public.ranks",
+          "referencedTableName": "public.graduation_systems",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
         "recipient_group_id": {
           "name": "recipient_group_id",
           "type": "uuid",
@@ -7002,7 +8228,7 @@
       "checks": [
         {
           "name": "recipient_groups_group_or_section_check",
-          "columnName": "section_id",
+          "columnName": "group_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))))",
           "expression": "((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))"
         }
@@ -7873,7 +9099,7 @@
         },
         {
           "name": "role_assignments_role_matches_target_check",
-          "columnName": "role",
+          "columnName": "group_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text))) OR ((section_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text) OR (role = 'INSTRUCTOR'::text) OR (role = 'ASSISTANT'::text) OR (role = 'MEMBER'::text)))))",
           "expression": "((group_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text))) OR ((section_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text) OR (role = 'INSTRUCTOR'::text) OR (role = 'ASSISTANT'::text) OR (role = 'MEMBER'::text)))"
         }

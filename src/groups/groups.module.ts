@@ -80,12 +80,17 @@ import { SectionsService } from './sections.service';
   // AnnouncementsService re-querying RecipientGroupMember itself.
   // One-directional: GroupsModule never imports UsersModule, EventsModule,
   // or AnnouncementsModule back.
+  // AuditLogService is additionally exported for GraduationModule - logging
+  // graduation catalog mutations (system/rank create/edit/reorder/archive/
+  // restore) under the exact owning Group reuses this exact service rather
+  // than GraduationModule re-implementing AuditLogEntry writes itself.
   exports: [
     RoleAssignmentsService,
     GroupPermissionService,
     GroupHierarchyService,
     GroupPermissionsGuard,
     RecipientGroupsService,
+    AuditLogService,
   ],
 })
 export class GroupsModule {}

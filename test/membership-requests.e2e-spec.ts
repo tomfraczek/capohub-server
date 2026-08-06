@@ -307,7 +307,7 @@ describe('MembershipRequests + Discovery (e2e)', () => {
         .post(`/api/v1/sections/${section.id}/join`)
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .send({ targetType: 'INVALID_TYPE' });
-      // eslint-disable-next-line no-console
+
       console.error(
         'DIAG invalid-targetType',
         'group.id=',

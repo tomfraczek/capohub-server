@@ -203,6 +203,30 @@ describe('GroupPermissionService', () => {
       ).toBe(false);
     });
 
+    it('grants ADMIN and OWNER equal graduation catalog permissions, never SECTION', () => {
+      expect(
+        service.hasPermission(
+          'GROUP',
+          GroupRole.ADMIN,
+          GroupPermission.GRADUATION_SYSTEM_MANAGE,
+        ),
+      ).toBe(true);
+      expect(
+        service.hasPermission(
+          'GROUP',
+          GroupRole.OWNER,
+          GroupPermission.GRADUATION_SYSTEM_MANAGE,
+        ),
+      ).toBe(true);
+      expect(
+        service.hasPermission(
+          'SECTION',
+          GroupRole.OWNER,
+          GroupPermission.GRADUATION_SYSTEM_MANAGE,
+        ),
+      ).toBe(false);
+    });
+
     it('has no membership-status gating at all - ACTIVE/READ_ONLY/etc are irrelevant, only the RoleAssignment matters', () => {
       // membershipStatus is always null for a Group target - the union of
       // permissions is unconditionally granted.
@@ -244,18 +268,27 @@ describe('GroupPermissionService', () => {
   });
 
   describe('getPermissionsForRole (SECTION target)', () => {
-    it('returns every GroupPermission for OWNER except HIERARCHY_INVITE', () => {
+    it('returns every GroupPermission for OWNER except the Group-only ones', () => {
       // HIERARCHY_INVITE only ever applies to a Group target - only a Group
       // may be the parent side of a hierarchy relationship (a Section can
       // never have children), so it is deliberately absent from
       // SECTION_TARGET_ROLE_PERMISSIONS even for OWNER (see
-      // group-role-permissions.map.ts).
-      const everyPermissionExceptHierarchyInvite = Object.values(
+      // group-role-permissions.map.ts). GRADUATION_SYSTEM_VIEW/MANAGE are
+      // absent for the same "Group-only" reason: a Section never defines
+      // its own graduation catalog, and Section OWNER/ADMIN gain no
+      // catalog rights through membership or hierarchy (see the
+      // graduation module spec).
+      const groupOnlyPermissions: GroupPermission[] = [
+        GroupPermission.HIERARCHY_INVITE,
+        GroupPermission.GRADUATION_SYSTEM_VIEW,
+        GroupPermission.GRADUATION_SYSTEM_MANAGE,
+      ];
+      const everyPermissionExceptGroupOnly = Object.values(
         GroupPermission,
-      ).filter((permission) => permission !== GroupPermission.HIERARCHY_INVITE);
+      ).filter((permission) => !groupOnlyPermissions.includes(permission));
       expect(
         [...service.getPermissionsForRole('SECTION', GroupRole.OWNER)].sort(),
-      ).toEqual(everyPermissionExceptHierarchyInvite.sort());
+      ).toEqual(everyPermissionExceptGroupOnly.sort());
     });
   });
 

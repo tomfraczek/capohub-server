@@ -301,7 +301,6 @@ describe('Rhythms (e2e)', () => {
       .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
       .send(payload);
     if (res.status !== 201) {
-      // eslint-disable-next-line no-console
       console.error(
         'DIAG createRhythm failed',
         res.status,

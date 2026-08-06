@@ -140,6 +140,12 @@ const GROUP_ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.ANNOUNCEMENT_VIEW,
   GroupPermission.ANNOUNCEMENT_MANAGE,
   GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW,
+  // Graduation catalog - OWNER and ADMIN of this exact Group manage it
+  // equally (see GroupPermission.GRADUATION_SYSTEM_MANAGE's own comment),
+  // so both permissions sit directly on the ADMIN tier rather than being
+  // split/escalated to OWNER_PERMISSIONS the way lifecycle actions are.
+  GroupPermission.GRADUATION_SYSTEM_VIEW,
+  GroupPermission.GRADUATION_SYSTEM_MANAGE,
   // Propose attaching a child Group/Section this ADMIN does not directly
   // control - the recipient's own OWNER still has to accept (see
   // HierarchyInvitation), so this never mutates anything by itself and can
