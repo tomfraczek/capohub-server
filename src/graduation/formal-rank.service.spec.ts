@@ -1,6 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { Collection } from '@mikro-orm/core';
+import type { EventAccessService } from '../events/event-access.service';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
 import { Group } from '../groups/entities/group.entity';
 import { User } from '../users/entities/user.entity';
@@ -10,6 +11,15 @@ import { Rank } from './entities/rank.entity';
 import { FormalRankAssignment } from './entities/formal-rank-assignment.entity';
 import { RankTrack } from './enums/rank-track.enum';
 import { FormalRankService } from './formal-rank.service';
+
+// Not exercised in these cases - every setCurrent() call below passes
+// eventId: null, so FormalRankService never calls into this service.
+function buildMockEventAccessService(): EventAccessService {
+  return {
+    loadOrFail: jest.fn(),
+    isVisibleToViewer: jest.fn(),
+  } as unknown as EventAccessService;
+}
 
 function buildUser(id = 'user-1'): User {
   const user = new User();
@@ -90,11 +100,12 @@ describe('FormalRankService', () => {
   describe('setCurrent', () => {
     it('rejects when the caller has no active formal group', async () => {
       const { em } = buildMockEm({ activeFormalGroup: null });
-      const service = new FormalRankService(em);
+      const service = new FormalRankService(em, buildMockEventAccessService());
 
       const promise = service.setCurrent(buildUser(), {
         rankId: 'rank-1',
         awardedByName: null,
+        eventId: null,
       });
 
       await expect(promise).rejects.toBeInstanceOf(ConflictException);
@@ -108,11 +119,12 @@ describe('FormalRankService', () => {
         activeFormalGroup: buildFormalGroup(),
         rank: buildRank({ isArchived: true }),
       });
-      const service = new FormalRankService(em);
+      const service = new FormalRankService(em, buildMockEventAccessService());
 
       const promise = service.setCurrent(buildUser(), {
         rankId: 'rank-1',
         awardedByName: null,
+        eventId: null,
       });
 
       await expect(promise).rejects.toMatchObject({
@@ -125,11 +137,12 @@ describe('FormalRankService', () => {
         activeFormalGroup: buildFormalGroup('group-2'),
         rank: buildRank({}),
       });
-      const service = new FormalRankService(em);
+      const service = new FormalRankService(em, buildMockEventAccessService());
 
       const promise = service.setCurrent(buildUser(), {
         rankId: 'rank-1',
         awardedByName: null,
+        eventId: null,
       });
 
       await expect(promise).rejects.toMatchObject({
@@ -144,11 +157,12 @@ describe('FormalRankService', () => {
         currentAssignment: null,
         activeCordao: null,
       });
-      const service = new FormalRankService(em);
+      const service = new FormalRankService(em, buildMockEventAccessService());
 
       const result = await service.setCurrent(buildUser(), {
         rankId: 'rank-1',
         awardedByName: 'Mestre Marcão',
+        eventId: null,
       });
 
       expect(persist).toHaveBeenCalled();
@@ -168,11 +182,12 @@ describe('FormalRankService', () => {
         currentAssignment: null,
         activeCordao,
       });
-      const service = new FormalRankService(em);
+      const service = new FormalRankService(em, buildMockEventAccessService());
 
       await service.setCurrent(buildUser(), {
         rankId: 'rank-1',
         awardedByName: null,
+        eventId: null,
       });
 
       expect(activeCordao.isActive).toBe(false);
@@ -182,7 +197,7 @@ describe('FormalRankService', () => {
   describe('endCurrent', () => {
     it('throws RANK_NOT_SET when there is no active assignment', async () => {
       const { em } = buildMockEm({ currentAssignment: null });
-      const service = new FormalRankService(em);
+      const service = new FormalRankService(em, buildMockEventAccessService());
 
       const promise = service.endCurrent(buildUser());
 
@@ -196,7 +211,7 @@ describe('FormalRankService', () => {
   describe('getCurrent', () => {
     it('throws RANK_NOT_SET when there is no active assignment', async () => {
       const { em } = buildMockEm({ currentAssignment: null });
-      const service = new FormalRankService(em);
+      const service = new FormalRankService(em, buildMockEventAccessService());
 
       const promise = service.getCurrent('user-1');
 

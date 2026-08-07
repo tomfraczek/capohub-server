@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AnnouncementsModule } from './announcements/announcements.module';
 import { AuthModule } from './auth/auth.module';
+import { CareerTimelineModule } from './career-timeline/career-timeline.module';
 import { ConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { DiscoveryModule } from './discovery/discovery.module';
@@ -30,6 +31,7 @@ import { UsersModule } from './users/users.module';
     GroupsModule,
     EventsModule,
     GraduationModule,
+    CareerTimelineModule,
     DiscoveryModule,
     HealthModule,
     HomeModule,

@@ -59,6 +59,9 @@ export const updateUserProfileSchema = z.object({
   showCapoeiraStartedAt: privacyToggleSchema,
   showSections: privacyToggleSchema,
   showFormalGroup: privacyToggleSchema,
+  showFormalRank: privacyToggleSchema,
+  showCareerTimeline: privacyToggleSchema,
+  showEventParticipation: privacyToggleSchema,
 });
 
 export class UpdateUserProfileDto extends createZodDto(

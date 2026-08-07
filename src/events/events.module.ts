@@ -64,6 +64,11 @@ import { EventPermissionService } from './permissions/event-permission.service';
   // UserService.deleteLocalAccountData). EventsService is exported for
   // HomeModule, which reuses listForViewer as-is (same viewer-scoped
   // visibility rules as GET /events) rather than re-querying Events itself.
-  exports: [EventRolesService, EventsService],
+  // EventAccessService is exported for GraduationModule (FormalRankService's
+  // rank<->Event evidence link, see loadAndValidateEventLink) and for
+  // CareerTimelineModule (EVENT entry visibility, see
+  // career-timeline-aggregation.service.ts) - both reuse
+  // isVisibleToViewer/loadOrFail rather than re-deriving Event visibility.
+  exports: [EventRolesService, EventsService, EventAccessService],
 })
 export class EventsModule {}

@@ -1,5 +1,6 @@
 import {
   FormalRankAssignmentResponseDto,
+  FormalRankEventRefDto,
   FormalRankRefDto,
 } from '../dto/formal-rank-assignment-response.dto';
 import { FormalRankAssignment } from '../entities/formal-rank-assignment.entity';
@@ -32,6 +33,24 @@ function toFormalRankRef(assignment: FormalRankAssignment): FormalRankRefDto {
   };
 }
 
+// Requires `event` to have been populated (see FormalRankService's
+// RANK_POPULATE) - same assumption as every other populated relation this
+// mapper reads (e.g. `rank`, `sourceGroup`).
+function toFormalRankEventRef(
+  assignment: FormalRankAssignment,
+): FormalRankEventRefDto | null {
+  const event = assignment.event;
+  if (!event) {
+    return null;
+  }
+  return {
+    id: event.id,
+    name: event.name,
+    startsAt: event.startsAt.toISOString(),
+    endsAt: event.endsAt.toISOString(),
+  };
+}
+
 export function toFormalRankAssignmentResponseDto(
   assignment: FormalRankAssignment,
 ): FormalRankAssignmentResponseDto {
@@ -46,5 +65,6 @@ export function toFormalRankAssignmentResponseDto(
     endedOn: toDateOnly(assignment.endedOn),
     awardedByName: assignment.awardedByName,
     isCurrent: assignment.endedOn === null,
+    event: toFormalRankEventRef(assignment),
   };
 }

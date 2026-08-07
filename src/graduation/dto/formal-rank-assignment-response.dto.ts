@@ -19,6 +19,15 @@ export interface FormalRankSourceGroupRefDto {
   name: string;
 }
 
+// Minimal evidence reference - a full Event fetch (GET /events/:id) is
+// where a caller gets the rest.
+export interface FormalRankEventRefDto {
+  id: string;
+  name: string;
+  startsAt: string;
+  endsAt: string;
+}
+
 // Never exposes internal history bookkeeping (row ids of the underlying
 // FormalGroupAffiliation, role data, etc.) - see the module spec. Never
 // describes a CustomUserRank - see the module spec's naming rule ("Nie
@@ -32,4 +41,5 @@ export interface FormalRankAssignmentResponseDto {
   endedOn: string | null;
   awardedByName: string | null;
   isCurrent: boolean;
+  event: FormalRankEventRefDto | null;
 }

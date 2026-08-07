@@ -113,6 +113,15 @@ export class UserProfileService {
     if (changes.showFormalGroup !== undefined) {
       user.showFormalGroup = changes.showFormalGroup;
     }
+    if (changes.showFormalRank !== undefined) {
+      user.showFormalRank = changes.showFormalRank;
+    }
+    if (changes.showCareerTimeline !== undefined) {
+      user.showCareerTimeline = changes.showCareerTimeline;
+    }
+    if (changes.showEventParticipation !== undefined) {
+      user.showEventParticipation = changes.showEventParticipation;
+    }
     await this.em.flush();
 
     return this.getOwnProfile(user);

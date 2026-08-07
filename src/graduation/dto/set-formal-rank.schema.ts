@@ -8,6 +8,11 @@ import { uuidSchema } from '../../common/validation/uuid.schema';
 // formal-rank-assignment.entity.ts) - setting a custom cordão active is a
 // separate action, POST /users/me/custom-ranks/:id/activate (see
 // custom-user-ranks.controller.ts), never this endpoint.
+//
+// eventId is optional evidence linking this rank to the Event where it was
+// received - eligibility (attended, past/ongoing, viewer had access) is
+// validated in FormalRankService.setCurrent, not here, since it requires
+// DB lookups.
 export const setFormalRankSchema = z.object({
   rankId: uuidSchema,
   startedOn: z.string().date('Must be a valid date (YYYY-MM-DD)').optional(),
@@ -18,6 +23,7 @@ export const setFormalRankSchema = z.object({
     .max(150)
     .nullish()
     .transform((value) => (value ? value : null)),
+  eventId: uuidSchema.nullish().transform((value) => (value ? value : null)),
 });
 
 export class SetFormalRankDto extends createZodDto(setFormalRankSchema) {}

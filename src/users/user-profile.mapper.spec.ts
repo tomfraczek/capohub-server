@@ -26,6 +26,9 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.showCapoeiraStartedAt = false;
   user.showSections = false;
   user.showFormalGroup = false;
+  user.showFormalRank = false;
+  user.showCareerTimeline = false;
+  user.showEventParticipation = false;
   Object.assign(user, overrides);
   return user;
 }
@@ -92,6 +95,9 @@ describe('toUserProfileResponseDto', () => {
       showCapoeiraStartedAt: false,
       showSections: true,
       showFormalGroup: false,
+      showFormalRank: false,
+      showCareerTimeline: false,
+      showEventParticipation: false,
     });
   });
 

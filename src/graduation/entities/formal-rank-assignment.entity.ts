@@ -7,6 +7,7 @@ import {
   Unique,
 } from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
+import { Event } from '../../events/entities/event.entity';
 import { Group } from '../../groups/entities/group.entity';
 import { User } from '../../users/entities/user.entity';
 import { Rank } from './rank.entity';
@@ -77,4 +78,15 @@ export class FormalRankAssignment extends BaseEntity {
 
   @Property({ nullable: true, length: 150 })
   awardedByName: string | null = null;
+
+  // Optional evidence link to the Event where this rank was actually
+  // awarded/received - see FormalRankService.setCurrent for the
+  // eligibility checks run at write time (attended, not in the future,
+  // viewer had access). Never physically deleted (ADR-007), so - like
+  // `rank` and `sourceGroup` - this reference is always resolvable. Purely
+  // an evidentiary reference: the rank's date of record stays
+  // `startedOn`, never derived from the Event.
+  @Index()
+  @ManyToOne(() => Event, { nullable: true, deleteRule: 'no action' })
+  event: Event | null = null;
 }

@@ -145,4 +145,23 @@ export class User extends BaseEntity {
 
   @Property()
   showFormalGroup: boolean = false;
+
+  @Property()
+  showFormalRank: boolean = false;
+
+  // Gates the whole GET /users/:userId/career-timeline endpoint - see
+  // career-timeline.service.ts. Per-category toggles were deliberately
+  // rejected in favor of this single switch (see the module spec); the
+  // underlying source data (formal group, formal rank, event
+  // participation) still applies its own privacy toggle on top of this one.
+  @Property()
+  showCareerTimeline: boolean = false;
+
+  // Gates whether this user's participation in an Event (EventAttendee row)
+  // may ever be revealed to a viewer other than the owner - both directly
+  // (a future "who's attending" surface) and via the career timeline's
+  // EVENT entries. No such toggle existed before the career timeline
+  // module.
+  @Property()
+  showEventParticipation: boolean = false;
 }

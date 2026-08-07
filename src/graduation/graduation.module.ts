@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { EventsModule } from '../events/events.module';
 import { GroupsModule } from '../groups/groups.module';
 import { CustomUserRanksController } from './custom-user-ranks.controller';
 import { CustomUserRankService } from './custom-user-rank.service';
@@ -26,14 +27,20 @@ import { RanksService } from './ranks.service';
 // mutations and the correction workflow, always under the exact Group/
 // Section - see the module spec), and RoleAssignmentsService (variant-C
 // review authorization - see FormalRankCorrectionService.assertCanReview).
-// One-directional: GroupsModule never imports this module back. Nothing
-// outside this module needs anything it exports, so there is nothing to
-// export - UsersModule does NOT need to import this module, since
-// /users/me/formal-rank*, /users/me/custom-ranks* and
-// /users/me/formal-rank-correction* all live here directly rather than on
-// UsersController.
+// Imports EventsModule for EventAccessService, used by FormalRankService to
+// validate an optional rank<->Event evidence link (see
+// loadAndValidateEventLink). One-directional: neither GroupsModule nor
+// EventsModule imports this module back.
+//
+// Exports FormalRankCorrectionService for CareerTimelineModule, which reuses
+// isPubliclyVisible to gate FORMAL_RANK timeline entries during an active
+// correction rather than re-deriving that rule (see
+// career-timeline-aggregation.service.ts). UsersModule still does NOT need
+// to import this module - /users/me/formal-rank*, /users/me/custom-ranks*
+// and /users/me/formal-rank-correction* all live here directly rather than
+// on UsersController.
 @Module({
-  imports: [GroupsModule],
+  imports: [GroupsModule, EventsModule],
   controllers: [
     GraduationSystemController,
     RanksController,
@@ -50,5 +57,6 @@ import { RanksService } from './ranks.service';
     CustomUserRankService,
     FormalRankCorrectionService,
   ],
+  exports: [FormalRankCorrectionService],
 })
 export class GraduationModule {}

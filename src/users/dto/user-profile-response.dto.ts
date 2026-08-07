@@ -5,6 +5,9 @@ export interface UserProfilePrivacyDto {
   showCapoeiraStartedAt: boolean;
   showSections: boolean;
   showFormalGroup: boolean;
+  showFormalRank: boolean;
+  showCareerTimeline: boolean;
+  showEventParticipation: boolean;
 }
 
 export interface OwnFormalGroupRefDto {

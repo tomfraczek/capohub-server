@@ -44,6 +44,9 @@ export function toUserProfileResponseDto(
       showCapoeiraStartedAt: user.showCapoeiraStartedAt,
       showSections: user.showSections,
       showFormalGroup: user.showFormalGroup,
+      showFormalRank: user.showFormalRank,
+      showCareerTimeline: user.showCareerTimeline,
+      showEventParticipation: user.showEventParticipation,
     },
     formalGroup: activeFormalGroup
       ? toOwnFormalGroupRefDto(activeFormalGroup)

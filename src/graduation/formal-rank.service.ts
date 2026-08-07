@@ -6,6 +6,10 @@ import {
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
+import { EventAccessService } from '../events/event-access.service';
+import { EventAttendee } from '../events/entities/event-attendee.entity';
+import type { Event } from '../events/entities/event.entity';
+import { PARTICIPATING_RSVP_STATUSES } from '../events/event-participation.util';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
 import { User } from '../users/entities/user.entity';
 import { CustomUserRank } from './entities/custom-user-rank.entity';
@@ -18,7 +22,7 @@ import { SetFormalRankInput } from './dto/set-formal-rank.schema';
 import { FormalRankAssignmentResponseDto } from './dto/formal-rank-assignment-response.dto';
 import { toFormalRankAssignmentResponseDto } from './mappers/formal-rank-assignment.mapper';
 
-const RANK_POPULATE = ['rank.cordSegments', 'sourceGroup'] as const;
+const RANK_POPULATE = ['rank.cordSegments', 'sourceGroup', 'event'] as const;
 
 function startOfTodayUtc(): Date {
   const now = new Date();
@@ -43,7 +47,10 @@ function parseDateOnly(value: string): Date {
 // do community Audit Log").
 @Injectable()
 export class FormalRankService {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly eventAccessService: EventAccessService,
+  ) {}
 
   /**
    * A 404 (RANK_NOT_SET) when there is no active assignment, not a 200
@@ -124,6 +131,10 @@ export class FormalRankService {
         });
       }
 
+      const event = input.eventId
+        ? await this.loadAndValidateEventLink(em, user, input.eventId)
+        : null;
+
       const current = await em.findOne(FormalRankAssignment, {
         user: user.id,
         endedOn: null,
@@ -155,6 +166,7 @@ export class FormalRankService {
       assignment.sourceGroup = formalGroup.group;
       assignment.startedOn = startedOn;
       assignment.awardedByName = input.awardedByName ?? null;
+      assignment.event = event;
 
       try {
         em.persist(assignment);
@@ -202,5 +214,61 @@ export class FormalRankService {
       { user: userId, endedOn: null },
       { populate: ['group'] },
     );
+  }
+
+  /**
+   * Evidence-link eligibility for `event` (see the module spec, "Powiązanie
+   * stopnia z Eventem"): the caller must have actually attended it (an
+   * EventAttendee row with subjectUser = user and a participating RSVP
+   * status - see PARTICIPATING_RSVP_STATUSES), it must be in the past or
+   * currently ongoing, and the caller must have the right to view it
+   * (reuses EventAccessService.isVisibleToViewer rather than re-deriving
+   * visibility). There is no separate "not a plain training" check: the
+   * Event model has no flag distinguishing a training from any other Event
+   * (see the module's final report) - every EventType is treated as
+   * eligible, exactly as career-timeline-aggregation.service does for its
+   * EVENT entries.
+   */
+  private async loadAndValidateEventLink(
+    em: EntityManager,
+    user: User,
+    eventId: string,
+  ): Promise<Event> {
+    const event = await this.eventAccessService.loadOrFail(em, eventId);
+
+    if (event.startsAt.getTime() > Date.now()) {
+      throw new ConflictException({
+        code: 'RANK_EVENT_NOT_STARTED',
+        message: 'The linked event must be in the past or currently ongoing',
+      });
+    }
+
+    const attended =
+      (await em.count(EventAttendee, {
+        event: eventId,
+        subjectUser: user.id,
+        rsvpStatus: { $in: PARTICIPATING_RSVP_STATUSES },
+      })) > 0;
+    if (!attended) {
+      throw new ConflictException({
+        code: 'RANK_EVENT_NOT_ATTENDED',
+        message: 'You did not attend this event',
+      });
+    }
+
+    const visible = await this.eventAccessService.isVisibleToViewer(
+      em,
+      event,
+      user.id,
+      user.email,
+    );
+    if (!visible) {
+      throw new ConflictException({
+        code: 'RANK_EVENT_NOT_VISIBLE',
+        message: 'You do not have access to this event',
+      });
+    }
+
+    return event;
   }
 }
