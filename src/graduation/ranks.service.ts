@@ -7,9 +7,15 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { AuditLogService } from '../groups/audit-log.service';
 import { AuditAction } from '../groups/enums/audit-action.enum';
 import { AuditTargetType } from '../groups/enums/audit-target-type.enum';
+import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
 import { User } from '../users/entities/user.entity';
 import { buildCordSegments } from './cord-segment-builder';
 import { CreateRankInput } from './dto/create-rank.schema';
+import {
+  FormalRankOptionDto,
+  FormalRankOptionsByTrackDto,
+  FormalRankOptionsResponseDto,
+} from './dto/formal-rank-options-response.dto';
 import {
   RankResponseDto,
   RanksByTrackResponseDto,
@@ -55,6 +61,102 @@ export class RanksService {
     const rank = await this.loadRank(this.em, groupId, rankId);
     const nextRankId = await this.findNextRankId(this.em, rank);
     return toRankResponseDto(rank, nextRankId, rank.cordSegments.getItems());
+  }
+
+  /**
+   * GET /users/me/formal-rank-options - the self-service catalog read for
+   * @CurrentUser(), never gated by GroupPermission.GRADUATION_SYSTEM_VIEW
+   * (which only Group OWNER/ADMIN hold - see the module spec). Derives the
+   * Group exclusively from the caller's own active FormalGroupAffiliation;
+   * there is no groupId parameter here, so a caller can never inspect
+   * another Group's catalog through this endpoint.
+   *
+   * Reuses toRanksByTrackResponseDto (the exact same orderChain-based
+   * ordering `list()` above uses) rather than re-deriving gradation order.
+   * Archived ranks are filtered out *after* ordering, not before: the
+   * chain walk in orderChain needs every node present to follow
+   * previousRank correctly - filtering first would silently truncate the
+   * walk at the first archived gap (see rank-chain.ts). A previousRankId/
+   * nextRankId that happens to point at a since-filtered archived rank is
+   * left as-is (not re-linked) - a rare edge case, and out of scope for
+   * this read-only selector.
+   */
+  async getFormalRankOptionsForUser(
+    userId: string,
+  ): Promise<FormalRankOptionsResponseDto> {
+    const formalGroup = await this.loadActiveFormalGroupAffiliation(
+      this.em,
+      userId,
+    );
+    if (!formalGroup) {
+      return {
+        formalGroup: null,
+        graduationSystem: null,
+        ranks: this.emptyRankOptionsByTrack(),
+      };
+    }
+
+    const system = await this.loadActiveSystem(this.em, formalGroup.group.id);
+    const formalGroupRef = {
+      id: formalGroup.group.id,
+      name: formalGroup.group.name,
+    };
+    if (!system) {
+      return {
+        formalGroup: formalGroupRef,
+        graduationSystem: null,
+        ranks: this.emptyRankOptionsByTrack(),
+      };
+    }
+
+    const ranks = await this.em.find(
+      Rank,
+      { system: system.id },
+      { populate: ['previousRank', 'cordSegments'] },
+    );
+    const byTrack = toRanksByTrackResponseDto(ranks);
+
+    return {
+      formalGroup: formalGroupRef,
+      graduationSystem: { id: system.id, name: system.name },
+      ranks: {
+        [RankTrack.CHILD]: this.toFormalRankOptions(byTrack[RankTrack.CHILD]),
+        [RankTrack.ADULT]: this.toFormalRankOptions(byTrack[RankTrack.ADULT]),
+      },
+    };
+  }
+
+  private toFormalRankOptions(ranks: RankResponseDto[]): FormalRankOptionDto[] {
+    return ranks
+      .filter((rank) => !rank.isArchived)
+      .map((rank) => ({
+        id: rank.id,
+        name: rank.name,
+        description: rank.description,
+        track: rank.track,
+        previousRankId: rank.previousRankId,
+        nextRankId: rank.nextRankId,
+        cordSegments: rank.cordSegments,
+      }));
+  }
+
+  private emptyRankOptionsByTrack(): FormalRankOptionsByTrackDto {
+    return { [RankTrack.CHILD]: [], [RankTrack.ADULT]: [] };
+  }
+
+  // Same query shape as FormalRankService/FormalRankCorrectionService's own
+  // private loadActiveFormalGroup - deliberately re-implemented here rather
+  // than shared/extracted (see the module's own established convention of
+  // one small private copy per consumer, not a shared helper).
+  private async loadActiveFormalGroupAffiliation(
+    em: EntityManager,
+    userId: string,
+  ): Promise<FormalGroupAffiliation | null> {
+    return em.findOne(
+      FormalGroupAffiliation,
+      { user: userId, endedOn: null },
+      { populate: ['group'] },
+    );
   }
 
   async create(

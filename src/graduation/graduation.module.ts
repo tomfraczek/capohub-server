@@ -3,6 +3,7 @@ import { EventsModule } from '../events/events.module';
 import { GroupsModule } from '../groups/groups.module';
 import { CustomUserRanksController } from './custom-user-ranks.controller';
 import { CustomUserRankService } from './custom-user-rank.service';
+import { FormalRankOptionsController } from './formal-rank-options.controller';
 import { MyFormalRankCorrectionController } from './formal-rank-correction-own.controller';
 import { FormalRankCorrectionService } from './formal-rank-correction.service';
 import { FormalRankCorrectionsController } from './formal-rank-corrections.controller';
@@ -15,6 +16,7 @@ import { GraduationSystemController } from './graduation-system.controller';
 import { GraduationSystemService } from './graduation-system.service';
 import { RanksController } from './ranks.controller';
 import { RanksService } from './ranks.service';
+import { SectionMemberFormalRankController } from './section-member-formal-rank.controller';
 
 // Entities are driven through the plain EntityManager (auto-discovered
 // globally, see mikro-orm-options.factory.ts's entitiesTs glob) - same as
@@ -49,6 +51,8 @@ import { RanksService } from './ranks.service';
     CustomUserRanksController,
     FormalRankCorrectionsController,
     MyFormalRankCorrectionController,
+    FormalRankOptionsController,
+    SectionMemberFormalRankController,
   ],
   providers: [
     GraduationSystemService,

@@ -24,6 +24,7 @@ import { FormalRankCorrectionOwnResponseDto } from './dto/formal-rank-correction
 import { FormalRankCorrectionQuery } from './dto/formal-rank-correction-query.schema';
 import { FormalRankCorrectionResponseDto } from './dto/formal-rank-correction-response.dto';
 import { RejectFormalRankCorrectionInput } from './dto/reject-formal-rank-correction.schema';
+import { SectionMemberFormalRankResponseDto } from './dto/section-member-formal-rank-response.dto';
 import { SubmitFormalRankCorrectionInput } from './dto/submit-formal-rank-correction.schema';
 import {
   ACTIVE_FORMAL_RANK_CORRECTION_STATUSES,
@@ -41,6 +42,7 @@ import {
   toFormalRankCorrectionOwnResponseDto,
   toFormalRankCorrectionResponseDto,
 } from './mappers/formal-rank-correction.mapper';
+import { toFormalRankAssignmentResponseDto } from './mappers/formal-rank-assignment.mapper';
 
 const ACTIVE_MEMBERSHIP_STATUSES = [
   SectionMembershipStatus.ACTIVE,
@@ -228,6 +230,117 @@ export class FormalRankCorrectionService {
       request,
       request.formalRankAssignment.rank,
     );
+  }
+
+  /**
+   * GET sections/:sectionId/members/:membershipId/formal-rank - the
+   * Section OWNER/ADMIN prep view for the correction workflow (module
+   * spec): the target's current formal Group, current formal
+   * FormalRankAssignment, and (if one exists) the minimal current state of
+   * an active correction request for it - assembled without duplicating
+   * this service's own request/submit/approve/reject validation logic,
+   * since it only ever reads.
+   *
+   * `sectionId`/`membershipId` are resolved together (never membershipId
+   * alone) - a membershipId belonging to a different Section simply does
+   * not match, same 404-not-403 convention as
+   * SectionMembershipsService.loadMembershipByIdOrFail. The target must be
+   * a *currently* active (ACTIVE/READ_ONLY) member - a past/archived
+   * membership 404s here even though SectionMembershipsService.
+   * getMembership itself would still resolve it as history.
+   *
+   * Deliberately bypasses isPubliclyVisible()'s hide-while-correction-
+   * pending rule - that rule protects a non-owner *public* viewer; a
+   * Section OWNER/ADMIN reviewing this exact administrative workflow is
+   * always allowed to see the raw current rank and its correction state,
+   * the same "admin exception" precedent as
+   * UserProfileService.viewerHasSectionAdminAccess for full name.
+   */
+  async getMemberFormalRank(
+    sectionId: string,
+    membershipId: string,
+  ): Promise<SectionMemberFormalRankResponseDto> {
+    const membership = await this.em.findOne(
+      SectionMembership,
+      {
+        id: membershipId,
+        section: sectionId,
+        status: { $in: ACTIVE_MEMBERSHIP_STATUSES },
+      },
+      { populate: ['user'] },
+    );
+    if (!membership) {
+      throw this.membershipNotFound();
+    }
+    const targetUser = membership.user;
+
+    // Sequential, not Promise.all - concurrent queries on the same
+    // EntityManager/connection race each other at the driver level (same
+    // convention as every other multi-query read in this codebase).
+    const formalGroup = await this.loadActiveFormalGroup(
+      this.em,
+      targetUser.id,
+    );
+    const assignment = await this.em.findOne(
+      FormalRankAssignment,
+      { user: targetUser.id, endedOn: null },
+      { populate: ['rank.cordSegments', 'sourceGroup', 'event'] },
+    );
+
+    let correction: SectionMemberFormalRankResponseDto['correction'] = null;
+    if (assignment) {
+      const activeRequest = await this.em.findOne(
+        FormalRankCorrectionRequest,
+        {
+          formalRankAssignment: assignment.id,
+          section: sectionId,
+          status: { $in: ACTIVE_FORMAL_RANK_CORRECTION_STATUSES },
+        },
+        { populate: ['submittedRank'] },
+      );
+      if (activeRequest) {
+        correction = {
+          id: activeRequest.id,
+          status: activeRequest.status,
+          proposedRank: activeRequest.submittedRank
+            ? {
+                id: activeRequest.submittedRank.id,
+                name: activeRequest.submittedRank.name,
+                track: activeRequest.submittedRank.track,
+              }
+            : null,
+          submittedAt: activeRequest.submittedAt
+            ? activeRequest.submittedAt.toISOString()
+            : null,
+          reviewedAt: activeRequest.reviewedAt
+            ? activeRequest.reviewedAt.toISOString()
+            : null,
+        };
+      }
+    }
+
+    return {
+      user: { id: targetUser.id, displayName: targetUser.displayName },
+      formalGroup: formalGroup
+        ? { id: formalGroup.group.id, name: formalGroup.group.name }
+        : null,
+      formalRank: assignment ? this.toCurrentFormalRankDto(assignment) : null,
+      correction,
+    };
+  }
+
+  private toCurrentFormalRankDto(
+    assignment: FormalRankAssignment,
+  ): SectionMemberFormalRankResponseDto['formalRank'] {
+    const mapped = toFormalRankAssignmentResponseDto(assignment);
+    return {
+      assignmentId: mapped.id,
+      rank: mapped.rank,
+      sourceGroup: mapped.sourceGroup,
+      startedOn: mapped.startedOn,
+      awardedByName: mapped.awardedByName,
+      event: mapped.event,
+    };
   }
 
   async approve(
@@ -802,6 +915,17 @@ export class FormalRankCorrectionService {
     return new NotFoundException({
       code: 'USER_NOT_FOUND',
       message: 'User not found',
+    });
+  }
+
+  // Same code/message as SectionMembershipsService's own
+  // membershipNotFound() - same conceptual 404, independently duplicated
+  // here rather than shared (see this module's own established
+  // per-consumer-copy convention for small private helpers).
+  private membershipNotFound(): NotFoundException {
+    return new NotFoundException({
+      code: 'MEMBERSHIP_NOT_FOUND',
+      message: 'Section membership not found',
     });
   }
 
