@@ -199,4 +199,28 @@ export enum GroupPermission {
   FORMAL_RANK_CORRECTION_REQUEST = 'FORMAL_RANK_CORRECTION_REQUEST',
   FORMAL_RANK_CORRECTION_REVIEW = 'FORMAL_RANK_CORRECTION_REVIEW',
   FORMAL_RANK_CORRECTION_VIEW = 'FORMAL_RANK_CORRECTION_VIEW',
+
+  // Training (see trainings/entities/training.entity.ts) - exact-Section-only,
+  // deliberately absent from GROUP_TARGET_ROLE_PERMISSIONS: a Training always
+  // belongs to a specific Section, never to a Group or inherited through the
+  // hierarchy (see the module spec). TRAINING_VIEW gates browsing this
+  // Section's own training list/detail management surface - a MEMBERS_ONLY
+  // Training's actual visibility to a given viewer is additionally resolved
+  // per-Training (see TrainingsService), same split as EVENT_CREATE vs
+  // Event's own visibility rule. TRAINING_MANAGE covers every
+  // create/edit/cancel action on a Training or TrainingSeries.
+  // TRAINING_ATTENDANCE_MANAGE and TRAINING_PRIVATE_NOTES_MANAGE are
+  // deliberately their own permissions, not folded into TRAINING_MANAGE:
+  // the assigned trainer of one specific Training also gets an equivalent,
+  // narrower capability for that Training alone without holding any of
+  // these Section-wide permissions (a resource-level override resolved in
+  // TrainingsService/TrainingAttendanceService, not expressible in this
+  // permission map - see the module spec §3). TRAINING_STATS_VIEW is
+  // deliberately withheld from INSTRUCTOR (unlike the other three) and
+  // reserved for OWNER/ADMIN, mirroring AUDIT_LOG_VIEW's own tier.
+  TRAINING_VIEW = 'TRAINING_VIEW',
+  TRAINING_MANAGE = 'TRAINING_MANAGE',
+  TRAINING_ATTENDANCE_MANAGE = 'TRAINING_ATTENDANCE_MANAGE',
+  TRAINING_PRIVATE_NOTES_MANAGE = 'TRAINING_PRIVATE_NOTES_MANAGE',
+  TRAINING_STATS_VIEW = 'TRAINING_STATS_VIEW',
 }

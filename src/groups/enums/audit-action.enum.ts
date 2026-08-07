@@ -65,4 +65,20 @@ export enum AuditAction {
   SUBMIT_FORMAL_RANK_CORRECTION = 'SUBMIT_FORMAL_RANK_CORRECTION',
   APPROVE_FORMAL_RANK_CORRECTION = 'APPROVE_FORMAL_RANK_CORRECTION',
   REJECT_FORMAL_RANK_CORRECTION = 'REJECT_FORMAL_RANK_CORRECTION',
+
+  // Trainings module (see trainings/entities) - always logged under the
+  // exact Section a Training/TrainingSeries belongs to, never a parent
+  // Group (see AuditLogEntry's own "no inheritance" comment).
+  // UPDATE_TRAINING/CANCEL_TRAINING cover both THIS and THIS_AND_FOLLOWING
+  // scope (see TrainingEditScope) - the scope actually applied is recorded
+  // in the entry's metadata, not as a separate action value, mirroring how
+  // ADD_ROLE/REMOVE_ROLE record `role` in metadata rather than minting one
+  // action per role.
+  CREATE_TRAINING = 'CREATE_TRAINING',
+  UPDATE_TRAINING = 'UPDATE_TRAINING',
+  CANCEL_TRAINING = 'CANCEL_TRAINING',
+  CREATE_TRAINING_SERIES = 'CREATE_TRAINING_SERIES',
+  UPDATE_TRAINING_SERIES = 'UPDATE_TRAINING_SERIES',
+  CANCEL_TRAINING_SERIES = 'CANCEL_TRAINING_SERIES',
+  RECORD_TRAINING_ATTENDANCE = 'RECORD_TRAINING_ATTENDANCE',
 }

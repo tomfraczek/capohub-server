@@ -3,6 +3,7 @@ import { AnnouncementsService } from '../announcements/announcements.service';
 import { EventsService } from '../events/events.service';
 import { LearningStatus } from '../song-library/enums/learning-status.enum';
 import { LearningStatusService } from '../song-library/learning-status.service';
+import { TrainingsService } from '../trainings/trainings.service';
 import { User } from '../users/entities/user.entity';
 import { HomeResponseDto } from './dto/home-response.dto';
 
@@ -19,17 +20,17 @@ const ANNOUNCEMENTS_PREVIEW_LIMIT = 3;
 
 // Backs the mobile app's Home screen. Purely a composition layer: every
 // section here is read from an existing, already-authorized service
-// (EventsService.findNearestEventAndTraining - same viewer-scoped
-// visibility rule GET /events itself runs, just resolved once for both
-// facts instead of via two independent listForViewer calls - see that
-// method's own comment; LearningStatusService.listLearningSongs - the same
-// data GET /users/me/learning-songs returns; AnnouncementsService.listForViewer -
+// (EventsService.findNearestEvent / TrainingsService.findNearestForViewer -
+// same viewer-scoped visibility rule GET /events and GET .../trainings
+// themselves run; LearningStatusService.listLearningSongs - the same data
+// GET /users/me/learning-songs returns; AnnouncementsService.listForViewer -
 // the same visibility/sorting rule the community-scoped announcements list
 // endpoint uses) and reshaped into the specific facts the Home screen
 // needs. No section here re-implements or duplicates any business rule
 // already owned by those services - a query filter change (e.g. what
-// counts as "upcoming", which Events/Announcements a viewer may see)
-// belongs in EventsService/AnnouncementsService, not here.
+// counts as "upcoming", which Events/Trainings/Announcements a viewer may
+// see) belongs in EventsService/TrainingsService/AnnouncementsService, not
+// here.
 //
 // Deliberately still has no "birthdays" section: User carries no birth
 // date field anywhere in this codebase. Inventing it inside this
@@ -42,6 +43,7 @@ const ANNOUNCEMENTS_PREVIEW_LIMIT = 3;
 export class HomeService {
   constructor(
     private readonly eventsService: EventsService,
+    private readonly trainingsService: TrainingsService,
     private readonly learningStatusService: LearningStatusService,
     private readonly announcementsService: AnnouncementsService,
   ) {}
@@ -52,8 +54,11 @@ export class HomeService {
     // Sequential, not Promise.all - concurrent queries on the same
     // request-scoped EntityManager corrupt the underlying pg connection
     // (see CapoHub's other services' identical comment on this pattern).
-    const { nearestEvent, nearestTraining } =
-      await this.eventsService.findNearestEventAndTraining(user, now);
+    const nearestEvent = await this.eventsService.findNearestEvent(user, now);
+    const nearestTraining = await this.trainingsService.findNearestForViewer(
+      user,
+      now,
+    );
     const learningSongs = await this.learningStatusService.listLearningSongs(
       user.id,
     );

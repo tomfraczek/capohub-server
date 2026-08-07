@@ -5,10 +5,10 @@
  *  1. Unauthenticated request -> 401
  *  2. Brand new user -> greetingName derived from their email, every
  *     section in its documented empty state
- *  3. The soonest upcoming Event (any type) becomes nearestEvent;
- *     nearestTraining is always null - EventType.OPEN_TRAINING was removed
- *     (see the EventType cleanup report), trainings are not Events, and
- *     the field is reserved for a future dedicated training module
+ *  3. The soonest upcoming Event (any type) becomes nearestEvent; the
+ *     soonest upcoming, visible, SCHEDULED Training (a distinct entity
+ *     from Event - see trainings/entities/training.entity.ts) becomes
+ *     nearestTraining, resolved independently by TrainingsService
  *  4. continueLearning.toReview only ever contains TO_REVIEW rows
  *  5. announcements.items reuses AnnouncementsService's own visibility/
  *     sorting rule, capped at 3, with a correct cross-community
@@ -38,11 +38,21 @@ import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter
 import { closeE2eApp } from './close-e2e-app.helper';
 import { HomeResponseDto } from '../src/home/dto/home-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
+import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { Group } from '../src/groups/entities/group.entity';
+import { Section } from '../src/groups/entities/section.entity';
+import { SectionMembership } from '../src/groups/entities/section-membership.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
 import { EventResponseDto } from '../src/events/dto/event-response.dto';
+import { TrainingResponseDto } from '../src/trainings/dto/training-response.dto';
+import { Training } from '../src/trainings/entities/training.entity';
+import { TrainingAttendance } from '../src/trainings/entities/training-attendance.entity';
+import { TrainingNotification } from '../src/trainings/entities/training-notification.entity';
+import { TrainingRsvp } from '../src/trainings/entities/training-rsvp.entity';
+import { TrainingSeries } from '../src/trainings/entities/training-series.entity';
+import { TrainingVisibility } from '../src/trainings/enums/training-visibility.enum';
 import { EventAttendee } from '../src/events/entities/event-attendee.entity';
 import { EventGuardianAssignment } from '../src/events/entities/event-guardian-assignment.entity';
 import { EventInvitation } from '../src/events/entities/event-invitation.entity';
@@ -67,11 +77,19 @@ const NEWUSER_TOKEN = 'valid-home-newuser-token';
 // toBeGreaterThanOrEqual, needed because it accumulates memberships across
 // every other test in the 'announcements' describe block).
 const MULTI_ORG_TOKEN = 'valid-home-multi-org-token';
+// Dedicated to the nearestTraining tests below, for the same reason as
+// MULTI_ORG_TOKEN - MEMBER_TOKEN accumulates Section memberships across
+// every other test in this file, which would make "the soonest Training"
+// and "cancelled is ignored" assertions depend on unrelated tests' data.
+const TRAINING_MEMBER_TOKEN = 'valid-home-training-member-token';
+const TRAINING_MEMBER_TOKEN_2 = 'valid-home-training-member-2-token';
 
 const OWNER_CLERK_ID = 'user_test_home_owner';
 const MEMBER_CLERK_ID = 'user_test_home_member';
 const NEWUSER_CLERK_ID = 'user_test_home_newuser';
 const MULTI_ORG_CLERK_ID = 'user_test_home_multi_org';
+const TRAINING_MEMBER_CLERK_ID = 'user_test_home_training_member';
+const TRAINING_MEMBER_CLERK_ID_2 = 'user_test_home_training_member_2';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
   [OWNER_TOKEN]: {
@@ -98,6 +116,21 @@ const TOKEN_TO_AUTH: Record<string, AuthContext> = {
     tokenType: 'session_token',
     claims: { sub: MULTI_ORG_CLERK_ID, sid: 'sess_home_multi_org' },
   },
+  [TRAINING_MEMBER_TOKEN]: {
+    userId: TRAINING_MEMBER_CLERK_ID,
+    sessionId: 'sess_home_training_member',
+    tokenType: 'session_token',
+    claims: { sub: TRAINING_MEMBER_CLERK_ID, sid: 'sess_home_training_member' },
+  },
+  [TRAINING_MEMBER_TOKEN_2]: {
+    userId: TRAINING_MEMBER_CLERK_ID_2,
+    sessionId: 'sess_home_training_member_2',
+    tokenType: 'session_token',
+    claims: {
+      sub: TRAINING_MEMBER_CLERK_ID_2,
+      sid: 'sess_home_training_member_2',
+    },
+  },
 };
 
 const FIXTURE_CLERK_PROFILES: Record<
@@ -119,6 +152,14 @@ const FIXTURE_CLERK_PROFILES: Record<
   [MULTI_ORG_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/home-multi-org.png',
     primaryEmailAddress: { emailAddress: 'home.multi.org@example.com' },
+  },
+  [TRAINING_MEMBER_CLERK_ID]: {
+    imageUrl: 'https://img.clerk.com/home-training-member.png',
+    primaryEmailAddress: { emailAddress: 'home.training.member@example.com' },
+  },
+  [TRAINING_MEMBER_CLERK_ID_2]: {
+    imageUrl: 'https://img.clerk.com/home-training-member-2.png',
+    primaryEmailAddress: { emailAddress: 'home.training.member.2@example.com' },
   },
 };
 
@@ -229,17 +270,38 @@ describe('Home (e2e)', () => {
         announcement: announcementCommunityInIds,
       });
       await cleanup.nativeDelete(Announcement, announcementCommunityInIds);
+      await cleanup.nativeDelete(TrainingNotification, {
+        training: { section: { $in: createdGroupIds } },
+      });
+      await cleanup.nativeDelete(TrainingAttendance, {
+        training: { section: { $in: createdGroupIds } },
+      });
+      await cleanup.nativeDelete(TrainingRsvp, {
+        training: { section: { $in: createdGroupIds } },
+      });
+      await cleanup.nativeDelete(Training, {
+        section: { $in: createdGroupIds },
+      });
+      await cleanup.nativeDelete(TrainingSeries, {
+        section: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(RoleAssignment, {
         $or: [
           { group: { $in: createdGroupIds } },
           { section: { $in: createdGroupIds } },
         ],
       });
+      await cleanup.nativeDelete(SectionMembership, {
+        section: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(AuditLogEntry, {
         $or: [
           { group: { $in: createdGroupIds } },
           { section: { $in: createdGroupIds } },
         ],
+      });
+      await cleanup.nativeDelete(Section, {
+        parentGroup: { $in: createdGroupIds },
       });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
       await cleanup.nativeDelete(User, {
@@ -307,6 +369,99 @@ describe('Home (e2e)', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ userId: memberUser.id, role: GroupRole.ADMIN })
       .expect(201);
+  }
+
+  function sectionPayload(
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return {
+      name: 'Home Test Section',
+      description: null,
+      logoUrl: null,
+      coverImageUrl: null,
+      contactEmail: null,
+      contactPhone: null,
+      websiteUrl: null,
+      facebookUrl: null,
+      instagramUrl: null,
+      youtubeUrl: null,
+      isPublic: true,
+      isHidden: false,
+      memberInvitesAllowed: false,
+      timezone: 'Europe/Warsaw',
+      currencyCode: 'PLN',
+      country: 'PL',
+      city: 'Warsaw',
+      region: 'Mazovia',
+      geonameId: 756135,
+      ...overrides,
+    };
+  }
+
+  async function createSection(
+    token: string,
+    parentGroupId: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<SectionResponseDto> {
+    const created = await bodyOf<SectionResponseDto>(
+      request(app.getHttpServer())
+        .post(`/api/v1/groups/${parentGroupId}/sections`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(sectionPayload(overrides))
+        .expect(201),
+    );
+    createdGroupIds.push(created.id);
+    return created;
+  }
+
+  async function addSectionMember(
+    ownerToken: string,
+    sectionId: string,
+    memberToken: string,
+  ): Promise<void> {
+    const memberUser = await bodyOf<{ id: string }>(
+      request(app.getHttpServer())
+        .get('/api/v1/users/me')
+        .set('Authorization', `Bearer ${memberToken}`)
+        .expect(200),
+    );
+    await request(app.getHttpServer())
+      .post(`/api/v1/sections/${sectionId}/members`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ userId: memberUser.id })
+      .expect(201);
+  }
+
+  async function createTraining(
+    token: string,
+    sectionId: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<TrainingResponseDto> {
+    const trainerUser = await bodyOf<{ id: string }>(
+      request(app.getHttpServer())
+        .get('/api/v1/users/me')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200),
+    );
+    return bodyOf<TrainingResponseDto>(
+      request(app.getHttpServer())
+        .post(`/api/v1/sections/${sectionId}/trainings`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          startsAt: '2031-01-05T10:00:00.000Z',
+          endsAt: '2031-01-05T12:00:00.000Z',
+          locationName: null,
+          locationAddress: null,
+          latitude: null,
+          longitude: null,
+          trainerUserId: trainerUser.id,
+          description: null,
+          visibility: TrainingVisibility.MEMBERS_ONLY,
+          allowExternalRsvp: false,
+          ...overrides,
+        })
+        .expect(201),
+    );
   }
 
   function eventPayload(
@@ -434,7 +589,7 @@ describe('Home (e2e)', () => {
   });
 
   describe('nearestEvent / nearestTraining', () => {
-    it('the soonest upcoming Event of any type becomes nearestEvent; nearestTraining is always null', async () => {
+    it('the soonest upcoming Event of any type becomes nearestEvent, independent of Trainings', async () => {
       const group = await createGroup(OWNER_TOKEN, {
         name: 'Home Events Org',
       });
@@ -450,9 +605,6 @@ describe('Home (e2e)', () => {
           endsAt: '2031-02-01T18:00:00.000Z',
         },
       );
-      // OPEN_RODA, not OPEN_TRAINING (removed - trainings are not Events,
-      // see EventType cleanup report) - still must not surface as
-      // nearestTraining just because it is otherwise upcoming.
       await createAndPublishEvent(OWNER_TOKEN, group.id, {
         type: 'OPEN_RODA',
         name: 'Later Roda',
@@ -463,6 +615,52 @@ describe('Home (e2e)', () => {
       const home = await getHome(MEMBER_TOKEN);
 
       expect(home.nearestEvent?.id).toBe(soonerWorkshop.id);
+    });
+
+    it('the soonest upcoming, visible, SCHEDULED Training for a Section the caller is an active member of becomes nearestTraining', async () => {
+      const group = await createGroup(OWNER_TOKEN, {
+        name: 'Home Trainings Org',
+      });
+      const section = await createSection(OWNER_TOKEN, group.id, {
+        name: 'Home Trainings Section',
+      });
+      await addSectionMember(OWNER_TOKEN, section.id, TRAINING_MEMBER_TOKEN);
+
+      await createTraining(OWNER_TOKEN, section.id, {
+        startsAt: '2031-04-10T10:00:00.000Z',
+        endsAt: '2031-04-10T12:00:00.000Z',
+      });
+      const soonerTraining = await createTraining(OWNER_TOKEN, section.id, {
+        startsAt: '2031-04-05T10:00:00.000Z',
+        endsAt: '2031-04-05T12:00:00.000Z',
+      });
+
+      const home = await getHome(TRAINING_MEMBER_TOKEN);
+
+      expect(home.nearestTraining?.id).toBe(soonerTraining.id);
+    });
+
+    it('a cancelled Training is never returned as nearestTraining', async () => {
+      const group = await createGroup(OWNER_TOKEN, {
+        name: 'Home Cancelled Training Org',
+      });
+      const section = await createSection(OWNER_TOKEN, group.id, {
+        name: 'Home Cancelled Training Section',
+      });
+      await addSectionMember(OWNER_TOKEN, section.id, TRAINING_MEMBER_TOKEN_2);
+
+      const training = await createTraining(OWNER_TOKEN, section.id, {
+        startsAt: '2031-05-01T10:00:00.000Z',
+        endsAt: '2031-05-01T12:00:00.000Z',
+      });
+      await request(app.getHttpServer())
+        .post(`/api/v1/sections/${section.id}/trainings/${training.id}/cancel`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ scope: 'THIS', reason: null })
+        .expect(201);
+
+      const home = await getHome(TRAINING_MEMBER_TOKEN_2);
+
       expect(home.nearestTraining).toBeNull();
     });
   });

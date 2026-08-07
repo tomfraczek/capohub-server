@@ -124,13 +124,38 @@ describe('GroupPermissionService', () => {
       ).toBe(true);
     });
 
-    it('gives INSTRUCTOR and ASSISTANT the same permissions as MEMBER', () => {
-      expect(
-        service.getPermissionsForRole('SECTION', GroupRole.INSTRUCTOR),
-      ).toEqual(service.getPermissionsForRole('SECTION', GroupRole.MEMBER));
+    it('gives ASSISTANT the same permissions as MEMBER - it still carries no extra weight', () => {
       expect(
         service.getPermissionsForRole('SECTION', GroupRole.ASSISTANT),
       ).toEqual(service.getPermissionsForRole('SECTION', GroupRole.MEMBER));
+    });
+
+    // INSTRUCTOR now diverges from MEMBER: the Trainings module (see
+    // trainings/) grants it TRAINING_MANAGE/TRAINING_ATTENDANCE_MANAGE/
+    // TRAINING_PRIVATE_NOTES_MANAGE on top of every MEMBER permission - see
+    // group-role-permissions.map.ts's SECTION_INSTRUCTOR_PERMISSIONS.
+    it('gives INSTRUCTOR every MEMBER permission plus the Training management tier', () => {
+      const memberPermissions = service.getPermissionsForRole(
+        'SECTION',
+        GroupRole.MEMBER,
+      );
+      const instructorPermissions = service.getPermissionsForRole(
+        'SECTION',
+        GroupRole.INSTRUCTOR,
+      );
+      expect(instructorPermissions).toEqual(
+        expect.arrayContaining(memberPermissions),
+      );
+      expect(instructorPermissions).toEqual(
+        expect.arrayContaining([
+          GroupPermission.TRAINING_MANAGE,
+          GroupPermission.TRAINING_ATTENDANCE_MANAGE,
+          GroupPermission.TRAINING_PRIVATE_NOTES_MANAGE,
+        ]),
+      );
+      expect(instructorPermissions).not.toContain(
+        GroupPermission.TRAINING_STATS_VIEW,
+      );
     });
   });
 

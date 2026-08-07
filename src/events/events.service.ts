@@ -424,23 +424,15 @@ export class EventsService {
 
   /**
    * The single soonest upcoming Event (any type) visible to `viewer` from
-   * `from` onward - backs GET /home (see HomeService).
-   *
-   * `nearestTraining` is always `null`: EventType.OPEN_TRAINING was
-   * removed (see the EventType cleanup report) - a training is not an
-   * Event and will be resolved from a dedicated future training module
-   * instead (same "no dedicated training flag on Event" call already made
-   * in career-timeline-aggregation.service.ts and formal-rank.service.ts).
-   * The field stays in the return shape/HomeResponseDto so the /home
-   * response contract is unchanged until that module exists to back it.
+   * `from` onward - backs Home.nearestEvent (see HomeService).
+   * Home.nearestTraining is a wholly separate fact, resolved by
+   * TrainingsService.findNearestForViewer instead (Training is a distinct
+   * entity, never an Event - see the trainings module).
    */
-  async findNearestEventAndTraining(
+  async findNearestEvent(
     viewer: User,
     from: string,
-  ): Promise<{
-    nearestEvent: EventResponseDto | null;
-    nearestTraining: EventResponseDto | null;
-  }> {
+  ): Promise<EventResponseDto | null> {
     const em = this.em;
     const { visibilityAnd, rolesByEvent } = await this.resolveViewerVisibility(
       em,
@@ -462,16 +454,14 @@ export class EventsService {
       await reconcileEventFinished(em, event);
     }
 
-    const nearestEvent = anyEvents[0]
-      ? await this.buildResponse(
+    return anyEvents[0]
+      ? this.buildResponse(
           em,
           anyEvents[0],
           viewer,
           rolesByEvent.get(anyEvents[0].id) ?? [],
         )
       : null;
-
-    return { nearestEvent, nearestTraining: null };
   }
 
   /**

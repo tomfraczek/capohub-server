@@ -15,6 +15,7 @@ import { PlaylistsModule } from './playlists/playlists.module';
 import { RhythmsModule } from './rhythms/rhythms.module';
 import { SongLibraryModule } from './song-library/song-library.module';
 import { SongsModule } from './songs/songs.module';
+import { TrainingsModule } from './trainings/trainings.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -30,6 +31,7 @@ import { UsersModule } from './users/users.module';
     RhythmsModule,
     GroupsModule,
     EventsModule,
+    TrainingsModule,
     GraduationModule,
     CareerTimelineModule,
     DiscoveryModule,

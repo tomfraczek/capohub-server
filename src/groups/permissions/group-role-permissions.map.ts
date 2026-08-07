@@ -31,17 +31,28 @@ const SECTION_MEMBER_PERMISSIONS: readonly GroupPermission[] = [
   // service then rejects them when the setting is off. ADMIN and OWNER
   // always pass regardless of the setting.
   GroupPermission.GROUP_INVITE,
+  // Every member may browse this Section's own Trainings - actual
+  // visibility of a MEMBERS_ONLY vs PUBLIC Training is resolved per-row by
+  // TrainingsService, this permission only gates the endpoint itself (see
+  // GroupPermission.TRAINING_VIEW's own comment).
+  GroupPermission.TRAINING_VIEW,
 ];
 
-// INSTRUCTOR and ASSISTANT have no extra permissions yet - they carry no
-// functional weight until training/attendance modules land in a later
-// stage.
+// ASSISTANT has no extra permissions yet - it carries no functional weight
+// until a later stage (see GroupRole's own comment).
 const SECTION_ASSISTANT_PERMISSIONS: readonly GroupPermission[] = [
   ...SECTION_MEMBER_PERMISSIONS,
 ];
 
+// INSTRUCTOR's one functional permission tier: full Training/TrainingSeries
+// authoring plus attendance-taking and plan/notes access for every Training
+// in this Section (see the module spec §4) - it still gains none of
+// ADMIN's membership/catalog/event management.
 const SECTION_INSTRUCTOR_PERMISSIONS: readonly GroupPermission[] = [
   ...SECTION_MEMBER_PERMISSIONS,
+  GroupPermission.TRAINING_MANAGE,
+  GroupPermission.TRAINING_ATTENDANCE_MANAGE,
+  GroupPermission.TRAINING_PRIVATE_NOTES_MANAGE,
 ];
 
 const SECTION_ADMIN_PERMISSIONS: readonly GroupPermission[] = [
@@ -87,6 +98,13 @@ const SECTION_ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.FORMAL_RANK_CORRECTION_REQUEST,
   GroupPermission.FORMAL_RANK_CORRECTION_REVIEW,
   GroupPermission.FORMAL_RANK_CORRECTION_VIEW,
+  // ADMIN gets every INSTRUCTOR Training capability plus the OWNER/ADMIN-only
+  // statistics endpoint (see GroupPermission.TRAINING_STATS_VIEW's own
+  // comment - deliberately withheld from INSTRUCTOR).
+  GroupPermission.TRAINING_MANAGE,
+  GroupPermission.TRAINING_ATTENDANCE_MANAGE,
+  GroupPermission.TRAINING_PRIVATE_NOTES_MANAGE,
+  GroupPermission.TRAINING_STATS_VIEW,
 ];
 
 // Every lifecycle-status permission (ARCHIVE, UNARCHIVE, SET_READ_ONLY,
@@ -213,5 +231,6 @@ export const READ_ONLY_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> = new Set(
     // because of its "_VIEW" name.
     GroupPermission.AUDIT_LOG_VIEW,
     GroupPermission.FORMAL_RANK_CORRECTION_VIEW,
+    GroupPermission.TRAINING_VIEW,
   ],
 );

@@ -1,6 +1,7 @@
 import { AnnouncementResponseDto } from '../../announcements/dto/announcement-response.dto';
 import { EventResponseDto } from '../../events/dto/event-response.dto';
 import { LearningSongListItemDto } from '../../song-library/dto/learning-songs-list-response.dto';
+import { TrainingResponseDto } from '../../trainings/dto/training-response.dto';
 
 // Generic capped-preview section shape, same convention as
 // CommunityHomeBoundedSectionDto (see docs/api-conventions.md "Dashboard
@@ -39,9 +40,13 @@ export interface HomeResponseDto {
   // when the very next thing on the caller's calendar happens to be a
   // training; the two sections are independent facts, never deduplicated.
   nearestEvent: EventResponseDto | null;
-  // The soonest upcoming Event of type OPEN_TRAINING the caller can see, or
-  // `null` if none.
-  nearestTraining: EventResponseDto | null;
+  // The soonest upcoming, visible, SCHEDULED Training (a distinct entity
+  // from Event - see trainings/entities/training.entity.ts) the caller can
+  // see, or `null` if none. May belong to the same or a different Section
+  // than nearestEvent's community - the two fields are independent facts,
+  // never deduplicated (same convention as nearestEvent vs nearestTraining
+  // historically being allowed to coincide).
+  nearestTraining: TrainingResponseDto | null;
   continueLearning: HomeContinueLearningDto;
   announcements: HomeAnnouncementsDto;
 }

@@ -3,9 +3,10 @@
  *
  * Covers:
  *  - greetingName is exactly User.displayName, untouched
- *  - nearestEvent/nearestTraining are read as-is from
- *    EventsService.findNearestEventAndTraining, `null` when there is
- *    nothing upcoming, and may be the same Event as each other
+ *  - nearestEvent is read as-is from EventsService.findNearestEvent,
+ *    nearestTraining is read as-is from
+ *    TrainingsService.findNearestForViewer, both `null` when there is
+ *    nothing upcoming
  *  - continueLearning.toReview only contains TO_REVIEW rows, with
  *    total/hasMore describing the full matching set, not just the capped
  *    preview
@@ -23,6 +24,10 @@ import { MembershipRequestTarget } from '../groups/enums/membership-request-targ
 import { EventResponseDto } from '../events/dto/event-response.dto';
 import { EventType } from '../events/enums/event-type.enum';
 import { EventsService } from '../events/events.service';
+import { TrainingResponseDto } from '../trainings/dto/training-response.dto';
+import { TrainingVisibility } from '../trainings/enums/training-visibility.enum';
+import { TrainingStatus } from '../trainings/enums/training-status.enum';
+import { TrainingsService } from '../trainings/trainings.service';
 import { LearningSongListItemDto } from '../song-library/dto/learning-songs-list-response.dto';
 import { LearningStatus } from '../song-library/enums/learning-status.enum';
 import { LearningStatusService } from '../song-library/learning-status.service';
@@ -77,6 +82,39 @@ function buildEvent(
   };
 }
 
+function buildTraining(
+  overrides: Partial<TrainingResponseDto> = {},
+): TrainingResponseDto {
+  return {
+    id: 'training-1',
+    section: { id: 'section-1', name: 'Section', logoUrl: null },
+    seriesId: null,
+    startsAt: '2026-08-01T18:00:00.000Z',
+    endsAt: '2026-08-01T20:00:00.000Z',
+    locationName: null,
+    locationAddress: null,
+    latitude: null,
+    longitude: null,
+    trainer: { id: 'user-2', displayName: 'Trainer' },
+    description: null,
+    visibility: TrainingVisibility.MEMBERS_ONLY,
+    allowExternalRsvp: false,
+    status: TrainingStatus.SCHEDULED,
+    rsvpCounts: { yes: 0, no: 0, maybe: 0 },
+    viewerRsvp: null,
+    management: null,
+    capabilities: {
+      canEdit: false,
+      canCancel: false,
+      canManageAttendance: false,
+      canManagePlanNotes: false,
+    },
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
 function buildLearningSong(
   overrides: Partial<LearningSongListItemDto> = {},
 ): LearningSongListItemDto {
@@ -125,15 +163,17 @@ function buildAnnouncement(
 
 function buildService(options: {
   nearestEvent?: EventResponseDto | null;
-  nearestTraining?: EventResponseDto | null;
+  nearestTraining?: TrainingResponseDto | null;
   learningSongs?: LearningSongListItemDto[];
   announcements?: AnnouncementResponseDto[];
   unreadCount?: number;
 }) {
-  const findNearestEventAndTraining = jest.fn().mockResolvedValue({
-    nearestEvent: options.nearestEvent ?? null,
-    nearestTraining: options.nearestTraining ?? null,
-  });
+  const findNearestEvent = jest
+    .fn()
+    .mockResolvedValue(options.nearestEvent ?? null);
+  const findNearestForViewer = jest
+    .fn()
+    .mockResolvedValue(options.nearestTraining ?? null);
   const listLearningSongs = jest
     .fn()
     .mockResolvedValue(options.learningSongs ?? []);
@@ -142,9 +182,10 @@ function buildService(options: {
     unreadCount: options.unreadCount ?? 0,
   });
 
-  const eventsService = {
-    findNearestEventAndTraining,
-  } as unknown as EventsService;
+  const eventsService = { findNearestEvent } as unknown as EventsService;
+  const trainingsService = {
+    findNearestForViewer,
+  } as unknown as TrainingsService;
   const learningStatusService = {
     listLearningSongs,
   } as unknown as LearningStatusService;
@@ -155,10 +196,12 @@ function buildService(options: {
   return {
     service: new HomeService(
       eventsService,
+      trainingsService,
       learningStatusService,
       announcementsService,
     ),
-    findNearestEventAndTraining,
+    findNearestEvent,
+    findNearestForViewer,
     listLearningSongs,
     listForViewer,
   };
@@ -171,13 +214,10 @@ describe('HomeService', () => {
     expect(home.greetingName).toBe('Ana');
   });
 
-  it('returns nearestEvent/nearestTraining exactly as EventsService resolves them, and passes the caller through', async () => {
+  it('returns nearestEvent/nearestTraining exactly as EventsService/TrainingsService resolve them, and passes the caller through', async () => {
     const event = buildEvent({ id: 'event-1', type: EventType.WORKSHOP });
-    const training = buildEvent({
-      id: 'event-2',
-      type: EventType.OPEN_RODA,
-    });
-    const { service, findNearestEventAndTraining } = buildService({
+    const training = buildTraining({ id: 'training-1' });
+    const { service, findNearestEvent, findNearestForViewer } = buildService({
       nearestEvent: event,
       nearestTraining: training,
     });
@@ -187,11 +227,10 @@ describe('HomeService', () => {
 
     expect(home.nearestEvent).toEqual(event);
     expect(home.nearestTraining).toEqual(training);
-    expect(findNearestEventAndTraining).toHaveBeenCalledTimes(1);
-    expect(findNearestEventAndTraining).toHaveBeenCalledWith(
-      user,
-      expect.any(String),
-    );
+    expect(findNearestEvent).toHaveBeenCalledTimes(1);
+    expect(findNearestEvent).toHaveBeenCalledWith(user, expect.any(String));
+    expect(findNearestForViewer).toHaveBeenCalledTimes(1);
+    expect(findNearestForViewer).toHaveBeenCalledWith(user, expect.any(String));
   });
 
   it('returns null for nearestEvent/nearestTraining when nothing is upcoming', async () => {
@@ -200,22 +239,6 @@ describe('HomeService', () => {
 
     expect(home.nearestEvent).toBeNull();
     expect(home.nearestTraining).toBeNull();
-  });
-
-  it('the very next Event may equal the very next training - the two fields are never deduplicated', async () => {
-    const training = buildEvent({
-      id: 'event-1',
-      type: EventType.OPEN_RODA,
-    });
-    const { service } = buildService({
-      nearestEvent: training,
-      nearestTraining: training,
-    });
-
-    const home = await service.getHome(buildUser());
-
-    expect(home.nearestEvent).toEqual(training);
-    expect(home.nearestTraining).toEqual(training);
   });
 
   it('continueLearning.toReview only includes TO_REVIEW rows, with total/hasMore describing the full matching set', async () => {
