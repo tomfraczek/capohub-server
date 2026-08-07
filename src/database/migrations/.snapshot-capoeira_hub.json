@@ -3884,7 +3884,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -4166,6 +4166,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "numeric_code": {
+          "name": "numeric_code",
+          "type": "varchar(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "events",
@@ -4275,6 +4291,17 @@
         },
         {
           "columnNames": [
+            "type",
+            "numeric_code"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "events_type_numeric_code_unique",
+          "unique": true,
+          "primary": false
+        },
+        {
+          "columnNames": [
             "visibility"
           ],
           "composite": false,
@@ -4290,6 +4317,12 @@
           "columnName": "community_group_id",
           "definition": "CHECK ((((community_group_id IS NOT NULL) AND (community_section_id IS NULL)) OR ((community_group_id IS NULL) AND (community_section_id IS NOT NULL))))",
           "expression": "((community_group_id IS NOT NULL) AND (community_section_id IS NULL)) OR ((community_group_id IS NULL) AND (community_section_id IS NOT NULL))"
+        },
+        {
+          "name": "events_numeric_code_check",
+          "columnName": "numeric_code",
+          "definition": "CHECK (((numeric_code)::text ~ '^[0-9]{6}$'::text))",
+          "expression": "numeric_code ~ '^[0-9]{6}$'::text"
         }
       ],
       "foreignKeys": {
@@ -15232,6 +15265,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "boolean"
+        },
+        "numeric_code": {
+          "name": "numeric_code",
+          "type": "varchar(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "users",
@@ -15255,6 +15304,16 @@
           "constraint": false,
           "keyName": "users_email_index",
           "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "numeric_code"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "users_numeric_code_unique",
+          "unique": true,
           "primary": false
         },
         {
@@ -15284,6 +15343,12 @@
           "columnName": "country",
           "definition": "CHECK (((country IS NULL) OR ((country)::text ~ '^[A-Z]{2}$'::text)))",
           "expression": "country IS NULL) OR ((country ~ '^[A-Z]{2}$'::text)"
+        },
+        {
+          "name": "users_numeric_code_check",
+          "columnName": "numeric_code",
+          "definition": "CHECK (((numeric_code)::text ~ '^[0-9]{6}$'::text))",
+          "expression": "numeric_code ~ '^[0-9]{6}$'::text"
         }
       ],
       "foreignKeys": {},

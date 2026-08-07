@@ -1,3 +1,4 @@
+import { buildUserQrPayload } from '../common/identity/qr-payload.util';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
 import { FormalGroupResponseDto } from './dto/formal-group-response.dto';
 import {
@@ -51,6 +52,8 @@ export function toUserProfileResponseDto(
     formalGroup: activeFormalGroup
       ? toOwnFormalGroupRefDto(activeFormalGroup)
       : null,
+    numericCode: user.numericCode,
+    qrPayload: buildUserQrPayload(user.numericCode),
   };
 }
 

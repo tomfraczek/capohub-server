@@ -1,5 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
+import {
+  assignUniqueNumericCode,
+  normalizeNumericCodeInput,
+} from '../common/utils/numeric-code';
 import { generateUniquePublicCode } from '../common/utils/public-code';
 import { Group } from '../groups/entities/group.entity';
 import { Section } from '../groups/entities/section.entity';
@@ -20,11 +28,15 @@ import { EventAttendee } from './entities/event-attendee.entity';
 import { EventInvitation } from './entities/event-invitation.entity';
 import { EventRoleAssignment } from './entities/event-role-assignment.entity';
 import { EventStatusHistory } from './entities/event-status-history.entity';
-import { Event } from './entities/event.entity';
+import {
+  Event,
+  EVENTS_TYPE_NUMERIC_CODE_UNIQUE_INDEX,
+} from './entities/event.entity';
 import { EventInvitationStatus } from './enums/event-invitation-status.enum';
 import { EventRole } from './enums/event-role.enum';
 import { EventRsvpStatus } from './enums/event-rsvp-status.enum';
 import { EventStatus } from './enums/event-status.enum';
+import { EventType, isEventType } from './enums/event-type.enum';
 import { EventWaitlistPolicy } from './enums/event-waitlist-policy.enum';
 import { EventVisibility } from './enums/event-visibility.enum';
 import { EventRolesService } from './event-roles.service';
@@ -84,7 +96,15 @@ export class EventsService {
       event.customTypeLabel = input.customTypeLabel;
       this.applyCommonFields(event, input);
       event.publicCode = await generateUniquePublicCode(em);
-      await em.persist(event).flush();
+      await assignUniqueNumericCode(
+        em,
+        async (trx, code) => {
+          event.numericCode = code;
+          trx.persist(event);
+          await trx.flush();
+        },
+        EVENTS_TYPE_NUMERIC_CODE_UNIQUE_INDEX,
+      );
 
       await this.eventRolesService.insertRoleAssignment(
         em,
@@ -203,10 +223,53 @@ export class EventsService {
       'communitySection',
       'createdBy',
     ]);
+    return this.getVisibleEventResponse(em, event, viewer);
+  }
 
+  /**
+   * GET events/by-code/:type/:code (see event-lookup.controller.ts) -
+   * finds the exact (type, numericCode) Event and applies the identical
+   * visibility rule getById does (see getVisibleEventResponse); knowing an
+   * Event's public numeric code never bypasses DRAFT/visibility access
+   * control (module spec §10).
+   */
+  async getByTypeAndCode(
+    typeInput: string,
+    codeInput: string,
+    viewer: User,
+  ): Promise<EventResponseDto> {
+    if (!isEventType(typeInput)) {
+      throw new BadRequestException({
+        code: 'INVALID_EVENT_TYPE',
+        message: `type must be one of ${Object.values(EventType).join(', ')}`,
+      });
+    }
+    const numericCode = normalizeNumericCodeInput(codeInput);
+    if (!numericCode) {
+      throw new BadRequestException({
+        code: 'INVALID_NUMERIC_CODE',
+        message: 'code must be exactly 6 digits',
+      });
+    }
+
+    const em = this.em;
+    const event = await this.eventAccessService.loadByTypeAndCodeOrFail(
+      em,
+      typeInput,
+      numericCode,
+      ['communityGroup', 'communitySection', 'createdBy'],
+    );
+    return this.getVisibleEventResponse(em, event, viewer);
+  }
+
+  private async getVisibleEventResponse(
+    em: EntityManager,
+    event: Event,
+    viewer: User,
+  ): Promise<EventResponseDto> {
     const roles = await this.eventRolesService.getRolesForUser(
       em,
-      eventId,
+      event.id,
       viewer.id,
     );
 

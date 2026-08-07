@@ -101,11 +101,21 @@ async function insertEvent(
   id: string,
   name: string,
   type: string,
+  // Only relevant once Migration20260807105243_AddIdentityNumericCodes has
+  // applied (events.numeric_code NOT NULL) - omitted for every call site in
+  // this file that runs before that point, where the column does not exist
+  // yet.
+  numericCode?: string,
 ): Promise<void> {
-  await orm.em.getConnection().execute(
-    `insert into "events" (id, created_at, updated_at, community_group_id, type, name, starts_at, ends_at) values
-      ('${id}', now(), now(), '${ROOT_GROUP_ID}', '${type}', '${name}', now(), now() + interval '1 hour')`,
-  );
+  const columns = numericCode
+    ? '(id, created_at, updated_at, community_group_id, type, name, starts_at, ends_at, numeric_code)'
+    : '(id, created_at, updated_at, community_group_id, type, name, starts_at, ends_at)';
+  const values = numericCode
+    ? `('${id}', now(), now(), '${ROOT_GROUP_ID}', '${type}', '${name}', now(), now() + interval '1 hour', '${numericCode}')`
+    : `('${id}', now(), now(), '${ROOT_GROUP_ID}', '${type}', '${name}', now(), now() + interval '1 hour')`;
+  await orm.em
+    .getConnection()
+    .execute(`insert into "events" ${columns} values ${values}`);
 }
 
 describe('EventType cleanup migration (Align Event Type To Four Values)', () => {
@@ -152,6 +162,7 @@ describe('EventType cleanup migration (Align Event Type To Four Values)', () => 
             'd0000000-0000-4000-8000-000000000099',
             'Should Be Rejected',
             'BATIZADO',
+            '000001',
           ),
         ).rejects.toThrow();
       });
@@ -166,6 +177,9 @@ describe('EventType cleanup migration (Align Event Type To Four Values)', () => 
             `d0000000-0000-4000-8000-0000000001${i}${i}`,
             `Accepted ${value}`,
             value,
+            // Namespace is per-type (see EVENTS_TYPE_NUMERIC_CODE_UNIQUE_INDEX),
+            // so the same code is safe to reuse across these 4 distinct types.
+            '000001',
           );
         }
         const rows: { type: string }[] = await orm.em

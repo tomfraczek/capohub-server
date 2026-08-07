@@ -36,6 +36,13 @@ export interface EventResponseDto {
   seatsAvailable: number | null;
   waitlistCount: number;
   publicCode: string | null;
+  // Stable 6-digit code, unique within this Event's own `type` (see
+  // entities/event.entity.ts) - not a secret.
+  numericCode: string;
+  // "capohub:v1:<f|w|r|e>:<numericCode>" (one letter per EventType - see
+  // common/identity/qr-payload.util.ts) - the exact string the frontend
+  // encodes as this Event's QR identity.
+  qrPayload: string;
   // The caller's own Event roles for this Event - [] if none. Never used
   // by the frontend to derive `capabilities` itself - see
   // event-capabilities.dto.ts.

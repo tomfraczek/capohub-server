@@ -12,3 +12,11 @@ export enum EventType {
   // label (see event.entity.ts).
   OTHER = 'OTHER',
 }
+
+// Runtime type guard for an untrusted string (a route :type param, or a
+// parsed QR payload segment - see common/identity/qr-payload.util.ts and
+// event-lookup.controller.ts) - never trust a path/query param to already
+// be an EventType just because its TS type says so.
+export function isEventType(value: string): value is EventType {
+  return (Object.values(EventType) as string[]).includes(value);
+}

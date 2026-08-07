@@ -8,6 +8,7 @@ import { RoleAssignmentsService } from '../groups/role-assignments.service';
 import { EventInvitation } from './entities/event-invitation.entity';
 import { EventInvitationStatus } from './enums/event-invitation-status.enum';
 import { EventStatus } from './enums/event-status.enum';
+import { EventType } from './enums/event-type.enum';
 import { EventVisibility } from './enums/event-visibility.enum';
 import { Event } from './entities/event.entity';
 import { eventCommunity } from './event-community.util';
@@ -46,6 +47,31 @@ export class EventAccessService {
     ],
   ): Promise<Event> {
     const event = await em.findOne(Event, { id: eventId }, { populate });
+    if (!event) {
+      throw this.eventNotFound();
+    }
+    await reconcileEventFinished(em, event);
+    return event;
+  }
+
+  /**
+   * Loads an Event by its (type, numericCode) public identity instead of
+   * its id - backs GET events/by-code/:type/:code (see
+   * event-lookup.controller.ts). Same reconciliation as loadOrFail; the
+   * caller is still responsible for the usual visibility check afterwards
+   * (see EventsService.getVisibleEventResponse) - finding an Event by its
+   * numeric code never bypasses access control.
+   */
+  async loadByTypeAndCodeOrFail(
+    em: EntityManager,
+    type: EventType,
+    numericCode: string,
+    populate: ('communityGroup' | 'communitySection' | 'createdBy')[] = [
+      'communityGroup',
+      'communitySection',
+    ],
+  ): Promise<Event> {
+    const event = await em.findOne(Event, { type, numericCode }, { populate });
     if (!event) {
       throw this.eventNotFound();
     }

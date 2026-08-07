@@ -1,3 +1,4 @@
+import { buildEventQrPayload } from '../../common/identity/qr-payload.util';
 import { Event } from '../entities/event.entity';
 import { eventCommunity } from '../event-community.util';
 import { EventCapabilitiesDto } from '../dto/event-capabilities.dto';
@@ -54,6 +55,8 @@ export function toEventResponseDto(
     seatsAvailable: context.seatsAvailable,
     waitlistCount: context.waitlistCount,
     publicCode: event.publicCode,
+    numericCode: event.numericCode,
+    qrPayload: buildEventQrPayload(event.type, event.numericCode),
     viewerRoles: context.viewerRoles,
     capabilities: context.capabilities,
     createdAt: event.createdAt.toISOString(),

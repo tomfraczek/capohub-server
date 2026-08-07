@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -10,6 +11,7 @@ import {
   Put,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { normalizeNumericCodeInput } from '../common/utils/numeric-code';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { uuidSchema } from '../common/validation/uuid.schema';
 import { FavoriteSongsListResponseDto } from '../song-library/dto/favorite-songs-list-response.dto';
@@ -25,6 +27,7 @@ import { UpdateUserProfileDto } from './dto/update-user-profile.schema';
 import type { UserProfileResponseDto } from './dto/user-profile-response.dto';
 import type { UserResponseDto } from './dto/user-response.dto';
 import { User } from './entities/user.entity';
+import { UserIdentityService } from './user-identity.service';
 import { UserProfileService } from './user-profile.service';
 import { toUserResponseDto } from './user.mapper';
 import { UserService } from './user.service';
@@ -34,6 +37,7 @@ export class UsersController {
   constructor(
     private readonly userService: UserService,
     private readonly userProfileService: UserProfileService,
+    private readonly userIdentityService: UserIdentityService,
     private readonly favoriteSongsService: FavoriteSongsService,
     private readonly learningStatusService: LearningStatusService,
   ) {}
@@ -129,6 +133,36 @@ export class UsersController {
   @HttpCode(204)
   endMyFormalGroup(@CurrentUser() user: User): Promise<void> {
     return this.userProfileService.endFormalGroup(user);
+  }
+
+  // Declared after every `me/*` route, and before `:userId/profile` below -
+  // route-registration order matters here, since `:userId` would otherwise
+  // also match "by-code". Accepts either the raw 6-digit code or the
+  // frontend's "123-456" display format (see normalizeNumericCodeInput);
+  // the response is the same privacy-filtered PublicUserProfileResponseDto
+  // GET /users/:userId/profile returns - knowing the code never bypasses
+  // the target's own privacy toggles (module spec §9).
+  @Get('by-code/:code')
+  async getByCode(
+    @CurrentUser() viewer: User,
+    @Param('code') code: string,
+  ): Promise<PublicUserProfileResponseDto> {
+    const numericCode = normalizeNumericCodeInput(code);
+    if (!numericCode) {
+      throw new BadRequestException({
+        code: 'INVALID_NUMERIC_CODE',
+        message: 'code must be exactly 6 digits',
+      });
+    }
+    const target =
+      await this.userIdentityService.resolveUserByNumericCode(numericCode);
+    if (!target) {
+      throw new NotFoundException({
+        code: 'USER_NOT_FOUND',
+        message: 'User not found',
+      });
+    }
+    return this.userProfileService.getPublicProfile(viewer, target.id);
   }
 
   // Declared after every `me/*` route above - route-registration order

@@ -13,6 +13,7 @@ import { EventRolesService } from './event-roles.service';
 import { EventRsvpController } from './event-rsvp.controller';
 import { EventRsvpService } from './event-rsvp.service';
 import { EventController } from './event.controller';
+import { EventLookupController } from './event-lookup.controller';
 import { EventsController } from './events.controller';
 import { EventsService } from './events.service';
 import { EventPermissionsGuard } from './guards/event-permissions.guard';
@@ -34,6 +35,7 @@ import { EventPermissionService } from './permissions/event-permission.service';
     EventsController,
     MyEventsController,
     EventController,
+    EventLookupController,
     EventRolesController,
     EventInvitationsController,
     EventRsvpController,

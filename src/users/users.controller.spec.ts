@@ -2,6 +2,7 @@ import { GlobalRole } from '../auth/permissions/global-role.enum';
 import { FavoriteSongsService } from '../song-library/favorite-songs.service';
 import { LearningStatusService } from '../song-library/learning-status.service';
 import { AvatarType } from './enums/avatar-type.enum';
+import { UserIdentityService } from './user-identity.service';
 import { UserProfileService } from './user-profile.service';
 import { UserService } from './user.service';
 import { User } from './entities/user.entity';
@@ -12,6 +13,7 @@ import { UsersController } from './users.controller';
 const favoriteSongsService = {} as unknown as FavoriteSongsService;
 const learningStatusService = {} as unknown as LearningStatusService;
 const userProfileService = {} as unknown as UserProfileService;
+const userIdentityService = {} as unknown as UserIdentityService;
 
 function buildUser(): User {
   const user = new User();
@@ -40,6 +42,7 @@ describe('UsersController', () => {
       const controller = new UsersController(
         userService,
         userProfileService,
+        userIdentityService,
         favoriteSongsService,
         learningStatusService,
       );
@@ -66,6 +69,7 @@ describe('UsersController', () => {
       const controller = new UsersController(
         userService,
         userProfileService,
+        userIdentityService,
         favoriteSongsService,
         learningStatusService,
       );
@@ -89,6 +93,7 @@ describe('UsersController', () => {
       const controller = new UsersController(
         userService,
         userProfileService,
+        userIdentityService,
         favoriteSongsService,
         learningStatusService,
       );
@@ -117,6 +122,7 @@ describe('UsersController', () => {
       const controller = new UsersController(
         userService,
         userProfileService,
+        userIdentityService,
         favoriteSongsService,
         learningStatusService,
       );
@@ -145,6 +151,7 @@ describe('UsersController', () => {
       const controller = new UsersController(
         userService,
         userProfileService,
+        userIdentityService,
         favoriteSongsService,
         learningStatusService,
       );
@@ -166,6 +173,7 @@ describe('UsersController', () => {
       const controller = new UsersController(
         userService,
         userProfileService,
+        userIdentityService,
         favoriteSongsService,
         learningStatusService,
       );
@@ -188,6 +196,7 @@ describe('UsersController', () => {
       const controller = new UsersController(
         userService,
         userProfileService,
+        userIdentityService,
         favoritesService,
         learningStatusService,
       );
@@ -211,6 +220,7 @@ describe('UsersController', () => {
       const controller = new UsersController(
         userService,
         userProfileService,
+        userIdentityService,
         favoriteSongsService,
         learningService,
       );

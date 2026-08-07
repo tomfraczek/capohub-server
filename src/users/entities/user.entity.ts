@@ -7,6 +7,8 @@ export const THEMES = ['system', 'light', 'dark'] as const;
 
 export type Theme = (typeof THEMES)[number];
 
+export const USERS_NUMERIC_CODE_UNIQUE_INDEX = 'users_numeric_code_unique';
+
 @Entity({ tableName: 'users' })
 // Mirrors sections_country_check (see section.entity.ts) - same ISO
 // 3166-1 alpha-2 shape, same reason for a DB-level backstop alongside the
@@ -15,6 +17,13 @@ export type Theme = (typeof THEMES)[number];
   name: 'users_country_check',
   expression: (columns) =>
     `"${columns.country}" is null or "${columns.country}" ~ '^[A-Z]{2}$'`,
+})
+// Same DB-level backstop pattern as the country check above - guards
+// numericCode's shape independently of the application-level generator
+// (see common/utils/numeric-code.ts).
+@Check<User>({
+  name: 'users_numeric_code_check',
+  expression: (columns) => `"${columns.numericCode}" ~ '^[0-9]{6}$'`,
 })
 export class User extends BaseEntity {
   @Unique()
@@ -79,6 +88,21 @@ export class User extends BaseEntity {
   @Unique()
   @Property({ length: 15 })
   publicCode!: string;
+
+  // Stable, immutable 6-digit code - a separate namespace/purpose from
+  // publicCode above (see the module spec's own framing): easy to type by
+  // hand, and the payload behind this User's QR identity (see
+  // common/identity/qr-payload.util.ts). Generated exactly once, at
+  // account creation (see UserService.findOrCreateFromClerk), via
+  // common/utils/numeric-code.ts - never regenerated, never settable
+  // through any PATCH. Not a secret and not an authorization token:
+  // knowing it only ever resolves this User's already-public profile
+  // (still filtered by the normal privacy rules - see
+  // UserProfileService.getPublicProfile), the same way publicCode already
+  // does.
+  @Unique({ name: USERS_NUMERIC_CODE_UNIQUE_INDEX })
+  @Property({ length: 6 })
+  numericCode!: string;
 
   // ─── Profile (see UserProfileService / GET,PATCH /users/me/profile) ───
   // firstName/lastName are business-required (see profileComplete on

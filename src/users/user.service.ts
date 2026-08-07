@@ -8,6 +8,7 @@ import {
 import type { ClerkClient } from '@clerk/backend';
 import { CLERK_CLIENT } from '../auth/clerk/clerk-client.provider';
 import { AuthContext } from '../auth/types/auth-context.type';
+import { assignUniqueNumericCode } from '../common/utils/numeric-code';
 import { generateUniquePublicCode } from '../common/utils/public-code';
 import { EventRolesService } from '../events/event-roles.service';
 import { SectionMembership } from '../groups/entities/section-membership.entity';
@@ -16,7 +17,11 @@ import { GroupRole } from '../groups/enums/group-role.enum';
 import { GroupStatus } from '../groups/enums/group-status.enum';
 import { ClerkProfile } from './clerk-profile.type';
 import { AvatarType } from './enums/avatar-type.enum';
-import { User, Theme } from './entities/user.entity';
+import {
+  User,
+  Theme,
+  USERS_NUMERIC_CODE_UNIQUE_INDEX,
+} from './entities/user.entity';
 import { generateDisplayNameFromEmail } from './generate-display-name';
 
 export interface UpdateUserProfileInput {
@@ -61,7 +66,14 @@ export class UserService {
     const created = this.buildUser(auth.userId, profile);
     created.lastLoginAt = new Date();
     created.publicCode = await generateUniquePublicCode(this.em);
-    await this.em.persistAndFlush(created);
+    await assignUniqueNumericCode(
+      this.em,
+      async (trx, code) => {
+        created.numericCode = code;
+        await trx.persistAndFlush(created);
+      },
+      USERS_NUMERIC_CODE_UNIQUE_INDEX,
+    );
     return created;
   }
 

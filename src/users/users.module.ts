@@ -5,6 +5,7 @@ import { EventsModule } from '../events/events.module';
 import { GroupsModule } from '../groups/groups.module';
 import { SongLibraryModule } from '../song-library/song-library.module';
 import { User } from './entities/user.entity';
+import { UserIdentityService } from './user-identity.service';
 import { UserProfileService } from './user-profile.service';
 import { UserService } from './user.service';
 import { UsersController } from './users.controller';
@@ -28,7 +29,11 @@ import { UsersController } from './users.controller';
     EventsModule,
   ],
   controllers: [UsersController],
-  providers: [UserService, UserProfileService],
-  exports: [UserService],
+  providers: [UserService, UserProfileService, UserIdentityService],
+  // UserIdentityService is additionally exported so a future
+  // attendance/check-in module can call resolveUserByNumericCode without
+  // this module needing to change (see that service's own comment) - not
+  // consumed by anything outside UsersModule yet.
+  exports: [UserService, UserIdentityService],
 })
 export class UsersModule {}

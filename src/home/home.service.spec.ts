@@ -74,6 +74,8 @@ function buildEvent(
     seatsAvailable: null,
     waitlistCount: 0,
     publicCode: null,
+    numericCode: '000001',
+    qrPayload: 'capohub:v1:f:000001',
     viewerRoles: [],
     capabilities: {} as never,
     createdAt: '2026-07-01T00:00:00.000Z',

@@ -14,6 +14,7 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.email = 'ada@example.com';
   user.displayName = 'Ada Real Name'; // deliberately name-like, to prove it's never reused
   user.publicCode = 'ADA00001';
+  user.numericCode = '042981';
   user.firstName = null;
   user.lastName = null;
   user.apelido = null;
@@ -73,6 +74,12 @@ describe('toUserProfileResponseDto', () => {
     expect(toUserProfileResponseDto(buildUser(), null).profileComplete).toBe(
       false,
     );
+  });
+
+  it('returns the numericCode verbatim and a matching versioned qrPayload', () => {
+    const dto = toUserProfileResponseDto(buildUser(), null);
+    expect(dto.numericCode).toBe('042981');
+    expect(dto.qrPayload).toBe('capohub:v1:u:042981');
   });
 
   it('computes profileComplete=true once both names are set', () => {

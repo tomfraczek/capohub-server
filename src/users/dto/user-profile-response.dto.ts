@@ -37,4 +37,13 @@ export interface UserProfileResponseDto {
   profileComplete: boolean;
   privacy: UserProfilePrivacyDto;
   formalGroup: OwnFormalGroupRefDto | null;
+  // Stable 6-digit code (see entities/user.entity.ts) - exposed on the
+  // *own* profile only, not on PublicUserProfileResponseDto (see that
+  // DTO's own comment for why). Not a secret.
+  numericCode: string;
+  // "capohub:v1:u:<numericCode>" - the exact string the frontend
+  // encodes as this User's QR identity (see
+  // common/identity/qr-payload.util.ts). Never contains the user's UUID,
+  // email, or name.
+  qrPayload: string;
 }
