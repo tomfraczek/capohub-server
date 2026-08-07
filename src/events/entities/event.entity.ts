@@ -56,12 +56,19 @@ export class Event extends BaseEntity {
   @ManyToOne(() => User, { nullable: true, deleteRule: 'set null' })
   createdBy: User | null = null;
 
+  // Immutable after creation - see create-event.schema.ts (required on
+  // CREATE) and update-event.schema.ts (absent from UPDATE entirely, and
+  // EventsService.update never assigns this field). Not just a validation
+  // rule: there is structurally no code path that can write `type` after
+  // the Event is constructed in EventsService.create.
   @Enum({ items: () => Object.values(EventType) })
-  type: EventType = EventType.CUSTOM;
+  type: EventType = EventType.OTHER;
 
-  // Only meaningful when type === CUSTOM; null otherwise (enforced by the
-  // create/update schema, not the DB). Free text, not a second enum, since
-  // organizer-defined event kinds are inherently open-ended.
+  // Only meaningful when type === OTHER; null otherwise (enforced by the
+  // create schema, not the DB). Free text, not a second enum, since
+  // organizer-defined event kinds are inherently open-ended. Excluded from
+  // UPDATE together with `type` in this stage - editing the label
+  // independently of `type` is not modeled yet.
   @Property({ nullable: true, length: 100 })
   customTypeLabel: string | null = null;
 

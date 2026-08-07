@@ -467,6 +467,163 @@ describe('Events (e2e)', () => {
     });
   });
 
+  describe('EventType', () => {
+    it.each(['FESTIVAL', 'WORKSHOP', 'OPEN_RODA'] as const)(
+      'creates an Event of type %s',
+      async (type) => {
+        const community = await createCommunityWithMembers();
+
+        const created = await createEvent(OWNER_TOKEN, community.id, {
+          type,
+          customTypeLabel: null,
+        });
+
+        expect(created.type).toBe(type);
+        expect(created.customTypeLabel).toBeNull();
+      },
+    );
+
+    it('creates an Event of type OTHER with a customTypeLabel', async () => {
+      const community = await createCommunityWithMembers();
+
+      const created = await createEvent(OWNER_TOKEN, community.id, {
+        type: 'OTHER',
+        customTypeLabel: 'Community Cookout',
+      });
+
+      expect(created.type).toBe('OTHER');
+      expect(created.customTypeLabel).toBe('Community Cookout');
+    });
+
+    it('rejects an unknown/legacy type (e.g. a pre-cleanup BATIZADO) with 400 VALIDATION_ERROR', async () => {
+      const community = await createCommunityWithMembers();
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${community.id}/events`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(eventPayload({ type: 'BATIZADO' }))
+          .expect(400),
+      );
+      expect(response.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('rejects OTHER without a customTypeLabel, and rejects a customTypeLabel on a non-OTHER type', async () => {
+      const community = await createCommunityWithMembers();
+
+      const missingLabel = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${community.id}/events`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(eventPayload({ type: 'OTHER', customTypeLabel: null }))
+          .expect(400),
+      );
+      expect(missingLabel.code).toBe('VALIDATION_ERROR');
+
+      const unexpectedLabel = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${community.id}/events`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(
+            eventPayload({ type: 'WORKSHOP', customTypeLabel: 'Not allowed' }),
+          )
+          .expect(400),
+      );
+      expect(unexpectedLabel.code).toBe('VALIDATION_ERROR');
+    });
+  });
+
+  describe('update - type is immutable', () => {
+    function updatePayload(
+      overrides: Record<string, unknown> = {},
+    ): Record<string, unknown> {
+      // Deliberately no `type`/`customTypeLabel` key - update-event.schema.ts
+      // excludes both entirely (see EventType cleanup report).
+      return {
+        name: 'Updated Name',
+        description: 'Updated description',
+        coverImageUrl: null,
+        startsAt: '2027-02-10T10:00:00.000Z',
+        endsAt: '2027-02-10T18:00:00.000Z',
+        locationName: 'Updated hall',
+        locationAddress: null,
+        latitude: null,
+        longitude: null,
+        visibility: EventVisibility.COMMUNITY_MEMBERS,
+        capacity: null,
+        waitlistPolicy: EventWaitlistPolicy.NONE,
+        ...overrides,
+      };
+    }
+
+    it('updates an Event without eventType/type in the body - other fields change, type is untouched', async () => {
+      const community = await createCommunityWithMembers();
+      const created = await createEvent(OWNER_TOKEN, community.id, {
+        type: 'WORKSHOP',
+      });
+
+      const updated = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/events/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(updatePayload({ name: 'Renamed Workshop' }))
+          .expect(200),
+      );
+
+      expect(updated.name).toBe('Renamed Workshop');
+      expect(updated.type).toBe('WORKSHOP');
+    });
+
+    it('ignores a `type` smuggled into the update body - the Event keeps its original type', async () => {
+      const community = await createCommunityWithMembers();
+      const created = await createEvent(OWNER_TOKEN, community.id, {
+        type: 'FESTIVAL',
+      });
+
+      const updated = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/events/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ ...updatePayload(), type: 'WORKSHOP' })
+          .expect(200),
+      );
+
+      expect(updated.type).toBe('FESTIVAL');
+    });
+
+    it('keeps type unchanged across multiple successive updates', async () => {
+      const community = await createCommunityWithMembers();
+      const created = await createEvent(OWNER_TOKEN, community.id, {
+        type: 'OPEN_RODA',
+      });
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/events/${created.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(updatePayload({ name: 'First rename' }))
+        .expect(200);
+
+      const secondUpdate = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/events/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(updatePayload({ name: 'Second rename' }))
+          .expect(200),
+      );
+
+      expect(secondUpdate.name).toBe('Second rename');
+      expect(secondUpdate.type).toBe('OPEN_RODA');
+
+      const fetched = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/events/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(fetched.type).toBe('OPEN_RODA');
+    });
+  });
+
   describe('roles (Owner / Organizer / Moderator)', () => {
     it('lets the Owner grant Organizer, and the Organizer grant Moderator, but not vice versa', async () => {
       const community = await createCommunityWithMembers();

@@ -429,7 +429,7 @@ describe('Career Timeline (e2e)', () => {
     overrides: Record<string, unknown> = {},
   ): Record<string, unknown> {
     return {
-      type: 'BATIZADO',
+      type: 'FESTIVAL',
       customTypeLabel: null,
       name: 'Career Timeline Test Event',
       description: 'A career-timeline e2e fixture event',

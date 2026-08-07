@@ -25,7 +25,6 @@ import { EventInvitationStatus } from './enums/event-invitation-status.enum';
 import { EventRole } from './enums/event-role.enum';
 import { EventRsvpStatus } from './enums/event-rsvp-status.enum';
 import { EventStatus } from './enums/event-status.enum';
-import { EventType } from './enums/event-type.enum';
 import { EventWaitlistPolicy } from './enums/event-waitlist-policy.enum';
 import { EventVisibility } from './enums/event-visibility.enum';
 import { EventRolesService } from './event-roles.service';
@@ -77,7 +76,13 @@ export class EventsService {
       assignEventCommunity(event, community);
       event.createdBy = actor;
       event.status = EventStatus.DRAFT;
-      this.applyFields(event, input);
+      // type/customTypeLabel are set here, on create, only - see
+      // applyCommonFields, which update() also calls but which
+      // structurally cannot touch either field (UpdateEventInput has no
+      // such keys - see update-event.schema.ts).
+      event.type = input.type;
+      event.customTypeLabel = input.customTypeLabel;
+      this.applyCommonFields(event, input);
       event.publicCode = await generateUniquePublicCode(em);
       await em.persist(event).flush();
 
@@ -105,7 +110,11 @@ export class EventsService {
         'communitySection',
       ]);
       assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
-      this.applyFields(event, input);
+      // UpdateEventInput structurally has no `type`/`customTypeLabel` keys
+      // (see update-event.schema.ts) - there is no line here, or anywhere
+      // else in this method, that could reassign event.type even by
+      // accident.
+      this.applyCommonFields(event, input);
       await em.flush();
 
       const roles = await this.eventRolesService.getRolesForUser(
@@ -414,20 +423,16 @@ export class EventsService {
   }
 
   /**
-   * The single soonest upcoming Event (any type) and the single soonest
-   * upcoming OPEN_TRAINING Event visible to `viewer`, both from `from`
-   * onward - backs GET /home (see HomeService), which needs exactly these
-   * two facts and nothing else.
+   * The single soonest upcoming Event (any type) visible to `viewer` from
+   * `from` onward - backs GET /home (see HomeService).
    *
-   * Still runs two Event queries: an OPEN_TRAINING Event cannot be safely
-   * read off a bounded "any type, limit 1" result (the very next OPEN_
-   * TRAINING Event is very often not the very next Event of any type, and
-   * a small bounded window could miss it entirely, silently under-
-   * reporting nearestTraining as null). What *is* shared, and unlike two
-   * independent listForViewer calls, only ever resolved once here, is the
-   * expensive, query-count-heavy part: which Groups/roles/invitations make
-   * an Event visible to this viewer at all (see resolveViewerVisibility) -
-   * identical for both queries since it never depends on `type`.
+   * `nearestTraining` is always `null`: EventType.OPEN_TRAINING was
+   * removed (see the EventType cleanup report) - a training is not an
+   * Event and will be resolved from a dedicated future training module
+   * instead (same "no dedicated training flag on Event" call already made
+   * in career-timeline-aggregation.service.ts and formal-rank.service.ts).
+   * The field stays in the return shape/HomeResponseDto so the /home
+   * response contract is unchanged until that module exists to back it.
    */
   async findNearestEventAndTraining(
     viewer: User,
@@ -443,8 +448,6 @@ export class EventsService {
     );
     const endsAtFrom = { $gte: new Date(from) };
 
-    // Sequential, not Promise.all - concurrent queries on the same
-    // EntityManager/connection race each other at the driver level.
     const [anyEvents] = await em.findAndCount(
       Event,
       { $and: visibilityAnd, endsAt: endsAtFrom },
@@ -454,21 +457,8 @@ export class EventsService {
         limit: 1,
       },
     );
-    const [trainingEvents] = await em.findAndCount(
-      Event,
-      {
-        $and: visibilityAnd,
-        endsAt: endsAtFrom,
-        type: EventType.OPEN_TRAINING,
-      },
-      {
-        populate: ['communityGroup', 'communitySection'],
-        orderBy: { startsAt: 'asc' },
-        limit: 1,
-      },
-    );
 
-    for (const event of [...anyEvents, ...trainingEvents]) {
+    for (const event of anyEvents) {
       await reconcileEventFinished(em, event);
     }
 
@@ -480,16 +470,8 @@ export class EventsService {
           rolesByEvent.get(anyEvents[0].id) ?? [],
         )
       : null;
-    const nearestTraining = trainingEvents[0]
-      ? await this.buildResponse(
-          em,
-          trainingEvents[0],
-          viewer,
-          rolesByEvent.get(trainingEvents[0].id) ?? [],
-        )
-      : null;
 
-    return { nearestEvent, nearestTraining };
+    return { nearestEvent, nearestTraining: null };
   }
 
   /**
@@ -605,9 +587,12 @@ export class EventsService {
     return { visibilityAnd, rolesByEvent };
   }
 
-  private applyFields(event: Event, input: CreateEventInput): void {
-    event.type = input.type;
-    event.customTypeLabel = input.customTypeLabel;
+  // Every field but `type`/`customTypeLabel` - shared by create() and
+  // update(). Takes UpdateEventInput (the narrower shape, lacking
+  // type/customTypeLabel) so update() can never pass those fields through
+  // even by accident; create() still satisfies this, since CreateEventInput
+  // is a structural superset of UpdateEventInput.
+  private applyCommonFields(event: Event, input: UpdateEventInput): void {
     event.name = input.name;
     event.description = input.description;
     event.coverImageUrl = input.coverImageUrl;

@@ -49,7 +49,7 @@ function buildEvent(
       isRootGroup: true,
     },
     createdByUserId: 'user-2',
-    type: EventType.RODA,
+    type: EventType.FESTIVAL,
     customTypeLabel: null,
     name: 'Roda',
     description: null,
@@ -172,10 +172,10 @@ describe('HomeService', () => {
   });
 
   it('returns nearestEvent/nearestTraining exactly as EventsService resolves them, and passes the caller through', async () => {
-    const event = buildEvent({ id: 'event-1', type: EventType.RODA });
+    const event = buildEvent({ id: 'event-1', type: EventType.WORKSHOP });
     const training = buildEvent({
       id: 'event-2',
-      type: EventType.OPEN_TRAINING,
+      type: EventType.OPEN_RODA,
     });
     const { service, findNearestEventAndTraining } = buildService({
       nearestEvent: event,
@@ -205,7 +205,7 @@ describe('HomeService', () => {
   it('the very next Event may equal the very next training - the two fields are never deduplicated', async () => {
     const training = buildEvent({
       id: 'event-1',
-      type: EventType.OPEN_TRAINING,
+      type: EventType.OPEN_RODA,
     });
     const { service } = buildService({
       nearestEvent: training,

@@ -5,9 +5,10 @@
  *  1. Unauthenticated request -> 401
  *  2. Brand new user -> greetingName derived from their email, every
  *     section in its documented empty state
- *  3. The soonest upcoming Event (any type) becomes nearestEvent; the
- *     soonest upcoming OPEN_TRAINING Event becomes nearestTraining, even
- *     when it is a later, different Event
+ *  3. The soonest upcoming Event (any type) becomes nearestEvent;
+ *     nearestTraining is always null - EventType.OPEN_TRAINING was removed
+ *     (see the EventType cleanup report), trainings are not Events, and
+ *     the field is reserved for a future dedicated training module
  *  4. continueLearning.toReview only ever contains TO_REVIEW rows
  *  5. announcements.items reuses AnnouncementsService's own visibility/
  *     sorting rule, capped at 3, with a correct cross-community
@@ -433,7 +434,7 @@ describe('Home (e2e)', () => {
   });
 
   describe('nearestEvent / nearestTraining', () => {
-    it('the soonest upcoming Event of any type becomes nearestEvent; the soonest upcoming OPEN_TRAINING becomes nearestTraining even when it is a later, different Event', async () => {
+    it('the soonest upcoming Event of any type becomes nearestEvent; nearestTraining is always null', async () => {
       const group = await createGroup(OWNER_TOKEN, {
         name: 'Home Events Org',
       });
@@ -449,9 +450,12 @@ describe('Home (e2e)', () => {
           endsAt: '2031-02-01T18:00:00.000Z',
         },
       );
-      const laterTraining = await createAndPublishEvent(OWNER_TOKEN, group.id, {
-        type: 'OPEN_TRAINING',
-        name: 'Later Training',
+      // OPEN_RODA, not OPEN_TRAINING (removed - trainings are not Events,
+      // see EventType cleanup report) - still must not surface as
+      // nearestTraining just because it is otherwise upcoming.
+      await createAndPublishEvent(OWNER_TOKEN, group.id, {
+        type: 'OPEN_RODA',
+        name: 'Later Roda',
         startsAt: '2031-03-01T10:00:00.000Z',
         endsAt: '2031-03-01T12:00:00.000Z',
       });
@@ -459,7 +463,7 @@ describe('Home (e2e)', () => {
       const home = await getHome(MEMBER_TOKEN);
 
       expect(home.nearestEvent?.id).toBe(soonerWorkshop.id);
-      expect(home.nearestTraining?.id).toBe(laterTraining.id);
+      expect(home.nearestTraining).toBeNull();
     });
   });
 

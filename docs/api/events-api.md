@@ -200,8 +200,8 @@ Body (JSON):
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `type` | enum (`BATIZADO`\|`WORKSHOP`\|`SEMINAR`\|`RODA`\|`SHOW`\|`TRIP`\|`MEETING`\|`OPEN_TRAINING`\|`CUSTOM`) | Yes | |
-| `customTypeLabel` | string (≤100 chars) or `null` | Required iff `type` is `CUSTOM`; forbidden otherwise | Free-text label for a custom event kind. |
+| `type` | enum (`FESTIVAL`\|`WORKSHOP`\|`OPEN_RODA`\|`OTHER`) | Yes | Immutable once the Event is created - never part of [Update Event](#4-update-event)'s body. |
+| `customTypeLabel` | string (≤100 chars) or `null` | Required iff `type` is `OTHER`; forbidden otherwise | Free-text label for a custom event kind. |
 | `name` | string (1-200 chars, trimmed) | Yes | |
 | `description` | string (≤5000 chars) or `null` | No | Plain text — no rich text. |
 | `coverImageUrl` | URL string (≤2048 chars) or `null` | No | |
@@ -348,15 +348,18 @@ independently addressable regardless of which Community it belongs to
 **HTTP Method:** `PATCH`
 **URL:** `/events/:eventId`
 
-**Description:** Full-replace update of every editable field (same shape
-as create). `status` is never part of this body — it only changes through
-publish/cancel/finish.
+**Description:** Full-replace update of every editable field *except*
+`type`/`customTypeLabel`, which are immutable once the Event is created and
+are structurally absent from this body (sending them has no effect - they
+are not part of the schema). `status` is also never part of this body — it
+only changes through publish/cancel/finish.
 
 **Required authorization:** Event role holder.
 
 **Required permissions:** `EVENT_EDIT`.
 
-**Request** Body: identical shape to [Create Event](#1-create-event)'s body.
+**Request** Body: identical shape to [Create Event](#1-create-event)'s body,
+minus `type` and `customTypeLabel`.
 
 **Response** — `200 OK`, body: [`EventResponseDto`](#eventresponsedto).
 

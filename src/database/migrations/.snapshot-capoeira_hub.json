@@ -3879,18 +3879,13 @@
           "length": null,
           "precision": null,
           "scale": null,
-          "default": "'CUSTOM'",
+          "default": "'OTHER'",
           "comment": null,
           "enumItems": [
-            "BATIZADO",
+            "FESTIVAL",
             "WORKSHOP",
-            "SEMINAR",
-            "RODA",
-            "SHOW",
-            "TRIP",
-            "MEETING",
-            "OPEN_TRAINING",
-            "CUSTOM"
+            "OPEN_RODA",
+            "OTHER"
           ],
           "mappedType": "enum"
         },
