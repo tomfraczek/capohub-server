@@ -5,6 +5,7 @@ import { User } from './entities/user.entity';
 import {
   toPublicUserProfileResponseDto,
   toUserProfileResponseDto,
+  toUserSearchResultDto,
 } from './user-profile.mapper';
 
 function buildUser(overrides: Partial<User> = {}): User {
@@ -222,5 +223,50 @@ describe('toPublicUserProfileResponseDto', () => {
     const dto = toPublicUserProfileResponseDto(buildUser(), baseCtx);
     expect(dto.sections).toBeNull();
     expect(dto.formalGroup).toBeNull();
+  });
+});
+
+describe('toUserSearchResultDto', () => {
+  it('never reuses User.displayName, even though it could contain a real name', () => {
+    const dto = toUserSearchResultDto(buildUser());
+    expect(dto.displayName).not.toBe('Ada Real Name');
+    expect(dto.displayName).toBe('ADA00001');
+  });
+
+  it('shows the full name only when showFullName is true and both parts are set', () => {
+    const user = buildUser({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      showFullName: true,
+    });
+    expect(toUserSearchResultDto(user).displayName).toBe('Ada Lovelace');
+
+    const hidden = buildUser({ firstName: 'Ada', lastName: 'Lovelace' });
+    expect(toUserSearchResultDto(hidden).displayName).not.toBe('Ada Lovelace');
+  });
+
+  it('falls back to apelido when full name is hidden but apelido is public', () => {
+    const user = buildUser({ apelido: 'Formiga', showApelido: true });
+    expect(toUserSearchResultDto(user).displayName).toBe('Formiga');
+  });
+
+  it('falls back to publicCode when both name and apelido are private', () => {
+    const user = buildUser({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      apelido: 'Formiga',
+    });
+    expect(toUserSearchResultDto(user).displayName).toBe('ADA00001');
+  });
+
+  it('always includes id and numericCode, and never private fields', () => {
+    const dto = toUserSearchResultDto(buildUser());
+    expect(dto.id).toBe('user-1');
+    expect(dto.numericCode).toBe('042981');
+    expect(Object.keys(dto).sort()).toEqual([
+      'displayName',
+      'id',
+      'numericCode',
+    ]);
   });
 });

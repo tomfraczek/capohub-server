@@ -4,8 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/postgresql';
+import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
+import { normalizeNumericCodeInput } from '../common/utils/numeric-code';
 import { Group } from '../groups/entities/group.entity';
 import { Section } from '../groups/entities/section.entity';
 import {
@@ -25,12 +26,16 @@ import { FormalGroupResponseDto } from './dto/formal-group-response.dto';
 import { PublicUserProfileResponseDto } from './dto/public-user-profile-response.dto';
 import { UpdateUserProfileInput } from './dto/update-user-profile.schema';
 import { UserProfileResponseDto } from './dto/user-profile-response.dto';
+import { UserSearchListResponseDto } from './dto/user-search-result.dto';
 import { User } from './entities/user.entity';
 import {
   toFormalGroupResponseDto,
   toPublicUserProfileResponseDto,
   toUserProfileResponseDto,
+  toUserSearchResultDto,
 } from './user-profile.mapper';
+
+const SEARCH_TEXT_MIN_LENGTH = 2;
 
 const ACTIVE_MEMBERSHIP_STATUSES = [
   SectionMembershipStatus.ACTIVE,
@@ -170,6 +175,65 @@ export class UserProfileService {
       sections,
       formalGroup,
     });
+  }
+
+  /**
+   * GET /users/search - a minimal, global (not Section-scoped) user picker,
+   * currently only needed to pick a Training's external trainer. Matches
+   * against exactly four public fields, each independently gated:
+   * numericCode (exact), publicCode (prefix), firstName/lastName (only when
+   * `showFullName` is true), apelido (only when `showApelido` is true).
+   * Deliberately uses the *plain* toggle values, not `canSeeFullName`'s
+   * Section-admin/Event-organizer exception above - this endpoint has no
+   * target/viewer relationship to extend that exception from. Never touches
+   * `User.displayName` (see resolveDisplayName's own comment). A single
+   * `em.findAndCount` - no fetch-all-then-filter-in-JS.
+   */
+  async searchUsers(
+    search: string,
+    limit: number,
+    offset: number,
+  ): Promise<UserSearchListResponseDto> {
+    const trimmed = search.trim();
+    const numericCode = normalizeNumericCodeInput(trimmed);
+
+    if (!numericCode && trimmed.length < SEARCH_TEXT_MIN_LENGTH) {
+      throw new BadRequestException({
+        code: 'SEARCH_TOO_SHORT',
+        message: `search must be at least ${SEARCH_TEXT_MIN_LENGTH} characters, or an exact numeric code`,
+      });
+    }
+
+    const orConditions: FilterQuery<User>[] = [];
+    if (numericCode) {
+      orConditions.push({ numericCode });
+    }
+    if (trimmed.length >= SEARCH_TEXT_MIN_LENGTH) {
+      orConditions.push({ publicCode: { $ilike: `${trimmed}%` } });
+      orConditions.push({
+        showFullName: true,
+        $or: [
+          { firstName: { $ilike: `%${trimmed}%` } },
+          { lastName: { $ilike: `%${trimmed}%` } },
+        ],
+      });
+      orConditions.push({
+        showApelido: true,
+        apelido: { $ilike: `%${trimmed}%` },
+      });
+    }
+
+    const [users, total] = await this.em.findAndCount(
+      User,
+      { $or: orConditions },
+      { limit, offset, orderBy: { numericCode: 'asc' } },
+    );
+
+    return {
+      items: users.map(toUserSearchResultDto),
+      total,
+      hasMore: offset + users.length < total,
+    };
   }
 
   /**

@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Put,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { normalizeNumericCodeInput } from '../common/utils/numeric-code';
@@ -24,6 +25,11 @@ import { PublicUserProfileResponseDto } from './dto/public-user-profile-response
 import { SetFormalGroupDto } from './dto/set-formal-group.schema';
 import { UpdateUserDto } from './dto/update-user.schema';
 import { UpdateUserProfileDto } from './dto/update-user-profile.schema';
+import {
+  userSearchQuerySchema,
+  UserSearchQueryDto,
+} from './dto/user-search-query.schema';
+import type { UserSearchListResponseDto } from './dto/user-search-result.dto';
 import type { UserProfileResponseDto } from './dto/user-profile-response.dto';
 import type { UserResponseDto } from './dto/user-response.dto';
 import { User } from './entities/user.entity';
@@ -163,6 +169,25 @@ export class UsersController {
       });
     }
     return this.userProfileService.getPublicProfile(viewer, target.id);
+  }
+
+  // No route-ordering hazard here (unlike "by-code" above) - "search" is a
+  // single static segment with no same-shape dynamic route in this
+  // controller to collide with. A neutral picker for Trainings'
+  // external-trainer flow (see UserProfileService.searchUsers) -
+  // deliberately lives on UsersController rather than in TrainingsModule,
+  // since TrainingsModule already validates any submitted trainerUserId
+  // independently and UsersModule must never import TrainingsModule back.
+  @Get('search')
+  search(
+    @Query(new ZodValidationPipe(userSearchQuerySchema))
+    query: UserSearchQueryDto,
+  ): Promise<UserSearchListResponseDto> {
+    return this.userProfileService.searchUsers(
+      query.search,
+      query.limit,
+      query.offset,
+    );
   }
 
   // Declared after every `me/*` route above - route-registration order

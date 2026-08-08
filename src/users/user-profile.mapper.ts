@@ -10,6 +10,7 @@ import {
   PublicSectionRefDto,
   PublicUserProfileResponseDto,
 } from './dto/public-user-profile-response.dto';
+import { UserSearchResultDto } from './dto/user-search-result.dto';
 import { User } from './entities/user.entity';
 import { Section } from '../groups/entities/section.entity';
 
@@ -121,8 +122,12 @@ export function toPublicUserProfileResponseDto(
 // (nothing stops a user from setting it to one), so reusing it here could
 // silently bypass showFullName=false. Falls through: full name (if
 // visible) -> apelido (if visible) -> the raw publicCode, with no
-// localized/templated wrapper text (that's a frontend concern).
-function resolveDisplayName(
+// localized/templated wrapper text (that's a frontend concern). Exported so
+// UserProfileService.searchUsers (GET /users/search) can reuse the exact
+// same fallback rule instead of re-deriving it - that caller passes plain
+// `target.showFullName`/`target.showApelido` as the two booleans, never the
+// Section-admin/Event-organizer-extended `canSeeFullName`.
+export function resolveDisplayName(
   target: User,
   fullNameKnown: boolean,
   apelidoKnown: boolean,
@@ -144,4 +149,23 @@ function toPublicFormalGroupRefDto(
   affiliation: FormalGroupAffiliation,
 ): PublicFormalGroupRefDto {
   return { id: affiliation.group.id, name: affiliation.group.name };
+}
+
+// GET /users/search result row - unconditional public visibility rules only
+// (no isOwner or Section-admin/Event-organizer exception, unlike
+// toPublicUserProfileResponseDto above), since the picker has no
+// target/viewer relationship yet. `numericCode` is always included - it's a
+// public identifier by design (see numeric-code.ts), not privacy-gated.
+export function toUserSearchResultDto(target: User): UserSearchResultDto {
+  const fullNameKnown =
+    target.showFullName &&
+    target.firstName !== null &&
+    target.lastName !== null;
+  const apelidoKnown = target.showApelido && target.apelido !== null;
+
+  return {
+    id: target.id,
+    displayName: resolveDisplayName(target, fullNameKnown, apelidoKnown),
+    numericCode: target.numericCode,
+  };
 }
