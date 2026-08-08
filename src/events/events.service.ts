@@ -528,6 +528,91 @@ export class EventsService {
   }
 
   /**
+   * Every Event `viewer` is actually associated with as a participant -
+   * they are the registered subject of an EventAttendee row (SELF, or a
+   * CHILD_ACCOUNT row where `viewer` is that child's own account - never a
+   * CHILD_DEPENDENT registered by someone else, which has no `subjectUser`
+   * to match) or they hold an EventRoleAssignment (Organizer/Moderator/
+   * Owner - they are running it, so it belongs on their calendar too).
+   * Deliberately NOT the same rule as listForViewer/resolveViewerVisibility
+   * above: those return every Event a Community membership merely lets
+   * `viewer` *see* (including PUBLIC Events they never registered for) -
+   * this is CalendarService's "my calendar" source, which must be narrower
+   * (see the Calendar module spec § User Calendar). No status filter -
+   * CANCELLED Events stay visible here too, same reasoning as Trainings.
+   */
+  async findForViewerInRange(
+    viewer: User,
+    from: string,
+    to: string,
+  ): Promise<EventResponseDto[]> {
+    const em = this.em;
+    // Sequential, not Promise.all - concurrent queries on the same
+    // EntityManager/connection race each other at the driver level.
+    const attendeeRows = await em.find(
+      EventAttendee,
+      { subjectUser: viewer.id },
+      { fields: ['event'] },
+    );
+    const roleRows = await em.find(
+      EventRoleAssignment,
+      { user: viewer.id },
+      { populate: ['event'] },
+    );
+    const eventIds = [
+      ...new Set([
+        ...attendeeRows.map((row) => row.event.id),
+        ...roleRows.map((row) => row.event.id),
+      ]),
+    ];
+    if (eventIds.length === 0) {
+      return [];
+    }
+
+    const rolesByEvent = new Map<string, EventRole[]>();
+    for (const assignment of roleRows) {
+      const list = rolesByEvent.get(assignment.event.id) ?? [];
+      list.push(assignment.role);
+      rolesByEvent.set(assignment.event.id, list);
+    }
+
+    const events = await em.find(
+      Event,
+      {
+        id: { $in: eventIds },
+        // Intersecting-range, not startsAt-only - see list()'s identical
+        // from/to shape; an Event spanning the range boundary must still
+        // be included.
+        startsAt: { $lt: new Date(to) },
+        endsAt: { $gt: new Date(from) },
+      },
+      {
+        populate: ['communityGroup', 'communitySection'],
+        orderBy: { startsAt: 'asc' },
+      },
+    );
+
+    for (const event of events) {
+      await reconcileEventFinished(em, event);
+    }
+
+    // Sequential, not Promise.all(events.map(...)) - see list()'s identical
+    // comment above.
+    const items: EventResponseDto[] = [];
+    for (const event of events) {
+      items.push(
+        await this.buildResponse(
+          em,
+          event,
+          viewer,
+          rolesByEvent.get(event.id) ?? [],
+        ),
+      );
+    }
+    return items;
+  }
+
+  /**
    * Resolves everything listForViewer/findNearestEventAndTraining need to
    * decide which Events `viewer` may see, independent of any `type`/`from`/
    * `to` query filter: their shared Groups (own Root Group plus every

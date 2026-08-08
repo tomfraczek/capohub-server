@@ -52,6 +52,7 @@ function buildEvent(
       name: 'Group',
       logoUrl: null,
       isRootGroup: true,
+      communityType: 'GROUP',
     },
     createdByUserId: 'user-2',
     type: EventType.FESTIVAL,

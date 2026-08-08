@@ -192,6 +192,51 @@ export class TrainingsService {
     return trainings[0] ? this.buildResponse(em, trainings[0], viewer) : null;
   }
 
+  /**
+   * Every Training belonging to any Section `viewer` currently has an
+   * active (ACTIVE/READ_ONLY) membership in, intersecting [from, to) -
+   * CalendarService's "my calendar" Training source (see the Calendar
+   * module spec § User Calendar). Mirrors list()'s own member rule exactly
+   * ("if (!isMember) where.visibility = PUBLIC" - i.e. a member sees every
+   * Training in their Section regardless of visibility or their own RSVP),
+   * just resolved across every one of `viewer`'s Sections at once instead
+   * of one Section at a time. No status filter - CANCELLED Trainings stay
+   * visible here too (module spec §9).
+   */
+  async findForViewerSectionsInRange(
+    viewer: User,
+    from: string,
+    to: string,
+  ): Promise<TrainingResponseDto[]> {
+    const em = this.em;
+    const sectionIds = await this.resolveActiveSectionIds(em, viewer.id);
+    if (sectionIds.size === 0) {
+      return [];
+    }
+
+    const trainings = await em.find(
+      Training,
+      {
+        section: { $in: [...sectionIds] },
+        // Intersecting-range, not startsAt-only - same shape as list().
+        startsAt: { $lt: new Date(to) },
+        endsAt: { $gt: new Date(from) },
+      },
+      {
+        populate: [...TRAINING_POPULATE],
+        orderBy: { startsAt: 'asc' },
+      },
+    );
+
+    // Sequential, not Promise.all(trainings.map(...)) - see list()'s
+    // identical comment above.
+    const items: TrainingResponseDto[] = [];
+    for (const training of trainings) {
+      items.push(await this.buildResponse(em, training, viewer));
+    }
+    return items;
+  }
+
   private async resolveActiveSectionIds(
     em: EntityManager,
     userId: string,

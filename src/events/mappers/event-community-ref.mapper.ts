@@ -13,5 +13,6 @@ export function toEventCommunityRefDto(
     // organizational-domain rebuild, stage 1: a Section is never "root"
     // regardless of whether it currently has a parent.
     isRootGroup: community instanceof Group && community.parentGroup === null,
+    communityType: community instanceof Group ? 'GROUP' : 'SECTION',
   };
 }
