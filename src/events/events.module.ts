@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { UserCheckInIdentityService } from '../common/identity/user-check-in-identity.service';
 import { GroupsModule } from '../groups/groups.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { EventAccessService } from './event-access.service';
 import { EventAttendanceController } from './event-attendance.controller';
 import { EventAttendanceService } from './event-attendance.service';
@@ -9,6 +10,7 @@ import { EventGuardiansService } from './event-guardians.service';
 import { EventHistoryService } from './event-history.service';
 import { EventInvitationsController } from './event-invitations.controller';
 import { EventInvitationsService } from './event-invitations.service';
+import { EventNotificationsService } from './event-notifications.service';
 import { EventRolesController } from './event-roles.controller';
 import { EventRolesService } from './event-roles.service';
 import { EventRsvpController } from './event-rsvp.controller';
@@ -31,7 +33,7 @@ import { EventPermissionService } from './permissions/event-permission.service';
 // never the reverse (ADR-024: Group Domain independence; Events is
 // explicitly out of scope for it).
 @Module({
-  imports: [GroupsModule],
+  imports: [GroupsModule, NotificationsModule],
   controllers: [
     EventsController,
     MyEventsController,
@@ -59,6 +61,7 @@ import { EventPermissionService } from './permissions/event-permission.service';
     EventInvitationsService,
     EventGuardiansService,
     EventAttendanceService,
+    EventNotificationsService,
     // Stateless (only needs EntityManager) - provided directly here rather
     // than via a shared module, since UsersModule already imports
     // EventsModule (see users.module.ts) and importing UsersModule back

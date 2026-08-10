@@ -17,8 +17,8 @@ import { Training } from './entities/training.entity';
 import { TrainingAttendance } from './entities/training-attendance.entity';
 import { TrainingRsvp } from './entities/training-rsvp.entity';
 import { TrainingSeries } from './entities/training-series.entity';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
 import { TrainingAccessService } from './training-access.service';
-import { TrainingNotificationType } from './enums/training-notification-type.enum';
 import { TrainingStatus } from './enums/training-status.enum';
 import { TrainingNotificationsService } from './training-notifications.service';
 import {
@@ -320,21 +320,21 @@ export class TrainingSeriesService {
         await this.trainingNotificationsService.notify(
           em,
           training,
-          TrainingNotificationType.TRAINING_TIME_CHANGED,
+          NotificationType.TRAINING_TIME_CHANGED,
         );
       }
       for (const training of notifyLocationChanged) {
         await this.trainingNotificationsService.notify(
           em,
           training,
-          TrainingNotificationType.TRAINING_LOCATION_CHANGED,
+          NotificationType.TRAINING_LOCATION_CHANGED,
         );
       }
       for (const training of notifyTrainerChanged) {
         await this.trainingNotificationsService.notify(
           em,
           training,
-          TrainingNotificationType.TRAINING_TRAINER_CHANGED,
+          NotificationType.TRAINING_TRAINER_CHANGED,
         );
       }
       const count = await em.count(Training, { series: series.id });
@@ -379,7 +379,7 @@ export class TrainingSeriesService {
         await this.trainingNotificationsService.notify(
           em,
           occurrence,
-          TrainingNotificationType.TRAINING_CANCELLED,
+          NotificationType.TRAINING_CANCELLED,
         );
       }
 

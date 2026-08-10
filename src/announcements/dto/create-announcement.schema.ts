@@ -24,6 +24,9 @@ export const createAnnouncementSchema = z.object({
   body: z.string().trim().min(1).max(BODY_MAX_LENGTH),
   recipientGroupId: uuidSchema.nullish().transform((value) => value ?? null),
   isPinned: z.boolean().default(false),
+  // Only OWNER/ADMIN can even reach this endpoint (ANNOUNCEMENT_MANAGE -
+  // see announcements.controller.ts), so no extra gating is needed here.
+  isImportant: z.boolean().default(false),
   expiresAt: isoDateTimeSchema.refine(
     (value) => new Date(value).getTime() > Date.now(),
     'expiresAt must be in the future',

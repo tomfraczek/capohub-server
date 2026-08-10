@@ -6,10 +6,18 @@ import {
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
+import { Group } from '../groups/entities/group.entity';
+import { Section } from '../groups/entities/section.entity';
+import { NotificationCategory } from '../notifications/enums/notification-category.enum';
+import { NotificationTargetType } from '../notifications/enums/notification-target-type.enum';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
+import { eventInvitationText } from '../notifications/notification-text.util';
+import { NotificationsService } from '../notifications/notifications.service';
 import { User } from '../users/entities/user.entity';
 import { CreateEventInvitationInput } from './dto/create-event-invitation.schema';
 import { EventInvitationResponseDto } from './dto/event-invitation-response.dto';
 import { EventAccessService } from './event-access.service';
+import { eventCommunity } from './event-community.util';
 import {
   EVENT_INVITATIONS_PENDING_EMAIL_IDX,
   EVENT_INVITATIONS_PENDING_USER_IDX,
@@ -27,6 +35,7 @@ export class EventInvitationsService {
   constructor(
     private readonly em: EntityManager,
     private readonly eventAccessService: EventAccessService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(
@@ -69,6 +78,28 @@ export class EventInvitationsService {
           });
         }
         throw error;
+      }
+
+      // Only a resolved User can be notified - an email-only invitee with
+      // no account yet has no inbox/device to notify (module spec: no
+      // email channel exists in this module).
+      if (invitedUser) {
+        const community = eventCommunity(event);
+        const { title, body } = eventInvitationText(event.name);
+        await this.notificationsService.createMany(em, [
+          {
+            recipient: invitedUser,
+            category: NotificationCategory.EVENT,
+            type: NotificationType.EVENT_INVITATION,
+            title,
+            body,
+            targetType: NotificationTargetType.EVENT,
+            targetId: event.id,
+            contextGroup: community instanceof Group ? community : null,
+            contextSection: community instanceof Section ? community : null,
+            actor,
+          },
+        ]);
       }
 
       return toEventInvitationResponseDto(invitation);

@@ -23,6 +23,7 @@ export interface AnnouncementResponseDto {
   // Only non-null when recipientType === RECIPIENT_GROUP.
   recipientGroupId: string | null;
   isPinned: boolean;
+  isImportant: boolean;
   // Computed from `expiresAt` at read time, never stored (task
   // requirement - no cron job just to flip a status column).
   isActive: boolean;

@@ -152,6 +152,7 @@ function buildAnnouncement(
     recipientType: AnnouncementRecipientType.GROUP,
     recipientGroupId: null,
     isPinned: false,
+    isImportant: false,
     isActive: true,
     expiresAt: '2026-09-01T00:00:00.000Z',
     publishedAt: '2026-07-01T00:00:00.000Z',

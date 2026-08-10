@@ -18,6 +18,7 @@ export const updateCommunityNotificationSettingsSchema = z
     archived: z.boolean().optional(),
     restored: z.boolean().optional(),
     communityDeleted: z.boolean().optional(),
+    muted: z.boolean().optional(),
   })
   .strict();
 

@@ -16,6 +16,7 @@ import { GroupHierarchyService } from '../groups/group-hierarchy.service';
 import { GroupPermission } from '../groups/permissions/group-permission.enum';
 import { GroupPermissionService } from '../groups/permissions/group-permission.service';
 import { RoleAssignmentsService } from '../groups/role-assignments.service';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
 import { User } from '../users/entities/user.entity';
 import { CancelEventInput } from './dto/cancel-event.schema';
 import { CreateEventInput } from './dto/create-event.schema';
@@ -40,6 +41,7 @@ import { EventStatus } from './enums/event-status.enum';
 import { EventType, isEventType } from './enums/event-type.enum';
 import { EventWaitlistPolicy } from './enums/event-waitlist-policy.enum';
 import { EventVisibility } from './enums/event-visibility.enum';
+import { EventNotificationsService } from './event-notifications.service';
 import { EventRolesService } from './event-roles.service';
 import {
   ADMIN_OPERATION_STATUSES,
@@ -69,6 +71,7 @@ export class EventsService {
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly groupPermissionService: GroupPermissionService,
     private readonly groupHierarchyService: GroupHierarchyService,
+    private readonly eventNotificationsService: EventNotificationsService,
   ) {}
 
   async create(
@@ -131,12 +134,38 @@ export class EventsService {
         'communitySection',
       ]);
       assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
+
+      const timeChanged =
+        event.startsAt.getTime() !== new Date(input.startsAt).getTime() ||
+        event.endsAt.getTime() !== new Date(input.endsAt).getTime();
+      const locationChanged =
+        event.locationName !== input.locationName ||
+        event.locationAddress !== input.locationAddress;
+
       // UpdateEventInput structurally has no `type`/`customTypeLabel` keys
       // (see update-event.schema.ts) - there is no line here, or anywhere
       // else in this method, that could reassign event.type even by
       // accident.
       this.applyCommonFields(event, input);
       await em.flush();
+
+      // Recipients are this Event's registered attendees only (module spec
+      // §24) - never a description-only edit, never check-in/RSVP/
+      // attendance (see EventNotificationsService's own comment).
+      if (timeChanged) {
+        await this.eventNotificationsService.notify(
+          em,
+          event,
+          NotificationType.EVENT_TIME_CHANGED,
+        );
+      }
+      if (locationChanged) {
+        await this.eventNotificationsService.notify(
+          em,
+          event,
+          NotificationType.EVENT_LOCATION_CHANGED,
+        );
+      }
 
       const roles = await this.eventRolesService.getRolesForUser(
         em,
@@ -188,6 +217,12 @@ export class EventsService {
         EventStatus.CANCELLED,
         actor,
         input.reason,
+      );
+
+      await this.eventNotificationsService.notify(
+        em,
+        event,
+        NotificationType.EVENT_CANCELLED,
       );
 
       const roles = await this.eventRolesService.getRolesForUser(

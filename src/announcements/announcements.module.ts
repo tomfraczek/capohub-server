@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { GroupsModule } from '../groups/groups.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { AnnouncementsController } from './announcements.controller';
 import { GlobalAnnouncementsController } from './global-announcements.controller';
 import { AnnouncementsService } from './announcements.service';
@@ -8,19 +9,13 @@ import { AnnouncementsService } from './announcements.service';
 // to reuse RoleAssignmentsService/RecipientGroupsService/GroupPermissionService
 // rather than duplicating community-membership, Recipient-Group-snapshot,
 // or archive-permission logic here. One-directional: GroupsModule never
-// imports this module back.
-//
-// No push-notification wiring here - a `sendPushNotification` checkbox
-// existed briefly, backed only by a placeholder port whose sole
-// implementation always reported 0 delivered. Since this codebase has no
-// device-token storage, no registration flow, and no provider SDK, that
-// checkbox was removed from the public API entirely rather than kept as a
-// button that looks functional but never delivers anything (see
-// AnnouncementsService's git history / the "Push" section of this
-// engagement's reports). Push will return once a real Notifications module
+// imports this module back. Imports NotificationsModule so publishing an
+// Announcement raises a central Notification for its resolved audience
+// (see AnnouncementsService.create) - the placeholder push checkbox this
+// comment used to describe is gone now that a real Notifications module
 // exists to back it.
 @Module({
-  imports: [GroupsModule],
+  imports: [GroupsModule, NotificationsModule],
   controllers: [AnnouncementsController, GlobalAnnouncementsController],
   providers: [AnnouncementsService],
   // Exported for HomeModule - HomeService aggregates the announcements

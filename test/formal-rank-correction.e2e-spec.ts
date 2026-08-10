@@ -64,9 +64,10 @@ import { GraduationSystem } from '../src/graduation/entities/graduation-system.e
 import { Rank } from '../src/graduation/entities/rank.entity';
 import { FormalRankAssignment } from '../src/graduation/entities/formal-rank-assignment.entity';
 import { FormalRankCorrectionRequest } from '../src/graduation/entities/formal-rank-correction-request.entity';
-import { FormalRankCorrectionNotification } from '../src/graduation/entities/formal-rank-correction-notification.entity';
+import { Notification } from '../src/notifications/entities/notification.entity';
+import { NotificationTargetType } from '../src/notifications/enums/notification-target-type.enum';
+import { NotificationType } from '../src/notifications/enums/notification-type.enum';
 import { FormalRankCorrectionStatus } from '../src/graduation/enums/formal-rank-correction-status.enum';
-import { FormalRankCorrectionNotificationType } from '../src/graduation/enums/formal-rank-correction-notification-type.enum';
 import { FormalRankCorrectionService } from '../src/graduation/formal-rank-correction.service';
 import { RankTrack } from '../src/graduation/enums/rank-track.enum';
 
@@ -197,7 +198,7 @@ describe('Formal Rank Correction (e2e)', () => {
   afterAll(async () => {
     await closeE2eApp(app, async () => {
       const cleanup = app.get(EntityManager).fork();
-      await cleanup.nativeDelete(FormalRankCorrectionNotification, {
+      await cleanup.nativeDelete(Notification, {
         recipient: { $in: [...localUserIdByToken.values()] },
       });
       await cleanup.nativeDelete(FormalRankCorrectionRequest, {
@@ -579,15 +580,16 @@ describe('Formal Rank Correction (e2e)', () => {
       )) as FormalRankCorrectionResponseDto;
 
       const em = app.get(EntityManager).fork();
-      const notifications = await em.find(FormalRankCorrectionNotification, {
-        correctionRequest: created.id,
+      const notifications = await em.find(Notification, {
+        targetType: NotificationTargetType.FORMAL_RANK_CORRECTION,
+        targetId: created.id,
       });
       expect(notifications).toHaveLength(1);
       expect(notifications[0].recipient.id).toBe(
         localUserIdByToken.get(TARGET_TOKEN),
       );
       expect(notifications[0].type).toBe(
-        FormalRankCorrectionNotificationType.FORMAL_RANK_CORRECTION_REQUESTED,
+        NotificationType.FORMAL_RANK_CORRECTION_REQUIRED,
       );
 
       const auditEntries = await em.find(AuditLogEntry, {
@@ -699,9 +701,10 @@ describe('Formal Rank Correction (e2e)', () => {
         .expect(201);
 
       const em = app.get(EntityManager).fork();
-      const notifications = await em.find(FormalRankCorrectionNotification, {
-        correctionRequest: created.id,
-        type: FormalRankCorrectionNotificationType.FORMAL_RANK_CORRECTION_SUBMITTED,
+      const notifications = await em.find(Notification, {
+        targetType: NotificationTargetType.FORMAL_RANK_CORRECTION,
+        targetId: created.id,
+        type: NotificationType.FORMAL_RANK_CORRECTION_SUBMITTED,
       });
       expect(notifications).toHaveLength(1);
       expect(notifications[0].recipient.id).toBe(

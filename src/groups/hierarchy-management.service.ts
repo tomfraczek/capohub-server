@@ -6,6 +6,15 @@ import {
 } from '@nestjs/common';
 import { EntityManager, LockMode } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
+import { NotificationCategory } from '../notifications/enums/notification-category.enum';
+import { NotificationTargetType } from '../notifications/enums/notification-target-type.enum';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
+import {
+  hierarchyInvitationAcceptedText,
+  hierarchyInvitationReceivedText,
+  hierarchyInvitationRejectedText,
+} from '../notifications/notification-text.util';
+import { NotificationsService } from '../notifications/notifications.service';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
 import { CreateHierarchyInvitationInput } from './dto/create-hierarchy-invitation.schema';
@@ -20,9 +29,15 @@ import {
   HIERARCHY_INVITATION_PENDING_UNIQUE_IDX,
   HierarchyInvitation,
 } from './entities/hierarchy-invitation.entity';
+import { RoleAssignment } from './entities/role-assignment.entity';
 import { Section } from './entities/section.entity';
+import { GroupRole } from './enums/group-role.enum';
 import { HierarchyInvitationStatus } from './enums/hierarchy-invitation-status.enum';
-import { Community, GroupHierarchyService } from './group-hierarchy.service';
+import {
+  Community,
+  communityIdFilter,
+  GroupHierarchyService,
+} from './group-hierarchy.service';
 import { GroupsService } from './groups.service';
 import {
   GroupPermissionService,
@@ -60,6 +75,7 @@ export class HierarchyManagementService {
     private readonly auditLogService: AuditLogService,
     private readonly groupsService: GroupsService,
     private readonly sectionsService: SectionsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ─── Reads: parent / children / breadcrumbs ──────────────────────────────
@@ -374,6 +390,16 @@ export class HierarchyManagementService {
       });
       await em.flush();
 
+      const target = (targetGroup ?? targetSection)!;
+      await this.notifyTargetOwner(
+        em,
+        target,
+        NotificationType.HIERARCHY_INVITATION_RECEIVED,
+        hierarchyInvitationReceivedText(),
+        invitation.id,
+        actor,
+      );
+
       return this.toInvitationResponseDto(invitation);
     });
   }
@@ -479,7 +505,12 @@ export class HierarchyManagementService {
         HierarchyInvitation,
         { id: invitationId },
         {
-          populate: ['parentGroup', 'targetGroup', 'targetSection'],
+          populate: [
+            'parentGroup',
+            'targetGroup',
+            'targetSection',
+            'invitedBy',
+          ],
           lockMode: LockMode.PESSIMISTIC_WRITE,
         },
       );
@@ -523,6 +554,21 @@ export class HierarchyManagementService {
         metadata: { targetId },
       });
       await em.flush();
+
+      // invitedBy is nullable (set null if that account was since deleted -
+      // see hierarchy-invitation.entity.ts) - nothing to notify then.
+      if (invitation.invitedBy) {
+        await this.notificationsService.createMany(em, [
+          this.buildHierarchyNotificationParams(
+            invitation.invitedBy,
+            NotificationType.HIERARCHY_INVITATION_ACCEPTED,
+            hierarchyInvitationAcceptedText(),
+            invitation.parentGroup,
+            invitation.id,
+            actor,
+          ),
+        ]);
+      }
     });
   }
 
@@ -539,7 +585,12 @@ export class HierarchyManagementService {
         HierarchyInvitation,
         { id: invitationId },
         {
-          populate: ['parentGroup', 'targetGroup', 'targetSection'],
+          populate: [
+            'parentGroup',
+            'targetGroup',
+            'targetSection',
+            'invitedBy',
+          ],
           lockMode: LockMode.PESSIMISTIC_WRITE,
         },
       );
@@ -566,10 +617,85 @@ export class HierarchyManagementService {
         metadata: { targetId },
       });
       await em.flush();
+
+      if (invitation.invitedBy) {
+        await this.notificationsService.createMany(em, [
+          this.buildHierarchyNotificationParams(
+            invitation.invitedBy,
+            NotificationType.HIERARCHY_INVITATION_REJECTED,
+            hierarchyInvitationRejectedText(),
+            invitation.parentGroup,
+            invitation.id,
+            actor,
+          ),
+        ]);
+      }
     });
   }
 
   // ─── Private helpers ──────────────────────────────────────────────────────
+
+  private buildHierarchyNotificationParams(
+    recipient: User,
+    type: NotificationType,
+    text: { title: string; body: string },
+    community: Community,
+    hierarchyInvitationId: string,
+    actor: User,
+  ): {
+    recipient: User;
+    category: NotificationCategory;
+    type: NotificationType;
+    title: string;
+    body: string;
+    targetType: NotificationTargetType;
+    targetId: string;
+    contextGroup: Group | null;
+    contextSection: Section | null;
+    actor: User;
+  } {
+    return {
+      recipient,
+      category: NotificationCategory.MEMBERSHIP,
+      type,
+      title: text.title,
+      body: text.body,
+      targetType: NotificationTargetType.HIERARCHY_INVITATION,
+      targetId: hierarchyInvitationId,
+      contextGroup: community instanceof Group ? community : null,
+      contextSection: community instanceof Section ? community : null,
+      actor,
+    };
+  }
+
+  /** Recipient: the target's current OWNER (module spec - the only one who can accept/reject it). */
+  private async notifyTargetOwner(
+    em: EntityManager,
+    target: Community,
+    type: NotificationType,
+    text: { title: string; body: string },
+    hierarchyInvitationId: string,
+    actor: User,
+  ): Promise<void> {
+    const ownerAssignment = await em.findOne(RoleAssignment, {
+      ...communityIdFilter(target.id),
+      role: GroupRole.OWNER,
+      revokedAt: null,
+    });
+    if (!ownerAssignment) {
+      return;
+    }
+    await this.notificationsService.createMany(em, [
+      this.buildHierarchyNotificationParams(
+        em.getReference(User, ownerAssignment.user.id),
+        type,
+        text,
+        target,
+        hierarchyInvitationId,
+        actor,
+      ),
+    ]);
+  }
 
   private toRef(community: Community): HierarchyEntityRefDto {
     return {

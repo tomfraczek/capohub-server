@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { UserCheckInIdentityService } from '../common/identity/user-check-in-identity.service';
 import { GroupsModule } from '../groups/groups.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { TrainingAccessService } from './training-access.service';
 import { TrainingAttendanceController } from './training-attendance.controller';
 import { TrainingAttendanceService } from './training-attendance.service';
@@ -22,7 +23,7 @@ import { TrainingsService } from './trainings.service';
 // than duplicating it - never the reverse (ADR-024: Group Domain
 // independence).
 @Module({
-  imports: [GroupsModule],
+  imports: [GroupsModule, NotificationsModule],
   controllers: [
     TrainingsController,
     TrainingSeriesController,

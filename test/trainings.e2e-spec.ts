@@ -38,7 +38,7 @@ import { TrainingSeriesResponseDto } from '../src/trainings/dto/training-series-
 import { TrainingRsvpResponseDto } from '../src/trainings/dto/training-rsvp-response.dto';
 import { Training } from '../src/trainings/entities/training.entity';
 import { TrainingAttendance } from '../src/trainings/entities/training-attendance.entity';
-import { TrainingNotification } from '../src/trainings/entities/training-notification.entity';
+import { Notification } from '../src/notifications/entities/notification.entity';
 import { TrainingRsvp } from '../src/trainings/entities/training-rsvp.entity';
 import { TrainingSeries } from '../src/trainings/entities/training-series.entity';
 import { TrainingStatus } from '../src/trainings/enums/training-status.enum';
@@ -197,8 +197,8 @@ describe('Trainings (e2e)', () => {
   afterAll(async () => {
     await closeE2eApp(app, async () => {
       const cleanup = app.get(EntityManager).fork();
-      await cleanup.nativeDelete(TrainingNotification, {
-        training: { section: { $in: createdGroupIds } },
+      await cleanup.nativeDelete(Notification, {
+        contextSection: { $in: createdGroupIds },
       });
       await cleanup.nativeDelete(TrainingAttendance, {
         training: { section: { $in: createdGroupIds } },

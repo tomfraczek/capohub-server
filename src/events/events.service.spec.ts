@@ -13,6 +13,7 @@ import { EventVisibility } from './enums/event-visibility.enum';
 import { EventWaitlistPolicy } from './enums/event-waitlist-policy.enum';
 import { EventRolesService } from './event-roles.service';
 import { eventCommunity } from './event-community.util';
+import { EventNotificationsService } from './event-notifications.service';
 import { EventsService } from './events.service';
 import { EventPermissionService } from './permissions/event-permission.service';
 import { CreateEventInput } from './dto/create-event.schema';
@@ -174,6 +175,10 @@ function buildService(
       ),
   } as unknown as GroupHierarchyService;
 
+  const eventNotificationsService = {
+    notify: jest.fn().mockResolvedValue(undefined),
+  } as unknown as EventNotificationsService;
+
   return new EventsService(
     em,
     eventAccessService,
@@ -182,6 +187,7 @@ function buildService(
     roleAssignmentsService,
     groupPermissionService,
     groupHierarchyService,
+    eventNotificationsService,
   );
 }
 

@@ -16,6 +16,7 @@ export const updateAnnouncementSchema = z.object({
   title: z.string().trim().min(1).max(TITLE_MAX_LENGTH),
   body: z.string().trim().min(1).max(BODY_MAX_LENGTH),
   isPinned: z.boolean(),
+  isImportant: z.boolean(),
   expiresAt: isoDateTimeSchema.refine(
     (value) => new Date(value).getTime() > Date.now(),
     'expiresAt must be in the future',

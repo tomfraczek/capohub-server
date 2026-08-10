@@ -2,39 +2,81 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { SectionMembership } from '../groups/entities/section-membership.entity';
 import { SectionMembershipStatus } from '../groups/enums/section-membership-status.enum';
+import { NotificationCategory } from '../notifications/enums/notification-category.enum';
+import { NotificationTargetType } from '../notifications/enums/notification-target-type.enum';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
+import {
+  trainingCancelledText,
+  trainingLocationChangedText,
+  trainingTimeChangedText,
+  trainingTrainerChangedText,
+} from '../notifications/notification-text.util';
+import {
+  CreateNotificationParams,
+  NotificationsService,
+} from '../notifications/notifications.service';
 import { User } from '../users/entities/user.entity';
-import { TrainingNotification } from './entities/training-notification.entity';
 import { Training } from './entities/training.entity';
 import { TrainingRsvp } from './entities/training-rsvp.entity';
-import { TrainingNotificationType } from './enums/training-notification-type.enum';
 import { TrainingRsvpStatus } from './enums/training-rsvp-status.enum';
 
 /**
- * Writes minimal in-app TrainingNotification rows for the users "related to"
- * one specific Training - its Section's active members plus anyone who has
- * RSVP'd YES/MAYBE (covers an external RSVP holder under allowExternalRsvp -
- * see the module spec §12: "Nie spamuj całej hierarchii Group"). Never
- * delivers a push/email - see training-notification.entity.ts.
+ * Raises a central Notification (see NotificationsService) for every user
+ * "related to" one specific Training - its Section's active members plus
+ * anyone who has RSVP'd YES/MAYBE (covers an external RSVP holder under
+ * allowExternalRsvp - module spec §12/§25: "Nie spamuj całej hierarchii
+ * Group", recipient semantics unchanged from before this module).
+ *
+ * This is the sole surviving descendant of the removed TrainingNotification
+ * table - the recipient-resolution logic is unchanged, only the sink it
+ * writes to (see this module's final report).
  */
 @Injectable()
 export class TrainingNotificationsService {
+  constructor(private readonly notificationsService: NotificationsService) {}
+
   async notify(
     em: EntityManager,
     training: Training,
-    type: TrainingNotificationType,
+    type: NotificationType,
   ): Promise<void> {
     const recipientIds = await this.resolveRecipientIds(em, training);
     if (recipientIds.size === 0) {
       return;
     }
-    for (const userId of recipientIds) {
-      const notification = new TrainingNotification();
-      notification.recipient = em.getReference(User, userId);
-      notification.training = training;
-      notification.type = type;
-      em.persist(notification);
+
+    const { title, body } = this.buildText(type, training);
+    const params: CreateNotificationParams[] = [...recipientIds].map(
+      (userId) => ({
+        recipient: em.getReference(User, userId),
+        category: NotificationCategory.TRAINING,
+        type,
+        title,
+        body,
+        targetType: NotificationTargetType.TRAINING,
+        targetId: training.id,
+        contextSection: training.section,
+      }),
+    );
+    await this.notificationsService.createMany(em, params);
+  }
+
+  private buildText(
+    type: NotificationType,
+    training: Training,
+  ): { title: string; body: string } {
+    switch (type) {
+      case NotificationType.TRAINING_CANCELLED:
+        return trainingCancelledText(null, training.startsAt);
+      case NotificationType.TRAINING_TIME_CHANGED:
+        return trainingTimeChangedText(training.startsAt);
+      case NotificationType.TRAINING_LOCATION_CHANGED:
+        return trainingLocationChangedText(training.locationName);
+      case NotificationType.TRAINING_TRAINER_CHANGED:
+        return trainingTrainerChangedText();
+      default:
+        throw new Error(`Unsupported training notification type: ${type}`);
     }
-    await em.flush();
   }
 
   private async resolveRecipientIds(

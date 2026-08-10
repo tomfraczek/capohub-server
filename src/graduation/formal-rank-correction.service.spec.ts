@@ -6,6 +6,7 @@ import {
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { Collection } from '@mikro-orm/core';
 import { AuditLogService } from '../groups/audit-log.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
 import { Group } from '../groups/entities/group.entity';
 import { RoleAssignment } from '../groups/entities/role-assignment.entity';
@@ -184,6 +185,12 @@ function buildAuditLogService(): AuditLogService {
   return { record: jest.fn() } as unknown as AuditLogService;
 }
 
+function buildNotificationsService(): NotificationsService {
+  return {
+    createMany: jest.fn().mockResolvedValue([]),
+  } as unknown as NotificationsService;
+}
+
 function buildRoleAssignmentsService(
   roles: Partial<Record<GroupRole, boolean>> = {},
 ): RoleAssignmentsService {
@@ -205,6 +212,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.request(
@@ -229,6 +237,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.request(
@@ -253,6 +262,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.request(
@@ -277,6 +287,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.request(
@@ -302,6 +313,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.request(
@@ -327,6 +339,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const result = await service.request(
@@ -351,6 +364,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.submit(buildUser('target-1'), {
@@ -379,6 +393,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.submit(buildUser('target-1'), {
@@ -404,6 +419,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.submit(buildUser('target-1'), {
@@ -431,6 +447,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const result = await service.submit(buildUser('target-1'), {
@@ -467,6 +484,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService({ [GroupRole.OWNER]: true }),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const result = await service.approve(
@@ -494,6 +512,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService({ [GroupRole.ADMIN]: true }),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const result = await service.approve('section-1', 'request-1', reporter);
@@ -511,6 +530,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService({ [GroupRole.ADMIN]: true }),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.approve(
@@ -535,6 +555,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.approve(
@@ -556,6 +577,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService({ [GroupRole.OWNER]: true }),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.approve(
@@ -581,6 +603,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService({ [GroupRole.OWNER]: true }),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.approve(
@@ -609,6 +632,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService({ [GroupRole.OWNER]: true }),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.approve(
@@ -641,6 +665,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService({ [GroupRole.OWNER]: true }),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.approve(
@@ -673,6 +698,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService({ [GroupRole.OWNER]: true }),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const result = await service.approve(
@@ -699,6 +725,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService({ [GroupRole.OWNER]: true }),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.reject(
@@ -726,6 +753,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService({ [GroupRole.OWNER]: true }),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const result = await service.reject(
@@ -751,6 +779,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService({ [GroupRole.ADMIN]: true }),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
 
       const promise = service.reject(
@@ -774,6 +803,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
       expect(await service.isPubliclyVisible('assignment-1')).toBe(false);
     });
@@ -788,6 +818,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
       expect(await service.isPubliclyVisible('assignment-1')).toBe(false);
     });
@@ -798,6 +829,7 @@ describe('FormalRankCorrectionService', () => {
         em,
         buildRoleAssignmentsService(),
         buildAuditLogService(),
+        buildNotificationsService(),
       );
       expect(await service.isPubliclyVisible('assignment-1')).toBe(true);
     });

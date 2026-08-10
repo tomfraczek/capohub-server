@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AnnouncementsModule } from './announcements/announcements.module';
 import { AuthModule } from './auth/auth.module';
 import { CalendarModule } from './calendar/calendar.module';
@@ -12,6 +13,7 @@ import { GroupsModule } from './groups/groups.module';
 import { HealthModule } from './health/health.module';
 import { HomeModule } from './home/home.module';
 import { InstrumentsModule } from './instruments/instruments.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { PlaylistsModule } from './playlists/playlists.module';
 import { RhythmsModule } from './rhythms/rhythms.module';
 import { SongLibraryModule } from './song-library/song-library.module';
@@ -22,6 +24,10 @@ import { UsersModule } from './users/users.module';
 @Module({
   imports: [
     ConfigModule,
+    // Powers NotificationReminderScheduler's single periodic job (module
+    // spec section 26/27) - the only @Cron in this codebase; registered
+    // once, globally, here.
+    ScheduleModule.forRoot(),
     DatabaseModule,
     AuthModule,
     UsersModule,
@@ -40,6 +46,7 @@ import { UsersModule } from './users/users.module';
     HealthModule,
     HomeModule,
     AnnouncementsModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

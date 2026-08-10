@@ -116,5 +116,6 @@ function toResponseDto(
     archived: settings?.archived ?? true,
     restored: settings?.restored ?? true,
     communityDeleted: settings?.communityDeleted ?? true,
+    muted: settings?.muted ?? false,
   };
 }

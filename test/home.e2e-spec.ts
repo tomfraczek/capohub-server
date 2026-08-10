@@ -49,7 +49,7 @@ import { EventResponseDto } from '../src/events/dto/event-response.dto';
 import { TrainingResponseDto } from '../src/trainings/dto/training-response.dto';
 import { Training } from '../src/trainings/entities/training.entity';
 import { TrainingAttendance } from '../src/trainings/entities/training-attendance.entity';
-import { TrainingNotification } from '../src/trainings/entities/training-notification.entity';
+import { Notification } from '../src/notifications/entities/notification.entity';
 import { TrainingRsvp } from '../src/trainings/entities/training-rsvp.entity';
 import { TrainingSeries } from '../src/trainings/entities/training-series.entity';
 import { TrainingVisibility } from '../src/trainings/enums/training-visibility.enum';
@@ -270,8 +270,11 @@ describe('Home (e2e)', () => {
         announcement: announcementCommunityInIds,
       });
       await cleanup.nativeDelete(Announcement, announcementCommunityInIds);
-      await cleanup.nativeDelete(TrainingNotification, {
-        training: { section: { $in: createdGroupIds } },
+      await cleanup.nativeDelete(Notification, {
+        $or: [
+          { contextGroup: { $in: createdGroupIds } },
+          { contextSection: { $in: createdGroupIds } },
+        ],
       });
       await cleanup.nativeDelete(TrainingAttendance, {
         training: { section: { $in: createdGroupIds } },

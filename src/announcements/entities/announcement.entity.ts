@@ -113,6 +113,18 @@ export class Announcement extends BaseEntity {
   @Property()
   isPinned: boolean = false;
 
+  // Drives NotificationType.IMPORTANT_ANNOUNCEMENT_PUBLISHED vs
+  // .ANNOUNCEMENT_PUBLISHED (see AnnouncementsService.create) - push is
+  // sent by default for an important Announcement regardless of the
+  // recipient's general pushCommunity preference would otherwise suggest,
+  // still subject to the master pushEnabled switch and device capability
+  // (see NotificationPushService). Settable only by whoever already holds
+  // ANNOUNCEMENT_MANAGE (OWNER/ADMIN - see group-role-permissions.map.ts),
+  // the same guard create()/update() already require - no separate
+  // permission was added for this field.
+  @Property()
+  isImportant: boolean = false;
+
   // Required, always in the future at creation (see
   // create-announcement.schema.ts) - pinning does not exempt an
   // Announcement from expiring (task requirement). Governs *only* natural

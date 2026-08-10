@@ -9,13 +9,26 @@ import { Section } from './section.entity';
 // this was always a per-member preference, never a per-role one, so
 // Group's ADMIN/OWNER simply have nothing here.
 //
-// This entity stores *preferences only* - whether and how notifications are
-// actually delivered (push, email, in-app) is a future Notifications
-// module's concern, entirely out of scope here (see PAD-001 exclusions).
-// A missing row for a (user, section) pair means "use the defaults"
-// (every toggle true) - CommunityNotificationSettingsService creates the
-// row lazily, only on the first explicit update, so simply viewing a
-// section never writes anything.
+// This entity stores *preferences only*. A missing row for a (user,
+// section) pair means "use the defaults" (every toggle true, `muted`
+// false) - CommunityNotificationSettingsService creates the row lazily,
+// only on the first explicit update, so simply viewing a section never
+// writes anything.
+//
+// `muted` (below) is the Notifications module's per-community push mute
+// (module spec § COMMUNITY-SPECIFIC MUTE): when true, NotificationPushService
+// suppresses push delivery for any Notification whose contextSection is
+// this Section, regardless of category or of the toggles below - but the
+// Notification itself is still always created, so the in-app inbox is
+// entirely unaffected (mute governs push only, never the inbox). Five of
+// the ten booleans below (newJoinRequests/joinRequestApproved/
+// newInvitations/invitationAccepted/invitationRejected) additionally each
+// gate one specific membership-workflow push (see NotificationPushService's
+// own MEMBERSHIP_TYPE_SETTINGS_FIELD mapping) - checked independently of
+// `muted`. The remaining five (roleChanges/transferOwnership/archived/
+// restored/communityDeleted) predate this module and are not yet consulted
+// by any delivery decision - no domain integration here raises a
+// notification for those events (see this module's final report).
 @Entity({ tableName: 'community_notification_settings' })
 @Unique({ properties: ['community', 'user'] })
 export class CommunityNotificationSettings extends BaseEntity {
@@ -62,4 +75,9 @@ export class CommunityNotificationSettings extends BaseEntity {
 
   @Property()
   communityDeleted: boolean = true;
+
+  // Broad per-community push mute - see the class comment above. Default
+  // false (not muted), independent of every field above.
+  @Property()
+  muted: boolean = false;
 }

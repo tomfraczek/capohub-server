@@ -37,6 +37,7 @@ export function toAnnouncementResponseDto(
     recipientType: announcement.recipientType,
     recipientGroupId: announcement.recipientGroup?.id ?? null,
     isPinned: announcement.isPinned,
+    isImportant: announcement.isImportant,
     isActive: isAnnouncementActive(announcement, now),
     expiresAt: announcement.expiresAt.toISOString(),
     publishedAt: announcement.createdAt.toISOString(),

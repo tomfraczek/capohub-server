@@ -2,12 +2,26 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
 import { GroupPermission } from '../groups/permissions/group-permission.enum';
 import { GroupPermissionService } from '../groups/permissions/group-permission.service';
+import { communityIdFilter } from '../groups/group-hierarchy.service';
 import { Group } from '../groups/entities/group.entity';
+import { RoleAssignment } from '../groups/entities/role-assignment.entity';
+import { Section } from '../groups/entities/section.entity';
 import { GroupHierarchyService } from '../groups/group-hierarchy.service';
 import { RecipientGroupsService } from '../groups/recipient-groups.service';
 import { RoleAssignmentsService } from '../groups/role-assignments.service';
+import { NotificationCategory } from '../notifications/enums/notification-category.enum';
+import { NotificationTargetType } from '../notifications/enums/notification-target-type.enum';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
+import { announcementPublishedText } from '../notifications/notification-text.util';
+import {
+  CreateNotificationParams,
+  NotificationsService,
+} from '../notifications/notifications.service';
 import { User } from '../users/entities/user.entity';
-import { assignAnnouncementCommunity } from './announcement-community.util';
+import {
+  announcementCommunity,
+  assignAnnouncementCommunity,
+} from './announcement-community.util';
 import { AnnouncementListQueryInput } from './dto/announcement-list-query.schema';
 import { AnnouncementResponseDto } from './dto/announcement-response.dto';
 import { CreateAnnouncementInput } from './dto/create-announcement.schema';
@@ -71,6 +85,7 @@ export class AnnouncementsService {
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly groupPermissionService: GroupPermissionService,
     private readonly groupHierarchyService: GroupHierarchyService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(
@@ -93,6 +108,7 @@ export class AnnouncementsService {
       created.title = input.title;
       created.body = input.body;
       created.isPinned = input.isPinned;
+      created.isImportant = input.isImportant;
       created.expiresAt = new Date(input.expiresAt);
 
       if (input.recipientGroupId) {
@@ -114,19 +130,32 @@ export class AnnouncementsService {
 
       await em.persist(created).flush();
 
+      let recipientUserIds: string[];
       if (input.recipientGroupId) {
-        const memberUserIds =
-          await this.recipientGroupsService.listMemberUserIds(
-            input.recipientGroupId,
-          );
-        for (const userId of memberUserIds) {
+        recipientUserIds = await this.recipientGroupsService.listMemberUserIds(
+          input.recipientGroupId,
+        );
+        for (const userId of recipientUserIds) {
           const snapshotRow = new AnnouncementRecipient();
           snapshotRow.announcement = created;
           snapshotRow.user = em.getReference(User, userId);
           em.persist(snapshotRow);
         }
         await em.flush();
+      } else {
+        // GROUP/SECTION type: the audience is every currently active Role
+        // holder for this exact community - the same population
+        // GroupPermissionsGuard/ANNOUNCEMENT_VIEW already lets read this
+        // Announcement (join always grants a MEMBER RoleAssignment - see
+        // MembershipRequestsService.fulfillJoin), so this needs no separate
+        // membership query.
+        recipientUserIds = await this.resolveCommunityRoleHolderIds(
+          em,
+          community.id,
+        );
       }
+
+      await this.notifyRecipients(em, created, recipientUserIds, author);
 
       return created;
     });
@@ -161,12 +190,14 @@ export class AnnouncementsService {
       announcement.title !== input.title ||
       announcement.body !== input.body ||
       announcement.isPinned !== input.isPinned ||
+      announcement.isImportant !== input.isImportant ||
       announcement.expiresAt.getTime() !== newExpiresAt.getTime();
 
     if (changed) {
       announcement.title = input.title;
       announcement.body = input.body;
       announcement.isPinned = input.isPinned;
+      announcement.isImportant = input.isImportant;
       announcement.expiresAt = newExpiresAt;
       announcement.editedAt = new Date();
       await this.em.flush();
@@ -671,6 +702,52 @@ export class AnnouncementsService {
       throw this.announcementNotFound();
     }
     return announcement;
+  }
+
+  private async resolveCommunityRoleHolderIds(
+    em: EntityManager,
+    communityId: string,
+  ): Promise<string[]> {
+    const assignments = await em.find(
+      RoleAssignment,
+      { ...communityIdFilter(communityId), revokedAt: null },
+      { fields: ['user'] },
+    );
+    return [...new Set(assignments.map((a) => a.user.id))];
+  }
+
+  private async notifyRecipients(
+    em: EntityManager,
+    announcement: Announcement,
+    recipientUserIds: string[],
+    author: User,
+  ): Promise<void> {
+    if (recipientUserIds.length === 0) {
+      return;
+    }
+    const type = announcement.isImportant
+      ? NotificationType.IMPORTANT_ANNOUNCEMENT_PUBLISHED
+      : NotificationType.ANNOUNCEMENT_PUBLISHED;
+    const { title, body } = announcementPublishedText(
+      announcement.title,
+      announcement.isImportant,
+    );
+    const community = announcementCommunity(announcement);
+    const params: CreateNotificationParams[] = recipientUserIds.map(
+      (userId) => ({
+        recipient: em.getReference(User, userId),
+        category: NotificationCategory.COMMUNITY,
+        type,
+        title,
+        body,
+        targetType: NotificationTargetType.ANNOUNCEMENT,
+        targetId: announcement.id,
+        contextGroup: community instanceof Group ? community : null,
+        contextSection: community instanceof Section ? community : null,
+        actor: author,
+      }),
+    );
+    await this.notificationsService.createMany(em, params);
   }
 
   private announcementNotFound(): NotFoundException {

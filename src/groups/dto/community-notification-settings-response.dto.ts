@@ -10,4 +10,5 @@ export interface CommunityNotificationSettingsResponseDto {
   archived: boolean;
   restored: boolean;
   communityDeleted: boolean;
+  muted: boolean;
 }

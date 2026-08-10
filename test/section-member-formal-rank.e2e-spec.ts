@@ -38,7 +38,7 @@ import { GraduationSystem } from '../src/graduation/entities/graduation-system.e
 import { Rank } from '../src/graduation/entities/rank.entity';
 import { FormalRankAssignment } from '../src/graduation/entities/formal-rank-assignment.entity';
 import { FormalRankCorrectionRequest } from '../src/graduation/entities/formal-rank-correction-request.entity';
-import { FormalRankCorrectionNotification } from '../src/graduation/entities/formal-rank-correction-notification.entity';
+import { Notification } from '../src/notifications/entities/notification.entity';
 import { FormalRankCorrectionStatus } from '../src/graduation/enums/formal-rank-correction-status.enum';
 import { RankTrack } from '../src/graduation/enums/rank-track.enum';
 
@@ -178,7 +178,7 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
   afterAll(async () => {
     await closeE2eApp(app, async () => {
       const cleanup = app.get(EntityManager).fork();
-      await cleanup.nativeDelete(FormalRankCorrectionNotification, {
+      await cleanup.nativeDelete(Notification, {
         recipient: { $in: [...localUserIdByToken.values()] },
       });
       await cleanup.nativeDelete(FormalRankCorrectionRequest, {

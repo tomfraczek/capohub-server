@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { EventsModule } from '../events/events.module';
 import { GroupsModule } from '../groups/groups.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { CustomUserRanksController } from './custom-user-ranks.controller';
 import { CustomUserRankService } from './custom-user-rank.service';
 import { FormalRankOptionsController } from './formal-rank-options.controller';
@@ -42,7 +43,7 @@ import { SectionMemberFormalRankController } from './section-member-formal-rank.
 // and /users/me/formal-rank-correction* all live here directly rather than
 // on UsersController.
 @Module({
-  imports: [GroupsModule, EventsModule],
+  imports: [GroupsModule, EventsModule, NotificationsModule],
   controllers: [
     GraduationSystemController,
     RanksController,

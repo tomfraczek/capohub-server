@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { AcademiesController } from './academies.controller';
 import { AcademiesService } from './academies.service';
 import { AuditLogController } from './audit-log.controller';
@@ -34,6 +35,7 @@ import { SectionsService } from './sections.service';
 // wired to auth/permissions/permissions.module.ts - see
 // group-role-permissions.map.ts.
 @Module({
+  imports: [NotificationsModule],
   controllers: [
     GroupsController,
     SectionsController,

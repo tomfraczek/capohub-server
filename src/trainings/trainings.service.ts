@@ -23,8 +23,8 @@ import { UpdateTrainingPlanNotesInput } from './dto/update-training-plan-notes.s
 import { Training } from './entities/training.entity';
 import { TrainingRsvp } from './entities/training-rsvp.entity';
 import { TrainingAccessService } from './training-access.service';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
 import { TrainingEditScope } from './enums/training-edit-scope.enum';
-import { TrainingNotificationType } from './enums/training-notification-type.enum';
 import { TrainingRsvpStatus } from './enums/training-rsvp-status.enum';
 import { TrainingStatus } from './enums/training-status.enum';
 import { TrainingVisibility } from './enums/training-visibility.enum';
@@ -486,7 +486,7 @@ export class TrainingsService {
           await this.trainingNotificationsService.notify(
             em,
             occurrence,
-            TrainingNotificationType.TRAINING_CANCELLED,
+            NotificationType.TRAINING_CANCELLED,
           );
         }
         return this.buildResponse(em, training, actor);
@@ -502,7 +502,7 @@ export class TrainingsService {
       await this.trainingNotificationsService.notify(
         em,
         training,
-        TrainingNotificationType.TRAINING_CANCELLED,
+        NotificationType.TRAINING_CANCELLED,
       );
       return this.buildResponse(em, training, actor);
     });
@@ -630,21 +630,21 @@ export class TrainingsService {
         await this.trainingNotificationsService.notify(
           em,
           training,
-          TrainingNotificationType.TRAINING_TIME_CHANGED,
+          NotificationType.TRAINING_TIME_CHANGED,
         );
       }
       if (changes.locationChanged) {
         await this.trainingNotificationsService.notify(
           em,
           training,
-          TrainingNotificationType.TRAINING_LOCATION_CHANGED,
+          NotificationType.TRAINING_LOCATION_CHANGED,
         );
       }
       if (changes.trainerChanged) {
         await this.trainingNotificationsService.notify(
           em,
           training,
-          TrainingNotificationType.TRAINING_TRAINER_CHANGED,
+          NotificationType.TRAINING_TRAINER_CHANGED,
         );
       }
     }

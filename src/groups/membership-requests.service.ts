@@ -8,12 +8,28 @@ import {
 import { LockMode } from '@mikro-orm/core';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
+import { NotificationCategory } from '../notifications/enums/notification-category.enum';
+import { NotificationTargetType } from '../notifications/enums/notification-target-type.enum';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
+import {
+  sectionInvitationAcceptedText,
+  sectionInvitationReceivedText,
+  sectionInvitationRejectedText,
+  sectionJoinRequestApprovedText,
+  sectionJoinRequestReceivedText,
+  sectionJoinRequestRejectedText,
+} from '../notifications/notification-text.util';
+import {
+  CreateNotificationParams,
+  NotificationsService,
+} from '../notifications/notifications.service';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
 import { CreateInvitationInput } from './dto/create-invitation.schema';
 import { MembershipRequestResponseDto } from './dto/membership-request-response.dto';
 import { AuditAction } from './enums/audit-action.enum';
 import { AuditTargetType } from './enums/audit-target-type.enum';
+import { RoleAssignment } from './entities/role-assignment.entity';
 import { SectionBan } from './entities/section-ban.entity';
 import { Section } from './entities/section.entity';
 import { SectionMembership } from './entities/section-membership.entity';
@@ -30,7 +46,7 @@ import { GroupStatus } from './enums/group-status.enum';
 import { MembershipRequestStatus } from './enums/membership-request-status.enum';
 import { MembershipRequestTarget } from './enums/membership-request-target.enum';
 import { MembershipRequestType } from './enums/membership-request-type.enum';
-import { Community } from './group-hierarchy.service';
+import { Community, communityIdFilter } from './group-hierarchy.service';
 import { loadActiveSectionMembership } from './section-membership.query';
 import { RoleAssignmentsService } from './role-assignments.service';
 
@@ -82,6 +98,7 @@ export class MembershipRequestsService {
     private readonly em: EntityManager,
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly auditLogService: AuditLogService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ─── JOIN (auto-join or join request based on isPublic) ──────────────────
@@ -160,6 +177,15 @@ export class MembershipRequestsService {
           metadata: { targetType, autoApproved: false },
         });
         await em.flush();
+
+        await this.notifySectionAdmins(
+          em,
+          targetSection,
+          NotificationType.SECTION_JOIN_REQUEST_RECEIVED,
+          sectionJoinRequestReceivedText(requestingUser.displayName),
+          request.id,
+          requestingUser,
+        );
 
         return toMembershipRequestResponseDto(request);
       }
@@ -346,6 +372,22 @@ export class MembershipRequestsService {
       });
       await em.flush();
 
+      // Only a resolved User can be notified (module spec: no email
+      // channel exists) - an email-only invitee with no account yet simply
+      // gets nothing here, same as every other User-only notification path.
+      if (invitedUser) {
+        await this.notificationsService.createMany(em, [
+          this.buildMembershipNotificationParams(
+            invitedUser,
+            NotificationType.SECTION_INVITATION_RECEIVED,
+            sectionInvitationReceivedText(),
+            targetSection,
+            request.id,
+            inviter,
+          ),
+        ]);
+      }
+
       return toMembershipRequestResponseDto(request);
     });
   }
@@ -523,6 +565,17 @@ export class MembershipRequestsService {
         acceptingUser,
       );
       await em.flush();
+
+      await this.notificationsService.createMany(em, [
+        this.buildMembershipNotificationParams(
+          request.initiatedBy,
+          NotificationType.SECTION_INVITATION_ACCEPTED,
+          sectionInvitationAcceptedText(acceptingUser.displayName),
+          target,
+          request.id,
+          acceptingUser,
+        ),
+      ]);
     });
   }
 
@@ -537,7 +590,14 @@ export class MembershipRequestsService {
       const request = await em.findOne(
         MembershipRequest,
         { id: requestId },
-        { populate: ['invitedUser', 'targetGroup', 'targetSection'] },
+        {
+          populate: [
+            'invitedUser',
+            'initiatedBy',
+            'targetGroup',
+            'targetSection',
+          ],
+        },
       );
       if (!request) throw this.requestNotFound();
 
@@ -570,6 +630,17 @@ export class MembershipRequestsService {
         rejectingUser,
       );
       await em.flush();
+
+      await this.notificationsService.createMany(em, [
+        this.buildMembershipNotificationParams(
+          request.initiatedBy,
+          NotificationType.SECTION_INVITATION_REJECTED,
+          sectionInvitationRejectedText(rejectingUser.displayName),
+          requestTarget(request),
+          request.id,
+          rejectingUser,
+        ),
+      ]);
     });
   }
 
@@ -616,6 +687,17 @@ export class MembershipRequestsService {
         actor,
       );
       await em.flush();
+
+      await this.notificationsService.createMany(em, [
+        this.buildMembershipNotificationParams(
+          request.initiatedBy,
+          NotificationType.SECTION_JOIN_REQUEST_APPROVED,
+          sectionJoinRequestApprovedText(),
+          target,
+          request.id,
+          actor,
+        ),
+      ]);
     });
   }
 
@@ -627,7 +709,7 @@ export class MembershipRequestsService {
       const request = await em.findOne(
         MembershipRequest,
         { id: requestId },
-        { populate: ['targetGroup', 'targetSection'] },
+        { populate: ['targetGroup', 'targetSection', 'initiatedBy'] },
       );
       if (!request) throw this.requestNotFound();
 
@@ -650,6 +732,17 @@ export class MembershipRequestsService {
         actor,
       );
       await em.flush();
+
+      await this.notificationsService.createMany(em, [
+        this.buildMembershipNotificationParams(
+          request.initiatedBy,
+          NotificationType.SECTION_JOIN_REQUEST_REJECTED,
+          sectionJoinRequestRejectedText(),
+          requestTarget(request),
+          request.id,
+          actor,
+        ),
+      ]);
     });
   }
 
@@ -883,6 +976,62 @@ export class MembershipRequestsService {
       targetType: AuditTargetType.MEMBERSHIP_REQUEST,
       targetId: request.id,
     });
+  }
+
+  private buildMembershipNotificationParams(
+    recipient: User,
+    type: NotificationType,
+    text: { title: string; body: string },
+    community: Community,
+    membershipRequestId: string,
+    actor: User,
+  ): CreateNotificationParams {
+    return {
+      recipient,
+      category: NotificationCategory.MEMBERSHIP,
+      type,
+      title: text.title,
+      body: text.body,
+      targetType: NotificationTargetType.MEMBERSHIP_REQUEST,
+      targetId: membershipRequestId,
+      contextSection: community instanceof Section ? community : null,
+      actor,
+    };
+  }
+
+  /**
+   * Recipients: every currently active ADMIN/OWNER of `section` (module
+   * spec: newJoinRequests is "admin-facing" - see
+   * CommunityNotificationSettings' own field comment).
+   */
+  private async notifySectionAdmins(
+    em: EntityManager,
+    section: Section,
+    type: NotificationType,
+    text: { title: string; body: string },
+    membershipRequestId: string,
+    actor: User,
+  ): Promise<void> {
+    const assignments = await em.find(RoleAssignment, {
+      ...communityIdFilter(section.id),
+      role: { $in: [GroupRole.ADMIN, GroupRole.OWNER] },
+      revokedAt: null,
+    });
+    const recipientIds = [...new Set(assignments.map((a) => a.user.id))];
+    if (recipientIds.length === 0) {
+      return;
+    }
+    const params = recipientIds.map((userId) =>
+      this.buildMembershipNotificationParams(
+        em.getReference(User, userId),
+        type,
+        text,
+        section,
+        membershipRequestId,
+        actor,
+      ),
+    );
+    await this.notificationsService.createMany(em, params);
   }
 
   /** Enforces that a MEMBER may only invite when memberInvitesAllowed=true. */

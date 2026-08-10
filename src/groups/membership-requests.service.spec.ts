@@ -29,6 +29,7 @@ import { MembershipRequestType } from './enums/membership-request-type.enum';
 import { AuditLogService } from './audit-log.service';
 import { MembershipRequestsService } from './membership-requests.service';
 import { RoleAssignmentsService } from './role-assignments.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // ─── Builders ────────────────────────────────────────────────────────────────
 
@@ -154,10 +155,15 @@ function buildService(em: EntityManager) {
     record: jest.fn().mockResolvedValue(undefined),
   } as unknown as AuditLogService;
 
+  const notificationsService = {
+    createMany: jest.fn().mockResolvedValue([]),
+  } as unknown as NotificationsService;
+
   const service = new MembershipRequestsService(
     em,
     roleAssignmentsService,
     auditLogService,
+    notificationsService,
   );
 
   return {

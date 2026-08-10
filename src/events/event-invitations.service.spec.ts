@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
+import { NotificationsService } from '../notifications/notifications.service';
 import { User } from '../users/entities/user.entity';
 import { EventAccessService } from './event-access.service';
 import { EventInvitation } from './entities/event-invitation.entity';
@@ -78,7 +79,15 @@ function buildService(em: EntityManager, event: Event = buildEvent()) {
     loadOrFail: jest.fn().mockResolvedValue(event),
   } as unknown as EventAccessService;
 
-  return new EventInvitationsService(em, eventAccessService);
+  const notificationsService = {
+    createMany: jest.fn().mockResolvedValue([]),
+  } as unknown as NotificationsService;
+
+  return new EventInvitationsService(
+    em,
+    eventAccessService,
+    notificationsService,
+  );
 }
 
 describe('EventInvitationsService', () => {

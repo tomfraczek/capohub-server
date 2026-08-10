@@ -297,7 +297,7 @@
       "checks": [
         {
           "name": "academies_group_or_section_check",
-          "columnName": "group_id",
+          "columnName": "section_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))))",
           "expression": "((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))"
         }
@@ -898,6 +898,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "is_important": {
+          "name": "is_important",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
         }
       },
       "name": "announcements",
@@ -1970,6 +1986,22 @@
           "precision": null,
           "scale": null,
           "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "muted": {
+          "name": "muted",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
           "comment": null,
           "enumItems": [],
           "mappedType": "boolean"
@@ -4953,7 +4985,7 @@
       "checks": [
         {
           "name": "formal_rank_assignments_ended_on_after_started_on_check",
-          "columnName": "ended_on",
+          "columnName": "started_on",
           "definition": "CHECK (((started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)))",
           "expression": "(started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)"
         }
@@ -5004,180 +5036,6 @@
           ],
           "constraintName": "formal_rank_assignments_user_id_foreign",
           "localTableName": "public.formal_rank_assignments",
-          "referencedTableName": "public.users",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        }
-      },
-      "nativeEnums": {},
-      "comment": null
-    },
-    {
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": true,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "recipient_id": {
-          "name": "recipient_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "type": {
-          "name": "type",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [
-            "FORMAL_RANK_CORRECTION_REQUESTED",
-            "FORMAL_RANK_CORRECTION_SUBMITTED",
-            "FORMAL_RANK_CORRECTION_APPROVED",
-            "FORMAL_RANK_CORRECTION_REJECTED"
-          ],
-          "mappedType": "enum"
-        },
-        "correction_request_id": {
-          "name": "correction_request_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        }
-      },
-      "name": "formal_rank_correction_notifications",
-      "schema": "public",
-      "indexes": [
-        {
-          "columnNames": [
-            "correction_request_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "formal_rank_correction_notifications_correction_re_7881c_index",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "created_at"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "formal_rank_correction_notifications_created_at_index",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "formal_rank_correction_notifications_pkey",
-          "unique": true,
-          "primary": true
-        },
-        {
-          "columnNames": [
-            "recipient_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "formal_rank_correction_notifications_recipient_id_index",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "type"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "formal_rank_correction_notifications_type_index",
-          "unique": false,
-          "primary": false
-        }
-      ],
-      "checks": [],
-      "foreignKeys": {
-        "formal_rank_correction_notifications_correction__86eef_foreign": {
-          "columnNames": [
-            "correction_request_id"
-          ],
-          "constraintName": "formal_rank_correction_notifications_correction__86eef_foreign",
-          "localTableName": "public.formal_rank_correction_notifications",
-          "referencedTableName": "public.formal_rank_correction_requests",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        },
-        "formal_rank_correction_notifications_recipient_id_foreign": {
-          "columnNames": [
-            "recipient_id"
-          ],
-          "constraintName": "formal_rank_correction_notifications_recipient_id_foreign",
-          "localTableName": "public.formal_rank_correction_notifications",
           "referencedTableName": "public.users",
           "referencedColumnNames": [
             "id"
@@ -7643,7 +7501,7 @@
       "checks": [
         {
           "name": "membership_requests_target_group_or_section_check",
-          "columnName": "target_group_id",
+          "columnName": "target_section_id",
           "definition": "CHECK ((((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))))",
           "expression": "((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))"
         }
@@ -7979,6 +7837,413 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
+        "recipient_id": {
+          "name": "recipient_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "COMMUNITY",
+            "TRAINING",
+            "EVENT",
+            "MEMBERSHIP",
+            "GRADUATION",
+            "PAYMENT",
+            "SYSTEM"
+          ],
+          "mappedType": "enum"
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "TRAINING_CANCELLED",
+            "TRAINING_TIME_CHANGED",
+            "TRAINING_LOCATION_CHANGED",
+            "TRAINING_TRAINER_CHANGED",
+            "TRAINING_REMINDER_24H",
+            "TRAINING_REMINDER_2H",
+            "EVENT_INVITATION",
+            "EVENT_CANCELLED",
+            "EVENT_TIME_CHANGED",
+            "EVENT_LOCATION_CHANGED",
+            "EVENT_REMINDER_24H",
+            "EVENT_REMINDER_2H",
+            "ANNOUNCEMENT_PUBLISHED",
+            "IMPORTANT_ANNOUNCEMENT_PUBLISHED",
+            "SECTION_JOIN_REQUEST_RECEIVED",
+            "SECTION_JOIN_REQUEST_APPROVED",
+            "SECTION_JOIN_REQUEST_REJECTED",
+            "SECTION_INVITATION_RECEIVED",
+            "SECTION_INVITATION_ACCEPTED",
+            "SECTION_INVITATION_REJECTED",
+            "HIERARCHY_INVITATION_RECEIVED",
+            "HIERARCHY_INVITATION_ACCEPTED",
+            "HIERARCHY_INVITATION_REJECTED",
+            "FORMAL_RANK_CORRECTION_REQUIRED",
+            "FORMAL_RANK_CORRECTION_SUBMITTED",
+            "FORMAL_RANK_CORRECTION_APPROVED",
+            "FORMAL_RANK_CORRECTION_REJECTED"
+          ],
+          "mappedType": "enum"
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(200)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 200,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "target_type": {
+          "name": "target_type",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "context_group_id": {
+          "name": "context_group_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "context_section_id": {
+          "name": "context_section_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "deduplication_key": {
+          "name": "deduplication_key",
+          "type": "varchar(200)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": true,
+          "length": 200,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "read_at": {
+          "name": "read_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "notifications",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "context_group_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "notifications_context_group_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "context_section_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "notifications_context_section_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "deduplication_key"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "notifications_deduplication_key_unique",
+          "unique": true,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "notifications_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "recipient_id",
+            "created_at"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "notifications_recipient_id_created_at_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "recipient_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "notifications_recipient_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "recipient_id",
+            "read_at"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "notifications_recipient_id_read_at_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "type"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "notifications_type_index",
+          "unique": false,
+          "primary": false
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "notifications_actor_id_foreign": {
+          "columnNames": [
+            "actor_id"
+          ],
+          "constraintName": "notifications_actor_id_foreign",
+          "localTableName": "public.notifications",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "notifications_context_group_id_foreign": {
+          "columnNames": [
+            "context_group_id"
+          ],
+          "constraintName": "notifications_context_group_id_foreign",
+          "localTableName": "public.notifications",
+          "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        },
+        "notifications_context_section_id_foreign": {
+          "columnNames": [
+            "context_section_id"
+          ],
+          "constraintName": "notifications_context_section_id_foreign",
+          "localTableName": "public.notifications",
+          "referencedTableName": "public.sections",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        },
+        "notifications_recipient_id_foreign": {
+          "columnNames": [
+            "recipient_id"
+          ],
+          "constraintName": "notifications_recipient_id_foreign",
+          "localTableName": "public.notifications",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamptz(6)",
@@ -8268,6 +8533,219 @@
           ],
           "constraintName": "playlists_owner_id_foreign",
           "localTableName": "public.playlists",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "expo_push_token": {
+          "name": "expo_push_token",
+          "type": "varchar(400)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": 400,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "platform": {
+          "name": "platform",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "IOS",
+            "ANDROID"
+          ],
+          "mappedType": "enum"
+        },
+        "installation_id": {
+          "name": "installation_id",
+          "type": "varchar(200)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 200,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "push_devices",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "expo_push_token"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "push_devices_expo_push_token_unique",
+          "unique": true,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "is_active"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "push_devices_is_active_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "push_devices_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "user_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "push_devices_user_id_index",
+          "unique": false,
+          "primary": false
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "push_devices_user_id_foreign": {
+          "columnNames": [
+            "user_id"
+          ],
+          "constraintName": "push_devices_user_id_foreign",
+          "localTableName": "public.push_devices",
           "referencedTableName": "public.users",
           "referencedColumnNames": [
             "id"
@@ -9658,7 +10136,7 @@
       "checks": [
         {
           "name": "rhythms_check",
-          "columnName": "tempo_max_bpm",
+          "columnName": "tempo_min_bpm",
           "definition": "CHECK (((tempo_min_bpm IS NULL) OR (tempo_max_bpm IS NULL) OR (tempo_min_bpm <= tempo_max_bpm)))",
           "expression": "(tempo_min_bpm IS NULL) OR (tempo_max_bpm IS NULL) OR (tempo_min_bpm <= tempo_max_bpm)"
         }
@@ -9923,13 +10401,13 @@
       "checks": [
         {
           "name": "role_assignments_group_or_section_check",
-          "columnName": "group_id",
+          "columnName": "section_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))))",
           "expression": "((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))"
         },
         {
           "name": "role_assignments_role_matches_target_check",
-          "columnName": "role",
+          "columnName": "section_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text))) OR ((section_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text) OR (role = 'INSTRUCTOR'::text) OR (role = 'ASSISTANT'::text) OR (role = 'MEMBER'::text)))))",
           "expression": "((group_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text))) OR ((section_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text) OR (role = 'INSTRUCTOR'::text) OR (role = 'ASSISTANT'::text) OR (role = 'MEMBER'::text)))"
         }
@@ -13400,161 +13878,6 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
-        "recipient_id": {
-          "name": "recipient_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "training_id": {
-          "name": "training_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "type": {
-          "name": "type",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [
-            "TRAINING_REMINDER",
-            "TRAINING_CANCELLED",
-            "TRAINING_TIME_CHANGED",
-            "TRAINING_LOCATION_CHANGED",
-            "TRAINING_TRAINER_CHANGED"
-          ],
-          "mappedType": "enum"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        }
-      },
-      "name": "training_notifications",
-      "schema": "public",
-      "indexes": [
-        {
-          "columnNames": [
-            "id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "training_notifications_pkey",
-          "unique": true,
-          "primary": true
-        },
-        {
-          "columnNames": [
-            "recipient_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "training_notifications_recipient_id_index",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "training_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "training_notifications_training_id_index",
-          "unique": false,
-          "primary": false
-        }
-      ],
-      "checks": [],
-      "foreignKeys": {
-        "training_notifications_recipient_id_foreign": {
-          "columnNames": [
-            "recipient_id"
-          ],
-          "constraintName": "training_notifications_recipient_id_foreign",
-          "localTableName": "public.training_notifications",
-          "referencedTableName": "public.users",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        },
-        "training_notifications_training_id_foreign": {
-          "columnNames": [
-            "training_id"
-          ],
-          "constraintName": "training_notifications_training_id_foreign",
-          "localTableName": "public.training_notifications",
-          "referencedTableName": "public.trainings",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        }
-      },
-      "nativeEnums": {},
-      "comment": null
-    },
-    {
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": true,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamptz(6)",
@@ -14584,6 +14907,292 @@
           ],
           "updateRule": "cascade",
           "deleteRule": "no action"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "push_enabled": {
+          "name": "push_enabled",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "push_community": {
+          "name": "push_community",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "push_training": {
+          "name": "push_training",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "push_event": {
+          "name": "push_event",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "push_membership": {
+          "name": "push_membership",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "push_graduation": {
+          "name": "push_graduation",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "push_payment": {
+          "name": "push_payment",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "training_reminder24h": {
+          "name": "training_reminder24h",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "training_reminder2h": {
+          "name": "training_reminder2h",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "event_reminder24h": {
+          "name": "event_reminder24h",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "event_reminder2h": {
+          "name": "event_reminder2h",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        }
+      },
+      "name": "user_notification_preferences",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "user_notification_preferences_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "user_id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "user_notification_preferences_user_id_unique",
+          "unique": true,
+          "primary": false
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "user_notification_preferences_user_id_foreign": {
+          "columnNames": [
+            "user_id"
+          ],
+          "constraintName": "user_notification_preferences_user_id_foreign",
+          "localTableName": "public.user_notification_preferences",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
         }
       },
       "nativeEnums": {},

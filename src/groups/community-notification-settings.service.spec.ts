@@ -96,6 +96,7 @@ describe('CommunityNotificationSettingsService', () => {
         archived: true,
         restored: true,
         communityDeleted: true,
+        muted: false,
       });
     });
 

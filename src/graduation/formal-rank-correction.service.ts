@@ -30,14 +30,25 @@ import {
   ACTIVE_FORMAL_RANK_CORRECTION_STATUSES,
   FormalRankCorrectionStatus,
 } from './enums/formal-rank-correction-status.enum';
-import { FormalRankCorrectionNotificationType } from './enums/formal-rank-correction-notification-type.enum';
 import { FormalRankAssignment } from './entities/formal-rank-assignment.entity';
 import {
   FORMAL_RANK_CORRECTION_REQUESTS_ACTIVE_UNIQUE_INDEX,
   FormalRankCorrectionRequest,
 } from './entities/formal-rank-correction-request.entity';
-import { FormalRankCorrectionNotification } from './entities/formal-rank-correction-notification.entity';
 import { Rank } from './entities/rank.entity';
+import { NotificationCategory } from '../notifications/enums/notification-category.enum';
+import { NotificationTargetType } from '../notifications/enums/notification-target-type.enum';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
+import {
+  formalRankCorrectionApprovedText,
+  formalRankCorrectionRejectedText,
+  formalRankCorrectionRequiredText,
+  formalRankCorrectionSubmittedText,
+} from '../notifications/notification-text.util';
+import {
+  CreateNotificationParams,
+  NotificationsService,
+} from '../notifications/notifications.service';
 import {
   toFormalRankCorrectionOwnResponseDto,
   toFormalRankCorrectionResponseDto,
@@ -76,6 +87,7 @@ export class FormalRankCorrectionService {
     private readonly em: EntityManager,
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly auditLogService: AuditLogService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ─── Section admin surface ────────────────────────────────────────────
@@ -181,7 +193,7 @@ export class FormalRankCorrectionService {
       await this.notify(
         em,
         [targetUser],
-        FormalRankCorrectionNotificationType.FORMAL_RANK_CORRECTION_REQUESTED,
+        NotificationType.FORMAL_RANK_CORRECTION_REQUIRED,
         request,
       );
 
@@ -470,7 +482,7 @@ export class FormalRankCorrectionService {
       await this.notify(
         em,
         [request.targetUser],
-        FormalRankCorrectionNotificationType.FORMAL_RANK_CORRECTION_APPROVED,
+        NotificationType.FORMAL_RANK_CORRECTION_APPROVED,
         request,
       );
 
@@ -539,7 +551,7 @@ export class FormalRankCorrectionService {
       await this.notify(
         em,
         [request.targetUser],
-        FormalRankCorrectionNotificationType.FORMAL_RANK_CORRECTION_REJECTED,
+        NotificationType.FORMAL_RANK_CORRECTION_REJECTED,
         request,
       );
 
@@ -669,7 +681,7 @@ export class FormalRankCorrectionService {
       await this.notify(
         em,
         recipients,
-        FormalRankCorrectionNotificationType.FORMAL_RANK_CORRECTION_SUBMITTED,
+        NotificationType.FORMAL_RANK_CORRECTION_SUBMITTED,
         request,
       );
 
@@ -824,30 +836,54 @@ export class FormalRankCorrectionService {
   }
 
   /**
-   * Persists one notification row per unique recipient - a purely
-   * server-side, queryable record (see FormalRankCorrectionNotification's
-   * own comment on why there is no push/email delivery). Deduplicates by
-   * user id so e.g. an OWNER who is also the reporter never gets two rows
-   * for the same event (see the module spec's SUBMITTED recipients rule).
+   * Raises one central Notification per unique recipient (see
+   * NotificationsService) - deduplicates by user id so e.g. an OWNER who is
+   * also the reporter never gets two rows for the same event (module spec's
+   * SUBMITTED recipients rule, unchanged from before this method wrote to
+   * the now-removed FormalRankCorrectionNotification table).
    */
   private async notify(
     em: EntityManager,
     recipients: User[],
-    type: FormalRankCorrectionNotificationType,
+    type: NotificationType,
     request: FormalRankCorrectionRequest,
   ): Promise<void> {
     const unique = this.dedupeUsers(recipients);
     if (unique.length === 0) {
       return;
     }
-    for (const recipient of unique) {
-      const notification = new FormalRankCorrectionNotification();
-      notification.recipient = recipient;
-      notification.type = type;
-      notification.correctionRequest = request;
-      em.persist(notification);
+    const { title, body } = this.buildNotificationText(type);
+    const params: CreateNotificationParams[] = unique.map((recipient) => ({
+      recipient,
+      category: NotificationCategory.GRADUATION,
+      type,
+      title,
+      body,
+      targetType: NotificationTargetType.FORMAL_RANK_CORRECTION,
+      targetId: request.id,
+      contextSection: request.section,
+    }));
+    await this.notificationsService.createMany(em, params);
+  }
+
+  private buildNotificationText(type: NotificationType): {
+    title: string;
+    body: string;
+  } {
+    switch (type) {
+      case NotificationType.FORMAL_RANK_CORRECTION_REQUIRED:
+        return formalRankCorrectionRequiredText();
+      case NotificationType.FORMAL_RANK_CORRECTION_SUBMITTED:
+        return formalRankCorrectionSubmittedText();
+      case NotificationType.FORMAL_RANK_CORRECTION_APPROVED:
+        return formalRankCorrectionApprovedText();
+      case NotificationType.FORMAL_RANK_CORRECTION_REJECTED:
+        return formalRankCorrectionRejectedText();
+      default:
+        throw new Error(
+          `Unsupported formal rank correction notification type: ${type}`,
+        );
     }
-    await em.flush();
   }
 
   private dedupeUsers(users: readonly User[]): User[] {
