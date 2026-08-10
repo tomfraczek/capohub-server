@@ -81,4 +81,13 @@ export enum AuditAction {
   UPDATE_TRAINING_SERIES = 'UPDATE_TRAINING_SERIES',
   CANCEL_TRAINING_SERIES = 'CANCEL_TRAINING_SERIES',
   RECORD_TRAINING_ATTENDANCE = 'RECORD_TRAINING_ATTENDANCE',
+
+  // Event attendance, recorded via the numericCode/QR check-in flow (see
+  // EventAttendanceService) - always logged under the Event's own exact
+  // Community (Group or Section, never a resolved root - see
+  // event-community.util.ts), same "no inheritance" rule as every other
+  // Community-scoped action here. Deliberately only logged on an actual
+  // attended-value change, never on an idempotent re-scan - see
+  // EventAttendanceService's own comment.
+  RECORD_EVENT_ATTENDANCE = 'RECORD_EVENT_ATTENDANCE',
 }

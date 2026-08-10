@@ -102,9 +102,9 @@ export class EventAttendee extends BaseEntity {
   // Deliberately flat fields, not a separate entity: each attendee has
   // exactly one current presence status, never a history of scans (spec:
   // "Każda osoba posiada własny status obecności"). A future payment-
-  // verification gate slots into EventCheckInService.checkIn() as an extra
-  // precondition before these fields are set - no schema change needed for
-  // that (see events-api.md "Check-in extensibility").
+  // verification gate slots into EventAttendanceService's write path as an
+  // extra precondition before these fields are set - no schema change
+  // needed for that (see events-api.md "Check-in extensibility").
   @Property()
   checkedIn: boolean = false;
 

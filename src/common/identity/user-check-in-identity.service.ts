@@ -1,0 +1,104 @@
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { EntityManager } from '@mikro-orm/postgresql';
+import { User } from '../../users/entities/user.entity';
+import { normalizeNumericCodeInput } from '../utils/numeric-code';
+import { parseQrPayload } from './qr-payload.util';
+
+// A User's own check-in "scan" method - QR mirrors an in-person scan,
+// MANUAL mirrors an organizer typing the code by hand. Reused verbatim as
+// Event.checkInMethod's own value (see event-check-in-method.enum.ts) -
+// deliberately the same two-value shape, not redefined.
+export type CheckInIdentityMethod = 'QR' | 'MANUAL';
+
+export interface ResolvedCheckInIdentity {
+  user: User;
+  method: CheckInIdentityMethod;
+}
+
+// The single place that turns a scanned/typed check-in input into a User -
+// reused, unmodified, by both Event and Training check-in (see the module
+// spec §3). Deliberately does NOT live in UsersModule: UsersModule already
+// imports EventsModule (see users.module.ts), so EventsModule/
+// TrainingsModule importing UsersModule back would be circular - this
+// service only needs EntityManager, so it is provided directly by each
+// module that needs it instead (no shared module wrapper needed for one
+// stateless class - see events.module.ts/trainings.module.ts).
+//
+// Accepts exactly two input shapes, matching the identity system's own
+// fundamental rule (numericCode and QR are two encodings of the same
+// identity - see the module spec §2):
+//  - a numeric code: "123456", "123-456", or the frontend's "U123-456"
+//    human-display form (a leading U is stripped before validating - the
+//    display prefix is a presentation convention, not part of the stored
+//    code),
+//  - a User QR payload: "capohub:v1:u:123456".
+// A well-formed Event QR payload (capohub:v1:<f|w|r|e>:...) is explicitly
+// rejected with WRONG_IDENTITY_TYPE, never silently ignored or
+// misinterpreted as a numeric code - see the module spec §3/§18. This
+// service only *identifies* the User; it never checks any check-in
+// permission or eligibility itself (that is each caller's own concern,
+// after resolving the User here - see EventAttendanceService/
+// TrainingAttendanceController).
+@Injectable()
+export class UserCheckInIdentityService {
+  constructor(private readonly em: EntityManager) {}
+
+  async resolve(
+    identity: string,
+    em: EntityManager = this.em,
+  ): Promise<ResolvedCheckInIdentity> {
+    const trimmed = identity.trim();
+
+    const qrPayload = parseQrPayload(trimmed);
+    if (qrPayload) {
+      if (qrPayload.entityType !== 'USER') {
+        throw new BadRequestException({
+          code: 'WRONG_IDENTITY_TYPE',
+          message: 'This QR code identifies an Event, not a User',
+        });
+      }
+      return {
+        user: await this.findUserByNumericCodeOrFail(em, qrPayload.numericCode),
+        method: 'QR',
+      };
+    }
+
+    // Strip an optional leading "U" (case-insensitive) - the frontend's
+    // human-display form of a User's numericCode (see
+    // common/utils/numeric-code.ts's own "123-456" display convention,
+    // which this simply extends with the "U" entity-kind letter also used
+    // for Event's own F/W/R/E human codes). A real numeric code can never
+    // itself start with "U", so stripping it unconditionally here is safe.
+    const withoutPrefix = /^u/i.test(trimmed) ? trimmed.slice(1) : trimmed;
+    const numericCode = normalizeNumericCodeInput(withoutPrefix);
+    if (!numericCode) {
+      throw new BadRequestException({
+        code: 'INVALID_CHECK_IN_IDENTITY',
+        message:
+          'identity must be a 6-digit numeric code or a valid User QR payload',
+      });
+    }
+    return {
+      user: await this.findUserByNumericCodeOrFail(em, numericCode),
+      method: 'MANUAL',
+    };
+  }
+
+  private async findUserByNumericCodeOrFail(
+    em: EntityManager,
+    numericCode: string,
+  ): Promise<User> {
+    const user = await em.findOne(User, { numericCode });
+    if (!user) {
+      throw new NotFoundException({
+        code: 'USER_NOT_FOUND',
+        message: 'No user matches this identity',
+      });
+    }
+    return user;
+  }
+}

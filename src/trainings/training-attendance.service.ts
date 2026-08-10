@@ -5,7 +5,11 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
+import { UserCheckInIdentityService } from '../common/identity/user-check-in-identity.service';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
+import { AuditLogService } from '../groups/audit-log.service';
+import { AuditAction } from '../groups/enums/audit-action.enum';
+import { AuditTargetType } from '../groups/enums/audit-target-type.enum';
 import { SectionMembership } from '../groups/entities/section-membership.entity';
 import { SectionMembershipStatus } from '../groups/enums/section-membership-status.enum';
 import { User } from '../users/entities/user.entity';
@@ -13,6 +17,7 @@ import { RecordTrainingAttendanceInput } from './dto/record-training-attendance.
 import {
   TrainingAttendanceResponseDto,
   TrainingAttendanceRosterEntryDto,
+  TrainingCheckInResultDto,
 } from './dto/training-attendance-response.dto';
 import { Training } from './entities/training.entity';
 import {
@@ -43,7 +48,68 @@ export class TrainingAttendanceService {
   constructor(
     private readonly em: EntityManager,
     private readonly trainingAccessService: TrainingAccessService,
+    private readonly userCheckInIdentityService: UserCheckInIdentityService,
+    private readonly auditLogService: AuditLogService,
   ) {}
+
+  /**
+   * POST trainings/:trainingId/check-in - resolves `identity` (numeric
+   * code or QR payload - see UserCheckInIdentityService) to a User, then
+   * reuses record() as-is for every existing rule (permission,
+   * cancelled/not-started guard, roster eligibility, race-safe upsert -
+   * module spec §11: "Nie duplikuj obecnej walidacji"). Idempotent: a
+   * re-scan of someone already marked present changes nothing and is never
+   * an error - `alreadyCheckedIn` on the response distinguishes it from a
+   * fresh check-in (mirrors EventAttendanceService.checkInByIdentity).
+   * Audit-logged only on an actual change, same reasoning as record()'s own
+   * comment about bulk roster edits not needing one-entry-per-row logging -
+   * a single scan is exactly one row, so this one entry *is* the whole
+   * action.
+   */
+  async checkInByIdentity(
+    trainingId: string,
+    identity: string,
+    actor: User,
+  ): Promise<TrainingCheckInResultDto> {
+    const em = this.em;
+    const resolved = await this.userCheckInIdentityService.resolve(
+      identity,
+      em,
+    );
+
+    const existing = await em.findOne(TrainingAttendance, {
+      training: trainingId,
+      user: resolved.user.id,
+    });
+    const alreadyCheckedIn = existing?.attended === true;
+
+    const attendance = await this.record(
+      trainingId,
+      resolved.user.id,
+      { attended: true },
+      actor,
+    );
+
+    if (!alreadyCheckedIn) {
+      const training = await this.loadTraining(em, trainingId);
+      this.auditLogService.record(em, {
+        community: training.section,
+        action: AuditAction.RECORD_TRAINING_ATTENDANCE,
+        actor,
+        targetType: AuditTargetType.USER,
+        targetId: resolved.user.id,
+        metadata: { trainingId, attended: true },
+      });
+      await em.flush();
+    }
+
+    return {
+      user: { id: resolved.user.id, displayName: resolved.user.displayName },
+      attended: true,
+      recordedAt: attendance.recordedAt,
+      alreadyCheckedIn,
+    };
+  }
 
   async record(
     trainingId: string,

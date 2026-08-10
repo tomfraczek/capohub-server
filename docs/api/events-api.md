@@ -111,9 +111,12 @@ convention `GROUP_NOT_FOUND` already follows.
 ## Identifiers
 
 Every id in this API is the entity's UUID `id`, except where a
-`publicCode` is explicitly documented (Event's own shareable code, and a
-User's personal check-in code — two different codes, never interchangeable,
-see [Check-in](#check-in)).
+`publicCode` is explicitly documented (Event's own shareable/discovery
+code — see [community-api.md](community-api.md)). Check-in identity is a
+separate system entirely: `User.numericCode`/QR, resolved via
+`UserCheckInIdentityService` — see
+[Check-in / Attendance](#check-in--attendance). `publicCode` is never used
+for check-in.
 
 ## Visibility
 
@@ -839,106 +842,144 @@ replacing it.
 
 ---
 
-## Check-in
+## Check-in / Attendance
 
-### 25. Identify by Check-in Code
+The sole check-in system — identity is always `User.numericCode`/QR
+(`capohub:v1:u:<numericCode>`), resolved through the same
+`UserCheckInIdentityService` Training check-in also uses. `publicCode` is
+never used for check-in. Attendance (the recorded fact of presence) lives
+directly on `EventAttendee` (`checkedIn`/`checkedInAt`/`checkedInBy`/
+`checkInMethod`) — a distinct fact from RSVP (declared intent); there is no
+separate `EventAttendance` table.
+
+**Tri-state per attendee:** `recordedAt == null` → never recorded;
+`recordedAt != null && attended == true` → present; `recordedAt != null &&
+attended == false` → explicitly marked absent.
+
+### 25. Identify Check-in Candidates
 
 **HTTP Method:** `POST`
-**URL:** `/events/:eventId/checkin/identify`
+**URL:** `/events/:eventId/attendance/identify`
 
-**Description:** Resolves a scanned/typed check-in code — always a
-User's own stable `publicCode` (see [Check-in](#check-in) below) — to that
-person's own registration for this Event (if any) and every child they are
-currently the active guardian for on this Event (spec: "Jeżeli użytkownik
-jest opiekunem dzieci na tym Evencie, backend zwraca również dzieci będące
-pod jego opieką"). This call alone does **not** mark anyone present — see
-[Mark Present](#26-mark-present).
+**Description:** Resolves a scanned/typed identity to a User, then reports
+their own registration for this Event (if any) **and** every child they
+are the *active* guardian for on this Event (see
+[`EventGuardianAssignment`](#eventguardianassignment)) — a guardian need
+not be a participant themselves. **Zero mutation** — `checkedIn`/
+`checkedInAt` are never touched by this call. The frontend uses the result
+to let the operator pick exactly who actually showed up, then calls
+[Record Attendance](#27-record-attendance-by-user) /
+[Record Attendance by Attendee](#28-record-attendance-by-attendee) per
+person.
 
-**Required permissions:** `EVENT_CHECKIN`.
+**Required permissions:** `EVENT_CHECKIN` (same level as actually
+recording attendance — identifying candidates is the same organizational
+action).
 
-**Request** Body: `{ "code": string }` (format `XXXX-XXXX`, same charset as `User.publicCode`).
+**Request** Body: `{ "identity": string }` — a numeric code (`"123456"`,
+`"123-456"`, or the display form `"U123-456"`) or a User QR payload
+(`"capohub:v1:u:123456"`).
 
-**Response** — `201 Created`, body: [`EventCheckInIdentifyResponseDto`](#eventcheckinidentifyresponsedto).
+**Response** — `201 Created`, body: `EventAttendanceIdentifyResponseDto`
+(`{ user, selfAttendee, childrenUnderGuardianship }` — see
+[DTO Reference](#eventattendanceidentifyresponsedto)).
 
 **Possible errors**
 
 | Status | Code | When |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | Code fails the `XXXX-XXXX` format check. |
+| 400 | `INVALID_CHECK_IN_IDENTITY` | Identity is neither a valid code nor a valid QR payload. |
+| 400 | `WRONG_IDENTITY_TYPE` | Identity is an Event QR payload, not a User one. |
 | 404 | `EVENT_NOT_FOUND` | — |
-| 404 | `CHECK_IN_CODE_NOT_FOUND` | No user has this code. |
+| 404 | `USER_NOT_FOUND` | No user matches a well-formed identity. |
+| 404 | `EVENT_ATTENDEE_NOT_FOUND` | The resolved User has no registration of their own *and* is guardian of nobody on this Event. |
 | 403 | `INSUFFICIENT_EVENT_PERMISSIONS` | — |
 | 409 | `EVENT_DRAFT` / `EVENT_CANCELLED` | Event is neither `PUBLISHED` nor `FINISHED`. |
+| 409 | `EVENT_NOT_STARTED` | Before `startsAt`. |
 
 ---
 
-### 26. Mark Present
+### 26. List Attendance Roster
 
-**HTTP Method:** `POST`
-**URL:** `/events/:eventId/checkin/:attendeeId`
+**HTTP Method:** `GET`
+**URL:** `/events/:eventId/attendance`
 
-**Description:** Marks one specific attendee (the scanned user themselves,
-or any child under their guardianship) present, by QR scan or manual
-selection.
+**Description:** Every `EventAttendee` for this Event with RSVP and
+attendance side by side. `attendeeId` on each row is required to address a
+`CHILD_DEPENDENT` (no `user.id`) via
+[Record Attendance by Attendee](#28-record-attendance-by-attendee).
+
+**Required permissions:** `EVENT_VIEW_MANAGEMENT`.
+
+**Response** — `200 OK`, body: `{ event: { id, name }, items: EventAttendanceEntryDto[] }`.
+
+**Possible errors:** `404 EVENT_NOT_FOUND`, `403 INSUFFICIENT_EVENT_PERMISSIONS`.
+
+---
+
+### 27. Record Attendance by User
+
+**HTTP Method:** `PUT`
+**URL:** `/events/:eventId/attendance/:userId`
+
+**Description:** Sets a specific User's own attendance explicitly (present
+or absent). Only ever the User's own `EventAttendee` — never a child.
 
 **Required permissions:** `EVENT_CHECKIN`.
 
-**Request** Body: `{ "method": "QR" | "MANUAL" }`.
+**Request** Body: `{ "attended": boolean }`.
 
-**Response** — `201 Created`, body: [`EventAttendeeResponseDto`](#eventattendeeresponsedto).
+**Response** — `200 OK`, body: `EventAttendanceEntryDto`.
 
-**Possible errors**
-
-| Status | Code | When |
-|---|---|---|
-| 400 | `VALIDATION_ERROR` | — |
-| 404 | `EVENT_NOT_FOUND` / `EVENT_ATTENDEE_NOT_FOUND` | — |
-| 403 | `INSUFFICIENT_EVENT_PERMISSIONS` | — |
-| 409 | `EVENT_DRAFT` / `EVENT_CANCELLED` | — |
-| 409 | `ATTENDEE_ALREADY_CHECKED_IN` | — |
+**Possible errors:** `404 EVENT_NOT_FOUND` / `EVENT_ATTENDEE_NOT_FOUND`, `403 INSUFFICIENT_EVENT_PERMISSIONS`, `409 EVENT_DRAFT` / `EVENT_CANCELLED` / `EVENT_NOT_STARTED`.
 
 ---
 
-### 27. Undo Check-in
+### 28. Record Attendance by Attendee
 
-**HTTP Method:** `POST`
-**URL:** `/events/:eventId/checkin/:attendeeId/undo`
+**HTTP Method:** `PUT`
+**URL:** `/events/:eventId/attendance/attendees/:attendeeId`
 
-**Description:** Corrects a mistaken check-in.
+**Description:** Same write as [#27](#27-record-attendance-by-user), but
+addressed by `EventAttendee.id` instead of `User.id` — the only way to
+record attendance for a `CHILD_DEPENDENT` attendee, which has no `User.id`
+of its own. Also works for any other attendee (`SELF`/`CHILD_ACCOUNT`).
 
 **Required permissions:** `EVENT_CHECKIN`.
 
-**Response** — `201 Created`, body: [`EventAttendeeResponseDto`](#eventattendeeresponsedto).
+**Request** Body: `{ "attended": boolean }`.
 
-**Possible errors:** `404 EVENT_NOT_FOUND` / `EVENT_ATTENDEE_NOT_FOUND`, `403 INSUFFICIENT_EVENT_PERMISSIONS`, `409 ATTENDEE_NOT_CHECKED_IN`.
+**Response** — `200 OK`, body: `EventAttendanceEntryDto`.
+
+**Possible errors:** `404 EVENT_NOT_FOUND` / `EVENT_ATTENDEE_NOT_FOUND`, `403 INSUFFICIENT_EVENT_PERMISSIONS`, `409 EVENT_DRAFT` / `EVENT_CANCELLED` / `EVENT_NOT_STARTED`.
 
 ---
 
-# Check-in
+### 29. Check-in
 
-Every app user has one stable, immutable, non-userId-revealing code —
-`User.publicCode` (see `GET /users/me` →
-[`UserResponseDto.publicCode`](community-api.md) — exposed specifically to
-support this feature). The frontend renders it as a QR code for display
-("my check-in code"); an Organizer/Moderator scans or types it via
-[Identify](#25-identify-by-check-in-code) to resolve it to a person (and
-their guarded children), then calls [Mark Present](#26-mark-present) for
-each specific person to check in.
+**HTTP Method:** `POST`
+**URL:** `/events/:eventId/check-in`
 
-The code itself grants no authority on its own — resolving it only works
-for a caller who already holds `EVENT_CHECKIN` for the specific Event being
-scanned at. It is not a secret, and (like Group/Event `publicCode`) must
-never be treated as an authorization token.
+**Description:** The fast path — resolves `identity` to a User, requires
+that User to already have their own `EventAttendee` (never auto-creates
+one), and marks **only that User** present. Never selects/checks in a
+child under their guardianship, even if they have none of their own — use
+[Identify](#25-identify-check-in-candidates) + attendee-based PUT for
+that. Idempotent: re-scanning someone already present changes nothing and
+is never an error — see `alreadyCheckedIn`.
 
-## Check-in extensibility
+**Required permissions:** `EVENT_CHECKIN`.
 
-`EventAttendee.checkedIn`/`checkedInAt`/`checkedInBy`/`checkInMethod` are
-plain fields with no other preconditions today. A future payment
-verification requirement slots in as an additional check inside
-`EventCheckInService.markPresent` (e.g. "reject check-in unless a Payment
-record for this attendee is marked paid") — no entity or migration change
-needed for that; the schema was deliberately kept this simple in
-anticipation of it.
+**Request** Body: `{ "identity": string }` (same shape as
+[Identify](#25-identify-check-in-candidates)).
+
+**Response** — `201 Created`, body: `EventCheckInResultDto`
+(`{ user, attended: true, recordedAt, alreadyCheckedIn }`).
+
+**Possible errors:** same table as [#25](#25-identify-check-in-candidates),
+plus `404 EVENT_ATTENDEE_NOT_FOUND` whenever the resolved User has no
+registration of their own (guardian-only identities are rejected here,
+not silently redirected to a child).
 
 ---
 
@@ -1099,13 +1140,37 @@ anticipation of it.
 | `reason` | string or `null` |
 | `createdAt` | ISO-8601 string |
 
-### EventCheckInIdentifyResponseDto
+### EventAttendanceEntryDto
+
+The slim attendance shape used by the roster, identify, and both
+attendance-mutation endpoints (§25-28) — deliberately never the full
+[`EventAttendeeResponseDto`](#eventattendeeresponsedto) (no RSVP/waitlist/
+check-in-device detail, no email/phone/clerkUserId).
 
 | Field | Type |
 |---|---|
-| `user` | `{ id: UUID, displayName: string }` |
-| `selfAttendee` | [`EventAttendeeResponseDto`](#eventattendeeresponsedto) or `null` |
-| `childrenUnderGuardianship` | `EventAttendeeResponseDto[]` |
+| `attendeeId` | UUID (`EventAttendee.id`) |
+| `user` | `{ id: UUID \| null, displayName: string }` — `id` is `null` only for a `CHILD_DEPENDENT` |
+| `rsvpStatus` | `EventRsvpStatus` |
+| `attended` | boolean |
+| `recordedAt` | ISO-8601 string or `null` — see the tri-state rule at the top of [Check-in / Attendance](#check-in--attendance) |
+
+### EventAttendanceIdentifyResponseDto
+
+| Field | Type |
+|---|---|
+| `user` | `{ id: UUID, displayName: string }` — whoever the scanned identity resolved to |
+| `selfAttendee` | [`EventAttendanceEntryDto`](#eventattendanceentrydto) or `null` |
+| `childrenUnderGuardianship` | `EventAttendanceEntryDto[]` |
+
+### EventCheckInResultDto
+
+| Field | Type |
+|---|---|
+| `user` | `{ id: UUID \| null, displayName: string }` |
+| `attended` | always `true` |
+| `recordedAt` | ISO-8601 string |
+| `alreadyCheckedIn` | boolean — `true` when this scan changed nothing (already present) |
 
 ## Request DTOs (bodies)
 

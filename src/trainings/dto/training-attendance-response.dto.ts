@@ -19,3 +19,15 @@ export interface TrainingAttendanceRosterEntryDto {
   rsvpStatus: TrainingRsvpStatus | null;
   attendance: TrainingAttendanceResponseDto | null;
 }
+
+// POST trainings/:trainingId/check-in response - same shape as Event's
+// EventCheckInResultDto (see events/dto/event-attendance.dto.ts), kept
+// consistent on purpose so both check-in flows read the same way to a
+// frontend. `alreadyCheckedIn` is true exactly when this scan changed
+// nothing (see TrainingAttendanceService.checkInByIdentity).
+export interface TrainingCheckInResultDto {
+  user: TrainingUserRefDto;
+  attended: true;
+  recordedAt: string;
+  alreadyCheckedIn: boolean;
+}

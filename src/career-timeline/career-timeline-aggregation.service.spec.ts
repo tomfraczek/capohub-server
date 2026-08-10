@@ -380,6 +380,110 @@ describe('CareerTimelineAggregationService', () => {
     });
   });
 
+  describe('EventAttendance integration (attended overrides RSVP)', () => {
+    it('includes the Event when attended=true, even though RSVP is NOT_GOING', async () => {
+      const user = buildUser();
+      const event = buildEvent();
+      const attendee = new EventAttendee();
+      attendee.event = event;
+      attendee.subjectUser = user;
+      attendee.rsvpStatus = EventRsvpStatus.NOT_GOING;
+      attendee.checkedIn = true;
+      attendee.checkedInAt = new Date('2024-01-01T18:05:00.000Z');
+
+      const em = buildMockEm({ attendees: [attendee] });
+      const service = new CareerTimelineAggregationService(
+        em,
+        buildMockCorrectionService().service,
+        buildMockEventAccessService(),
+      );
+
+      const result = await service.getTimeline(user, user.id, {
+        limit: 20,
+        offset: 0,
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].category).toBe(CareerTimelineCategory.EVENT);
+    });
+
+    it('excludes the Event when attended=false, even though RSVP is GOING', async () => {
+      const user = buildUser();
+      const event = buildEvent();
+      const attendee = new EventAttendee();
+      attendee.event = event;
+      attendee.subjectUser = user;
+      attendee.rsvpStatus = EventRsvpStatus.GOING;
+      attendee.checkedIn = false;
+      attendee.checkedInAt = new Date('2024-01-01T18:05:00.000Z');
+
+      const em = buildMockEm({ attendees: [attendee] });
+      const service = new CareerTimelineAggregationService(
+        em,
+        buildMockCorrectionService().service,
+        buildMockEventAccessService(),
+      );
+
+      const result = await service.getTimeline(user, user.id, {
+        limit: 20,
+        offset: 0,
+      });
+
+      expect(result.items).toHaveLength(0);
+    });
+
+    it('falls back to RSVP GOING when no attendance was ever recorded (checkedInAt null)', async () => {
+      const user = buildUser();
+      const event = buildEvent();
+      const attendee = new EventAttendee();
+      attendee.event = event;
+      attendee.subjectUser = user;
+      attendee.rsvpStatus = EventRsvpStatus.GOING;
+      attendee.checkedIn = false;
+      attendee.checkedInAt = null;
+
+      const em = buildMockEm({ attendees: [attendee] });
+      const service = new CareerTimelineAggregationService(
+        em,
+        buildMockCorrectionService().service,
+        buildMockEventAccessService(),
+      );
+
+      const result = await service.getTimeline(user, user.id, {
+        limit: 20,
+        offset: 0,
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].category).toBe(CareerTimelineCategory.EVENT);
+    });
+
+    it('excludes the Event via RSVP fallback when checkedInAt is null and RSVP is not GOING', async () => {
+      const user = buildUser();
+      const event = buildEvent();
+      const attendee = new EventAttendee();
+      attendee.event = event;
+      attendee.subjectUser = user;
+      attendee.rsvpStatus = EventRsvpStatus.MAYBE;
+      attendee.checkedIn = false;
+      attendee.checkedInAt = null;
+
+      const em = buildMockEm({ attendees: [attendee] });
+      const service = new CareerTimelineAggregationService(
+        em,
+        buildMockCorrectionService().service,
+        buildMockEventAccessService(),
+      );
+
+      const result = await service.getTimeline(user, user.id, {
+        limit: 20,
+        offset: 0,
+      });
+
+      expect(result.items).toHaveLength(0);
+    });
+  });
+
   describe('sorting and pagination', () => {
     it('sorts descending by occurredOn with a deterministic id tie-break, and paginates', async () => {
       const user = buildUser();

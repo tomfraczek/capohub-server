@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
+import { parseQrPayload } from '../common/identity/qr-payload.util';
 import {
   assignUniqueNumericCode,
   normalizeNumericCodeInput,
@@ -260,6 +261,30 @@ export class EventsService {
       ['communityGroup', 'communitySection', 'createdBy'],
     );
     return this.getVisibleEventResponse(em, event, viewer);
+  }
+
+  /**
+   * Resolves a scanned Event QR payload ("capohub:v1:<f|w|r|e>:123456" -
+   * see common/identity/qr-payload.util.ts) to its EventResponseDto - the
+   * backend half of "scan Event QR -> open Event Details" (module spec
+   * §14). A pure read: parses, then delegates straight to getByTypeAndCode
+   * so the exact same visibility rule applies as every other Event lookup
+   * path - never a check-in, never a mutation. Rejects a User QR payload
+   * (or anything unparseable) with a 400, the same "wrong identity type"
+   * shape UserCheckInIdentityService uses for the mirror-image case.
+   */
+  async getByQrPayload(
+    payload: string,
+    viewer: User,
+  ): Promise<EventResponseDto> {
+    const parsed = parseQrPayload(payload);
+    if (!parsed || parsed.entityType !== 'EVENT') {
+      throw new BadRequestException({
+        code: 'INVALID_EVENT_QR_PAYLOAD',
+        message: 'This is not a valid Event QR payload',
+      });
+    }
+    return this.getByTypeAndCode(parsed.eventType, parsed.numericCode, viewer);
   }
 
   private async getVisibleEventResponse(

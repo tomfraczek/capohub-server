@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { UserCheckInIdentityService } from '../common/identity/user-check-in-identity.service';
 import { GroupsModule } from '../groups/groups.module';
 import { TrainingAccessService } from './training-access.service';
 import { TrainingAttendanceController } from './training-attendance.controller';
@@ -37,6 +38,12 @@ import { TrainingsService } from './trainings.service';
     TrainingAttendanceService,
     TrainingStatsService,
     TrainingNotificationsService,
+    // Stateless (only needs EntityManager) - see EventsModule's identical
+    // comment on why this is provided directly here rather than via
+    // UsersModule (which already imports EventsModule, so a shared
+    // module both Events and Trainings depend on would still risk
+    // circularity the moment UsersModule needs Trainings too).
+    UserCheckInIdentityService,
   ],
   // TrainingsService is exported for HomeModule, which reuses
   // findNearestForViewer as-is (same viewer-scoped visibility rule GET

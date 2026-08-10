@@ -154,15 +154,28 @@ export class CareerTimelineAggregationService {
     ) {
       const attendeeRows = await this.em.find(
         EventAttendee,
-        {
-          subjectUser: target.id,
-          rsvpStatus: { $in: PARTICIPATING_RSVP_STATUSES },
-        },
+        { subjectUser: target.id },
         { populate: ['event.communityGroup', 'event.communitySection'] },
       );
       for (const attendee of attendeeRows) {
         const event = attendee.event;
         if (linkedEventIds.has(event.id)) {
+          continue;
+        }
+        // Actual recorded attendance (EventAttendee.checkedIn - see the
+        // Event Attendance module spec §16) is a better source of truth
+        // than RSVP once it exists: `checkedInAt !== null` means a real
+        // decision was recorded (present or explicitly absent - see
+        // EventAttendanceService.applyAttendance), which then fully
+        // decides inclusion, RSVP or not. Only falls back to RSVP GOING
+        // when no attendance was ever recorded, so Events that predate
+        // this feature (or were simply never checked) keep working exactly
+        // as before - no backfill required.
+        if (attendee.checkedInAt !== null) {
+          if (!attendee.checkedIn) {
+            continue;
+          }
+        } else if (!PARTICIPATING_RSVP_STATUSES.includes(attendee.rsvpStatus)) {
           continue;
         }
         // Judgment call (no dedicated "training" flag exists on Event, see

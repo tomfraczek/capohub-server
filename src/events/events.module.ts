@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
+import { UserCheckInIdentityService } from '../common/identity/user-check-in-identity.service';
 import { GroupsModule } from '../groups/groups.module';
 import { EventAccessService } from './event-access.service';
-import { EventCheckInController } from './event-checkin.controller';
-import { EventCheckInService } from './event-checkin.service';
+import { EventAttendanceController } from './event-attendance.controller';
+import { EventAttendanceService } from './event-attendance.service';
 import { EventGuardiansController } from './event-guardians.controller';
 import { EventGuardiansService } from './event-guardians.service';
 import { EventHistoryService } from './event-history.service';
@@ -34,13 +35,21 @@ import { EventPermissionService } from './permissions/event-permission.service';
   controllers: [
     EventsController,
     MyEventsController,
-    EventController,
+    // Declared before EventController - EventController's bare @Get() at
+    // `events/:eventId` is a 2-segment route, the same shape as this
+    // controller's `events/by-qr` (unlike `events/by-code/:type/:code`,
+    // which is 3 segments and never collides regardless of order). Nest
+    // matches route-registration order for equally-shaped routes, so
+    // EventLookupController must be registered first or `by-qr` gets
+    // swallowed by `:eventId` (failing ParseUUIDPipe with a misleading
+    // "uuid is expected" 400 instead of ever reaching getByQrPayload).
     EventLookupController,
+    EventController,
     EventRolesController,
     EventInvitationsController,
     EventRsvpController,
     EventGuardiansController,
-    EventCheckInController,
+    EventAttendanceController,
   ],
   providers: [
     EventAccessService,
@@ -49,7 +58,13 @@ import { EventPermissionService } from './permissions/event-permission.service';
     EventRsvpService,
     EventInvitationsService,
     EventGuardiansService,
-    EventCheckInService,
+    EventAttendanceService,
+    // Stateless (only needs EntityManager) - provided directly here rather
+    // than via a shared module, since UsersModule already imports
+    // EventsModule (see users.module.ts) and importing UsersModule back
+    // here would be circular (see user-check-in-identity.service.ts's own
+    // comment). TrainingsModule provides its own instance the same way.
+    UserCheckInIdentityService,
     EventHistoryService,
     EventPermissionService,
     EventPermissionsGuard,

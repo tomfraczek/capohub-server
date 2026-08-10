@@ -1,4 +1,10 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 import { EventResponseDto } from './dto/event-response.dto';
@@ -20,5 +26,24 @@ export class EventLookupController {
     @CurrentUser() viewer: User,
   ): Promise<EventResponseDto> {
     return this.eventsService.getByTypeAndCode(type, code, viewer);
+  }
+
+  // "Scan Event QR -> open Event Details" (module spec §14) - a query
+  // param, not a path segment, since a raw QR payload contains colons
+  // ("capohub:v1:f:123456"). Declared before nothing dynamic could shadow
+  // it (this controller has no other `by-*` route shaped like a single
+  // segment), so no route-ordering concern here.
+  @Get('by-qr')
+  getByQrPayload(
+    @Query('payload') payload: string | undefined,
+    @CurrentUser() viewer: User,
+  ): Promise<EventResponseDto> {
+    if (!payload) {
+      throw new BadRequestException({
+        code: 'MISSING_QR_PAYLOAD',
+        message: 'payload query parameter is required',
+      });
+    }
+    return this.eventsService.getByQrPayload(payload, viewer);
   }
 }

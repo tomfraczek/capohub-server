@@ -482,4 +482,108 @@ describe('Event Identity (e2e)', () => {
         .expect(401);
     });
   });
+
+  describe('GET /events/by-qr (Event QR resolver)', () => {
+    it.each([
+      ['FESTIVAL', 'f'],
+      ['WORKSHOP', 'w'],
+      ['OPEN_RODA', 'r'],
+      ['OTHER', 'e'],
+    ])(
+      'resolves a %s QR payload (letter %s) to the correct Event',
+      async (type, letter) => {
+        const group = await createGroup(OWNER_TOKEN);
+        const event = await createEvent(OWNER_TOKEN, group.id, {
+          type,
+          customTypeLabel: type === 'OTHER' ? 'Custom Kind' : null,
+        });
+
+        const found = await bodyOf<EventResponseDto>(
+          request(app.getHttpServer())
+            .get('/api/v1/events/by-qr')
+            .query({ payload: `capohub:v1:${letter}:${event.numericCode}` })
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(200),
+        );
+        expect(found.id).toBe(event.id);
+        expect(found.type).toBe(type);
+      },
+    );
+
+    it('rejects a User QR payload - this resolver only ever returns an Event', async () => {
+      const error = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .get('/api/v1/events/by-qr')
+          .query({ payload: 'capohub:v1:u:123456' })
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(400),
+      );
+      expect(error.code).toBe('INVALID_EVENT_QR_PAYLOAD');
+    });
+
+    it.each(['garbage', 'capohub:v2:f:123456', 'capohub:v1:x:123456', ''])(
+      'returns 400 (never 500) for a malformed QR payload %p',
+      async (malformed) => {
+        const error = await bodyOf<HttpErrorResponse>(
+          request(app.getHttpServer())
+            .get('/api/v1/events/by-qr')
+            .query({ payload: malformed })
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(400),
+        );
+        expect(error.statusCode).toBe(400);
+      },
+    );
+
+    it('returns 400 when the payload query parameter is missing entirely', async () => {
+      const error = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .get('/api/v1/events/by-qr')
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(400),
+      );
+      expect(error.code).toBe('MISSING_QR_PAYLOAD');
+    });
+
+    it('preserves normal Event access control - a DRAFT Event is invisible to a non-role-holder via QR lookup too', async () => {
+      const group = await createGroup(OWNER_TOKEN);
+      const event = await createEvent(OWNER_TOKEN, group.id, {
+        type: 'FESTIVAL',
+      });
+
+      const error = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .get('/api/v1/events/by-qr')
+          .query({ payload: `capohub:v1:f:${event.numericCode}` })
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+          .expect(404),
+      );
+      expect(error.code).toBe('EVENT_NOT_FOUND');
+    });
+
+    it('a PUBLIC, PUBLISHED Event remains visible to an outsider via QR lookup', async () => {
+      const group = await createGroup(OWNER_TOKEN);
+      const event = await createEvent(OWNER_TOKEN, group.id, {
+        type: 'FESTIVAL',
+        visibility: EventVisibility.PUBLIC,
+      });
+      await publishEvent(OWNER_TOKEN, event.id);
+
+      const found = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .get('/api/v1/events/by-qr')
+          .query({ payload: `capohub:v1:f:${event.numericCode}` })
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+          .expect(200),
+      );
+      expect(found.id).toBe(event.id);
+    });
+
+    it('returns 401 for an unauthenticated lookup', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/events/by-qr')
+        .query({ payload: 'capohub:v1:f:123456' })
+        .expect(401);
+    });
+  });
 });

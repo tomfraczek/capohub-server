@@ -15,7 +15,7 @@ import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
 import { User } from '../src/users/entities/user.entity';
-import { UserResponseDto } from '../src/users/dto/user-response.dto';
+import { UserProfileResponseDto } from '../src/users/dto/user-profile-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
@@ -1046,95 +1046,6 @@ describe('Events (e2e)', () => {
     });
   });
 
-  describe('check-in', () => {
-    it('identifies a scanned user by their personal code and marks them present', async () => {
-      const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id);
-      await publishEvent(OWNER_TOKEN, event.id);
-      await request(app.getHttpServer())
-        .post(`/api/v1/events/${event.id}/roles`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-        .send({
-          userId: localUserIdByToken.get(ORGANIZER_TOKEN),
-          role: 'ORGANIZER',
-        })
-        .expect(201);
-
-      const memberAttendee = await bodyOf<EventAttendeeResponseDto[]>(
-        request(app.getHttpServer())
-          .post(`/api/v1/events/${event.id}/register`)
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .send({ attendSelf: true, children: [] })
-          .expect(201),
-      );
-
-      const memberProfile = await bodyOf<UserResponseDto>(
-        request(app.getHttpServer())
-          .get('/api/v1/users/me')
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .expect(200),
-      );
-      expect(memberProfile.publicCode).toEqual(expect.any(String));
-
-      const identified = await bodyOf<{
-        user: { id: string };
-        selfAttendee: EventAttendeeResponseDto | null;
-      }>(
-        request(app.getHttpServer())
-          .post(`/api/v1/events/${event.id}/checkin/identify`)
-          .set('Authorization', `Bearer ${ORGANIZER_TOKEN}`)
-          .send({ code: memberProfile.publicCode })
-          .expect(201),
-      );
-      expect(identified.user.id).toBe(localUserIdByToken.get(MEMBER_TOKEN));
-      expect(identified.selfAttendee?.id).toBe(memberAttendee[0].id);
-
-      const checkedIn = await bodyOf<EventAttendeeResponseDto>(
-        request(app.getHttpServer())
-          .post(`/api/v1/events/${event.id}/checkin/${memberAttendee[0].id}`)
-          .set('Authorization', `Bearer ${ORGANIZER_TOKEN}`)
-          .send({ method: 'QR' })
-          .expect(201),
-      );
-      expect(checkedIn.checkedIn).toBe(true);
-      expect(checkedIn.checkInMethod).toBe('QR');
-
-      const alreadyCheckedIn = await bodyOf<HttpErrorResponse>(
-        request(app.getHttpServer())
-          .post(`/api/v1/events/${event.id}/checkin/${memberAttendee[0].id}`)
-          .set('Authorization', `Bearer ${ORGANIZER_TOKEN}`)
-          .send({ method: 'MANUAL' })
-          .expect(409),
-      );
-      expect(alreadyCheckedIn.code).toBe('ATTENDEE_ALREADY_CHECKED_IN');
-
-      const undone = await bodyOf<EventAttendeeResponseDto>(
-        request(app.getHttpServer())
-          .post(
-            `/api/v1/events/${event.id}/checkin/${memberAttendee[0].id}/undo`,
-          )
-          .set('Authorization', `Bearer ${ORGANIZER_TOKEN}`)
-          .expect(201),
-      );
-      expect(undone.checkedIn).toBe(false);
-    });
-
-    it('rejects check-in attempts by someone without EVENT_CHECKIN', async () => {
-      const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id);
-      await publishEvent(OWNER_TOKEN, event.id);
-
-      const response = await bodyOf<HttpErrorResponse>(
-        request(app.getHttpServer())
-          .post(`/api/v1/events/${event.id}/checkin/identify`)
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .send({ code: 'ABCD-1234' })
-          .expect(404),
-      );
-      expect(response.code).toBe('EVENT_NOT_FOUND');
-    });
-  });
-
   describe('status lifecycle guards', () => {
     it('blocks transfer-ownership, role grants, invitations, and manual promotion once CANCELLED', async () => {
       const community = await createCommunityWithMembers();
@@ -1202,9 +1113,9 @@ describe('Events (e2e)', () => {
 
       const checkInResponse = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
-          .post(`/api/v1/events/${event.id}/checkin/identify`)
+          .post(`/api/v1/events/${event.id}/attendance/identify`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .send({ code: 'ABCD-1234' })
+          .send({ identity: '123456' })
           .expect(409),
       );
       expect(checkInResponse.code).toBe('EVENT_CANCELLED');
@@ -1236,7 +1147,14 @@ describe('Events (e2e)', () => {
       await em.nativeUpdate(
         Event,
         { id: event.id },
-        { endsAt: new Date('2020-01-10T18:00:00.000Z') },
+        {
+          // startsAt is pushed into the past too, not just endsAt - the
+          // numericCode/QR check-in flow (see event-attendance.service.ts)
+          // additionally requires the Event to have already started, a
+          // rule the removed legacy check-in never enforced.
+          startsAt: new Date('2020-01-10T10:00:00.000Z'),
+          endsAt: new Date('2020-01-10T18:00:00.000Z'),
+        },
       );
 
       // Reading the Event now triggers the lazy FINISHED reconciliation.
@@ -1299,23 +1217,29 @@ describe('Events (e2e)', () => {
       );
       expect(promoteResponse.code).toBe('EVENT_FINISHED');
 
-      // Check-in and undo remain available once FINISHED.
-      const memberProfile = await bodyOf<UserResponseDto>(
+      // Check-in and marking absent again both remain available once
+      // FINISHED (numericCode/QR check-in - see event-attendance.service.ts;
+      // the legacy publicCode-based check-in this test used to exercise
+      // here has been removed entirely).
+      const memberProfile = await bodyOf<UserProfileResponseDto>(
         request(app.getHttpServer())
-          .get('/api/v1/users/me')
+          .get('/api/v1/users/me/profile')
           .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
           .expect(200),
       );
       await request(app.getHttpServer())
-        .post(`/api/v1/events/${event.id}/checkin/${memberAttendee[0].id}`)
+        .post(`/api/v1/events/${event.id}/check-in`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-        .send({ method: 'MANUAL' })
+        .send({ identity: memberProfile.numericCode })
         .expect(201);
       await request(app.getHttpServer())
-        .post(`/api/v1/events/${event.id}/checkin/${memberAttendee[0].id}/undo`)
+        .put(
+          `/api/v1/events/${event.id}/attendance/${localUserIdByToken.get(MEMBER_TOKEN)}`,
+        )
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-        .expect(201);
-      expect(memberProfile.publicCode).toEqual(expect.any(String));
+        .send({ attended: false })
+        .expect(200);
+      expect(memberProfile.numericCode).toEqual(expect.any(String));
     });
   });
 

@@ -17,7 +17,7 @@ import { reconcileEventFinished } from './event-write-policy';
 /**
  * Shared, dependency-free helpers reused by every Event sub-service
  * (EventsService, EventRolesService, EventRsvpService,
- * EventInvitationsService, EventGuardiansService, EventCheckInService) -
+ * EventInvitationsService, EventGuardiansService, EventAttendanceService) -
  * kept in its own service, rather than on EventsService itself, so that
  * EventsService (which needs EventRolesService to grant OWNER at creation)
  * and EventRolesService (which needs to load/reconcile an Event before
