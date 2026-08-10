@@ -32,6 +32,7 @@ import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { CommunityNotificationSettings } from '../src/groups/entities/community-notification-settings.entity';
 import { CommunityNotificationSettingsResponseDto } from '../src/groups/dto/community-notification-settings-response.dto';
+import { GroupNotificationSettingsResponseDto } from '../src/groups/dto/group-notification-settings-response.dto';
 import { UserNotificationPreferences } from '../src/notifications/entities/user-notification-preferences.entity';
 import { UserNotificationPreferencesResponseDto } from '../src/notifications/dto/user-notification-preferences-response.dto';
 import { PushDevice } from '../src/notifications/entities/push-device.entity';
@@ -159,7 +160,10 @@ describe('Notification preferences / devices (e2e)', () => {
         user: { $in: [...localUserIdByToken.values()] },
       });
       await cleanup.nativeDelete(CommunityNotificationSettings, {
-        community: { $in: createdGroupIds },
+        $or: [
+          { communityGroup: { $in: createdGroupIds } },
+          { communitySection: { $in: createdGroupIds } },
+        ],
       });
       await cleanup.nativeDelete(RoleAssignment, {
         $or: [
@@ -248,6 +252,18 @@ describe('Notification preferences / devices (e2e)', () => {
     );
     createdGroupIds.push(section.id);
     return section;
+  }
+
+  async function createGroupOnly(): Promise<GroupResponseDto> {
+    const group = await bodyOf<GroupResponseDto>(
+      request(app.getHttpServer())
+        .post('/api/v1/groups')
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(groupPayload())
+        .expect(201),
+    );
+    createdGroupIds.push(group.id);
+    return group;
   }
 
   describe('GET/PATCH /users/me/notification-preferences', () => {
@@ -341,6 +357,68 @@ describe('Notification preferences / devices (e2e)', () => {
       expect(after.muted).toBe(true);
       // Untouched fields keep their defaults.
       expect(after.newJoinRequests).toBe(true);
+    });
+  });
+
+  describe('GET/PATCH /groups/:groupId/notification-settings (muted)', () => {
+    it('defaults muted=false, and PATCH round-trips true - minimal {communityId, muted} shape only', async () => {
+      const group = await createGroupOnly();
+
+      const before = await bodyOf<GroupNotificationSettingsResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${group.id}/notification-settings`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(before).toEqual({ communityId: group.id, muted: false });
+
+      const after = await bodyOf<GroupNotificationSettingsResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/groups/${group.id}/notification-settings`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ muted: true })
+          .expect(200),
+      );
+      expect(after).toEqual({ communityId: group.id, muted: true });
+
+      const refetched = await bodyOf<GroupNotificationSettingsResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${group.id}/notification-settings`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(refetched.muted).toBe(true);
+    });
+
+    it('returns 404 GROUP_NOT_FOUND for a caller with no RoleAssignment on this Group, never revealing it exists', async () => {
+      const group = await createGroupOnly();
+
+      const error = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${group.id}/notification-settings`)
+          .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+          .expect(404),
+      );
+      expect(error.code).toBe('GROUP_NOT_FOUND');
+    });
+
+    it('rejects an unrecognized field with 400 (schema is strict, only muted is settable)', async () => {
+      const group = await createGroupOnly();
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/groups/${group.id}/notification-settings`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send({ newJoinRequests: false })
+        .expect(400);
+    });
+
+    it('a Section id 404s at the Group endpoint - exact-resource routing, no cross-resolution', async () => {
+      const section = await createSectionWithOwnerAsMember();
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/groups/${section.id}/notification-settings`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(404);
     });
   });
 

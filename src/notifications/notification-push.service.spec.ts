@@ -1,5 +1,6 @@
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { CommunityNotificationSettings } from '../groups/entities/community-notification-settings.entity';
+import { Group } from '../groups/entities/group.entity';
 import { Section } from '../groups/entities/section.entity';
 import { User } from '../users/entities/user.entity';
 import { ExpoPushTicket, ExpoPushTransport } from './expo-push.transport';
@@ -21,6 +22,12 @@ function buildSection(id: string): Section {
   const section = new Section();
   section.id = id;
   return section;
+}
+
+function buildGroup(id: string): Group {
+  const group = new Group();
+  group.id = id;
+  return group;
 }
 
 function buildNotification(
@@ -65,7 +72,11 @@ function buildSettings(
 ): CommunityNotificationSettings {
   const settings = new CommunityNotificationSettings();
   settings.user = overrides.user ?? buildUser('user-1');
-  settings.community = overrides.community ?? buildSection('section-1');
+  settings.communitySection =
+    overrides.communityGroup || overrides.communitySection
+      ? (overrides.communitySection ?? null)
+      : buildSection('section-1');
+  settings.communityGroup = overrides.communityGroup ?? null;
   settings.muted = false;
   return Object.assign(settings, overrides);
 }
@@ -165,7 +176,7 @@ describe('NotificationPushService.deliverMany', () => {
     const { em } = buildMockEm({
       preferences: [buildPreferences()],
       devices: [buildDevice()],
-      settings: [buildSettings({ community: section, muted: true })],
+      settings: [buildSettings({ communitySection: section, muted: true })],
     });
     const { transport, send } = buildTransport();
     const service = new NotificationPushService(em, transport);
@@ -175,6 +186,37 @@ describe('NotificationPushService.deliverMany', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it('suppresses push for a muted Group context, inbox row still exists', async () => {
+    const group = buildGroup('group-1');
+    const { em } = buildMockEm({
+      preferences: [buildPreferences()],
+      devices: [buildDevice()],
+      settings: [buildSettings({ communityGroup: group, muted: true })],
+    });
+    const { transport, send } = buildTransport();
+    const service = new NotificationPushService(em, transport);
+
+    await service.deliverMany([buildNotification({ contextGroup: group })]);
+
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('a muted Group never suppresses an unrelated Section context Notification - exact-resource only, no inheritance', async () => {
+    const group = buildGroup('group-1');
+    const section = buildSection('section-1');
+    const { em } = buildMockEm({
+      preferences: [buildPreferences()],
+      devices: [buildDevice()],
+      settings: [buildSettings({ communityGroup: group, muted: true })],
+    });
+    const { transport, send } = buildTransport([{ status: 'ok' }]);
+    const service = new NotificationPushService(em, transport);
+
+    await service.deliverMany([buildNotification({ contextSection: section })]);
+
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
   it('suppresses push for a fine-grained membership toggle that is off', async () => {
     const section = buildSection('section-1');
     const { em } = buildMockEm({
@@ -182,7 +224,7 @@ describe('NotificationPushService.deliverMany', () => {
       devices: [buildDevice()],
       settings: [
         buildSettings({
-          community: section,
+          communitySection: section,
           muted: false,
           newJoinRequests: false,
         }),

@@ -13,6 +13,7 @@ import { CommunityNotificationSettingsService } from './community-notification-s
 import { GroupsController } from './groups.controller';
 import { GroupsService } from './groups.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
+import { GroupNotificationSettingsController } from './group-notification-settings.controller';
 import { HierarchyInvitationsController } from './hierarchy-invitations.controller';
 import { HierarchyManagementService } from './hierarchy-management.service';
 import { SectionMembershipsService } from './section-memberships.service';
@@ -48,6 +49,7 @@ import { SectionsService } from './sections.service';
     CommunityHomeController,
     AuditLogController,
     CommunityNotificationSettingsController,
+    GroupNotificationSettingsController,
     RecipientGroupsController,
     HierarchyInvitationsController,
   ],

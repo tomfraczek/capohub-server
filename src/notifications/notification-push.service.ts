@@ -49,11 +49,21 @@ const MEMBERSHIP_TYPE_SETTINGS_FIELD: Partial<
 interface RecipientDeliveryContext {
   preferences: UserNotificationPreferences | null;
   devices: PushDevice[];
-  // Keyed by Section id - every CommunityNotificationSettings row this
-  // recipient has, muted or not (module spec: `muted` and the five
+  // Keyed by the exact community id (a Group id or a Section id - never
+  // both for the same row, see CommunityNotificationSettings' own
+  // dual-nullable-FK comment) - every CommunityNotificationSettings row
+  // this recipient has, muted or not (module spec: `muted` and the five
   // per-action toggles above are independent checks, both read from the
   // same row).
   communitySettings: Map<string, CommunityNotificationSettings>;
+}
+
+// Resolves whichever of communityGroup/communitySection is actually set on
+// a CommunityNotificationSettings row - see that entity's own comment.
+function communitySettingsCommunityId(
+  settings: CommunityNotificationSettings,
+): string {
+  return (settings.communityGroup ?? settings.communitySection)!.id;
 }
 
 /**
@@ -67,12 +77,12 @@ interface RecipientDeliveryContext {
  * Notification row itself (module spec section 31):
  *  1. global pushEnabled (UserNotificationPreferences)
  *  2. per-category preference (see CATEGORY_PREFERENCE_FIELD)
- *  3. per-community mute (CommunityNotificationSettings.muted) and, for the
- *     five membership NotificationTypes that have one, the matching
- *     fine-grained toggle (see MEMBERSHIP_TYPE_SETTINGS_FIELD) - both read
- *     from the same row, only when the Notification carries a
- *     contextSection (Group has no membership/settings of its own, see
- *     that entity's comment)
+ *  3. per-community mute (CommunityNotificationSettings.muted, resolved
+ *     against whichever of contextGroup/contextSection the Notification
+ *     actually carries - exact-resource only, never inherited) and, for
+ *     the five membership NotificationTypes that have one, the matching
+ *     fine-grained toggle (see MEMBERSHIP_TYPE_SETTINGS_FIELD) - Section
+ *     only, read from the same row
  *  4. at least one active PushDevice
  */
 @Injectable()
@@ -164,16 +174,30 @@ export class NotificationPushService {
       return false;
     }
 
-    if (notification.contextSection) {
-      const settings = context.communitySettings.get(
-        notification.contextSection.id,
-      );
+    // Exact-resource only, never inherited: a Notification carries exactly
+    // one of contextGroup/contextSection (set at the point it was raised -
+    // see e.g. EventNotificationsService/TrainingNotificationsService), so
+    // this always reads the single most specific community's own settings
+    // row, never a parent/child's (module spec § GROUP MUTE SEMANTICS -
+    // "Exact-resource only... Nie buduj hierarchy-based mute").
+    const contextCommunityId =
+      notification.contextSection?.id ?? notification.contextGroup?.id;
+    if (contextCommunityId) {
+      const settings = context.communitySettings.get(contextCommunityId);
       if (settings?.muted) {
         return false;
       }
-      const settingsField = MEMBERSHIP_TYPE_SETTINGS_FIELD[notification.type];
-      if (settingsField && settings && settings[settingsField] === false) {
-        return false;
+      // The five fine-grained membership toggles are a Section-only concept
+      // (see CommunityNotificationSettings' own comment) - never consulted
+      // for a contextGroup Notification, even if MEMBERSHIP_TYPE_SETTINGS_FIELD
+      // happened to have an entry for its type (it never does in practice,
+      // since every type in that map is only ever raised with a
+      // contextSection).
+      if (notification.contextSection) {
+        const settingsField = MEMBERSHIP_TYPE_SETTINGS_FIELD[notification.type];
+        if (settingsField && settings && settings[settingsField] === false) {
+          return false;
+        }
       }
     }
 
@@ -214,7 +238,7 @@ export class NotificationPushService {
       const map =
         settingsByUser.get(settings.user.id) ??
         new Map<string, CommunityNotificationSettings>();
-      map.set(settings.community.id, settings);
+      map.set(communitySettingsCommunityId(settings), settings);
       settingsByUser.set(settings.user.id, map);
     }
 

@@ -36,7 +36,10 @@ import { SectionMembership } from '../src/groups/entities/section-membership.ent
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { MembershipRequest } from '../src/groups/entities/membership-request.entity';
+import { MembershipRequestResponseDto } from '../src/groups/dto/membership-request-response.dto';
 import { MembershipRequestTarget } from '../src/groups/enums/membership-request-target.enum';
+import { HierarchyInvitation } from '../src/groups/entities/hierarchy-invitation.entity';
+import { HierarchyInvitationResponseDto } from '../src/groups/dto/hierarchy-invitation-response.dto';
 import { Announcement } from '../src/announcements/entities/announcement.entity';
 import { AnnouncementResponseDto } from '../src/announcements/dto/announcement-response.dto';
 import { Training } from '../src/trainings/entities/training.entity';
@@ -44,6 +47,7 @@ import { TrainingResponseDto } from '../src/trainings/dto/training-response.dto'
 import { TrainingVisibility } from '../src/trainings/enums/training-visibility.enum';
 import { Notification } from '../src/notifications/entities/notification.entity';
 import { NotificationListResponseDto } from '../src/notifications/dto/notification-list-response.dto';
+import { NotificationTargetType } from '../src/notifications/enums/notification-target-type.enum';
 import { NotificationType } from '../src/notifications/enums/notification-type.enum';
 import { ExpoPushTransport } from '../src/notifications/expo-push.transport';
 
@@ -171,6 +175,13 @@ describe('Notification domain integrations (e2e)', () => {
           { targetSection: { $in: createdGroupIds } },
         ],
       });
+      await cleanup.nativeDelete(HierarchyInvitation, {
+        $or: [
+          { parentGroup: { $in: createdGroupIds } },
+          { targetGroup: { $in: createdGroupIds } },
+          { targetSection: { $in: createdGroupIds } },
+        ],
+      });
       await cleanup.nativeDelete(Announcement, {
         $or: [
           { communityGroup: { $in: createdGroupIds } },
@@ -257,11 +268,12 @@ describe('Notification domain integrations (e2e)', () => {
 
   async function createGroup(
     overrides: Record<string, unknown> = {},
+    actorToken: string = OWNER_TOKEN,
   ): Promise<GroupResponseDto> {
     const group = await bodyOf<GroupResponseDto>(
       request(app.getHttpServer())
         .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${actorToken}`)
         .send(groupPayload(overrides))
         .expect(201),
     );
@@ -470,7 +482,7 @@ describe('Notification domain integrations (e2e)', () => {
   });
 
   describe('Membership', () => {
-    it('a private Section join request notifies the OWNER with SECTION_JOIN_REQUEST_RECEIVED', async () => {
+    it('a private Section join request notifies the OWNER with SECTION_JOIN_REQUEST_RECEIVED and a resolvable deep link', async () => {
       const group = await createGroup();
       const section = await createSection(group.id, { isPublic: false });
 
@@ -485,7 +497,63 @@ describe('Notification domain integrations (e2e)', () => {
         (n) => n.type === NotificationType.SECTION_JOIN_REQUEST_RECEIVED,
       );
       expect(found).toBeDefined();
+      expect(found?.targetType).toBe(NotificationTargetType.MEMBERSHIP_REQUEST);
       expect(found?.contextSectionId).toBe(section.id);
+
+      // Deep-link contract: contextSectionId + targetId alone must resolve
+      // straight to the pending request, no global listing/guessing.
+      const pending = await bodyOf<MembershipRequestResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/sections/${found!.contextSectionId}/join-requests`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(pending.some((r) => r.id === found!.targetId)).toBe(true);
+    });
+  });
+
+  describe('Hierarchy invitations', () => {
+    it('inviting a Group as a child notifies the target Group OWNER with HIERARCHY_INVITATION and a resolvable deep link', async () => {
+      const parent = await createGroup({ name: 'Notif Integ Parent Org' });
+      const target = await createGroup(
+        { name: 'Notif Integ Target Org' },
+        MEMBER_TOKEN,
+      );
+
+      const invitation = await bodyOf<HierarchyInvitationResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${parent.id}/child-invitations`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ targetType: 'GROUP', targetId: target.id })
+          .expect(201),
+      );
+
+      const targetOwnerNotifications = await notificationsFor(MEMBER_TOKEN);
+      const found = targetOwnerNotifications.items.find(
+        (n) => n.type === NotificationType.HIERARCHY_INVITATION_RECEIVED,
+      );
+      expect(found).toBeDefined();
+      expect(found?.targetType).toBe(
+        NotificationTargetType.HIERARCHY_INVITATION,
+      );
+      expect(found?.targetId).toBe(invitation.id);
+      // Context is the *target*, not the parent - that is where the
+      // recipient (the target's OWNER) actually reviews/acts on it.
+      expect(found?.contextGroupId).toBe(target.id);
+      expect(found?.contextSectionId).toBeNull();
+
+      // Deep-link contract: contextGroupId + targetId alone must resolve
+      // straight to this exact invitation via the target-side "received"
+      // listing, no global search.
+      const received = await bodyOf<HierarchyInvitationResponseDto[]>(
+        request(app.getHttpServer())
+          .get(
+            `/api/v1/groups/${found!.contextGroupId}/hierarchy-invitations/received`,
+          )
+          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+          .expect(200),
+      );
+      expect(received.some((r) => r.id === found!.targetId)).toBe(true);
     });
   });
 });

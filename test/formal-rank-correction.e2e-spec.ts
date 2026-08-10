@@ -701,14 +701,36 @@ describe('Formal Rank Correction (e2e)', () => {
         .expect(201);
 
       const em = app.get(EntityManager).fork();
-      const notifications = await em.find(Notification, {
-        targetType: NotificationTargetType.FORMAL_RANK_CORRECTION,
-        targetId: created.id,
-        type: NotificationType.FORMAL_RANK_CORRECTION_SUBMITTED,
-      });
+      const notifications = await em.find(
+        Notification,
+        {
+          targetType: NotificationTargetType.FORMAL_RANK_CORRECTION,
+          targetId: created.id,
+          type: NotificationType.FORMAL_RANK_CORRECTION_SUBMITTED,
+        },
+        { populate: ['contextSection'] },
+      );
       expect(notifications).toHaveLength(1);
       expect(notifications[0].recipient.id).toBe(
         localUserIdByToken.get(OWNER_TOKEN),
+      );
+
+      // Deep-link contract: targetId + contextSection alone must be enough
+      // to resolve straight to the admin review screen, with no listing/
+      // guessing - GET .../formal-rank-corrections/:requestId already takes
+      // exactly those two identifiers.
+      expect(notifications[0].contextSection?.id).toBe(section.id);
+      const reviewTarget = await bodyOf<FormalRankCorrectionResponseDto>(
+        request(app.getHttpServer())
+          .get(
+            `/api/v1/sections/${notifications[0].contextSection!.id}/formal-rank-corrections/${notifications[0].targetId}`,
+          )
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(reviewTarget.id).toBe(created.id);
+      expect(reviewTarget.targetUser.id).toBe(
+        localUserIdByToken.get(TARGET_TOKEN),
       );
     });
   });

@@ -297,7 +297,7 @@
       "checks": [
         {
           "name": "academies_group_or_section_check",
-          "columnName": "section_id",
+          "columnName": "group_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))))",
           "expression": "((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))"
         }
@@ -1798,22 +1798,6 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
-        "community_id": {
-          "name": "community_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": true,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
         "user_id": {
           "name": "user_id",
           "type": "uuid",
@@ -1821,7 +1805,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -2005,6 +1989,38 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "boolean"
+        },
+        "community_group_id": {
+          "name": "community_group_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "community_section_id": {
+          "name": "community_section_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "community_notification_settings",
@@ -2012,23 +2028,22 @@
       "indexes": [
         {
           "columnNames": [
-            "community_id"
+            "community_group_id"
           ],
           "composite": false,
           "constraint": false,
-          "keyName": "community_notification_settings_community_id_index",
+          "keyName": "community_notification_settings_community_group_id_index",
           "unique": false,
           "primary": false
         },
         {
           "columnNames": [
-            "community_id",
-            "user_id"
+            "community_section_id"
           ],
-          "composite": true,
-          "constraint": true,
-          "keyName": "community_notification_settings_community_id_user_id_unique",
-          "unique": true,
+          "composite": false,
+          "constraint": false,
+          "keyName": "community_notification_settings_community_section_id_index",
+          "unique": false,
           "primary": false
         },
         {
@@ -2043,6 +2058,18 @@
         },
         {
           "columnNames": [
+            "user_id",
+            "COALESCE(community_group_id, community_section_id)"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "community_notification_settings_user_id_community_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX community_notification_settings_user_id_community_unique ON public.community_notification_settings USING btree (user_id, COALESCE(community_group_id, community_section_id))"
+        },
+        {
+          "columnNames": [
             "user_id"
           ],
           "composite": false,
@@ -2052,13 +2079,33 @@
           "primary": false
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "community_notification_settings_group_or_section_check",
+          "columnName": "community_group_id",
+          "definition": "CHECK ((((community_group_id IS NOT NULL) AND (community_section_id IS NULL)) OR ((community_group_id IS NULL) AND (community_section_id IS NOT NULL))))",
+          "expression": "((community_group_id IS NOT NULL) AND (community_section_id IS NULL)) OR ((community_group_id IS NULL) AND (community_section_id IS NOT NULL))"
+        }
+      ],
       "foreignKeys": {
-        "community_notification_settings_community_id_foreign": {
+        "community_notification_settings_community_group_id_foreign": {
           "columnNames": [
-            "community_id"
+            "community_group_id"
           ],
-          "constraintName": "community_notification_settings_community_id_foreign",
+          "constraintName": "community_notification_settings_community_group_id_foreign",
+          "localTableName": "public.community_notification_settings",
+          "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        },
+        "community_notification_settings_community_section_id_foreign": {
+          "columnNames": [
+            "community_section_id"
+          ],
+          "constraintName": "community_notification_settings_community_section_id_foreign",
           "localTableName": "public.community_notification_settings",
           "referencedTableName": "public.sections",
           "referencedColumnNames": [
@@ -4985,7 +5032,7 @@
       "checks": [
         {
           "name": "formal_rank_assignments_ended_on_after_started_on_check",
-          "columnName": "started_on",
+          "columnName": "ended_on",
           "definition": "CHECK (((started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)))",
           "expression": "(started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)"
         }
@@ -7501,7 +7548,7 @@
       "checks": [
         {
           "name": "membership_requests_target_group_or_section_check",
-          "columnName": "target_section_id",
+          "columnName": "target_group_id",
           "definition": "CHECK ((((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))))",
           "expression": "((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))"
         }
