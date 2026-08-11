@@ -10,7 +10,46 @@ import { Notification } from './entities/notification.entity';
 import { PushDevice } from './entities/push-device.entity';
 import { UserNotificationPreferences } from './entities/user-notification-preferences.entity';
 import { NotificationCategory } from './enums/notification-category.enum';
+import { NotificationTargetType } from './enums/notification-target-type.enum';
 import { NotificationType } from './enums/notification-type.enum';
+
+// The exact `data` payload attached to every push message - deliberately
+// the same navigation-relevant fields the inbox itself exposes
+// (NotificationResponseDto's targetType/targetId/contextGroupId/
+// contextSectionId), so a tap on a push notification can navigate exactly
+// as precisely as a tap in the inbox (a TRAINING/ANNOUNCEMENT/
+// MEMBERSHIP_REQUEST/HIERARCHY_INVITATION/FORMAL_RANK_CORRECTION target
+// cannot be routed to without knowing which Group or Section it belongs
+// to). Never a full context object, never a route/URL, never any other
+// field - see buildPushData's own comment.
+export interface NotificationPushData {
+  notificationId: string;
+  targetType: NotificationTargetType | null;
+  targetId: string | null;
+  contextGroupId: string | null;
+  contextSectionId: string | null;
+  // Satisfies ExpoPushMessage.data's `Record<string, unknown>` shape -
+  // every concrete field above is still fully typed for callers/tests, this
+  // only widens what the *type checker* accepts when assigning into
+  // ExpoPushMessage.data, it does not add any actual extra field.
+  [key: string]: unknown;
+}
+
+// Pulled out as its own small, pure function (rather than built inline in
+// deliverMany) purely for testability - a unit test can assert on this
+// mapping directly, for every targetType, without needing to also drive
+// preferences/devices/mute resolution.
+export function buildPushData(
+  notification: Notification,
+): NotificationPushData {
+  return {
+    notificationId: notification.id,
+    targetType: notification.targetType,
+    targetId: notification.targetId,
+    contextGroupId: notification.contextGroup?.id ?? null,
+    contextSectionId: notification.contextSection?.id ?? null,
+  };
+}
 
 // Which UserNotificationPreferences boolean field gates push for each
 // category - SYSTEM has none: it always passes this check (module spec
@@ -125,16 +164,13 @@ export class NotificationPushService {
       if (!this.isPushAllowed(notification, context)) {
         continue;
       }
+      const data = buildPushData(notification);
       for (const device of context.devices) {
         messages.push({
           to: device.expoPushToken,
           title: notification.title,
           body: notification.body,
-          data: {
-            notificationId: notification.id,
-            targetType: notification.targetType,
-            targetId: notification.targetId,
-          },
+          data,
         });
         deviceByTokenIndex.push(device);
       }

@@ -8,9 +8,13 @@ import { Notification } from './entities/notification.entity';
 import { PushDevice } from './entities/push-device.entity';
 import { UserNotificationPreferences } from './entities/user-notification-preferences.entity';
 import { NotificationCategory } from './enums/notification-category.enum';
+import { NotificationTargetType } from './enums/notification-target-type.enum';
 import { NotificationType } from './enums/notification-type.enum';
 import { PushPlatform } from './enums/push-platform.enum';
-import { NotificationPushService } from './notification-push.service';
+import {
+  buildPushData,
+  NotificationPushService,
+} from './notification-push.service';
 
 function buildUser(id: string): User {
   const user = new User();
@@ -296,5 +300,193 @@ describe('NotificationPushService.deliverMany', () => {
 
     expect(device.isActive).toBe(true);
     expect(flush).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildPushData', () => {
+  it('includes contextSectionId (and null contextGroupId) for a Section-context Notification', () => {
+    const section = buildSection('section-1');
+    const data = buildPushData(
+      buildNotification({
+        targetType: NotificationTargetType.TRAINING,
+        targetId: 'training-1',
+        contextSection: section,
+        contextGroup: null,
+      }),
+    );
+
+    expect(data).toEqual({
+      notificationId: 'notif-1',
+      targetType: NotificationTargetType.TRAINING,
+      targetId: 'training-1',
+      contextGroupId: null,
+      contextSectionId: 'section-1',
+    });
+  });
+
+  it('includes contextGroupId (and null contextSectionId) for a Group-context Notification', () => {
+    const group = buildGroup('group-1');
+    const data = buildPushData(
+      buildNotification({
+        targetType: NotificationTargetType.HIERARCHY_INVITATION,
+        targetId: 'invitation-1',
+        contextGroup: group,
+        contextSection: null,
+      }),
+    );
+
+    expect(data).toEqual({
+      notificationId: 'notif-1',
+      targetType: NotificationTargetType.HIERARCHY_INVITATION,
+      targetId: 'invitation-1',
+      contextGroupId: 'group-1',
+      contextSectionId: null,
+    });
+  });
+
+  it('both context ids are null when the Notification carries neither', () => {
+    const data = buildPushData(
+      buildNotification({
+        targetType: NotificationTargetType.USER,
+        targetId: 'user-9',
+        contextGroup: null,
+        contextSection: null,
+      }),
+    );
+
+    expect(data.contextGroupId).toBeNull();
+    expect(data.contextSectionId).toBeNull();
+  });
+
+  it('MEMBERSHIP_REQUEST: exact Section context alongside the request id', () => {
+    const section = buildSection('section-1');
+    const data = buildPushData(
+      buildNotification({
+        targetType: NotificationTargetType.MEMBERSHIP_REQUEST,
+        targetId: 'request-1',
+        contextSection: section,
+        contextGroup: null,
+      }),
+    );
+
+    expect(data).toMatchObject({
+      targetType: NotificationTargetType.MEMBERSHIP_REQUEST,
+      targetId: 'request-1',
+      contextSectionId: 'section-1',
+      contextGroupId: null,
+    });
+  });
+
+  it('HIERARCHY_INVITATION: exact target community context alongside the invitation id', () => {
+    const group = buildGroup('group-1');
+    const data = buildPushData(
+      buildNotification({
+        targetType: NotificationTargetType.HIERARCHY_INVITATION,
+        targetId: 'invitation-1',
+        contextGroup: group,
+        contextSection: null,
+      }),
+    );
+
+    expect(data).toMatchObject({
+      targetType: NotificationTargetType.HIERARCHY_INVITATION,
+      targetId: 'invitation-1',
+      contextGroupId: 'group-1',
+      contextSectionId: null,
+    });
+  });
+
+  it('FORMAL_RANK_CORRECTION (SUBMITTED): exact Section context alongside the correction request id', () => {
+    const section = buildSection('section-1');
+    const data = buildPushData(
+      buildNotification({
+        type: NotificationType.FORMAL_RANK_CORRECTION_SUBMITTED,
+        targetType: NotificationTargetType.FORMAL_RANK_CORRECTION,
+        targetId: 'correction-1',
+        contextSection: section,
+        contextGroup: null,
+      }),
+    );
+
+    expect(data).toMatchObject({
+      targetType: NotificationTargetType.FORMAL_RANK_CORRECTION,
+      targetId: 'correction-1',
+      contextSectionId: 'section-1',
+      contextGroupId: null,
+    });
+  });
+
+  it('TRAINING: exact Section context alongside the training id', () => {
+    const section = buildSection('section-1');
+    const data = buildPushData(
+      buildNotification({
+        type: NotificationType.TRAINING_TIME_CHANGED,
+        targetType: NotificationTargetType.TRAINING,
+        targetId: 'training-1',
+        contextSection: section,
+        contextGroup: null,
+      }),
+    );
+
+    expect(data).toMatchObject({
+      targetType: NotificationTargetType.TRAINING,
+      targetId: 'training-1',
+      contextSectionId: 'section-1',
+      contextGroupId: null,
+    });
+  });
+
+  it('EVENT: context still resolves correctly (Event may be Group- or Section-scoped)', () => {
+    const group = buildGroup('group-1');
+    const data = buildPushData(
+      buildNotification({
+        category: NotificationCategory.EVENT,
+        type: NotificationType.EVENT_CANCELLED,
+        targetType: NotificationTargetType.EVENT,
+        targetId: 'event-1',
+        contextGroup: group,
+        contextSection: null,
+      }),
+    );
+
+    expect(data).toEqual({
+      notificationId: 'notif-1',
+      targetType: NotificationTargetType.EVENT,
+      targetId: 'event-1',
+      contextGroupId: 'group-1',
+      contextSectionId: null,
+    });
+  });
+});
+
+describe('NotificationPushService.deliverMany - push data on the outgoing message', () => {
+  it('attaches the exact buildPushData shape as the message data, not just notificationId/targetType/targetId', async () => {
+    const section = buildSection('section-1');
+    const notification = buildNotification({
+      type: NotificationType.TRAINING_CANCELLED,
+      targetType: NotificationTargetType.TRAINING,
+      targetId: 'training-1',
+      contextSection: section,
+      contextGroup: null,
+    });
+    const { em } = buildMockEm({
+      preferences: [buildPreferences()],
+      devices: [buildDevice()],
+    });
+    const { transport, send } = buildTransport([{ status: 'ok' }]);
+    const service = new NotificationPushService(em, transport);
+
+    await service.deliverMany([notification]);
+
+    const [messages] = send.mock.calls[0] as [
+      { data?: Record<string, unknown> }[],
+    ];
+    expect(messages[0].data).toEqual({
+      notificationId: 'notif-1',
+      targetType: NotificationTargetType.TRAINING,
+      targetId: 'training-1',
+      contextGroupId: null,
+      contextSectionId: 'section-1',
+    });
   });
 });
