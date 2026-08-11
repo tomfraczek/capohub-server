@@ -15,15 +15,22 @@ import { NotificationType } from './enums/notification-type.enum';
 
 // The exact `data` payload attached to every push message - deliberately
 // the same navigation-relevant fields the inbox itself exposes
-// (NotificationResponseDto's targetType/targetId/contextGroupId/
+// (NotificationResponseDto's type/targetType/targetId/contextGroupId/
 // contextSectionId), so a tap on a push notification can navigate exactly
 // as precisely as a tap in the inbox (a TRAINING/ANNOUNCEMENT/
 // MEMBERSHIP_REQUEST/HIERARCHY_INVITATION/FORMAL_RANK_CORRECTION target
 // cannot be routed to without knowing which Group or Section it belongs
-// to). Never a full context object, never a route/URL, never any other
-// field - see buildPushData's own comment.
+// to). `type` is included alongside `targetType` because several
+// NotificationTypes share one targetType but need different frontend
+// routing - e.g. FORMAL_RANK_CORRECTION_SUBMITTED (reviewer/admin flow)
+// vs. FORMAL_RANK_CORRECTION_REQUIRED/APPROVED/REJECTED (self-service
+// flow), all four sharing targetType FORMAL_RANK_CORRECTION - so
+// targetType alone cannot disambiguate them. Never a full context object,
+// never a route/URL, never any other field - see buildPushData's own
+// comment.
 export interface NotificationPushData {
   notificationId: string;
+  type: NotificationType;
   targetType: NotificationTargetType | null;
   targetId: string | null;
   contextGroupId: string | null;
@@ -44,6 +51,7 @@ export function buildPushData(
 ): NotificationPushData {
   return {
     notificationId: notification.id,
+    type: notification.type,
     targetType: notification.targetType,
     targetId: notification.targetId,
     contextGroupId: notification.contextGroup?.id ?? null,

@@ -304,10 +304,11 @@ describe('NotificationPushService.deliverMany', () => {
 });
 
 describe('buildPushData', () => {
-  it('includes contextSectionId (and null contextGroupId) for a Section-context Notification', () => {
+  it('includes type alongside contextSectionId (and null contextGroupId) for a Section-context Notification', () => {
     const section = buildSection('section-1');
     const data = buildPushData(
       buildNotification({
+        type: NotificationType.TRAINING_CANCELLED,
         targetType: NotificationTargetType.TRAINING,
         targetId: 'training-1',
         contextSection: section,
@@ -317,6 +318,7 @@ describe('buildPushData', () => {
 
     expect(data).toEqual({
       notificationId: 'notif-1',
+      type: NotificationType.TRAINING_CANCELLED,
       targetType: NotificationTargetType.TRAINING,
       targetId: 'training-1',
       contextGroupId: null,
@@ -324,10 +326,11 @@ describe('buildPushData', () => {
     });
   });
 
-  it('includes contextGroupId (and null contextSectionId) for a Group-context Notification', () => {
+  it('includes type alongside contextGroupId (and null contextSectionId) for a Group-context Notification', () => {
     const group = buildGroup('group-1');
     const data = buildPushData(
       buildNotification({
+        type: NotificationType.HIERARCHY_INVITATION_RECEIVED,
         targetType: NotificationTargetType.HIERARCHY_INVITATION,
         targetId: 'invitation-1',
         contextGroup: group,
@@ -337,6 +340,7 @@ describe('buildPushData', () => {
 
     expect(data).toEqual({
       notificationId: 'notif-1',
+      type: NotificationType.HIERARCHY_INVITATION_RECEIVED,
       targetType: NotificationTargetType.HIERARCHY_INVITATION,
       targetId: 'invitation-1',
       contextGroupId: 'group-1',
@@ -358,10 +362,11 @@ describe('buildPushData', () => {
     expect(data.contextSectionId).toBeNull();
   });
 
-  it('MEMBERSHIP_REQUEST: exact Section context alongside the request id', () => {
+  it('MEMBERSHIP_REQUEST: type + exact Section context alongside the request id', () => {
     const section = buildSection('section-1');
     const data = buildPushData(
       buildNotification({
+        type: NotificationType.SECTION_JOIN_REQUEST_RECEIVED,
         targetType: NotificationTargetType.MEMBERSHIP_REQUEST,
         targetId: 'request-1',
         contextSection: section,
@@ -370,6 +375,7 @@ describe('buildPushData', () => {
     );
 
     expect(data).toMatchObject({
+      type: NotificationType.SECTION_JOIN_REQUEST_RECEIVED,
       targetType: NotificationTargetType.MEMBERSHIP_REQUEST,
       targetId: 'request-1',
       contextSectionId: 'section-1',
@@ -377,10 +383,11 @@ describe('buildPushData', () => {
     });
   });
 
-  it('HIERARCHY_INVITATION: exact target community context alongside the invitation id', () => {
+  it('HIERARCHY_INVITATION: type + exact target community context alongside the invitation id', () => {
     const group = buildGroup('group-1');
     const data = buildPushData(
       buildNotification({
+        type: NotificationType.HIERARCHY_INVITATION_ACCEPTED,
         targetType: NotificationTargetType.HIERARCHY_INVITATION,
         targetId: 'invitation-1',
         contextGroup: group,
@@ -389,6 +396,7 @@ describe('buildPushData', () => {
     );
 
     expect(data).toMatchObject({
+      type: NotificationType.HIERARCHY_INVITATION_ACCEPTED,
       targetType: NotificationTargetType.HIERARCHY_INVITATION,
       targetId: 'invitation-1',
       contextGroupId: 'group-1',
@@ -396,27 +404,7 @@ describe('buildPushData', () => {
     });
   });
 
-  it('FORMAL_RANK_CORRECTION (SUBMITTED): exact Section context alongside the correction request id', () => {
-    const section = buildSection('section-1');
-    const data = buildPushData(
-      buildNotification({
-        type: NotificationType.FORMAL_RANK_CORRECTION_SUBMITTED,
-        targetType: NotificationTargetType.FORMAL_RANK_CORRECTION,
-        targetId: 'correction-1',
-        contextSection: section,
-        contextGroup: null,
-      }),
-    );
-
-    expect(data).toMatchObject({
-      targetType: NotificationTargetType.FORMAL_RANK_CORRECTION,
-      targetId: 'correction-1',
-      contextSectionId: 'section-1',
-      contextGroupId: null,
-    });
-  });
-
-  it('TRAINING: exact Section context alongside the training id', () => {
+  it('TRAINING: type + exact Section context alongside the training id', () => {
     const section = buildSection('section-1');
     const data = buildPushData(
       buildNotification({
@@ -429,6 +417,7 @@ describe('buildPushData', () => {
     );
 
     expect(data).toMatchObject({
+      type: NotificationType.TRAINING_TIME_CHANGED,
       targetType: NotificationTargetType.TRAINING,
       targetId: 'training-1',
       contextSectionId: 'section-1',
@@ -436,7 +425,7 @@ describe('buildPushData', () => {
     });
   });
 
-  it('EVENT: context still resolves correctly (Event may be Group- or Section-scoped)', () => {
+  it('EVENT: type + context still resolve correctly (Event may be Group- or Section-scoped)', () => {
     const group = buildGroup('group-1');
     const data = buildPushData(
       buildNotification({
@@ -451,16 +440,68 @@ describe('buildPushData', () => {
 
     expect(data).toEqual({
       notificationId: 'notif-1',
+      type: NotificationType.EVENT_CANCELLED,
       targetType: NotificationTargetType.EVENT,
       targetId: 'event-1',
       contextGroupId: 'group-1',
       contextSectionId: null,
     });
   });
+
+  describe('FORMAL_RANK_CORRECTION - type disambiguates reviewer flow from self-service flow, targetType alone cannot', () => {
+    const section = buildSection('section-1');
+
+    it('SUBMITTED carries the exact type the reviewer/admin flow must key off', () => {
+      const data = buildPushData(
+        buildNotification({
+          type: NotificationType.FORMAL_RANK_CORRECTION_SUBMITTED,
+          targetType: NotificationTargetType.FORMAL_RANK_CORRECTION,
+          targetId: 'correction-1',
+          contextSection: section,
+          contextGroup: null,
+        }),
+      );
+
+      expect(data).toMatchObject({
+        type: NotificationType.FORMAL_RANK_CORRECTION_SUBMITTED,
+        targetType: NotificationTargetType.FORMAL_RANK_CORRECTION,
+        targetId: 'correction-1',
+        contextSectionId: 'section-1',
+        contextGroupId: null,
+      });
+    });
+
+    it.each([
+      NotificationType.FORMAL_RANK_CORRECTION_REQUIRED,
+      NotificationType.FORMAL_RANK_CORRECTION_APPROVED,
+      NotificationType.FORMAL_RANK_CORRECTION_REJECTED,
+    ])(
+      '%s keeps its own type, distinct from SUBMITTED, even though targetType is identical',
+      (type) => {
+        const data = buildPushData(
+          buildNotification({
+            type,
+            targetType: NotificationTargetType.FORMAL_RANK_CORRECTION,
+            targetId: 'correction-1',
+            contextSection: section,
+            contextGroup: null,
+          }),
+        );
+
+        expect(data.type).toBe(type);
+        expect(data.type).not.toBe(
+          NotificationType.FORMAL_RANK_CORRECTION_SUBMITTED,
+        );
+        expect(data.targetType).toBe(
+          NotificationTargetType.FORMAL_RANK_CORRECTION,
+        );
+      },
+    );
+  });
 });
 
 describe('NotificationPushService.deliverMany - push data on the outgoing message', () => {
-  it('attaches the exact buildPushData shape as the message data, not just notificationId/targetType/targetId', async () => {
+  it('attaches the exact buildPushData shape as the message data, including type', async () => {
     const section = buildSection('section-1');
     const notification = buildNotification({
       type: NotificationType.TRAINING_CANCELLED,
@@ -483,10 +524,37 @@ describe('NotificationPushService.deliverMany - push data on the outgoing messag
     ];
     expect(messages[0].data).toEqual({
       notificationId: 'notif-1',
+      type: NotificationType.TRAINING_CANCELLED,
       targetType: NotificationTargetType.TRAINING,
       targetId: 'training-1',
       contextGroupId: null,
       contextSectionId: 'section-1',
     });
+  });
+
+  it('attaches FORMAL_RANK_CORRECTION_SUBMITTED type distinctly on the outgoing message', async () => {
+    const section = buildSection('section-1');
+    const notification = buildNotification({
+      type: NotificationType.FORMAL_RANK_CORRECTION_SUBMITTED,
+      targetType: NotificationTargetType.FORMAL_RANK_CORRECTION,
+      targetId: 'correction-1',
+      contextSection: section,
+      contextGroup: null,
+    });
+    const { em } = buildMockEm({
+      preferences: [buildPreferences()],
+      devices: [buildDevice()],
+    });
+    const { transport, send } = buildTransport([{ status: 'ok' }]);
+    const service = new NotificationPushService(em, transport);
+
+    await service.deliverMany([notification]);
+
+    const [messages] = send.mock.calls[0] as [
+      { data?: Record<string, unknown> }[],
+    ];
+    expect(messages[0].data?.type).toBe(
+      NotificationType.FORMAL_RANK_CORRECTION_SUBMITTED,
+    );
   });
 });
