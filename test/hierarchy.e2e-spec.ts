@@ -290,22 +290,24 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     return created;
   }
 
-  // Creates a standalone Section (no parent yet) by creating it under a
-  // disposable, immediately-detached scratch Group - the API only ever
-  // creates a Section under a Group (see SectionsController), so this is
-  // the only way to reach "a Section that exists but has no parent" via
-  // HTTP, mirroring how a real Section becomes standalone (detach).
+  // Creates a standalone Section (no parent) directly via POST /sections -
+  // see ADR-032. Dedicated coverage for that endpoint itself lives in
+  // standalone-sections.e2e-spec.ts; this helper exists so every hierarchy
+  // test below (attach/detach/invitations/no-inheritance) gets a real
+  // parentless Section to work with, exactly as a caller would create one.
   async function createStandaloneSection(
     token: string,
     overrides: Record<string, unknown> = {},
   ): Promise<SectionResponseDto> {
-    const scratch = await createGroup(token, { name: 'Scratch Parent' });
-    const section = await createSection(token, scratch.id, overrides);
-    await request(app.getHttpServer())
-      .delete(`/api/v1/sections/${section.id}/parent`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
-    return { ...section, parentGroupId: null };
+    const created = await bodyOf<SectionResponseDto>(
+      request(app.getHttpServer())
+        .post('/api/v1/sections')
+        .set('Authorization', `Bearer ${token}`)
+        .send(sectionPayload(overrides))
+        .expect(201),
+    );
+    createdGroupOrSectionIds.push(created.id);
+    return created;
   }
 
   describe('direct attach: Group <-> Group and Group <-> Section', () => {

@@ -29,6 +29,7 @@ import { RoleAssignmentsService } from './role-assignments.service';
 import { SectionController } from './section.controller';
 import { SectionsController } from './sections.controller';
 import { SectionsService } from './sections.service';
+import { StandaloneSectionsController } from './standalone-sections.controller';
 
 // Entities are driven through the plain EntityManager (auto-discovered
 // globally), so no forFeature() is needed. Group-level authorization is a
@@ -41,6 +42,7 @@ import { SectionsService } from './sections.service';
     GroupsController,
     SectionsController,
     SectionController,
+    StandaloneSectionsController,
     AcademiesController,
     CohortsController,
     RoleAssignmentsController,

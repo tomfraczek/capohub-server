@@ -28,6 +28,12 @@ import { RoleAssignmentsService } from './role-assignments.service';
 // the two intentionally duplicate a modest amount of lifecycle-transition
 // logic rather than share it, since a Group and a Section expose different
 // response DTOs and are reached through different route families.
+//
+// A Section may also have *no* parent at all - see ADR-032. create() and
+// createStandalone() below are the two public entry points for that; both
+// funnel through createInternal(), which is the single place that actually
+// builds the Section row plus its creator's membership/roles, so nothing
+// about that bootstrap can drift between the two paths.
 @Injectable()
 export class SectionsService {
   constructor(
@@ -51,28 +57,33 @@ export class SectionsService {
     actor: User,
     input: CreateSectionInput,
   ): Promise<SectionResponseDto> {
-    const section = await this.em.transactional(async (em) => {
-      const parent = await em.findOne(Group, { id: parentId });
-      if (!parent) {
-        throw this.notFound();
-      }
-      if (parent.status === GroupStatus.ARCHIVED) {
-        throw new ConflictException({
-          code: 'GROUP_ARCHIVED',
-          message:
-            'This group is archived and is read-only until it is restored',
-        });
-      }
+    return this.createInternal(parentId, actor, input);
+  }
 
-      const authorization =
-        await this.roleAssignmentsService.resolveAuthorization(
-          parentId,
-          actor.id,
-          em,
-        );
-      if (!authorization) {
-        throw this.notFound();
-      }
+  // Standalone Section - no parent Group at all (see ADR-032 and
+  // StandaloneSectionsController). Any authenticated user may call this,
+  // mirroring GroupsService.create: there is no parent to hold
+  // SECTION_CREATE against, so creating a standalone Section requires no
+  // permission of its own. The creator gets exactly the same bootstrap
+  // membership/roles as a Section created under a Group (see
+  // createInternal) - parentGroup simply stays null until someone
+  // (optionally, later) attaches it via HierarchyManagementService.
+  async createStandalone(
+    actor: User,
+    input: CreateSectionInput,
+  ): Promise<SectionResponseDto> {
+    return this.createInternal(null, actor, input);
+  }
+
+  private async createInternal(
+    parentId: string | null,
+    actor: User,
+    input: CreateSectionInput,
+  ): Promise<SectionResponseDto> {
+    const section = await this.em.transactional(async (em) => {
+      const parent = parentId
+        ? await this.resolveParentForCreate(em, parentId, actor)
+        : null;
 
       const section = new Section();
       section.publicCode = await generateUniquePublicCode(em);
@@ -101,23 +112,65 @@ export class SectionsService {
         actor,
       );
 
-      // Logged under the immediate parent, not a resolved root - "no
-      // inheritance" applies to audit trails too (see AuditLogEntry's own
-      // comment): CREATE_CHILD_GROUP describes something that happened to
-      // *this exact* parent, not to whatever root sits above it.
-      this.auditLogService.record(em, {
-        community: parent,
-        action: AuditAction.CREATE_CHILD_GROUP,
-        actor,
-        targetType: AuditTargetType.COMMUNITY,
-        targetId: section.id,
-      });
+      if (parent) {
+        // Logged under the immediate parent, not a resolved root - "no
+        // inheritance" applies to audit trails too (see AuditLogEntry's own
+        // comment): CREATE_CHILD_GROUP describes something that happened to
+        // *this exact* parent, not to whatever root sits above it.
+        this.auditLogService.record(em, {
+          community: parent,
+          action: AuditAction.CREATE_CHILD_GROUP,
+          actor,
+          targetType: AuditTargetType.COMMUNITY,
+          targetId: section.id,
+        });
+      } else {
+        // No parent to file this under - logged under the Section itself,
+        // exactly like GroupsService.create logs a new Group under itself
+        // (CREATE_COMMUNITY, not CREATE_CHILD_GROUP - nothing "child" about
+        // a standalone Section).
+        this.auditLogService.record(em, {
+          community: section,
+          action: AuditAction.CREATE_COMMUNITY,
+          actor,
+          targetType: AuditTargetType.COMMUNITY,
+          targetId: section.id,
+        });
+      }
       await em.flush();
 
       return section;
     });
 
     return toSectionResponseDto(section);
+  }
+
+  private async resolveParentForCreate(
+    em: EntityManager,
+    parentId: string,
+    actor: User,
+  ): Promise<Group> {
+    const parent = await em.findOne(Group, { id: parentId });
+    if (!parent) {
+      throw this.notFound();
+    }
+    if (parent.status === GroupStatus.ARCHIVED) {
+      throw new ConflictException({
+        code: 'GROUP_ARCHIVED',
+        message: 'This group is archived and is read-only until it is restored',
+      });
+    }
+
+    const authorization =
+      await this.roleAssignmentsService.resolveAuthorization(
+        parentId,
+        actor.id,
+        em,
+      );
+    if (!authorization) {
+      throw this.notFound();
+    }
+    return parent;
   }
 
   async list(parentId: string): Promise<SectionResponseDto[]> {

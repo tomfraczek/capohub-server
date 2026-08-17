@@ -35,7 +35,7 @@ const PENDING_SECTION_LIMIT = 20;
 // per-community lists).
 type CapabilityListKey = Exclude<
   keyof CommunityHomeCapabilitiesDto,
-  'canCreateGroup' | 'canManageAnyCommunity'
+  'canCreateGroup' | 'canCreateStandaloneSection' | 'canManageAnyCommunity'
 >;
 
 interface ParticipationResult {
@@ -143,8 +143,11 @@ export class CommunityHomeService {
       },
       capabilities: {
         // Creating a Group requires no permission at all - any
-        // authenticated user may (see GroupsService.create).
+        // authenticated user may (see GroupsService.create). Same for a
+        // standalone Section (no parent Group) - see
+        // SectionsService.createStandalone and ADR-032.
         canCreateGroup: true,
+        canCreateStandaloneSection: true,
         ...capabilityLists,
         canManageAnyCommunity:
           capabilityLists.canCreateSectionInGroupIds.length > 0 ||

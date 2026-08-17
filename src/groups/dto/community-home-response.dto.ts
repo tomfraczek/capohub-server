@@ -75,9 +75,11 @@ export interface CommunityHomeSummaryDto {
   actionableItemsCount: number;
 }
 
-// Contextual capability data. `canCreateGroup` is a real global boolean
-// (creating a Group requires no permission - see GroupsService.create).
-// Every other capability is a *pair* of community-id lists - `...GroupIds`
+// Contextual capability data. `canCreateGroup` and `canCreateStandaloneSection`
+// are real global booleans (creating a Group, or creating a Section with no
+// parent, both require no permission at all - see GroupsService.create and
+// SectionsService.createStandalone / ADR-032). Every other capability is a
+// *pair* of community-id lists - `...GroupIds`
 // and `...SectionIds` - never one mixed list: Group and Section have
 // genuinely different, non-inheriting authorization (Group has no
 // membership at all), and this codebase's established convention for "a
@@ -93,6 +95,13 @@ export interface CommunityHomeSummaryDto {
 // `myRoles`/`myCommunities` - always read them from here.
 export interface CommunityHomeCapabilitiesDto {
   canCreateGroup: boolean;
+  // Any authenticated user may create a standalone Section (no parent
+  // Group) - see ADR-032. Deliberately not a community-id list like
+  // canCreateSectionIn{Group,Section}Ids below: those gate creating a
+  // Section *under* a specific, already-existing community the caller
+  // administers; this one has no such community to key off of, mirroring
+  // canCreateGroup's own shape.
+  canCreateStandaloneSection: boolean;
   canCreateSectionInGroupIds: string[];
   canCreateSectionInSectionIds: string[];
   canCreateEventInGroupIds: string[];

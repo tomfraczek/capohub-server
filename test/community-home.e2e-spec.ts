@@ -342,6 +342,7 @@ describe('Community Home (e2e)', () => {
     });
     expect(home.capabilities).toEqual({
       canCreateGroup: true,
+      canCreateStandaloneSection: true,
       canCreateSectionInGroupIds: [],
       canCreateSectionInSectionIds: [],
       canCreateEventInGroupIds: [],
