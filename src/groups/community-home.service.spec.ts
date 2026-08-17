@@ -262,6 +262,105 @@ describe('CommunityHomeService', () => {
     expect(home.capabilities.canManageAnyCommunity).toBe(true);
   });
 
+  it('Section OWNER/ADMIN: full Training capability set, including Stats', async () => {
+    for (const role of [GroupRole.OWNER, GroupRole.ADMIN]) {
+      const section = buildSection({ id: 'section-1' });
+      const membership = buildMembership({ section, user: buildUser() });
+      const { service } = buildService({
+        participation: [
+          { userId: 'user-1', groupId: 'section-1', roles: [role] },
+        ],
+        sections: [section],
+        sectionMemberships: [membership],
+      });
+
+      const home = await service.getHome(buildUser());
+
+      expect(home.capabilities.canCreateTrainingInSectionIds).toEqual([
+        'section-1',
+      ]);
+      expect(home.capabilities.canCreateTrainingSeriesInSectionIds).toEqual([
+        'section-1',
+      ]);
+      expect(home.capabilities.canManageTrainingSeriesInSectionIds).toEqual([
+        'section-1',
+      ]);
+      expect(home.capabilities.canViewTrainingStatsInSectionIds).toEqual([
+        'section-1',
+      ]);
+    }
+  });
+
+  it('Section INSTRUCTOR: can create/manage Trainings but NOT view Stats', async () => {
+    const section = buildSection({ id: 'section-1' });
+    const membership = buildMembership({ section, user: buildUser() });
+    const { service } = buildService({
+      participation: [
+        {
+          userId: 'user-1',
+          groupId: 'section-1',
+          roles: [GroupRole.INSTRUCTOR],
+        },
+      ],
+      sections: [section],
+      sectionMemberships: [membership],
+    });
+
+    const home = await service.getHome(buildUser());
+
+    expect(home.capabilities.canCreateTrainingInSectionIds).toEqual([
+      'section-1',
+    ]);
+    expect(home.capabilities.canCreateTrainingSeriesInSectionIds).toEqual([
+      'section-1',
+    ]);
+    expect(home.capabilities.canManageTrainingSeriesInSectionIds).toEqual([
+      'section-1',
+    ]);
+    expect(home.capabilities.canViewTrainingStatsInSectionIds).toEqual([]);
+  });
+
+  it('a plain MEMBER (Section) gets no Training capability at all', async () => {
+    const section = buildSection({ id: 'section-1' });
+    const membership = buildMembership({ section, user: buildUser() });
+    const { service } = buildService({
+      participation: [
+        { userId: 'user-1', groupId: 'section-1', roles: [GroupRole.MEMBER] },
+      ],
+      sections: [section],
+      sectionMemberships: [membership],
+    });
+
+    const home = await service.getHome(buildUser());
+
+    expect(home.capabilities.canCreateTrainingInSectionIds).toEqual([]);
+    expect(home.capabilities.canCreateTrainingSeriesInSectionIds).toEqual([]);
+    expect(home.capabilities.canManageTrainingSeriesInSectionIds).toEqual([]);
+    expect(home.capabilities.canViewTrainingStatsInSectionIds).toEqual([]);
+  });
+
+  it('Training capabilities are never populated for a Group (Training is Section-only)', async () => {
+    const group = buildGroup({ id: 'group-1' });
+    const { service } = buildService({
+      participation: [
+        { userId: 'user-1', groupId: 'group-1', roles: [GroupRole.OWNER] },
+      ],
+      groups: [group],
+    });
+
+    const home = await service.getHome(buildUser());
+
+    expect(home.capabilities.canCreateTrainingInSectionIds).toEqual([]);
+    expect(home.capabilities.canCreateTrainingSeriesInSectionIds).toEqual([]);
+    expect(home.capabilities.canManageTrainingSeriesInSectionIds).toEqual([]);
+    expect(home.capabilities.canViewTrainingStatsInSectionIds).toEqual([]);
+    expect(
+      (home.capabilities as unknown as Record<string, unknown>)[
+        'canCreateTrainingInGroupIds'
+      ],
+    ).toBeUndefined();
+  });
+
   it('returns an empty dashboard when the user participates in nothing', async () => {
     const { service } = buildService({ participation: [] });
 

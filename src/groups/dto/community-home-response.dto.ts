@@ -144,6 +144,18 @@ export interface CommunityHomeCapabilitiesDto {
   canViewRecipientGroupsInSectionIds: string[];
   canManageRecipientGroupsInGroupIds: string[];
   canManageRecipientGroupsInSectionIds: string[];
+  // Training/TrainingSeries are Section-only (a Training never belongs to a
+  // Group) - no ...InGroupIds counterpart, mirroring the membership-lifecycle
+  // fields above. Create-Training, create-Series, and manage-Series
+  // (edit/cancel) all gate on the identical TRAINING_MANAGE permission at
+  // the endpoint level (see TrainingsController/TrainingSeriesController) -
+  // three distinct fields for frontend clarity, one underlying check.
+  canCreateTrainingInSectionIds: string[];
+  canCreateTrainingSeriesInSectionIds: string[];
+  canManageTrainingSeriesInSectionIds: string[];
+  // TRAINING_STATS_VIEW - deliberately withheld from INSTRUCTOR, see the
+  // permission enum's own comment.
+  canViewTrainingStatsInSectionIds: string[];
   // True iff canCreateSectionIn{Group,Section}Ids is non-empty - i.e. the
   // user holds GROUP_EDIT (Admin/Owner) in at least one community. A
   // convenience aggregate, not an independent business rule.

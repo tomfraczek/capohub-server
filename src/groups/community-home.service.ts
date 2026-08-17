@@ -251,6 +251,10 @@ export class CommunityHomeService {
       canViewRecipientGroupsInSectionIds: [],
       canManageRecipientGroupsInGroupIds: [],
       canManageRecipientGroupsInSectionIds: [],
+      canCreateTrainingInSectionIds: [],
+      canCreateTrainingSeriesInSectionIds: [],
+      canManageTrainingSeriesInSectionIds: [],
+      canViewTrainingStatsInSectionIds: [],
     };
 
     const rootGroupIdCache = new Map<string, string>();
@@ -456,6 +460,20 @@ export class CommunityHomeService {
             ? 'canManageRecipientGroupsInGroupIds'
             : 'canManageRecipientGroupsInSectionIds',
         );
+      }
+      // Training/TrainingSeries create+manage and Stats-viewing are all
+      // Section-only and gate on the same TRAINING_MANAGE permission at the
+      // endpoint level - computed once and pushed to all three lists
+      // instead of repeating the identical has() check three times.
+      if (!isGroup && community.status === GroupStatus.ACTIVE) {
+        if (has(GroupPermission.TRAINING_MANAGE)) {
+          push('canCreateTrainingInSectionIds');
+          push('canCreateTrainingSeriesInSectionIds');
+          push('canManageTrainingSeriesInSectionIds');
+        }
+        if (has(GroupPermission.TRAINING_STATS_VIEW)) {
+          push('canViewTrainingStatsInSectionIds');
+        }
       }
     }
 
