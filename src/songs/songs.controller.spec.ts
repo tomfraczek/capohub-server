@@ -29,6 +29,7 @@ function buildDetailsResponse(
     title: 'Paranauê',
     authorName: null,
     status: SongStatus.DRAFT,
+    rejectionReason: null,
     category: { id: 'cat-1', code: 'CORRIDO', name: 'Corrido', position: 1 },
     createdBy: null,
     alternativeTitles: [],
@@ -172,15 +173,16 @@ describe('SongsController', () => {
   });
 
   describe('delete', () => {
-    it('delegates to SongsService.delete and returns void (204)', async () => {
+    it('delegates to SongsService.delete with the id param and current user, returning void (204)', async () => {
+      const user = buildUser();
       const del = jest.fn().mockResolvedValue(undefined);
       const controller = new SongsController({
         delete: del,
       } as unknown as SongsService);
 
-      const response = await controller.delete('song-uuid-1');
+      const response = await controller.delete('song-uuid-1', user);
 
-      expect(del).toHaveBeenCalledWith('song-uuid-1');
+      expect(del).toHaveBeenCalledWith('song-uuid-1', user);
       expect(response).toBeUndefined();
     });
   });
@@ -201,28 +203,133 @@ describe('SongsController', () => {
     });
   });
 
-  describe.each([
-    ['publish', 'publish'] as const,
-    ['reject', 'reject'] as const,
-    ['hide', 'hide'] as const,
-    ['restore', 'restore'] as const,
-  ])('%s', (controllerMethod, serviceMethod) => {
-    it(`delegates to SongsService.${serviceMethod} with the id param`, async () => {
+  describe('publish', () => {
+    it('delegates to SongsService.publish with the id param and current user', async () => {
+      const user = buildUser();
       const dto = buildDetailsResponse();
-      const serviceFn = jest.fn().mockResolvedValue(dto);
+      const publish = jest.fn().mockResolvedValue(dto);
       const controller = new SongsController({
-        [serviceMethod]: serviceFn,
+        publish,
       } as unknown as SongsService);
 
-      const response = await (
-        controller[controllerMethod as keyof SongsController] as (
-          id: string,
-        ) => Promise<SongDetailsResponseDto>
-      ).call(controller, 'song-uuid-1');
+      const response = await controller.publish('song-uuid-1', user);
 
-      expect(serviceFn).toHaveBeenCalledWith('song-uuid-1');
+      expect(publish).toHaveBeenCalledWith('song-uuid-1', user);
       expect(response).toBe(dto);
     });
+
+    it('is guarded by PermissionsGuard and requires Permission.CONTENT_APPROVE', () => {
+      const reflector = new Reflector();
+      const method: keyof SongsController = 'publish';
+      const handlerRef = SongsController.prototype[method];
+
+      expect(reflector.get<unknown[]>(GUARDS_METADATA, handlerRef)).toEqual([
+        PermissionsGuard,
+      ]);
+      expect(reflector.get<Permission[]>(PERMISSIONS_KEY, handlerRef)).toEqual([
+        Permission.CONTENT_APPROVE,
+      ]);
+    });
+  });
+
+  describe('reject', () => {
+    it('delegates to SongsService.reject with the id param, current user and body', async () => {
+      const user = buildUser();
+      const dto = buildDetailsResponse();
+      const reject = jest.fn().mockResolvedValue(dto);
+      const controller = new SongsController({
+        reject,
+      } as unknown as SongsService);
+
+      const response = await controller.reject('song-uuid-1', user, {
+        reason: 'Missing translation',
+      });
+
+      expect(reject).toHaveBeenCalledWith('song-uuid-1', user, {
+        reason: 'Missing translation',
+      });
+      expect(response).toBe(dto);
+    });
+
+    it('is guarded by PermissionsGuard and requires Permission.CONTENT_APPROVE', () => {
+      const reflector = new Reflector();
+      const method: keyof SongsController = 'reject';
+      const handlerRef = SongsController.prototype[method];
+
+      expect(reflector.get<unknown[]>(GUARDS_METADATA, handlerRef)).toEqual([
+        PermissionsGuard,
+      ]);
+      expect(reflector.get<Permission[]>(PERMISSIONS_KEY, handlerRef)).toEqual([
+        Permission.CONTENT_APPROVE,
+      ]);
+    });
+  });
+
+  describe.each([['hide', 'hide'] as const, ['restore', 'restore'] as const])(
+    '%s',
+    (controllerMethod, serviceMethod) => {
+      it(`delegates to SongsService.${serviceMethod} with the id param`, async () => {
+        const dto = buildDetailsResponse();
+        const serviceFn = jest.fn().mockResolvedValue(dto);
+        const controller = new SongsController({
+          [serviceMethod]: serviceFn,
+        } as unknown as SongsService);
+
+        const response = await (
+          controller[controllerMethod as keyof SongsController] as (
+            id: string,
+          ) => Promise<SongDetailsResponseDto>
+        ).call(controller, 'song-uuid-1');
+
+        expect(serviceFn).toHaveBeenCalledWith('song-uuid-1');
+        expect(response).toBe(dto);
+      });
+
+      it('is guarded by PermissionsGuard and requires Permission.CONTENT_HIDE', () => {
+        const reflector = new Reflector();
+        const handlerRef = SongsController.prototype[controllerMethod];
+
+        expect(reflector.get<unknown[]>(GUARDS_METADATA, handlerRef)).toEqual([
+          PermissionsGuard,
+        ]);
+        expect(
+          reflector.get<Permission[]>(PERMISSIONS_KEY, handlerRef),
+        ).toEqual([Permission.CONTENT_HIDE]);
+      });
+    },
+  );
+
+  describe('create guard/permission metadata', () => {
+    it('is guarded by PermissionsGuard and requires Permission.SONG_CREATE', () => {
+      const reflector = new Reflector();
+      const method: keyof SongsController = 'create';
+      const handlerRef = SongsController.prototype[method];
+
+      expect(reflector.get<unknown[]>(GUARDS_METADATA, handlerRef)).toEqual([
+        PermissionsGuard,
+      ]);
+      expect(reflector.get<Permission[]>(PERMISSIONS_KEY, handlerRef)).toEqual([
+        Permission.SONG_CREATE,
+      ]);
+    });
+  });
+
+  describe('update/submit/delete carry no declarative @Permissions()', () => {
+    // Unlike create/publish/reject/hide/restore, these three resolve
+    // "own vs. any" only after loading the Song, which a declarative
+    // controller-level permission cannot express - see
+    // SongsService.assertCanEditDirectly/delete's own comments.
+    it.each([['update'], ['submit'], ['delete']] as const)(
+      '%s has no PERMISSIONS_KEY metadata',
+      (methodName) => {
+        const reflector = new Reflector();
+        const handlerRef = SongsController.prototype[methodName];
+
+        expect(
+          reflector.get<Permission[] | undefined>(PERMISSIONS_KEY, handlerRef),
+        ).toBeUndefined();
+      },
+    );
   });
 
   describe('media verification', () => {

@@ -79,6 +79,7 @@ export function toSongDetailsResponseDto(
     title: song.title,
     authorName: song.authorName,
     status: song.status,
+    rejectionReason: song.rejectionReason,
     category: toSongCategoryResponseDto(song.category),
     createdBy: toSongUserRefDto(song.createdBy),
     alternativeTitles: song.alternativeTitles

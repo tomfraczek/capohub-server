@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -8,6 +9,8 @@ import {
   UniqueConstraintViolationException,
 } from '@mikro-orm/core';
 import type { EntityManager } from '@mikro-orm/postgresql';
+import { GlobalRole } from '../auth/permissions/global-role.enum';
+import { PermissionService } from '../auth/permissions/permission.service';
 import { User } from '../users/entities/user.entity';
 import { CreateSongInput } from './dto/create-song.schema';
 import { SongAlternativeTitle } from './entities/song-alternative-title.entity';
@@ -28,6 +31,7 @@ import { SongRhythm } from '../rhythms/entities/song-rhythm.entity';
 import { FavoriteSongsService } from '../song-library/favorite-songs.service';
 import { LearningStatusService } from '../song-library/learning-status.service';
 import { SongNotesService } from '../song-library/song-notes.service';
+import { SongContentService } from './song-content.service';
 import { SongDuplicateService } from './song-duplicate.service';
 import { SongsService } from './songs.service';
 
@@ -53,11 +57,21 @@ function buildMockDuplicateService(
 // note / no playlists" for SongDetails' user-context fields, unless it
 // specifically exercises that aggregation (see the "SongDetails user
 // context" describe block below, which passes its own overrides).
+//
+// SongContentService and PermissionService are real, un-mocked instances,
+// not jest.fn() stand-ins: SongContentService's replace-all logic runs
+// against the same mock `em` these tests already build (it is exactly the
+// code this file used to inline before it was extracted - see
+// song-content.service.ts), and PermissionService is a pure lookup over the
+// static ROLE_PERMISSIONS map with no DB access at all - both are cheaper
+// and more faithful to mock here than to stub out.
 function buildMockUserContextServices(): [
   FavoriteSongsService,
   LearningStatusService,
   SongNotesService,
   PlaylistsService,
+  SongContentService,
+  PermissionService,
 ] {
   const favoriteSongsService = {
     isFavorite: jest.fn().mockResolvedValue(false),
@@ -77,6 +91,8 @@ function buildMockUserContextServices(): [
     learningStatusService,
     songNotesService,
     playlistsService,
+    new SongContentService(),
+    new PermissionService(),
   ];
 }
 
@@ -89,10 +105,17 @@ function buildCategory(overrides: Partial<SongCategory> = {}): SongCategory {
   return Object.assign(category, overrides);
 }
 
+// MODERATOR by default - broad enough (SONG_CREATE, SONG_EDIT_OWN,
+// SONG_EDIT_ANY, CONTENT_APPROVE, CONTENT_HIDE) that most tests below don't
+// have to think about permissions at all, matching how little those tests
+// actually care about the permission model. Tests that specifically
+// exercise ownership/permission boundaries (see 'update', 'delete',
+// 'moderation transitions' self-approval) override globalRole explicitly.
 function buildUser(overrides: Partial<User> = {}): User {
   const user = new User();
   user.email = 'user@example.com';
   user.displayName = 'Test User';
+  user.globalRole = GlobalRole.MODERATOR;
   return Object.assign(user, overrides);
 }
 
@@ -410,6 +433,8 @@ describe('SongsService', () => {
         learningStatusService,
         songNotesService,
         playlistsService,
+        songContentService,
+        permissionService,
       ] = buildMockUserContextServices();
       const service = new SongsService(
         em,
@@ -418,6 +443,8 @@ describe('SongsService', () => {
         learningStatusService,
         songNotesService,
         playlistsService,
+        songContentService,
+        permissionService,
       );
 
       const result = await service.getDetails('song-1');
@@ -453,6 +480,8 @@ describe('SongsService', () => {
         learningStatusService,
         songNotesService,
         playlistsService,
+        new SongContentService(),
+        new PermissionService(),
       );
 
       const result = await service.getDetails('song-1', 'user-1');
@@ -545,12 +574,14 @@ describe('SongsService', () => {
   });
 
   describe('update', () => {
-    it('replaces child collections and never changes createdBy or status', async () => {
-      const owner = buildUser({ email: 'owner@example.com' });
-      const editor = buildUser({ email: 'editor@example.com' });
+    it('directly edits an own DRAFT: replaces child collections, keeps createdBy and status', async () => {
+      const owner = buildUser({
+        email: 'owner@example.com',
+        globalRole: GlobalRole.EDITOR,
+      });
       const existingSong = buildPopulatedSong({
         createdBy: owner,
-        status: SongStatus.PUBLISHED,
+        status: SongStatus.DRAFT,
       });
 
       const em = buildMockEm({ detailsSong: existingSong });
@@ -567,7 +598,7 @@ describe('SongsService', () => {
       );
       await service.update(
         existingSong.id,
-        editor,
+        owner,
         buildCreateInput({ title: 'New title' }),
       );
 
@@ -585,7 +616,7 @@ describe('SongsService', () => {
       });
 
       expect(existingSong.createdBy).toBe(owner);
-      expect(existingSong.status).toBe(SongStatus.PUBLISHED);
+      expect(existingSong.status).toBe(SongStatus.DRAFT);
       expect(existingSong.title).toBe('New title');
     });
 
@@ -606,6 +637,128 @@ describe('SongsService', () => {
       await expect(
         service.update('missing-id', buildUser(), buildCreateInput()),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    // The central fix of the moderation model audit: PUBLISHED/HIDDEN
+    // content must never be reachable through this method again, for
+    // anyone, regardless of role or ownership - see
+    // SongsService.assertDirectlyEditable and ADR-equivalent report.
+    it.each([SongStatus.PUBLISHED, SongStatus.HIDDEN])(
+      'rejects editing a %s song directly with 409 SONG_PROTECTED - use a SongEditProposal instead',
+      async (status) => {
+        const song = buildPopulatedSong({ status });
+        const em = buildMockEm({ detailsSong: song });
+        const service = new SongsService(
+          em,
+          buildMockDuplicateService(),
+          ...buildMockUserContextServices(),
+        );
+
+        const error: unknown = await service
+          .update(song.id, buildUser(), buildCreateInput())
+          .catch((caught: unknown) => caught);
+
+        expect(error).toBeInstanceOf(ConflictException);
+        expect((error as ConflictException).getResponse()).toMatchObject({
+          code: 'SONG_PROTECTED',
+        });
+      },
+    );
+
+    it('rejects editing a PENDING_REVIEW song directly with 409 SONG_UNDER_REVIEW - no parallel edit-while-under-review workflow', async () => {
+      const song = buildPopulatedSong({ status: SongStatus.PENDING_REVIEW });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      const error: unknown = await service
+        .update(song.id, buildUser(), buildCreateInput())
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).getResponse()).toMatchObject({
+        code: 'SONG_UNDER_REVIEW',
+      });
+    });
+
+    it("rejects a non-owner without SONG_EDIT_ANY from editing someone else's DRAFT with 403", async () => {
+      const owner = buildUser({ email: 'owner@example.com' });
+      const song = buildPopulatedSong({
+        status: SongStatus.DRAFT,
+        createdBy: owner,
+      });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+      // EDITOR holds SONG_EDIT_OWN but not SONG_EDIT_ANY.
+      const stranger = buildUser({
+        email: 'stranger@example.com',
+        globalRole: GlobalRole.EDITOR,
+      });
+
+      const error: unknown = await service
+        .update(song.id, stranger, buildCreateInput())
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect((error as ForbiddenException).getResponse()).toMatchObject({
+        code: 'INSUFFICIENT_SONG_PERMISSIONS',
+      });
+    });
+
+    it("allows a MODERATOR (SONG_EDIT_ANY) to edit someone else's DRAFT", async () => {
+      const owner = buildUser({ email: 'owner@example.com' });
+      const song = buildPopulatedSong({
+        status: SongStatus.DRAFT,
+        createdBy: owner,
+      });
+      const em = buildMockEm({ detailsSong: song });
+      em.findOne.mockImplementation((entity: unknown) => {
+        if (entity === SongCategory) return Promise.resolve(buildCategory());
+        if (entity === Song) return Promise.resolve(song);
+        return Promise.resolve(null);
+      });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+      const moderator = buildUser({
+        email: 'moderator@example.com',
+        globalRole: GlobalRole.MODERATOR,
+      });
+
+      await service.update(
+        song.id,
+        moderator,
+        buildCreateInput({ title: 'Moderator edit' }),
+      );
+
+      expect(song.title).toBe('Moderator edit');
+    });
+
+    it('rejects a USER-role owner (no SONG_EDIT_OWN) from editing their own DRAFT with 403 - ownership alone is never sufficient', async () => {
+      const owner = buildUser({ globalRole: GlobalRole.USER });
+      const song = buildPopulatedSong({
+        status: SongStatus.DRAFT,
+        createdBy: owner,
+      });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      await expect(
+        service.update(song.id, owner, buildCreateInput()),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -734,7 +887,7 @@ describe('SongsService', () => {
         ...buildMockUserContextServices(),
       );
 
-      await service.publish(song.id);
+      await service.publish(song.id, buildUser());
 
       expect(song.status).toBe(SongStatus.PUBLISHED);
     });
@@ -748,10 +901,41 @@ describe('SongsService', () => {
         ...buildMockUserContextServices(),
       );
 
-      await expect(service.publish(song.id)).rejects.toThrow(ConflictException);
+      await expect(service.publish(song.id, buildUser())).rejects.toThrow(
+        ConflictException,
+      );
     });
 
-    it('reject: PENDING_REVIEW -> REJECTED', async () => {
+    // The other central fix of the moderation model audit: a permission
+    // (CONTENT_APPROVE) is necessary but never sufficient - the song's own
+    // creator can never publish or reject their own submission, even when
+    // they separately hold that permission (e.g. a MODERATOR reviewing
+    // their own draft).
+    it('publish: rejects self-approval with 403, even when the actor holds CONTENT_APPROVE', async () => {
+      const author = buildUser({ globalRole: GlobalRole.MODERATOR });
+      const song = buildPopulatedSong({
+        status: SongStatus.PENDING_REVIEW,
+        createdBy: author,
+      });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      const error: unknown = await service
+        .publish(song.id, author)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect((error as ForbiddenException).getResponse()).toMatchObject({
+        code: 'SELF_APPROVAL_FORBIDDEN',
+      });
+      expect(song.status).toBe(SongStatus.PENDING_REVIEW);
+    });
+
+    it('reject: PENDING_REVIEW -> REJECTED, storing the rejection reason', async () => {
       const song = buildPopulatedSong({ status: SongStatus.PENDING_REVIEW });
       const em = buildMockEm({ detailsSong: song });
       const service = new SongsService(
@@ -760,9 +944,49 @@ describe('SongsService', () => {
         ...buildMockUserContextServices(),
       );
 
-      await service.reject(song.id);
+      await service.reject(song.id, buildUser(), {
+        reason: 'Missing translation for the chorus',
+      });
 
       expect(song.status).toBe(SongStatus.REJECTED);
+      expect(song.rejectionReason).toBe('Missing translation for the chorus');
+    });
+
+    it('reject: rejects self-approval with 403, even when the actor holds CONTENT_APPROVE', async () => {
+      const author = buildUser({ globalRole: GlobalRole.MODERATOR });
+      const song = buildPopulatedSong({
+        status: SongStatus.PENDING_REVIEW,
+        createdBy: author,
+      });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      await expect(
+        service.reject(song.id, author, { reason: null }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(song.status).toBe(SongStatus.PENDING_REVIEW);
+    });
+
+    it('submit: clears a stale rejectionReason from a previous rejection', async () => {
+      const song = buildCompleteDraftSong({
+        status: SongStatus.REJECTED,
+        rejectionReason: 'Old reason',
+      });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      await service.submit(song.id, buildUser());
+
+      expect(song.status).toBe(SongStatus.PENDING_REVIEW);
+      expect(song.rejectionReason).toBeNull();
     });
 
     it('hide: PUBLISHED -> HIDDEN', async () => {
@@ -795,8 +1019,12 @@ describe('SongsService', () => {
   });
 
   describe('delete', () => {
-    it('physically deletes a DRAFT song', async () => {
-      const song = buildPopulatedSong({ status: SongStatus.DRAFT });
+    it("deletes the caller's own DRAFT song", async () => {
+      const owner = buildUser();
+      const song = buildPopulatedSong({
+        status: SongStatus.DRAFT,
+        createdBy: owner,
+      });
       const em = buildMockEm({ detailsSong: song });
       const service = new SongsService(
         em,
@@ -804,13 +1032,17 @@ describe('SongsService', () => {
         ...buildMockUserContextServices(),
       );
 
-      await service.delete(song.id);
+      await service.delete(song.id, owner);
 
       expect(em.remove).toHaveBeenCalledWith(song);
     });
 
-    it('rejects deleting a PUBLISHED song with 409', async () => {
-      const song = buildPopulatedSong({ status: SongStatus.PUBLISHED });
+    it('rejects deleting a PUBLISHED song with 409, regardless of who asks', async () => {
+      const owner = buildUser();
+      const song = buildPopulatedSong({
+        status: SongStatus.PUBLISHED,
+        createdBy: owner,
+      });
       const em = buildMockEm({ detailsSong: song });
       const service = new SongsService(
         em,
@@ -818,8 +1050,58 @@ describe('SongsService', () => {
         ...buildMockUserContextServices(),
       );
 
-      await expect(service.delete(song.id)).rejects.toThrow(ConflictException);
+      await expect(service.delete(song.id, owner)).rejects.toThrow(
+        ConflictException,
+      );
       expect(em.remove).not.toHaveBeenCalled();
+    });
+
+    it("rejects deleting someone else's DRAFT without SONG_DELETE with 403 SONG_NOT_OWNED", async () => {
+      const owner = buildUser({ email: 'owner@example.com' });
+      const song = buildPopulatedSong({
+        status: SongStatus.DRAFT,
+        createdBy: owner,
+      });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+      // MODERATOR does not include SONG_DELETE (ADMIN-only).
+      const stranger = buildUser({ email: 'stranger@example.com' });
+
+      const error: unknown = await service
+        .delete(song.id, stranger)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect((error as ForbiddenException).getResponse()).toMatchObject({
+        code: 'SONG_NOT_OWNED',
+      });
+      expect(em.remove).not.toHaveBeenCalled();
+    });
+
+    it('allows an ADMIN (SONG_DELETE) to delete a DRAFT they do not own', async () => {
+      const owner = buildUser({ email: 'owner@example.com' });
+      const song = buildPopulatedSong({
+        status: SongStatus.DRAFT,
+        createdBy: owner,
+      });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+      const admin = buildUser({
+        email: 'admin@example.com',
+        globalRole: GlobalRole.ADMIN,
+      });
+
+      await service.delete(song.id, admin);
+
+      expect(em.remove).toHaveBeenCalledWith(song);
     });
   });
 

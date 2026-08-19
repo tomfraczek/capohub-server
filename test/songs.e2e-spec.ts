@@ -33,9 +33,15 @@ import { Tag } from '../src/songs/entities/tag.entity';
 const OWNER_TOKEN = 'valid-songs-owner-token';
 const OTHER_TOKEN = 'valid-songs-other-token';
 const MODERATOR_TOKEN = 'valid-songs-moderator-token';
+// Deliberately never elevated - stays at the default globalRole USER for
+// the lifetime of this file, so tests can assert what a completely
+// unprivileged (but authenticated) account can and cannot do (see the
+// moderation model: SONG_CREATE/SONG_EDIT_*/CONTENT_* are all EDITOR+).
+const PLAIN_USER_TOKEN = 'valid-songs-plain-user-token';
 const OWNER_CLERK_ID = 'user_test_songs_owner';
 const OTHER_CLERK_ID = 'user_test_songs_other';
 const MODERATOR_CLERK_ID = 'user_test_songs_moderator';
+const PLAIN_USER_CLERK_ID = 'user_test_songs_plain_user';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
   [OWNER_TOKEN]: {
@@ -56,6 +62,12 @@ const TOKEN_TO_AUTH: Record<string, AuthContext> = {
     tokenType: 'session_token',
     claims: { sub: MODERATOR_CLERK_ID, sid: 'sess_songs_moderator' },
   },
+  [PLAIN_USER_TOKEN]: {
+    userId: PLAIN_USER_CLERK_ID,
+    sessionId: 'sess_songs_plain_user',
+    tokenType: 'session_token',
+    claims: { sub: PLAIN_USER_CLERK_ID, sid: 'sess_songs_plain_user' },
+  },
 };
 
 const FIXTURE_CLERK_PROFILES: Record<
@@ -73,6 +85,10 @@ const FIXTURE_CLERK_PROFILES: Record<
   [MODERATOR_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/songs-moderator.png',
     primaryEmailAddress: { emailAddress: 'songs.moderator@example.com' },
+  },
+  [PLAIN_USER_CLERK_ID]: {
+    imageUrl: 'https://img.clerk.com/songs-plain-user.png',
+    primaryEmailAddress: { emailAddress: 'songs.plain.user@example.com' },
   },
 };
 
@@ -202,6 +218,16 @@ describe('Songs (e2e)', () => {
     secondCategory.isActive = true;
 
     await em.persistAndFlush([category, secondCategory]);
+
+    // OWNER_TOKEN/OTHER_TOKEN create, edit and submit their own songs
+    // throughout this file, which requires SONG_CREATE/SONG_EDIT_OWN
+    // (EDITOR+ - see role-permissions.map.ts); MODERATOR_TOKEN approves/
+    // rejects/hides/restores content and verifies media, which requires
+    // CONTENT_APPROVE/CONTENT_HIDE (MODERATOR+). PLAIN_USER_TOKEN is
+    // deliberately left at the default USER tier - see its own comment.
+    await grantGlobalRole(OWNER_TOKEN, GlobalRole.EDITOR);
+    await grantGlobalRole(OTHER_TOKEN, GlobalRole.EDITOR);
+    await grantGlobalRole(MODERATOR_TOKEN, GlobalRole.MODERATOR);
   });
 
   afterAll(async () => {
@@ -257,14 +283,23 @@ describe('Songs (e2e)', () => {
     return created;
   }
 
-  async function publishSong(token: string, id: string): Promise<void> {
+  // publisherToken defaults to MODERATOR_TOKEN, never submitterToken - the
+  // song's own creator can never self-approve their own submission (see
+  // SongsService.assertNotSelfApproval). Every existing call site that
+  // passes just (token, id) therefore now gets its song published by
+  // MODERATOR_TOKEN, exactly as a real moderation workflow requires.
+  async function publishSong(
+    submitterToken: string,
+    id: string,
+    publisherToken: string = MODERATOR_TOKEN,
+  ): Promise<void> {
     await request(app.getHttpServer())
       .post(`/api/v1/songs/${id}/submit`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${submitterToken}`)
       .expect(201);
     await request(app.getHttpServer())
       .post(`/api/v1/songs/${id}/publish`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${publisherToken}`)
       .expect(201);
   }
 
@@ -281,12 +316,16 @@ describe('Songs (e2e)', () => {
     );
   }
 
-  // Grants CONTENT_APPROVE by setting globalRole directly through the
-  // EntityManager fixture, never through a public endpoint (there is none -
-  // globalRole is never settable via the API, see UserService). The first
-  // authenticated request is what creates the local User row via
-  // findOrCreateFromClerk, so it must happen before we can look the row up.
-  async function grantContentApprove(token: string): Promise<void> {
+  // Sets globalRole directly through the EntityManager fixture, never
+  // through a public endpoint (there is none - globalRole is never
+  // settable via the API, see UserService). The first authenticated
+  // request is what creates the local User row via findOrCreateFromClerk,
+  // so it must happen before we can look the row up - safe to call more
+  // than once per token (idempotent).
+  async function grantGlobalRole(
+    token: string,
+    role: GlobalRole,
+  ): Promise<void> {
     await request(app.getHttpServer())
       .get('/api/v1/songs')
       .query({ page: 1, limit: 1 })
@@ -296,8 +335,12 @@ describe('Songs (e2e)', () => {
     const em = app.get(EntityManager).fork();
     const auth = TOKEN_TO_AUTH[token];
     const user = await em.findOneOrFail(User, { clerkUserId: auth.userId });
-    user.globalRole = GlobalRole.MODERATOR;
+    user.globalRole = role;
     await em.flush();
+  }
+
+  async function grantContentApprove(token: string): Promise<void> {
+    await grantGlobalRole(token, GlobalRole.MODERATOR);
   }
 
   async function getSongDetails(
@@ -751,6 +794,11 @@ describe('Songs (e2e)', () => {
   });
 
   describe('moderation', () => {
+    // Submitted by its own creator (OWNER_TOKEN, EDITOR), but every
+    // approve/reject/hide/restore step is done by MODERATOR_TOKEN - the
+    // creator can never self-approve their own submission (see
+    // SongsService.assertNotSelfApproval), so a single-actor walk of this
+    // lifecycle is no longer representable end-to-end.
     it('walks DRAFT -> PENDING_REVIEW -> PUBLISHED -> HIDDEN -> PUBLISHED', async () => {
       const song = await createSong(
         OWNER_TOKEN,
@@ -769,7 +817,7 @@ describe('Songs (e2e)', () => {
       const published = await bodyOf<SongDetailsResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/songs/${id}/publish`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
           .expect(201),
       );
       expect(published.status).toBe('PUBLISHED');
@@ -777,7 +825,7 @@ describe('Songs (e2e)', () => {
       const hidden = await bodyOf<SongDetailsResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/songs/${id}/hide`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
           .expect(201),
       );
       expect(hidden.status).toBe('HIDDEN');
@@ -785,13 +833,13 @@ describe('Songs (e2e)', () => {
       const restored = await bodyOf<SongDetailsResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/songs/${id}/restore`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
           .expect(201),
       );
       expect(restored.status).toBe('PUBLISHED');
     });
 
-    it('DRAFT -> PENDING_REVIEW -> REJECTED, then resubmit', async () => {
+    it('DRAFT -> PENDING_REVIEW -> REJECTED (with a reason), then resubmit clears it', async () => {
       const song = await createSong(
         OWNER_TOKEN,
         minimalSongPayload(category.id),
@@ -806,10 +854,14 @@ describe('Songs (e2e)', () => {
       const rejected = await bodyOf<SongDetailsResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/songs/${id}/reject`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+          .send({ reason: 'Missing translation for the chorus' })
           .expect(201),
       );
       expect(rejected.status).toBe('REJECTED');
+      expect(rejected.rejectionReason).toBe(
+        'Missing translation for the chorus',
+      );
 
       const resubmitted = await bodyOf<SongDetailsResponseDto>(
         request(app.getHttpServer())
@@ -818,6 +870,7 @@ describe('Songs (e2e)', () => {
           .expect(201),
       );
       expect(resubmitted.status).toBe('PENDING_REVIEW');
+      expect(resubmitted.rejectionReason).toBeNull();
     });
 
     it('rejects an invalid transition with 409', async () => {
@@ -829,10 +882,86 @@ describe('Songs (e2e)', () => {
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/songs/${song.id}/publish`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
           .expect(409),
       );
       expect(response.code).toBe('INVALID_STATUS_TRANSITION');
+    });
+
+    it('rejects self-approval: the creator cannot publish or reject their own submission, even as a MODERATOR', async () => {
+      await grantContentApprove(OWNER_TOKEN);
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/submit`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(201);
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/songs/${song.id}/publish`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(403),
+      );
+      expect(response.code).toBe('SELF_APPROVAL_FORBIDDEN');
+
+      // Restore OWNER_TOKEN back to its normal EDITOR tier for every other
+      // test in this file.
+      await grantGlobalRole(OWNER_TOKEN, GlobalRole.EDITOR);
+    });
+
+    it('rejects create without SONG_CREATE (plain USER) with 403', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/songs')
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .send(minimalSongPayload(category.id))
+        .expect(403);
+    });
+
+    it("rejects submitting another user's DRAFT without SONG_EDIT_ANY with 403", async () => {
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/submit`)
+        .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+        .expect(403);
+    });
+
+    it("rejects deleting another user's DRAFT without SONG_DELETE with 403 SONG_NOT_OWNED", async () => {
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .delete(`/api/v1/songs/${song.id}`)
+          .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+          .expect(403),
+      );
+      expect(response.code).toBe('SONG_NOT_OWNED');
+    });
+
+    it('rejects editing a PUBLISHED song directly (PATCH) with 409 SONG_PROTECTED - even for its own creator', async () => {
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await publishSong(OWNER_TOKEN, song.id);
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/songs/${song.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(minimalSongPayload(category.id))
+          .expect(409),
+      );
+      expect(response.code).toBe('SONG_PROTECTED');
     });
 
     it('DELETE removes a DRAFT song (204) but refuses a PUBLISHED one (409)', async () => {
@@ -1182,9 +1311,10 @@ describe('Songs (e2e)', () => {
     it('any authenticated globalRole may vote - no CONTENT_APPROVE required', async () => {
       const song = await createSong(OWNER_TOKEN, twoMediaPayload());
 
-      // OTHER_TOKEN's user defaults to globalRole USER, which has no
-      // CONTENT_APPROVE - voting must still succeed.
-      await voteFor(OTHER_TOKEN, song.id, song.media[0].id);
+      // PLAIN_USER_TOKEN's user stays at the default globalRole USER
+      // (never elevated - see beforeAll), which has no permission at all
+      // beyond SONG_READ - voting must still succeed regardless.
+      await voteFor(PLAIN_USER_TOKEN, song.id, song.media[0].id);
     });
   });
 
@@ -1531,9 +1661,12 @@ describe('Songs (e2e)', () => {
           .post(`/api/v1/songs/${song.id}/submit`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
           .expect(201);
+        // Rejected by a moderator, never the song's own creator (self-
+        // approval is forbidden - see SongsService.assertNotSelfApproval).
         await request(app.getHttpServer())
           .post(`/api/v1/songs/${song.id}/reject`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+          .send({ reason: null })
           .expect(201);
 
         const resubmitted = await bodyOf<SongDetailsResponseDto>(

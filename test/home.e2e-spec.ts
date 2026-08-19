@@ -32,6 +32,7 @@ import { randomUUID } from 'node:crypto';
 import { AppModule } from '../src/app.module';
 import { ClerkAuthService } from '../src/auth/clerk/clerk-auth.service';
 import { CLERK_CLIENT } from '../src/auth/clerk/clerk-client.provider';
+import { GlobalRole } from '../src/auth/permissions/global-role.enum';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
@@ -234,6 +235,19 @@ describe('Home (e2e)', () => {
     category.position = 999;
     category.isActive = true;
     await em.persistAndFlush(category);
+
+    // MEMBER_TOKEN creates songs as fixture data for the continueLearning
+    // tests, which requires SONG_CREATE (EDITOR+, a globalRole - see
+    // role-permissions.map.ts). Independent of every GroupRole this token
+    // also holds elsewhere in this file - this file is about the Home
+    // dashboard, not Songs moderation, so the elevation is fixture setup
+    // only.
+    const memberAuth = TOKEN_TO_AUTH[MEMBER_TOKEN];
+    const memberUser = await em.findOneOrFail(User, {
+      clerkUserId: memberAuth.userId,
+    });
+    memberUser.globalRole = GlobalRole.EDITOR;
+    await em.flush();
   });
 
   afterAll(async () => {

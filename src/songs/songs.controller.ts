@@ -25,6 +25,10 @@ import {
   DuplicateSuggestionsQueryDto,
   duplicateSuggestionsQuerySchema,
 } from './dto/duplicate-suggestions-query.schema';
+import {
+  ModerationReasonDto,
+  moderationReasonSchema,
+} from './dto/moderation-reason.schema';
 import { SongDetailsResponseDto } from './dto/song-details-response.dto';
 import {
   ListSongsQueryDto,
@@ -42,6 +46,8 @@ export class SongsController {
 
   @Post()
   @HttpCode(201)
+  @UseGuards(PermissionsGuard)
+  @Permissions(Permission.SONG_CREATE)
   create(
     @CurrentUser() user: User,
     @Body(new ZodValidationPipe(createSongSchema)) dto: CreateSongDto,
@@ -82,6 +88,14 @@ export class SongsController {
     return this.songsService.getDetails(id, user.id);
   }
 
+  // No declarative @Permissions() here - unlike create(), which/whether a
+  // permission is required depends on whether `user` is this song's own
+  // creator (SONG_EDIT_OWN) or not (SONG_EDIT_ANY), which can only be
+  // resolved once the song is loaded. See
+  // SongsService.assertCanEditDirectly for the actual row-level check.
+  // Also only ever reaches a DRAFT/REJECTED song - PUBLISHED/HIDDEN/
+  // PENDING_REVIEW are rejected by SongsService.assertDirectlyEditable; use
+  // POST /songs/:songId/edit-proposals for a protected song instead.
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -91,12 +105,20 @@ export class SongsController {
     return this.songsService.update(id, user, dto);
   }
 
+  // No declarative @Permissions() here either - see update()'s own comment;
+  // the own-vs-SONG_DELETE row-level check lives in SongsService.delete.
   @Delete(':id')
   @HttpCode(204)
-  delete(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    return this.songsService.delete(id);
+  delete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<void> {
+    return this.songsService.delete(id, user);
   }
 
+  // Same reasoning as update() - own-vs-SONG_EDIT_ANY is row-level, see
+  // SongsService.assertCanEditDirectly (submit is an edit-adjacent action:
+  // it's the last step of preparing a draft, so it is gated identically).
   @Post(':id/submit')
   submit(
     @Param('id', ParseUUIDPipe) id: string,
@@ -105,21 +127,35 @@ export class SongsController {
     return this.songsService.submit(id, user);
   }
 
+  // CONTENT_APPROVE is necessary but not sufficient - SongsService.publish
+  // additionally blocks the song's own creator from approving their own
+  // submission (self-approval), even when they also hold this permission.
   @Post(':id/publish')
+  @UseGuards(PermissionsGuard)
+  @Permissions(Permission.CONTENT_APPROVE)
   publish(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
   ): Promise<SongDetailsResponseDto> {
-    return this.songsService.publish(id);
+    return this.songsService.publish(id, user);
   }
 
+  // Same self-approval guard as publish() - see SongsService.reject.
   @Post(':id/reject')
+  @UseGuards(PermissionsGuard)
+  @Permissions(Permission.CONTENT_APPROVE)
   reject(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+    @Body(new ZodValidationPipe(moderationReasonSchema))
+    dto: ModerationReasonDto,
   ): Promise<SongDetailsResponseDto> {
-    return this.songsService.reject(id);
+    return this.songsService.reject(id, user, dto);
   }
 
   @Post(':id/hide')
+  @UseGuards(PermissionsGuard)
+  @Permissions(Permission.CONTENT_HIDE)
   hide(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<SongDetailsResponseDto> {
@@ -127,6 +163,8 @@ export class SongsController {
   }
 
   @Post(':id/restore')
+  @UseGuards(PermissionsGuard)
+  @Permissions(Permission.CONTENT_HIDE)
   restore(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<SongDetailsResponseDto> {

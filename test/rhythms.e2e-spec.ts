@@ -176,6 +176,11 @@ describe('Rhythms (e2e)', () => {
     await em.persistAndFlush(category);
 
     await grantAdmin(ADMIN_TOKEN);
+    // OWNER_TOKEN creates songs as fixture data throughout this file, which
+    // requires SONG_CREATE (EDITOR+ - see role-permissions.map.ts). This
+    // file is about Rhythms, not Songs moderation, so the elevation is
+    // fixture setup only.
+    await grantEditor(OWNER_TOKEN);
   });
 
   afterAll(async () => {
@@ -215,6 +220,19 @@ describe('Rhythms (e2e)', () => {
     await em.flush();
   }
 
+  async function grantEditor(token: string): Promise<void> {
+    await request(app.getHttpServer())
+      .get('/api/v1/rhythms')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    const em = app.get(EntityManager).fork();
+    const auth = TOKEN_TO_AUTH[token];
+    const user = await em.findOneOrFail(User, { clerkUserId: auth.userId });
+    user.globalRole = GlobalRole.EDITOR;
+    await em.flush();
+  }
+
   async function createSong(
     token: string,
     overrides: Record<string, unknown> = {},
@@ -230,14 +248,24 @@ describe('Rhythms (e2e)', () => {
     return created;
   }
 
-  async function publishSong(token: string, id: string): Promise<void> {
+  // publisherToken defaults to ADMIN_TOKEN, never submitterToken - the
+  // song's own creator can never self-approve their own submission (see
+  // SongsService.assertNotSelfApproval). ADMIN_TOKEN already holds
+  // CONTENT_APPROVE (ADMIN includes every MODERATOR permission - see
+  // role-permissions.map.ts) and never creates songs in this file, so it
+  // never collides with the submitter.
+  async function publishSong(
+    submitterToken: string,
+    id: string,
+    publisherToken: string = ADMIN_TOKEN,
+  ): Promise<void> {
     await request(app.getHttpServer())
       .post(`/api/v1/songs/${id}/submit`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${submitterToken}`)
       .expect(201);
     await request(app.getHttpServer())
       .post(`/api/v1/songs/${id}/publish`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${publisherToken}`)
       .expect(201);
   }
 

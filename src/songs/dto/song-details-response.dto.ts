@@ -52,6 +52,10 @@ export interface SongDetailsResponseDto {
   title: string;
   authorName: string | null;
   status: SongStatus;
+  // Set only while status === REJECTED (see SongsService.reject); cleared
+  // on the next successful submit. Never set/read for a SongEditProposal's
+  // own rejection - see SongEditProposalResponseDto.rejectionReason.
+  rejectionReason: string | null;
   category: SongCategoryResponseDto;
   createdBy: SongUserRefDto | null;
   alternativeTitles: SongAlternativeTitleResponseDto[];

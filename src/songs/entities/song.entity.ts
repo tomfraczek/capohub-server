@@ -32,6 +32,16 @@ export class Song extends BaseEntity {
   @Enum({ items: () => Object.values(SongStatus) })
   status: SongStatus = SongStatus.DRAFT;
 
+  // Set by reject() (see SongsService) when a moderator rejects this song
+  // from PENDING_REVIEW. Cleared on the next successful submit() - a fresh
+  // submission should never carry a stale reason from a previous rejection.
+  // Never set for a REJECTED SongEditProposal - that keeps its own
+  // rejectionReason instead (see song-edit-proposal.entity.ts), since a
+  // proposal rejection must never appear to be a rejection of the Song
+  // itself, which stays PUBLISHED/untouched throughout.
+  @Property({ nullable: true, type: 'text' })
+  rejectionReason: string | null = null;
+
   @Property({ nullable: true, type: 'text' })
   meaningHistory: string | null = null;
 

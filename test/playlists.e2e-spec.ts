@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { AppModule } from '../src/app.module';
 import { ClerkAuthService } from '../src/auth/clerk/clerk-auth.service';
 import { CLERK_CLIENT } from '../src/auth/clerk/clerk-client.provider';
+import { GlobalRole } from '../src/auth/permissions/global-role.enum';
 import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
@@ -157,7 +158,30 @@ describe('Playlists (e2e)', () => {
     category.position = 999;
     category.isActive = true;
     await em.persistAndFlush(category);
+
+    // OWNER_TOKEN creates songs as fixture data throughout this file, which
+    // requires SONG_CREATE (EDITOR+ - see role-permissions.map.ts). This
+    // file is about Playlists, not Songs moderation, so the elevation is
+    // fixture setup only.
+    await grantGlobalRole(OWNER_TOKEN, GlobalRole.EDITOR);
   });
+
+  async function grantGlobalRole(
+    token: string,
+    role: GlobalRole,
+  ): Promise<void> {
+    await request(app.getHttpServer())
+      .get('/api/v1/songs')
+      .query({ page: 1, limit: 1 })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    const em = app.get(EntityManager).fork();
+    const auth = TOKEN_TO_AUTH[token];
+    const user = await em.findOneOrFail(User, { clerkUserId: auth.userId });
+    user.globalRole = role;
+    await em.flush();
+  }
 
   afterAll(async () => {
     await closeE2eApp(app, async () => {

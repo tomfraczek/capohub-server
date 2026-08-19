@@ -1,6 +1,6 @@
 import {
-  BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -10,6 +10,8 @@ import { UniqueConstraintViolationException } from '@mikro-orm/core';
 // runtime symbol (see @mikro-orm/postgresql's EntityManager = SqlEntityManager,
 // which adds createQueryBuilder over the plain @mikro-orm/core EntityManager).
 import { EntityManager } from '@mikro-orm/postgresql';
+import { Permission } from '../auth/permissions/permission.enum';
+import { PermissionService } from '../auth/permissions/permission.service';
 import { PaginatedResponse } from '../common/pagination/pagination.types';
 import { createPaginationMeta } from '../common/pagination/pagination.utils';
 import { PlaylistsService } from '../playlists/playlists.service';
@@ -18,29 +20,18 @@ import { FavoriteSongsService } from '../song-library/favorite-songs.service';
 import { LearningStatusService } from '../song-library/learning-status.service';
 import { SongNotesService } from '../song-library/song-notes.service';
 import { User } from '../users/entities/user.entity';
-import {
-  CreateSongAlternativeTitleInput,
-  CreateSongInput,
-  CreateSongMediaInput,
-  CreateSongPartInput,
-} from './dto/create-song.schema';
+import { CreateSongInput } from './dto/create-song.schema';
 import { DuplicateSuggestionsResponseDto } from './dto/duplicate-suggestion-response.dto';
+import { ModerationReasonInput } from './dto/moderation-reason.schema';
 import { ListSongsQuery } from './dto/song-list-query.schema';
 import { SongDetailsResponseDto } from './dto/song-details-response.dto';
 import { SongMediaDetailsResponseDto } from './dto/song-media-details-response.dto';
 import { SongMediaVoteResponseDto } from './dto/song-media-vote-response.dto';
 import { SongSummaryResponseDto } from './dto/song-summary-response.dto';
 import { UpdateSongInput } from './dto/update-song.schema';
-import { SongAlternativeTitle } from './entities/song-alternative-title.entity';
-import { SongCategory } from './entities/song-category.entity';
-import { SongLine } from './entities/song-line.entity';
-import { SongLineTranslation } from './entities/song-line-translation.entity';
 import { SongMediaVote } from './entities/song-media-vote.entity';
 import { SongMedia } from './entities/song-media.entity';
-import { SongPart } from './entities/song-part.entity';
-import { SongTag } from './entities/song-tag.entity';
 import { Song } from './entities/song.entity';
-import { Tag } from './entities/tag.entity';
 import { SongStatus } from './enums/song-status.enum';
 import {
   SongUserContext,
@@ -49,6 +40,7 @@ import {
   toSongSummaryResponseDto,
 } from './mappers/song.mapper';
 import { loadSongMediaVoteAggregates } from './song-media-vote-aggregates';
+import { SongContentService } from './song-content.service';
 import { SongDuplicateService } from './song-duplicate.service';
 import {
   loadSongSummaryAggregates,
@@ -75,27 +67,23 @@ export class SongsService {
     private readonly learningStatusService: LearningStatusService,
     private readonly songNotesService: SongNotesService,
     private readonly playlistsService: PlaylistsService,
+    private readonly songContentService: SongContentService,
+    private readonly permissionService: PermissionService,
   ) {}
 
+  // Permission-gated at the controller (SONG_CREATE - see
+  // songs.controller.ts) - nothing further to check here, a brand-new Song
+  // has no owner yet to compare against.
   async create(
     user: User,
     input: CreateSongInput,
   ): Promise<SongDetailsResponseDto> {
     const songId = await this.em.transactional(async (em) => {
-      const category = await this.loadActiveCategoryOrFail(
-        em,
-        input.categoryId,
-      );
-      const tags = await this.loadActiveTagsOrFail(em, input.tagIds);
-
       const song = new Song();
       song.createdBy = user;
       song.status = SongStatus.DRAFT;
-      this.applySongFields(song, input, category);
 
-      const children = this.buildChildEntities(song, input, tags, user);
-
-      await this.persistOrThrowConflict(em, [song, ...children]);
+      await this.songContentService.replaceContent(em, song, input, user);
 
       return song.id;
     });
@@ -103,6 +91,11 @@ export class SongsService {
     return this.getDetails(songId, user.id);
   }
 
+  // Direct, immediate edit - only ever legal for a Song that isn't
+  // protected content yet (DRAFT/REJECTED, see assertDirectlyEditable) and
+  // only for someone entitled to touch it (assertCanEditDirectly). A
+  // PUBLISHED/HIDDEN Song can never be reached through this method again -
+  // see SongEditProposalsService for how it is edited instead.
   async update(
     id: string,
     user: User,
@@ -114,26 +107,10 @@ export class SongsService {
         throw this.notFound();
       }
 
-      const category = await this.loadActiveCategoryOrFail(
-        em,
-        input.categoryId,
-      );
-      const tags = await this.loadActiveTagsOrFail(em, input.tagIds);
+      this.assertDirectlyEditable(song);
+      this.assertCanEditDirectly(song, user);
 
-      this.applySongFields(song, input, category);
-
-      // Replace-all strategy: wipe every child collection, then rebuild it
-      // from the request. SongPart's DB-level ON DELETE CASCADE (see the
-      // Etap 8.1 migration) takes song_lines and song_line_translations
-      // down with it, so there is nothing left to orphan.
-      await em.nativeDelete(SongAlternativeTitle, { song: song.id });
-      await em.nativeDelete(SongTag, { song: song.id });
-      await em.nativeDelete(SongPart, { song: song.id });
-      await em.nativeDelete(SongMedia, { song: song.id });
-
-      const children = this.buildChildEntities(song, input, tags, user);
-
-      await this.persistOrThrowConflict(em, [song, ...children]);
+      await this.songContentService.replaceContent(em, song, input, user);
     });
 
     return this.getDetails(id, user.id);
@@ -272,6 +249,7 @@ export class SongsService {
         SongStatus.DRAFT,
         SongStatus.REJECTED,
       ]);
+      this.assertCanEditDirectly(song, user);
       this.assertReadyForReview(song);
 
       // Duplicate check runs inside the same transaction as the status
@@ -302,6 +280,9 @@ export class SongsService {
       }
 
       song.status = SongStatus.PENDING_REVIEW;
+      // A fresh submission should never carry a stale reason from a
+      // previous rejection - see Song.rejectionReason's own comment.
+      song.rejectionReason = null;
       await em.flush();
     });
 
@@ -322,21 +303,41 @@ export class SongsService {
     return { items };
   }
 
-  async publish(id: string): Promise<SongDetailsResponseDto> {
-    await this.transitionStatus(
-      id,
-      [SongStatus.PENDING_REVIEW],
-      SongStatus.PUBLISHED,
-    );
+  // CONTENT_APPROVE-gated at the controller (songs.controller.ts) - but a
+  // permission alone is not enough: assertNotSelfApproval below additionally
+  // blocks the song's own creator, even one who happens to also hold
+  // CONTENT_APPROVE (e.g. a MODERATOR reviewing their own submission). See
+  // the moderation model's "author never self-approves" rule.
+  async publish(id: string, actor: User): Promise<SongDetailsResponseDto> {
+    await this.em.transactional(async (em) => {
+      const song = await em.findOne(Song, { id });
+      if (!song) {
+        throw this.notFound();
+      }
+      this.assertValidTransition(song.status, [SongStatus.PENDING_REVIEW]);
+      this.assertNotSelfApproval(song, actor);
+      song.status = SongStatus.PUBLISHED;
+      await em.flush();
+    });
     return this.getDetails(id);
   }
 
-  async reject(id: string): Promise<SongDetailsResponseDto> {
-    await this.transitionStatus(
-      id,
-      [SongStatus.PENDING_REVIEW],
-      SongStatus.REJECTED,
-    );
+  async reject(
+    id: string,
+    actor: User,
+    input: ModerationReasonInput,
+  ): Promise<SongDetailsResponseDto> {
+    await this.em.transactional(async (em) => {
+      const song = await em.findOne(Song, { id });
+      if (!song) {
+        throw this.notFound();
+      }
+      this.assertValidTransition(song.status, [SongStatus.PENDING_REVIEW]);
+      this.assertNotSelfApproval(song, actor);
+      song.status = SongStatus.REJECTED;
+      song.rejectionReason = input.reason;
+      await em.flush();
+    });
     return this.getDetails(id);
   }
 
@@ -350,7 +351,14 @@ export class SongsService {
     return this.getDetails(id);
   }
 
-  async delete(id: string): Promise<void> {
+  // DRAFT/REJECTED only (never PUBLISHED/PENDING_REVIEW/HIDDEN - protected
+  // content is never removable through this endpoint, by anyone, see the
+  // moderation model). Within that, either the song's own creator, or
+  // someone holding SONG_DELETE (there is no dedicated "delete own"
+  // permission in the model - ownership alone is sufficient for one's own
+  // not-yet-published work, mirroring how create() itself already gates on
+  // SONG_CREATE before a Song can exist to own in the first place).
+  async delete(id: string, actor: User): Promise<void> {
     await this.em.transactional(async (em) => {
       const song = await em.findOne(Song, { id });
       if (!song) {
@@ -364,6 +372,18 @@ export class SongsService {
         throw new ConflictException({
           code: 'SONG_NOT_DELETABLE',
           message: `Cannot delete a song with status ${song.status}`,
+        });
+      }
+
+      const isOwner = song.createdBy?.id === actor.id;
+      const canDeleteAny = this.permissionService.hasPermission(
+        actor.globalRole,
+        Permission.SONG_DELETE,
+      );
+      if (!isOwner && !canDeleteAny) {
+        throw new ForbiddenException({
+          code: 'SONG_NOT_OWNED',
+          message: 'You may only delete your own draft or rejected songs',
         });
       }
 
@@ -584,146 +604,62 @@ export class SongsService {
     }
   }
 
-  private async loadActiveCategoryOrFail(
-    em: EntityManager,
-    categoryId: string,
-  ): Promise<SongCategory> {
-    const category = await em.findOne(SongCategory, { id: categoryId });
-    if (!category || !category.isActive) {
-      throw new BadRequestException({
-        code: 'INVALID_CATEGORY',
-        message: 'categoryId does not reference an active category',
+  // Guards update()/submit() against a protected Song - once PUBLISHED or
+  // HIDDEN, a Song is never mutated directly by anyone again (see
+  // SongEditProposalsService), and PENDING_REVIEW is excluded too so a
+  // direct update can never bypass an already-in-flight review by racing
+  // it - there is deliberately no parallel "update while under review"
+  // workflow.
+  private assertDirectlyEditable(song: Song): void {
+    if (song.status === SongStatus.PENDING_REVIEW) {
+      throw new ConflictException({
+        code: 'SONG_UNDER_REVIEW',
+        message:
+          'This song is pending review and cannot be edited until it is published or rejected',
       });
     }
-    return category;
-  }
-
-  private async loadActiveTagsOrFail(
-    em: EntityManager,
-    tagIds: string[],
-  ): Promise<Tag[]> {
-    if (tagIds.length === 0) {
-      return [];
-    }
-
-    const tags = await em.find(Tag, { id: { $in: tagIds }, isActive: true });
-    if (tags.length !== tagIds.length) {
-      throw new BadRequestException({
-        code: 'INVALID_TAGS',
-        message: 'tagIds must all reference active tags',
+    if (
+      song.status === SongStatus.PUBLISHED ||
+      song.status === SongStatus.HIDDEN
+    ) {
+      throw new ConflictException({
+        code: 'SONG_PROTECTED',
+        message:
+          'Published content cannot be edited directly - submit a SongEditProposal instead',
       });
     }
-    return tags;
   }
 
-  private applySongFields(
-    song: Song,
-    input: CreateSongInput,
-    category: SongCategory,
-  ): void {
-    song.title = input.title;
-    song.authorName = input.authorName;
-    song.category = category;
-    song.meaningHistory = input.meaningHistory;
-    song.meaningContext = input.meaningContext;
-    song.meaningTrivia = input.meaningTrivia;
-  }
-
-  private buildChildEntities(
-    song: Song,
-    input: CreateSongInput,
-    tags: Tag[],
-    user: User,
-  ): object[] {
-    const entities: object[] = [
-      ...input.alternativeTitles.map((item) =>
-        this.buildAlternativeTitle(song, item),
-      ),
-      ...tags.map((tag) => this.buildSongTag(song, tag)),
-      ...input.media.map((item) => this.buildSongMedia(song, item, user)),
-    ];
-
-    for (const partInput of input.parts) {
-      const part = this.buildSongPart(song, partInput);
-      entities.push(part);
-
-      for (const lineInput of partInput.lines) {
-        const line = new SongLine();
-        line.part = part;
-        line.originalText = lineInput.originalText;
-        line.phoneticText = lineInput.phoneticText;
-        line.position = lineInput.position;
-        entities.push(line);
-
-        for (const translationInput of lineInput.translations) {
-          const translation = new SongLineTranslation();
-          translation.line = line;
-          translation.languageCode = translationInput.languageCode;
-          translation.text = translationInput.text;
-          entities.push(translation);
-        }
-      }
+  // Row-level ownership check backing update()/submit() on a DRAFT/REJECTED
+  // Song: its own creator needs SONG_EDIT_OWN, anyone else needs
+  // SONG_EDIT_ANY. Deliberately checked here (not just declaratively at the
+  // controller), since "own vs. any" can only be resolved once the Song's
+  // createdBy is known.
+  private assertCanEditDirectly(song: Song, actor: User): void {
+    const isOwner = song.createdBy?.id === actor.id;
+    const required = isOwner
+      ? Permission.SONG_EDIT_OWN
+      : Permission.SONG_EDIT_ANY;
+    if (!this.permissionService.hasPermission(actor.globalRole, required)) {
+      throw new ForbiddenException({
+        code: 'INSUFFICIENT_SONG_PERMISSIONS',
+        message: isOwner
+          ? 'Editing your own song requires the SONG_EDIT_OWN permission'
+          : "Editing another user's song requires the SONG_EDIT_ANY permission",
+      });
     }
-
-    return entities;
   }
 
-  private buildAlternativeTitle(
-    song: Song,
-    input: CreateSongAlternativeTitleInput,
-  ): SongAlternativeTitle {
-    const alternativeTitle = new SongAlternativeTitle();
-    alternativeTitle.song = song;
-    alternativeTitle.title = input.title;
-    alternativeTitle.position = input.position;
-    return alternativeTitle;
-  }
-
-  private buildSongTag(song: Song, tag: Tag): SongTag {
-    const songTag = new SongTag();
-    songTag.song = song;
-    songTag.tag = tag;
-    return songTag;
-  }
-
-  private buildSongPart(song: Song, input: CreateSongPartInput): SongPart {
-    const part = new SongPart();
-    part.song = song;
-    part.performer = input.performer;
-    part.position = input.position;
-    return part;
-  }
-
-  private buildSongMedia(
-    song: Song,
-    input: CreateSongMediaInput,
-    user: User,
-  ): SongMedia {
-    const media = new SongMedia();
-    media.song = song;
-    media.provider = input.provider;
-    media.url = input.url;
-    media.title = input.title;
-    media.position = input.position;
-    media.createdBy = user;
-    media.isVerified = false;
-    return media;
-  }
-
-  private async persistOrThrowConflict(
-    em: EntityManager,
-    entities: object[],
-  ): Promise<void> {
-    try {
-      await em.persist(entities).flush();
-    } catch (error) {
-      if (error instanceof UniqueConstraintViolationException) {
-        throw new ConflictException({
-          code: 'CONFLICT',
-          message: 'The request conflicts with existing data',
-        });
-      }
-      throw error;
+  // Backs publish()/reject(): the song's own creator may never approve or
+  // reject their own submission, even when they separately hold
+  // CONTENT_APPROVE (e.g. a MODERATOR reviewing their own draft) - see the
+  // moderation model's self-approval rule.
+  private assertNotSelfApproval(song: Song, actor: User): void {
+    if (song.createdBy?.id === actor.id) {
+      throw new ForbiddenException({
+        code: 'SELF_APPROVAL_FORBIDDEN',
+        message: 'You cannot publish or reject a song you submitted yourself',
+      });
     }
   }
 
