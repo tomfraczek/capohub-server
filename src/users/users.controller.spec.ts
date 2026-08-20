@@ -1,4 +1,5 @@
 import { GlobalRole } from '../auth/permissions/global-role.enum';
+import { PermissionService } from '../auth/permissions/permission.service';
 import { FavoriteSongsService } from '../song-library/favorite-songs.service';
 import { LearningStatusService } from '../song-library/learning-status.service';
 import { AvatarType } from './enums/avatar-type.enum';
@@ -14,6 +15,20 @@ const favoriteSongsService = {} as unknown as FavoriteSongsService;
 const learningStatusService = {} as unknown as LearningStatusService;
 const userProfileService = {} as unknown as UserProfileService;
 const userIdentityService = {} as unknown as UserIdentityService;
+// Real, never mocked - PermissionService is a pure lookup over the actual
+// ROLE_PERMISSIONS map (see permission.service.ts), so mocking it here
+// would defeat the point of asserting songCapabilities reflects the real
+// permission system.
+const permissionService = new PermissionService();
+
+// USER holds only SONG_READ (see role-permissions.map.ts), so every
+// Songs capability is false for it.
+const USER_SONG_CAPABILITIES = {
+  canCreate: false,
+  canApproveContent: false,
+  canHideContent: false,
+  canDeleteAnyDraft: false,
+};
 
 function buildUser(): User {
   const user = new User();
@@ -37,7 +52,7 @@ function buildUser(): User {
 
 describe('UsersController', () => {
   describe('getMe', () => {
-    it('maps the current user to a UserResponseDto', () => {
+    it('maps the current user to a UserResponseDto, including songCapabilities derived from globalRole', () => {
       const userService = {} as unknown as UserService;
       const controller = new UsersController(
         userService,
@@ -45,6 +60,7 @@ describe('UsersController', () => {
         userIdentityService,
         favoriteSongsService,
         learningStatusService,
+        permissionService,
       );
       const user = buildUser();
 
@@ -58,6 +74,7 @@ describe('UsersController', () => {
         theme: 'system',
         notificationsEnabled: true,
         globalRole: GlobalRole.USER,
+        songCapabilities: USER_SONG_CAPABILITIES,
         publicCode: 'ADA00001',
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-02-01T00:00:00.000Z',
@@ -72,6 +89,7 @@ describe('UsersController', () => {
         userIdentityService,
         favoriteSongsService,
         learningStatusService,
+        permissionService,
       );
 
       const response = controller.getMe(buildUser());
@@ -79,6 +97,27 @@ describe('UsersController', () => {
       expect(response).not.toHaveProperty('clerkUserId');
       expect(response).not.toHaveProperty('isActive');
       expect(response).not.toHaveProperty('lastLoginAt');
+    });
+
+    it('reflects an ADMIN caller with all four songCapabilities true', () => {
+      const userService = {} as unknown as UserService;
+      const controller = new UsersController(
+        userService,
+        userProfileService,
+        userIdentityService,
+        favoriteSongsService,
+        learningStatusService,
+        permissionService,
+      );
+      const user = buildUser();
+      user.globalRole = GlobalRole.ADMIN;
+
+      expect(controller.getMe(user).songCapabilities).toEqual({
+        canCreate: true,
+        canApproveContent: true,
+        canHideContent: true,
+        canDeleteAnyDraft: true,
+      });
     });
   });
 
@@ -96,6 +135,7 @@ describe('UsersController', () => {
         userIdentityService,
         favoriteSongsService,
         learningStatusService,
+        permissionService,
       );
 
       const response = await controller.updateMe(user, {
@@ -106,6 +146,7 @@ describe('UsersController', () => {
         displayName: 'Updated Name',
       });
       expect(response.displayName).toBe('Updated Name');
+      expect(response.songCapabilities).toEqual(USER_SONG_CAPABILITIES);
     });
   });
 
@@ -125,6 +166,7 @@ describe('UsersController', () => {
         userIdentityService,
         favoriteSongsService,
         learningStatusService,
+        permissionService,
       );
 
       const response = await controller.setAvatarPreset(user, {
@@ -154,6 +196,7 @@ describe('UsersController', () => {
         userIdentityService,
         favoriteSongsService,
         learningStatusService,
+        permissionService,
       );
 
       const response = await controller.resetAvatarToClerk(user);
@@ -176,6 +219,7 @@ describe('UsersController', () => {
         userIdentityService,
         favoriteSongsService,
         learningStatusService,
+        permissionService,
       );
 
       await controller.deleteMe(user);
@@ -199,6 +243,7 @@ describe('UsersController', () => {
         userIdentityService,
         favoritesService,
         learningStatusService,
+        permissionService,
       );
 
       const response = await controller.getFavoriteSongs(user);
@@ -223,6 +268,7 @@ describe('UsersController', () => {
         userIdentityService,
         favoriteSongsService,
         learningService,
+        permissionService,
       );
 
       const response = await controller.getLearningSongs(user);

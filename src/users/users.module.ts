@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { ClerkModule } from '../auth/clerk/clerk.module';
+import { PermissionsModule } from '../auth/permissions/permissions.module';
 import { EventsModule } from '../events/events.module';
 import { GroupsModule } from '../groups/groups.module';
 import { SongLibraryModule } from '../song-library/song-library.module';
@@ -20,13 +21,18 @@ import { UsersController } from './users.controller';
   // GroupHierarchyService (walking a formal Group's Section subtree - see
   // UserProfileService.setFormalGroup). EventsModule likewise, so
   // UserService can check whether the account solely owns any live Event
-  // first (see EventRolesService.findOwnedActiveEvents).
+  // first (see EventRolesService.findOwnedActiveEvents). PermissionsModule
+  // is imported for PermissionService, which UsersController uses to
+  // compute GET/PATCH /users/me's songCapabilities from the caller's
+  // globalRole (see dto/song-capabilities.dto.ts) - no guard is needed here
+  // since every route below is already scoped to "me".
   imports: [
     MikroOrmModule.forFeature([User]),
     ClerkModule,
     SongLibraryModule,
     GroupsModule,
     EventsModule,
+    PermissionsModule,
   ],
   controllers: [UsersController],
   providers: [UserService, UserProfileService, UserIdentityService],

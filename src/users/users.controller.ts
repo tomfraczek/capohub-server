@@ -12,6 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { PermissionService } from '../auth/permissions/permission.service';
 import { normalizeNumericCodeInput } from '../common/utils/numeric-code';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { uuidSchema } from '../common/validation/uuid.schema';
@@ -23,6 +24,7 @@ import { SetAvatarPresetDto } from './dto/set-avatar-preset.schema';
 import { FormalGroupResponseDto } from './dto/formal-group-response.dto';
 import { PublicUserProfileResponseDto } from './dto/public-user-profile-response.dto';
 import { SetFormalGroupDto } from './dto/set-formal-group.schema';
+import { buildSongCapabilities } from './dto/song-capabilities.dto';
 import { UpdateUserDto } from './dto/update-user.schema';
 import { UpdateUserProfileDto } from './dto/update-user-profile.schema';
 import {
@@ -46,11 +48,23 @@ export class UsersController {
     private readonly userIdentityService: UserIdentityService,
     private readonly favoriteSongsService: FavoriteSongsService,
     private readonly learningStatusService: LearningStatusService,
+    private readonly permissionService: PermissionService,
   ) {}
+
+  // Shared by every route below that returns a UserResponseDto - keeps
+  // songCapabilities computed in exactly one place (see
+  // song-capabilities.dto.ts), rather than re-deriving it at each call
+  // site.
+  private toResponseDto(user: User): UserResponseDto {
+    return toUserResponseDto(
+      user,
+      buildSongCapabilities(user.globalRole, this.permissionService),
+    );
+  }
 
   @Get('me')
   getMe(@CurrentUser() user: User): UserResponseDto {
-    return toUserResponseDto(user);
+    return this.toResponseDto(user);
   }
 
   @Patch('me')
@@ -59,7 +73,7 @@ export class UsersController {
     @Body(new ZodValidationPipe(UpdateUserDto.schema)) dto: UpdateUserDto,
   ): Promise<UserResponseDto> {
     const updated = await this.userService.updateProfile(user, dto);
-    return toUserResponseDto(updated);
+    return this.toResponseDto(updated);
   }
 
   // Avatar type/URL/preset are deliberately not settable via PATCH /users/me
@@ -75,7 +89,7 @@ export class UsersController {
       user,
       dto.presetAvatarId,
     );
-    return toUserResponseDto(updated);
+    return this.toResponseDto(updated);
   }
 
   @Put('me/avatar/clerk')
@@ -83,7 +97,7 @@ export class UsersController {
     @CurrentUser() user: User,
   ): Promise<UserResponseDto> {
     const updated = await this.userService.resetAvatarToClerk(user);
-    return toUserResponseDto(updated);
+    return this.toResponseDto(updated);
   }
 
   @Delete('me')

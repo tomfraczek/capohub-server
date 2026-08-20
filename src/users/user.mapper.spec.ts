@@ -1,7 +1,15 @@
 import { GlobalRole } from '../auth/permissions/global-role.enum';
 import { AvatarType } from './enums/avatar-type.enum';
+import { SongCapabilitiesDto } from './dto/song-capabilities.dto';
 import { User } from './entities/user.entity';
 import { toUserResponseDto } from './user.mapper';
+
+const NO_SONG_CAPABILITIES: SongCapabilitiesDto = {
+  canCreate: false,
+  canApproveContent: false,
+  canHideContent: false,
+  canDeleteAnyDraft: false,
+};
 
 function buildUser(overrides: Partial<User> = {}): User {
   const user = new User();
@@ -27,7 +35,7 @@ describe('toUserResponseDto', () => {
   it('maps the exposed fields', () => {
     const user = buildUser();
 
-    expect(toUserResponseDto(user)).toEqual({
+    expect(toUserResponseDto(user, NO_SONG_CAPABILITIES)).toEqual({
       id: 'user-uuid-1',
       email: 'dev@example.com',
       displayName: 'Ada Lovelace',
@@ -37,15 +45,30 @@ describe('toUserResponseDto', () => {
       theme: 'dark',
       notificationsEnabled: false,
       globalRole: GlobalRole.EDITOR,
+      songCapabilities: NO_SONG_CAPABILITIES,
       publicCode: 'ABCD-1234',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-02-01T00:00:00.000Z',
     });
   });
 
+  it('passes the given songCapabilities through unchanged', () => {
+    const user = buildUser();
+    const capabilities: SongCapabilitiesDto = {
+      canCreate: true,
+      canApproveContent: true,
+      canHideContent: true,
+      canDeleteAnyDraft: true,
+    };
+
+    expect(toUserResponseDto(user, capabilities).songCapabilities).toEqual(
+      capabilities,
+    );
+  });
+
   it('serializes dates as ISO 8601 strings', () => {
     const user = buildUser();
-    const dto = toUserResponseDto(user);
+    const dto = toUserResponseDto(user, NO_SONG_CAPABILITIES);
 
     expect(dto.createdAt).toBe(user.createdAt.toISOString());
     expect(dto.updatedAt).toBe(user.updatedAt.toISOString());
@@ -54,7 +77,9 @@ describe('toUserResponseDto', () => {
   it('passes through null for avatarUrl', () => {
     const user = buildUser({ avatarUrl: null });
 
-    expect(toUserResponseDto(user)).toMatchObject({ avatarUrl: null });
+    expect(toUserResponseDto(user, NO_SONG_CAPABILITIES)).toMatchObject({
+      avatarUrl: null,
+    });
   });
 
   it('maps a PRESET avatar (presetAvatarId set, avatarUrl null)', () => {
@@ -64,7 +89,7 @@ describe('toUserResponseDto', () => {
       avatarUrl: null,
     });
 
-    expect(toUserResponseDto(user)).toMatchObject({
+    expect(toUserResponseDto(user, NO_SONG_CAPABILITIES)).toMatchObject({
       avatarType: AvatarType.PRESET,
       presetAvatarId: 'berimbau-01',
       avatarUrl: null,
@@ -73,7 +98,7 @@ describe('toUserResponseDto', () => {
 
   it('never includes clerkUserId, isActive, or lastLoginAt', () => {
     const user = buildUser();
-    const dto = toUserResponseDto(user);
+    const dto = toUserResponseDto(user, NO_SONG_CAPABILITIES);
 
     expect(dto).not.toHaveProperty('clerkUserId');
     expect(dto).not.toHaveProperty('isActive');
@@ -82,7 +107,7 @@ describe('toUserResponseDto', () => {
 
   it('never includes firstName or lastName', () => {
     const user = buildUser();
-    const dto = toUserResponseDto(user);
+    const dto = toUserResponseDto(user, NO_SONG_CAPABILITIES);
 
     expect(dto).not.toHaveProperty('firstName');
     expect(dto).not.toHaveProperty('lastName');

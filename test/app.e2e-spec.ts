@@ -206,6 +206,14 @@ describe('App (e2e)', () => {
         theme: 'system',
         notificationsEnabled: true,
         globalRole: GlobalRole.USER,
+        // USER holds only SONG_READ (see role-permissions.map.ts), so
+        // every Songs capability is false.
+        songCapabilities: {
+          canCreate: false,
+          canApproveContent: false,
+          canHideContent: false,
+          canDeleteAnyDraft: false,
+        },
       });
       expect(firstResponse.body).not.toHaveProperty('clerkUserId');
 
@@ -520,6 +528,24 @@ describe('App (e2e)', () => {
       expect(response.body).toEqual({
         ok: true,
         globalRole: GlobalRole.ADMIN,
+      });
+
+      // ADMIN holds SONG_CREATE, CONTENT_APPROVE, CONTENT_HIDE and
+      // SONG_DELETE (see role-permissions.map.ts), so all four Songs
+      // capabilities are true.
+      const meResponse = await request(app.getHttpServer())
+        .get('/api/v1/users/me')
+        .set('Authorization', 'Bearer valid-flow-token')
+        .expect(200);
+
+      expect(meResponse.body).toMatchObject({
+        globalRole: GlobalRole.ADMIN,
+        songCapabilities: {
+          canCreate: true,
+          canApproveContent: true,
+          canHideContent: true,
+          canDeleteAnyDraft: true,
+        },
       });
     });
   });
