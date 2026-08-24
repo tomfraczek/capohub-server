@@ -85,6 +85,20 @@ export class EventController {
     return this.eventsService.finish(eventId, user);
   }
 
+  // Only FINISHED/CANCELLED Events qualify (see ARCHIVABLE_STATUSES in
+  // event-write-policy.ts) - gated by EVENT_EDIT, the same trust tier as
+  // every other Event-management action (module decision: no new
+  // permission for archiving).
+  @Post('archive')
+  @UseGuards(EventPermissionsGuard)
+  @RequireEventPermission(EventPermission.EVENT_EDIT)
+  archive(
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @CurrentUser() user: User,
+  ): Promise<EventResponseDto> {
+    return this.eventsService.archive(eventId, user);
+  }
+
   @Get('history')
   @UseGuards(EventPermissionsGuard)
   @RequireEventPermission(EventPermission.EVENT_VIEW_MANAGEMENT)

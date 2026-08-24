@@ -47,6 +47,12 @@ function buildEvent(
 ): EventResponseDto {
   return {
     id: 'event-1',
+    organizer: {
+      type: 'GROUP',
+      id: 'group-1',
+      name: 'Group',
+      image: { url: null },
+    },
     community: {
       id: 'group-1',
       name: 'Group',

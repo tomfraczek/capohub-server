@@ -10,7 +10,9 @@ import { CLERK_CLIENT } from '../auth/clerk/clerk-client.provider';
 import { AuthContext } from '../auth/types/auth-context.type';
 import { assignUniqueNumericCode } from '../common/utils/numeric-code';
 import { generateUniquePublicCode } from '../common/utils/public-code';
+import { EventRoleAssignment } from '../events/entities/event-role-assignment.entity';
 import { EventRolesService } from '../events/event-roles.service';
+import { EventsService } from '../events/events.service';
 import { SectionMembership } from '../groups/entities/section-membership.entity';
 import { RoleAssignment } from '../groups/entities/role-assignment.entity';
 import { GroupRole } from '../groups/enums/group-role.enum';
@@ -39,6 +41,7 @@ export class UserService {
     @Inject(CLERK_CLIENT)
     private readonly clerkClient: ClerkClient,
     private readonly eventRolesService: EventRolesService,
+    private readonly eventsService: EventsService,
   ) {}
 
   /**
@@ -105,17 +108,36 @@ export class UserService {
    *    indirection needed at all (see role-assignment.entity.ts). Archived
    *    communities are excluded - an archived Group/Section can never
    *    accept writes again short of unarchiving it first, so its OWNER row
-   *    does not block account deletion.
-   * 2. If the check passes, deletes every RoleAssignment and every
-   *    SectionMembership this User holds, then the User row itself.
+   *    does not block account deletion. The identical rule applies to a
+   *    live Event this User owns via EventRole.OWNER (see
+   *    EventRolesService.findOwnedActiveEvents) - that gate is separate
+   *    from, and unaffected by, this User's public organizer identity (see
+   *    step 2 below).
+   * 2. Force-closes every Event where this User is the public organizer
+   *    identity (Event.organizerUser), regardless of EventRole - see
+   *    EventsService.closeOrganizedEventsForAccountDeletion. Unlike
+   *    EventRole.OWNER above, organizerUser has no transfer mechanism, so
+   *    it is never a hard block on its own: a live Event is force-cancelled
+   *    then archived, a terminal one is simply archived, and organizerUser
+   *    itself is cleared automatically (ON DELETE SET NULL - see
+   *    event.entity.ts) the moment the User row is deleted in step 4. The
+   *    Event's organizer identity survives via its
+   *    organizerType/organizerUserDisplayName snapshot regardless.
+   * 3. If the ownership check passes, deletes every EventRoleAssignment,
+   *    every (Group/Section) RoleAssignment and every SectionMembership
+   *    this User holds, then the User row itself. EventRoleAssignment.user
+   *    is, unlike the other two, a non-nullable `deleteRule: 'no action'`
+   *    FK (see event-role-assignment.entity.ts) - it must be deleted
+   *    explicitly here or the final User delete would fail outright with a
+   *    raw FK violation for anyone who has ever held an Event role
+   *    (including OWNER on an Event step 2 just archived).
    *
-   * Deleted explicitly, never left to an FK cascade to discover on its
-   * own: both RoleAssignment.user and SectionMembership.user are `cascade`
-   * on delete, so this is not strictly required for referential integrity,
-   * but keeps the deletion order predictable and explicit rather than
-   * implicit, consistent with how this method already treats the
-   * ownership check as something that must run - and be lockable - before
-   * anything is removed.
+   * RoleAssignment.user and SectionMembership.user are `cascade` on
+   * delete, so deleting them explicitly is not strictly required for
+   * referential integrity, but keeps the deletion order predictable and
+   * explicit rather than implicit, consistent with how this method already
+   * treats the ownership check as something that must run - and be
+   * lockable - before anything is removed.
    *
    * The User row itself is locked PESSIMISTIC_WRITE first, which
    * additionally blocks a concurrent addMember/grantRole from inserting a
@@ -170,6 +192,35 @@ export class UserService {
           ),
         });
       }
+
+      // Runs before the User row is removed below - a still-live Event
+      // needs its own organizer's account to still exist while it is being
+      // cancelled/archived (recordHistory.actor references it) - see that
+      // method's own comment for the full DRAFT/PUBLISHED/FINISHED/
+      // CANCELLED/ARCHIVED breakdown.
+      await this.eventsService.closeOrganizedEventsForAccountDeletion(
+        em,
+        user.id,
+        user,
+      );
+
+      // EventRoleAssignment.user is a non-nullable, `deleteRule: 'no
+      // action'` FK (see event-role-assignment.entity.ts) - unlike
+      // RoleAssignment/SectionMembership below, nothing about it is
+      // status-aware, so it must be cleared explicitly here or the
+      // `nativeDelete(User, ...)` below would fail with a raw FK violation
+      // for anyone who has ever held an Event role, including OWNER on the
+      // Event(s) closeOrganizedEventsForAccountDeletion just finished
+      // closing out above. Safe unconditionally at this point: the
+      // OWNER-of-a-still-active-Event case already threw
+      // CANNOT_DELETE_ACCOUNT_OWNS_EVENTS earlier in this same method
+      // (before anything was deleted) if it applied, so every remaining
+      // EventRoleAssignment row for this user is either a non-OWNER role,
+      // or an OWNER role on an Event that is now terminal
+      // (FINISHED/CANCELLED/ARCHIVED) - both are fine to drop, the same
+      // way an ARCHIVED Group/Section's own OWNER row is (see the
+      // Group/Section ownership check above).
+      await em.nativeDelete(EventRoleAssignment, { user: user.id });
 
       await em.nativeDelete(RoleAssignment, { user: user.id });
       await em.nativeDelete(SectionMembership, { user: user.id });

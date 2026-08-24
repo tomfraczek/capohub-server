@@ -323,10 +323,18 @@ export class EventAttendanceService {
     attendee.checkInMethod = method;
     await em.flush();
 
-    if (changed) {
+    // A User-organized Event has no Community (see event-community.util.ts)
+    // to file this entry under - AuditLogEntry itself requires exactly one
+    // of group/section (see audit-log-entry.entity.ts's own CHECK
+    // constraint), and this is exclusively a *Community* audit log (see
+    // GET /groups/:groupId/audit-log) with no equivalent surface for a
+    // personal Event, so the entry is simply not written in that case; the
+    // check-in itself still happens regardless.
+    const community = eventCommunity(event);
+    if (changed && community) {
       const targetUserId = attendee.subjectUser?.id;
       this.auditLogService.record(em, {
-        community: eventCommunity(event),
+        community,
         action: AuditAction.RECORD_EVENT_ATTENDANCE,
         actor,
         targetType: targetUserId ? AuditTargetType.USER : undefined,

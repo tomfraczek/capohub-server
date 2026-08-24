@@ -211,6 +211,33 @@ describe('EventRolesService', () => {
         ).resolves.toMatchObject({ role: EventRole.MODERATOR });
       },
     );
+
+    it('grants a role on a User-organized Event without any community-membership check', async () => {
+      const { em } = buildMockEm({ userRolesForActor: [EventRole.OWNER] });
+      const isActiveCommunityMember = jest.fn();
+      const eventAccessService = {
+        loadOrFail: jest.fn().mockResolvedValue(
+          buildEvent({
+            communityGroup: null,
+            communitySection: null,
+            organizerUser: { id: 'actor-1' } as never,
+          }),
+        ),
+        isActiveCommunityMember,
+      } as unknown as EventAccessService;
+      const service = new EventRolesService(em, eventAccessService);
+
+      const result = await service.grantRole(
+        'event-1',
+        { userId: 'user-2', role: EventRole.MODERATOR },
+        ACTOR,
+      );
+
+      expect(result.role).toBe(EventRole.MODERATOR);
+      // No Community to check membership against - the check must never
+      // even be attempted (see event-community.util.ts).
+      expect(isActiveCommunityMember).not.toHaveBeenCalled();
+    });
   });
 
   describe('revokeRole', () => {
@@ -366,6 +393,58 @@ describe('EventRolesService', () => {
         ).rejects.toBeInstanceOf(ConflictException);
       },
     );
+
+    it('transfers ownership on a User-organized Event without any community-membership check', async () => {
+      const { em } = buildMockEm({
+        eventRoleAssignmentResults: [
+          buildRoleAssignment({ role: EventRole.OWNER, user: ACTOR }),
+        ],
+      });
+      const isActiveCommunityMember = jest.fn();
+      const eventAccessService = {
+        loadOrFail: jest.fn().mockResolvedValue(
+          buildEvent({
+            communityGroup: null,
+            communitySection: null,
+            organizerUser: { id: 'actor-1' } as never,
+          }),
+        ),
+        isActiveCommunityMember,
+      } as unknown as EventAccessService;
+      const service = new EventRolesService(em, eventAccessService);
+
+      const result = await service.transferOwnership(
+        'event-1',
+        { toUserId: 'user-2' },
+        ACTOR,
+      );
+
+      expect(result.userId).toBe('user-2');
+      // organizerUser is never touched by an EventRole.OWNER transfer -
+      // only the administrative role moves (see event.entity.ts's class
+      // comment and event-community.util.ts).
+      expect(isActiveCommunityMember).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findOrganizedEvents', () => {
+    it('returns every Event where this user is organizerUser, regardless of status', async () => {
+      const find = jest
+        .fn()
+        .mockResolvedValue([
+          buildEvent({ id: 'e1', status: EventStatus.DRAFT }),
+          buildEvent({ id: 'e2', status: EventStatus.CANCELLED }),
+          buildEvent({ id: 'e3', status: EventStatus.FINISHED }),
+        ]);
+      const em = { find } as unknown as EntityManager;
+      const eventAccessService = {} as EventAccessService;
+      const service = new EventRolesService(em, eventAccessService);
+
+      const result = await service.findOrganizedEvents(em, 'user-1');
+
+      expect(result.map((e) => e.id)).toEqual(['e1', 'e2', 'e3']);
+      expect(find).toHaveBeenCalledWith(Event, { organizerUser: 'user-1' });
+    });
   });
 
   describe('findOwnedActiveEvents', () => {

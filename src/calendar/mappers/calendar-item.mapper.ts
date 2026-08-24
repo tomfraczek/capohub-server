@@ -69,7 +69,10 @@ export function toCalendarTrainingItem(
 
 function toCalendarCommunityRef(
   community: EventResponseDto['community'],
-): CalendarCommunityRefDto {
+): CalendarCommunityRefDto | null {
+  if (!community) {
+    return null;
+  }
   return {
     id: community.id,
     type: community.communityType,

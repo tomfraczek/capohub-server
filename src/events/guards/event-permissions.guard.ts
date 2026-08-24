@@ -79,10 +79,14 @@ export class EventPermissionsGuard implements CanActivate {
     const overridable = requiredPermissions.every((permission) =>
       COMMUNITY_OVERRIDABLE_PERMISSIONS.has(permission),
     );
-    if (overridable) {
+    // A User-organized Event has no Community to hold an override
+    // authority over (see event-community.util.ts) - only its own Event
+    // roles (checked above) can ever satisfy a permission on it.
+    const community = overridable ? eventCommunity(event) : null;
+    if (overridable && community) {
       const communityAuthorization =
         await this.roleAssignmentsService.resolveAuthorization(
-          eventCommunity(event).id,
+          community.id,
           request.localUser.id,
         );
       if (communityAuthorization) {

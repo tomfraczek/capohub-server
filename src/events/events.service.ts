@@ -25,7 +25,11 @@ import { EventListQueryInput } from './dto/event-list-query.schema';
 import { EventResponseDto } from './dto/event-response.dto';
 import { UpdateEventInput } from './dto/update-event.schema';
 import { EventAccessService } from './event-access.service';
-import { assignEventCommunity, eventCommunity } from './event-community.util';
+import {
+  assignEventCommunity,
+  assignEventOrganizerUser,
+  eventCommunity,
+} from './event-community.util';
 import { EventAttendee } from './entities/event-attendee.entity';
 import { EventInvitation } from './entities/event-invitation.entity';
 import { EventRoleAssignment } from './entities/event-role-assignment.entity';
@@ -45,6 +49,7 @@ import { EventNotificationsService } from './event-notifications.service';
 import { EventRolesService } from './event-roles.service';
 import {
   ADMIN_OPERATION_STATUSES,
+  ARCHIVABLE_STATUSES,
   assertEventStatusAllowed,
   reconcileEventFinished,
 } from './event-write-policy';
@@ -90,37 +95,75 @@ export class EventsService {
 
       const event = new Event();
       assignEventCommunity(event, community);
-      event.createdBy = actor;
-      event.status = EventStatus.DRAFT;
-      // type/customTypeLabel are set here, on create, only - see
-      // applyCommonFields, which update() also calls but which
-      // structurally cannot touch either field (UpdateEventInput has no
-      // such keys - see update-event.schema.ts).
-      event.type = input.type;
-      event.customTypeLabel = input.customTypeLabel;
-      this.applyCommonFields(event, input);
-      event.publicCode = await generateUniquePublicCode(em);
-      await assignUniqueNumericCode(
-        em,
-        async (trx, code) => {
-          event.numericCode = code;
-          trx.persist(event);
-          await trx.flush();
-        },
-        EVENTS_TYPE_NUMERIC_CODE_UNIQUE_INDEX,
-      );
-
-      await this.eventRolesService.insertRoleAssignment(
-        em,
-        event,
-        actor,
-        EventRole.OWNER,
-        actor,
-      );
-      await this.recordHistory(em, event, null, EventStatus.DRAFT, actor, null);
-
-      return this.buildResponse(em, event, actor, [EventRole.OWNER]);
+      return this.finalizeCreate(em, event, input, actor);
     });
+  }
+
+  /**
+   * POST /events (see my-events.controller.ts) - creates an Event whose
+   * public organizer identity is the caller themselves, never a Group or
+   * a Section (see event-community.util.ts's assignEventOrganizerUser).
+   * No Community membership is required - unlike create() above, `actor`
+   * need not belong to, let alone administer, any Group/Section; the only
+   * gate is being authenticated (module decision: a User may only ever
+   * create an Event as *themselves* - there is structurally no
+   * `organizerUserId` input field anywhere on CreateEventInput for a
+   * caller to substitute another User's identity here).
+   */
+  async createPersonal(
+    input: CreateEventInput,
+    actor: User,
+  ): Promise<EventResponseDto> {
+    return this.em.transactional(async (em) => {
+      this.assertVisibilityAllowedForUserOrganizer(input.visibility);
+
+      const event = new Event();
+      assignEventOrganizerUser(event, actor);
+      return this.finalizeCreate(em, event, input, actor);
+    });
+  }
+
+  /**
+   * Shared create tail for create()/createPersonal() - every field but the
+   * organizer identity itself, which the caller has already assigned via
+   * assignEventCommunity/assignEventOrganizerUser before calling this.
+   */
+  private async finalizeCreate(
+    em: EntityManager,
+    event: Event,
+    input: CreateEventInput,
+    actor: User,
+  ): Promise<EventResponseDto> {
+    event.createdBy = actor;
+    event.status = EventStatus.DRAFT;
+    // type/customTypeLabel are set here, on create, only - see
+    // applyCommonFields, which update() also calls but which
+    // structurally cannot touch either field (UpdateEventInput has no
+    // such keys - see update-event.schema.ts).
+    event.type = input.type;
+    event.customTypeLabel = input.customTypeLabel;
+    this.applyCommonFields(event, input);
+    event.publicCode = await generateUniquePublicCode(em);
+    await assignUniqueNumericCode(
+      em,
+      async (trx, code) => {
+        event.numericCode = code;
+        trx.persist(event);
+        await trx.flush();
+      },
+      EVENTS_TYPE_NUMERIC_CODE_UNIQUE_INDEX,
+    );
+
+    await this.eventRolesService.insertRoleAssignment(
+      em,
+      event,
+      actor,
+      EventRole.OWNER,
+      actor,
+    );
+    await this.recordHistory(em, event, null, EventStatus.DRAFT, actor, null);
+
+    return this.buildResponse(em, event, actor, [EventRole.OWNER]);
   }
 
   async update(
@@ -132,8 +175,12 @@ export class EventsService {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
         'communityGroup',
         'communitySection',
+        'organizerUser',
       ]);
       assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
+      if (event.organizerUser) {
+        this.assertVisibilityAllowedForUserOrganizer(input.visibility);
+      }
 
       const timeChanged =
         event.startsAt.getTime() !== new Date(input.startsAt).getTime() ||
@@ -181,6 +228,7 @@ export class EventsService {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
         'communityGroup',
         'communitySection',
+        'organizerUser',
       ]);
       assertEventStatusAllowed(event, [EventStatus.DRAFT]);
       await this.transitionStatus(
@@ -209,6 +257,7 @@ export class EventsService {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
         'communityGroup',
         'communitySection',
+        'organizerUser',
       ]);
       assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
       await this.transitionStatus(
@@ -239,6 +288,7 @@ export class EventsService {
       const event = await this.eventAccessService.loadOrFail(em, eventId, [
         'communityGroup',
         'communitySection',
+        'organizerUser',
       ]);
       assertEventStatusAllowed(event, [EventStatus.PUBLISHED]);
       await this.transitionStatus(em, event, EventStatus.FINISHED, actor, null);
@@ -252,11 +302,125 @@ export class EventsService {
     });
   }
 
+  /**
+   * POST /events/:eventId/archive - the only way an Event ever becomes
+   * ARCHIVED (module: "Event lifecycle USER-organized Event + usuwanie
+   * konta + archiwizacja Eventu"). Only FINISHED/CANCELLED Events qualify
+   * (see ARCHIVABLE_STATUSES) - a live DRAFT/PUBLISHED Event must be
+   * cancelled or finished first, same as every other terminal transition.
+   * Gated by EventPermission.EVENT_EDIT (see event.controller.ts) - the
+   * same trust tier as every other Event-management action, deliberately
+   * not a new permission (module decision: "Nie twórz nowego permission,
+   * jeśli istniejące lifecycle permissions wystarczą").
+   */
+  async archive(eventId: string, actor: User): Promise<EventResponseDto> {
+    return this.em.transactional(async (em) => {
+      const event = await this.eventAccessService.loadOrFail(em, eventId, [
+        'communityGroup',
+        'communitySection',
+        'organizerUser',
+      ]);
+      assertEventStatusAllowed(event, ARCHIVABLE_STATUSES);
+      await this.transitionStatus(em, event, EventStatus.ARCHIVED, actor, null);
+
+      const roles = await this.eventRolesService.getRolesForUser(
+        em,
+        eventId,
+        actor.id,
+      );
+      return this.buildResponse(em, event, actor, roles);
+    });
+  }
+
+  /**
+   * DELETE /users/me support (see UserService.deleteLocalAccountData) -
+   * called with that same method's own transactional `em`, immediately
+   * before the User row itself is removed, for every Event where `userId`
+   * is organizerUser. A live (DRAFT/PUBLISHED) User-organized Event cannot
+   * be left running with no organizer once its account disappears, so each
+   * one is force-closed here first: DRAFT/PUBLISHED -> CANCELLED ->
+   * ARCHIVED - the exact same two hops an organizer could have taken by
+   * hand (see cancel()/archive() above), never a direct DRAFT/PUBLISHED ->
+   * ARCHIVED shortcut (see EventStatus's own comment on why). Registered
+   * attendees of a PUBLISHED Event are still notified of the cancellation
+   * (EventNotificationsService.notify), same as a manual cancel(); a DRAFT
+   * Event never has attendees, so that call is a harmless no-op there.
+   *
+   * FINISHED/CANCELLED Events need no status change at all - they are
+   * already terminal - just one more hop straight to ARCHIVED, so the
+   * historical Event is consistently closed out rather than left dangling
+   * with no organizer in a non-final state. An already-ARCHIVED Event is
+   * left untouched.
+   *
+   * Never touches organizerUser itself - that FK is `deleteRule: 'set
+   * null'` (see event.entity.ts) and is cleared automatically the moment
+   * the User row is deleted right after this returns. The Event's public
+   * organizer identity survives regardless, via organizerType/
+   * organizerUserDisplayName (see event-community.util.ts's
+   * assignEventOrganizerUser and mappers/event-organizer-ref.mapper.ts).
+   *
+   * Deliberately independent of EventRole.OWNER: a still-active OWNER on a
+   * live Event already blocks account deletion entirely, earlier in
+   * deleteLocalAccountData (see EventRolesService.findOwnedActiveEvents) -
+   * this method only ever runs for Events that check has already let
+   * through, which includes the case where `userId` is organizerUser but
+   * has since transferred EventRole.OWNER away to someone else (the public
+   * organizer identity has no transfer mechanism - see
+   * EventRolesService.transferOwnership - so that Event can still be
+   * organizerUser's even though they no longer administer it day-to-day).
+   */
+  async closeOrganizedEventsForAccountDeletion(
+    em: EntityManager,
+    userId: string,
+    actor: User,
+  ): Promise<void> {
+    const events = await this.eventRolesService.findOrganizedEvents(em, userId);
+    for (const event of events) {
+      if (
+        event.status === EventStatus.DRAFT ||
+        event.status === EventStatus.PUBLISHED
+      ) {
+        await this.transitionStatus(
+          em,
+          event,
+          EventStatus.CANCELLED,
+          actor,
+          'Organizer account deleted',
+        );
+        await this.eventNotificationsService.notify(
+          em,
+          event,
+          NotificationType.EVENT_CANCELLED,
+        );
+        await this.transitionStatus(
+          em,
+          event,
+          EventStatus.ARCHIVED,
+          actor,
+          null,
+        );
+      } else if (
+        event.status === EventStatus.FINISHED ||
+        event.status === EventStatus.CANCELLED
+      ) {
+        await this.transitionStatus(
+          em,
+          event,
+          EventStatus.ARCHIVED,
+          actor,
+          null,
+        );
+      }
+      // ARCHIVED already: nothing to do.
+    }
+  }
+
   async getById(eventId: string, viewer: User): Promise<EventResponseDto> {
     const em = this.em;
     const event = await this.eventAccessService.loadOrFail(em, eventId, [
       'communityGroup',
       'communitySection',
+      'organizerUser',
       'createdBy',
     ]);
     return this.getVisibleEventResponse(em, event, viewer);
@@ -293,7 +457,7 @@ export class EventsService {
       em,
       typeInput,
       numericCode,
-      ['communityGroup', 'communitySection', 'createdBy'],
+      ['communityGroup', 'communitySection', 'organizerUser', 'createdBy'],
     );
     return this.getVisibleEventResponse(em, event, viewer);
   }
@@ -447,7 +611,7 @@ export class EventsService {
     }
 
     const [events, total] = await em.findAndCount(Event, where, {
-      populate: ['communityGroup', 'communitySection'],
+      populate: ['communityGroup', 'communitySection', 'organizerUser'],
       orderBy: { startsAt: 'asc' },
       limit: query.limit,
       offset: query.offset,
@@ -514,7 +678,7 @@ export class EventsService {
     if (query.to) where.startsAt = { $lte: new Date(query.to) };
 
     const [events, total] = await em.findAndCount(Event, where, {
-      populate: ['communityGroup', 'communitySection'],
+      populate: ['communityGroup', 'communitySection', 'organizerUser'],
       orderBy: { startsAt: 'asc' },
       limit: query.limit,
       offset: query.offset,
@@ -551,6 +715,14 @@ export class EventsService {
    * Home.nearestTraining is a wholly separate fact, resolved by
    * TrainingsService.findNearestForViewer instead (Training is a distinct
    * entity, never an Event - see the trainings module).
+   *
+   * Explicitly excludes ARCHIVED - a historical/retired Event must never
+   * surface as "your next upcoming event", even in the edge case of a
+   * CANCELLED-then-ARCHIVED Event whose `endsAt` still happens to be in the
+   * future (module: "ARCHIVED nie może pojawiać się jako aktywny/
+   * nadchodzący Event"). No such exclusion is needed for list()/
+   * listForViewer(), which are general-purpose/history-inclusive listings,
+   * not an "upcoming" concept.
    */
   async findNearestEvent(
     viewer: User,
@@ -565,9 +737,13 @@ export class EventsService {
 
     const [anyEvents] = await em.findAndCount(
       Event,
-      { $and: visibilityAnd, endsAt: endsAtFrom },
       {
-        populate: ['communityGroup', 'communitySection'],
+        $and: visibilityAnd,
+        endsAt: endsAtFrom,
+        status: { $ne: EventStatus.ARCHIVED },
+      },
+      {
+        populate: ['communityGroup', 'communitySection', 'organizerUser'],
         orderBy: { startsAt: 'asc' },
         limit: 1,
       },
@@ -647,7 +823,7 @@ export class EventsService {
         endsAt: { $gt: new Date(from) },
       },
       {
-        populate: ['communityGroup', 'communitySection'],
+        populate: ['communityGroup', 'communitySection', 'organizerUser'],
         orderBy: { startsAt: 'asc' },
       },
     );
@@ -880,13 +1056,15 @@ export class EventsService {
     // Sequential, not Promise.all - concurrent queries on the same
     // EntityManager/connection race each other at the driver level.
     const attendeeCounts = await this.countAttendees(em, event);
+    const community = eventCommunity(event);
+    // A User-organized Event has no Community to hold oversight over (see
+    // event-community.util.ts) - EVENT_VIEW_ALL/EVENT_MODERATE simply never
+    // apply, exactly as if the caller held neither permission.
     const oversight =
       precomputedOversight ??
-      (await this.resolveCommunityOversight(
-        em,
-        eventCommunity(event).id,
-        viewer.id,
-      ));
+      (community
+        ? await this.resolveCommunityOversight(em, community.id, viewer.id)
+        : { viewAll: false, moderate: false });
     const canRegister = await this.eventAccessService.canViewerRegister(
       em,
       event,
@@ -898,6 +1076,7 @@ export class EventsService {
       viewerRoles,
       oversight.moderate,
       canRegister,
+      event.status,
     );
 
     return toEventResponseDto(event, {
@@ -934,24 +1113,44 @@ export class EventsService {
     roles: EventRole[],
     hasModerateOverride: boolean,
     canRegister: boolean,
+    status: EventStatus,
   ): EventCapabilitiesDto {
     const has = (permission: EventPermission): boolean =>
       this.eventPermissionService.hasAllPermissionsForRoles(roles, [
         permission,
       ]);
+    // ARCHIVED is a closed, historical state (see event-status.enum.ts) -
+    // every write/management capability is unconditionally false here,
+    // regardless of role, mirroring how assertEventStatusAllowed already
+    // rejects every one of these actions at the service layer once
+    // archived; this makes the response DTO honest about it up front
+    // instead of the frontend having to special-case ARCHIVED itself
+    // (module: "Dla ARCHIVED... ARCHIVED nie jest aktywnym Eventem
+    // operacyjnym"). canViewManagement/canRegister are deliberately NOT
+    // included here: management reads (history, roles list) stay available
+    // for a historical Event, and canRegister is already false for any
+    // non-PUBLISHED status via canViewerRegister.
+    const isArchived = status === EventStatus.ARCHIVED;
 
     return {
       canViewManagement: roles.length > 0,
-      canEdit: has(EventPermission.EVENT_EDIT),
-      canPublish: has(EventPermission.EVENT_PUBLISH),
-      canCancel: has(EventPermission.EVENT_CANCEL) || hasModerateOverride,
-      canFinish: has(EventPermission.EVENT_FINISH),
-      canManageOrganizers: has(EventPermission.EVENT_MANAGE_ORGANIZERS),
-      canManageModerators: has(EventPermission.EVENT_MANAGE_MODERATORS),
-      canTransferOwnership: has(EventPermission.EVENT_OWNERSHIP_TRANSFER),
-      canManageInvitations: has(EventPermission.EVENT_MANAGE_INVITATIONS),
-      canManageParticipants: has(EventPermission.EVENT_MANAGE_PARTICIPANTS),
-      canCheckIn: has(EventPermission.EVENT_CHECKIN),
+      canEdit: !isArchived && has(EventPermission.EVENT_EDIT),
+      canPublish: !isArchived && has(EventPermission.EVENT_PUBLISH),
+      canCancel:
+        !isArchived &&
+        (has(EventPermission.EVENT_CANCEL) || hasModerateOverride),
+      canFinish: !isArchived && has(EventPermission.EVENT_FINISH),
+      canManageOrganizers:
+        !isArchived && has(EventPermission.EVENT_MANAGE_ORGANIZERS),
+      canManageModerators:
+        !isArchived && has(EventPermission.EVENT_MANAGE_MODERATORS),
+      canTransferOwnership:
+        !isArchived && has(EventPermission.EVENT_OWNERSHIP_TRANSFER),
+      canManageInvitations:
+        !isArchived && has(EventPermission.EVENT_MANAGE_INVITATIONS),
+      canManageParticipants:
+        !isArchived && has(EventPermission.EVENT_MANAGE_PARTICIPANTS),
+      canCheckIn: !isArchived && has(EventPermission.EVENT_CHECKIN),
       canRegister,
     };
   }
@@ -961,5 +1160,27 @@ export class EventsService {
       code: 'GROUP_NOT_FOUND',
       message: 'Group not found',
     });
+  }
+
+  /**
+   * COMMUNITY_MEMBERS visibility is only meaningful relative to an Event's
+   * own Community (see EventAccessService.isVisibleToViewer) - a
+   * User-organized Event has none (module decision: "Nie twórz sztucznego
+   * community dla Usera"), so it structurally cannot use that value.
+   * Called from createPersonal() unconditionally, and from update()
+   * whenever the Event being edited is User-organized - PUBLIC and
+   * INVITE_ONLY remain fully available either way (neither depends on
+   * Community membership).
+   */
+  private assertVisibilityAllowedForUserOrganizer(
+    visibility: EventVisibility,
+  ): void {
+    if (visibility === EventVisibility.COMMUNITY_MEMBERS) {
+      throw new BadRequestException({
+        code: 'EVENT_VISIBILITY_REQUIRES_COMMUNITY',
+        message:
+          'COMMUNITY_MEMBERS visibility requires a Group or Section organizer - a User-organized Event has no Community to check membership against',
+      });
+    }
   }
 }

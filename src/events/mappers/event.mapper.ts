@@ -5,6 +5,7 @@ import { EventCapabilitiesDto } from '../dto/event-capabilities.dto';
 import { EventResponseDto } from '../dto/event-response.dto';
 import { EventRole } from '../enums/event-role.enum';
 import { toEventCommunityRefDto } from './event-community-ref.mapper';
+import { toEventOrganizerRefDto } from './event-organizer-ref.mapper';
 
 export interface EventAggregateContext {
   viewerRoles: EventRole[];
@@ -33,6 +34,7 @@ export function toEventResponseDto(
 ): EventResponseDto {
   return {
     id: event.id,
+    organizer: toEventOrganizerRefDto(event),
     community: toEventCommunityRefDto(eventCommunity(event)),
     createdByUserId: event.createdBy?.id ?? null,
     type: event.type,

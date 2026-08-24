@@ -297,7 +297,7 @@
       "checks": [
         {
           "name": "academies_group_or_section_check",
-          "columnName": "section_id",
+          "columnName": "group_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))))",
           "expression": "((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))"
         }
@@ -3735,7 +3735,8 @@
             "DRAFT",
             "PUBLISHED",
             "CANCELLED",
-            "FINISHED"
+            "FINISHED",
+            "ARCHIVED"
           ],
           "mappedType": "enum"
         },
@@ -3756,7 +3757,8 @@
             "DRAFT",
             "PUBLISHED",
             "CANCELLED",
-            "FINISHED"
+            "FINISHED",
+            "ARCHIVED"
           ],
           "mappedType": "enum"
         },
@@ -4175,7 +4177,8 @@
             "DRAFT",
             "PUBLISHED",
             "CANCELLED",
-            "FINISHED"
+            "FINISHED",
+            "ARCHIVED"
           ],
           "mappedType": "enum"
         },
@@ -4262,6 +4265,58 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "string"
+        },
+        "organizer_user_id": {
+          "name": "organizer_user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "organizer_type": {
+          "name": "organizer_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "USER",
+            "GROUP",
+            "SECTION"
+          ],
+          "mappedType": "enum"
+        },
+        "organizer_user_display_name": {
+          "name": "organizer_user_display_name",
+          "type": "varchar(100)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 100,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "events",
@@ -4331,6 +4386,26 @@
         },
         {
           "columnNames": [
+            "organizer_type"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "events_organizer_type_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "organizer_user_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "events_organizer_user_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
             "id"
           ],
           "composite": false,
@@ -4393,16 +4468,16 @@
       ],
       "checks": [
         {
-          "name": "events_community_group_or_section_check",
-          "columnName": "community_group_id",
-          "definition": "CHECK ((((community_group_id IS NOT NULL) AND (community_section_id IS NULL)) OR ((community_group_id IS NULL) AND (community_section_id IS NOT NULL))))",
-          "expression": "((community_group_id IS NOT NULL) AND (community_section_id IS NULL)) OR ((community_group_id IS NULL) AND (community_section_id IS NOT NULL))"
-        },
-        {
           "name": "events_numeric_code_check",
           "columnName": "numeric_code",
           "definition": "CHECK (((numeric_code)::text ~ '^[0-9]{6}$'::text))",
           "expression": "numeric_code ~ '^[0-9]{6}$'::text"
+        },
+        {
+          "name": "events_organizer_identity_check",
+          "columnName": "organizer_type",
+          "definition": "CHECK ((((organizer_type = 'GROUP'::text) AND (community_group_id IS NOT NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'SECTION'::text) AND (community_section_id IS NOT NULL) AND (community_group_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'USER'::text) AND (community_group_id IS NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NOT NULL))))",
+          "expression": "((organizer_type = 'GROUP'::text) AND (community_group_id IS NOT NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'SECTION'::text) AND (community_section_id IS NOT NULL) AND (community_group_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'USER'::text) AND (community_group_id IS NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NOT NULL))"
         }
       ],
       "foreignKeys": {
@@ -4437,6 +4512,19 @@
             "created_by_id"
           ],
           "constraintName": "events_created_by_id_foreign",
+          "localTableName": "public.events",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "events_organizer_user_id_foreign": {
+          "columnNames": [
+            "organizer_user_id"
+          ],
+          "constraintName": "events_organizer_user_id_foreign",
           "localTableName": "public.events",
           "referencedTableName": "public.users",
           "referencedColumnNames": [
@@ -5032,7 +5120,7 @@
       "checks": [
         {
           "name": "formal_rank_assignments_ended_on_after_started_on_check",
-          "columnName": "ended_on",
+          "columnName": "started_on",
           "definition": "CHECK (((started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)))",
           "expression": "(started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)"
         }
@@ -9207,7 +9295,7 @@
       "checks": [
         {
           "name": "ranks_previous_rank_not_self_check",
-          "columnName": "id",
+          "columnName": "previous_rank_id",
           "definition": "CHECK (((previous_rank_id IS NULL) OR (previous_rank_id <> id)))",
           "expression": "(previous_rank_id IS NULL) OR (previous_rank_id <> id)"
         }
@@ -10183,7 +10271,7 @@
       "checks": [
         {
           "name": "rhythms_check",
-          "columnName": "tempo_min_bpm",
+          "columnName": "tempo_max_bpm",
           "definition": "CHECK (((tempo_min_bpm IS NULL) OR (tempo_max_bpm IS NULL) OR (tempo_min_bpm <= tempo_max_bpm)))",
           "expression": "(tempo_min_bpm IS NULL) OR (tempo_max_bpm IS NULL) OR (tempo_min_bpm <= tempo_max_bpm)"
         }
@@ -10448,7 +10536,7 @@
       "checks": [
         {
           "name": "role_assignments_group_or_section_check",
-          "columnName": "section_id",
+          "columnName": "group_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))))",
           "expression": "((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))"
         },

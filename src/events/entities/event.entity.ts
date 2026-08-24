@@ -11,6 +11,7 @@ import { BaseEntity } from '../../database/entities/base.entity';
 import { Group } from '../../groups/entities/group.entity';
 import { Section } from '../../groups/entities/section.entity';
 import { User } from '../../users/entities/user.entity';
+import { EventOrganizerType } from '../enums/event-organizer-type.enum';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
 import { EventVisibility } from '../enums/event-visibility.enum';
@@ -19,25 +20,59 @@ import { EventWaitlistPolicy } from '../enums/event-waitlist-policy.enum';
 export const EVENTS_TYPE_NUMERIC_CODE_UNIQUE_INDEX =
   'events_type_numeric_code_unique';
 
-// Belongs to exactly one Community - a Group or a Section, never both, and
-// never moved afterwards (spec: "Nie przewidujemy późniejszego
-// przenoszenia Eventu pomiędzy Community" - there is deliberately no
-// "move" operation anywhere in this module). Represented by two nullable
-// FKs (exactly one set) since the Group/Section physical split - see
-// GroupHierarchyService.findCommunityById for resolving whichever one is
-// populated.
+// Has exactly one public organizer identity - a Group, a Section, or a
+// User organizing directly - never more than one, never none, and never
+// moved afterwards (spec: "Nie przewidujemy późniejszego przenoszenia
+// Eventu pomiędzy Community", extended here to organizerUser: there is
+// deliberately no "change organizer" operation anywhere in this module -
+// see event-community.util.ts's assignEventCommunity/
+// assignEventOrganizerUser, each only ever called once, at creation).
+// Represented by an explicit `organizerType` discriminator plus three
+// nullable FKs/fields - communityGroup/communitySection date from the
+// Group/Section physical split (see GroupHierarchyService.findCommunityById
+// for resolving whichever one is populated); organizerUser +
+// organizerUserDisplayName were added alongside them for the User-as-
+// organizer case (module: "Event Organizer: USER | GROUP | SECTION").
+//
+// `organizerType` exists as its own column, not just derived from which FK
+// is set, because organizerUser is allowed to go null on its own (see its
+// own comment below) while the Event is still, unambiguously, USER-
+// organized - without a separate discriminator, a User-organized Event
+// whose organizer account was deleted would be indistinguishable from "no
+// organizer set at all" (module: "USER organizer - zachowanie historii").
+//
+// Deliberately distinct from two other, easily-confused concepts:
+// `createdBy` below (immutable audit provenance, never shown to
+// participants as "the organizer") and EventRole.OWNER (a transferable
+// *administrative* role held by a User managing the Event day-to-day -
+// see event-role-assignment.entity.ts) - a Group/Section-organized Event's
+// OWNER is just one of potentially many Community members with management
+// access, not the public organizer identity itself; a User-organized
+// Event's OWNER happens to start out as the same User as organizerUser,
+// but transferOwnership only ever moves the administrative role, never
+// organizerUser (see EventRolesService.transferOwnership).
 @Entity({ tableName: 'events' })
 @Index({ properties: ['communityGroup', 'status'] })
 @Index({ properties: ['communitySection', 'status'] })
-// Exactly one of `communityGroup`/`communitySection` must be set, never
-// both, never neither - mirrored here so migration:create/schema:update
-// know this constraint is intentional and never propose dropping it. Name
-// matches the constraint the migration creates verbatim - see
-// Migration20260802100200_AddPolymorphicCommunityReferences.
+// Discriminator-driven, not a plain "exactly one of three FKs" check
+// anymore (see the class comment above and organizerUser's own comment
+// below on why organizerUser alone can no longer distinguish USER from
+// "unset"): each organizerType branch pins down exactly which of
+// communityGroup/communitySection/organizerUserDisplayName must be set.
+// `organizerUser` is deliberately NOT constrained here at all in the USER
+// branch - it starts non-null and may later become null (ON DELETE SET
+// NULL - see its own comment), and both are valid. Mirrored here so
+// migration:create/schema:update know this constraint is intentional and
+// never propose dropping it. Name matches the constraint the migration
+// creates verbatim - see Migration20260824074804_AddEventArchivedAndOrganizerSnapshot
+// (which replaced events_organizer_check from
+// Migration20260821123136_AddEventOrganizerUser).
 @Check<Event>({
-  name: 'events_community_group_or_section_check',
+  name: 'events_organizer_identity_check',
   expression: (columns) =>
-    `("${columns.communityGroup}" is not null and "${columns.communitySection}" is null) or ("${columns.communityGroup}" is null and "${columns.communitySection}" is not null)`,
+    `("${columns.organizerType}" = 'GROUP' and "${columns.communityGroup}" is not null and "${columns.communitySection}" is null and "${columns.organizerUserDisplayName}" is null)` +
+    ` or ("${columns.organizerType}" = 'SECTION' and "${columns.communitySection}" is not null and "${columns.communityGroup}" is null and "${columns.organizerUserDisplayName}" is null)` +
+    ` or ("${columns.organizerType}" = 'USER' and "${columns.communityGroup}" is null and "${columns.communitySection}" is null and "${columns.organizerUserDisplayName}" is not null)`,
 })
 // numericCode's namespace is per-EventType, not global (see that field's
 // own comment) - enforced here as a composite unique constraint, not a
@@ -58,6 +93,45 @@ export class Event extends BaseEntity {
   @Index()
   @ManyToOne(() => Section, { nullable: true, deleteRule: 'no action' })
   communitySection: Section | null = null;
+
+  // Discriminates which organizer branch is in effect - see the class
+  // comment above. Set once, at creation (assignEventCommunity/
+  // assignEventOrganizerUser), and never changed afterwards.
+  @Index()
+  @Enum({ items: () => Object.values(EventOrganizerType) })
+  organizerType!: EventOrganizerType;
+
+  // Set only when this Event's public organizer is a User directly, rather
+  // than a Group/Section (see the class comment above and
+  // event-community.util.ts's assignEventOrganizerUser). `deleteRule:
+  // 'set null'` (like `createdBy` below, unlike communityGroup/
+  // communitySection) - this User account CAN be physically deleted
+  // (DELETE /users/me) even while still an Event's organizer, because
+  // `organizerType`/`organizerUserDisplayName` (not this FK) is what keeps
+  // the Event's USER-organizer identity intact afterwards. See
+  // UserService.deleteLocalAccountData /
+  // EventsService.closeOrganizedEventsForAccountDeletion for the deletion
+  // flow, and organizerUserDisplayName below for the surviving snapshot.
+  @Index()
+  @ManyToOne(() => User, { nullable: true, deleteRule: 'set null' })
+  organizerUser: User | null = null;
+
+  // Historical snapshot of the organizing User's displayName, taken once at
+  // creation (assignEventOrganizerUser) - never re-synced if the User later
+  // renames themselves (module decision: "Event zachowuje informację, pod
+  // jaką nazwą organizator występował przy tworzeniu"). This, not
+  // `organizerUser`, is what events_organizer_identity_check actually
+  // requires non-null for organizerType === USER - so the Event's public
+  // organizer name survives even after organizerUser goes null (account
+  // deleted). Always null for organizerType GROUP/SECTION. Deliberately no
+  // avatar/image snapshot alongside it: this codebase does not persist
+  // historical copies of profile images (no R2/storage module exists yet -
+  // see the module spec), so a deleted-account USER organizer simply has no
+  // image (see mappers/event-organizer-ref.mapper.ts) - the frontend falls
+  // back to initials, the same as it already would for any User with no
+  // avatar.
+  @Property({ nullable: true, length: 100 })
+  organizerUserDisplayName: string | null = null;
 
   // The User who originally created the Event. Always also granted
   // EventRole.OWNER at creation (see EventRolesService.create), but kept

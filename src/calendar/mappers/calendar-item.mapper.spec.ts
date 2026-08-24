@@ -18,6 +18,12 @@ function buildEvent(
 ): EventResponseDto {
   return {
     id: 'event-1',
+    organizer: {
+      type: 'SECTION',
+      id: 'section-1',
+      name: 'Downtown Section',
+      image: { url: null },
+    },
     community: {
       id: 'section-1',
       name: 'Downtown Section',

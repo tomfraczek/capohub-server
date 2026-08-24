@@ -41,10 +41,9 @@ export class EventAccessService {
   async loadOrFail(
     em: EntityManager,
     eventId: string,
-    populate: ('communityGroup' | 'communitySection' | 'createdBy')[] = [
-      'communityGroup',
-      'communitySection',
-    ],
+    populate: (
+      'communityGroup' | 'communitySection' | 'organizerUser' | 'createdBy'
+    )[] = ['communityGroup', 'communitySection', 'organizerUser'],
   ): Promise<Event> {
     const event = await em.findOne(Event, { id: eventId }, { populate });
     if (!event) {
@@ -66,10 +65,9 @@ export class EventAccessService {
     em: EntityManager,
     type: EventType,
     numericCode: string,
-    populate: ('communityGroup' | 'communitySection' | 'createdBy')[] = [
-      'communityGroup',
-      'communitySection',
-    ],
+    populate: (
+      'communityGroup' | 'communitySection' | 'organizerUser' | 'createdBy'
+    )[] = ['communityGroup', 'communitySection', 'organizerUser'],
   ): Promise<Event> {
     const event = await em.findOne(Event, { type, numericCode }, { populate });
     if (!event) {
@@ -85,9 +83,22 @@ export class EventAccessService {
    * (GroupMembership) is always Root-Group-scoped (ADR-004), so this is
    * the id every membership-based check below resolves against, even when
    * the Event belongs to a Child Group or a Section.
+   *
+   * Not callable for a User-organized Event, which has no Community at all
+   * (see event-community.util.ts) - this method is not called anywhere in
+   * the codebase today (Root Group resolution for Events currently only
+   * happens through getRootGroupIdForCommunity, called with an
+   * already-known Community), but throws explicitly rather than silently
+   * misbehaving if that ever changes.
    */
   async getRootGroupId(em: EntityManager, event: Event): Promise<string> {
-    return this.getRootGroupIdForCommunity(em, eventCommunity(event));
+    const community = eventCommunity(event);
+    if (!community) {
+      throw new Error(
+        'getRootGroupId is not supported for a User-organized Event',
+      );
+    }
+    return this.getRootGroupIdForCommunity(em, community);
   }
 
   /**
@@ -169,6 +180,14 @@ export class EventAccessService {
         return true;
       case EventVisibility.COMMUNITY_MEMBERS: {
         const community = eventCommunity(event);
+        // Structurally unreachable for a User-organized Event - create/
+        // update both reject COMMUNITY_MEMBERS visibility whenever
+        // organizerUser is set (see EventsService). Guarded defensively
+        // anyway: a User-organized Event has no Community to check
+        // membership against, so it can never be visible under this rule.
+        if (!community) {
+          return false;
+        }
         return this.isActiveCommunityMember(em, community.id, viewerId);
       }
       case EventVisibility.INVITE_ONLY: {

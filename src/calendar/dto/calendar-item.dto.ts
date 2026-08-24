@@ -30,7 +30,9 @@ export interface CalendarEventItemDto {
   endsAt: string;
   status: EventStatus;
   isCancelled: boolean;
-  community: CalendarCommunityRefDto;
+  // Null for a User-organized Event (see EventResponseDto.community and
+  // events/event-community.util.ts) - it belongs to no Group/Section.
+  community: CalendarCommunityRefDto | null;
   eventType: EventType;
   locationName: string | null;
   locationAddress: string | null;

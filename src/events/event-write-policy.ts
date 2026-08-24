@@ -29,6 +29,10 @@ const STATUS_CONFLICTS: Readonly<
     code: 'EVENT_FINISHED',
     message: 'This event has already finished',
   },
+  [EventStatus.ARCHIVED]: {
+    code: 'EVENT_ARCHIVED',
+    message: 'This event has been archived',
+  },
 };
 
 export function assertEventStatusAllowed(
@@ -59,6 +63,21 @@ export function assertEventStatusAllowed(
 export const ADMIN_OPERATION_STATUSES: readonly EventStatus[] = [
   EventStatus.DRAFT,
   EventStatus.PUBLISHED,
+];
+
+// Only a terminal, "settled" Event may be archived (module: "Event
+// lifecycle USER-organized Event + usuwanie konta + archiwizacja Eventu").
+// DRAFT/PUBLISHED are deliberately excluded even when forced closed by
+// EventsService.closeOrganizedEventsForAccountDeletion - that helper always
+// routes them through CANCELLED first (see EventStatus's own comment)
+// rather than archiving them directly, so this allow-list never needs a
+// DRAFT/PUBLISHED exception. ARCHIVED itself is excluded too - archiving is
+// one-directional, mirroring every other terminal transition in this
+// module (re-archiving hits the ARCHIVED conflict entry above, the same
+// pattern as re-publishing/re-cancelling/re-finishing).
+export const ARCHIVABLE_STATUSES: readonly EventStatus[] = [
+  EventStatus.FINISHED,
+  EventStatus.CANCELLED,
 ];
 
 /**

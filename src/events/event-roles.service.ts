@@ -129,17 +129,24 @@ export class EventRolesService {
         });
       }
 
-      const isMember = await this.eventAccessService.isActiveCommunityMember(
-        em,
-        eventCommunity(event).id,
-        input.userId,
-      );
-      if (!isMember) {
-        throw new ConflictException({
-          code: 'EVENT_ROLE_TARGET_NOT_COMMUNITY_MEMBER',
-          message:
-            "The target user must be an active member of this event's community",
-        });
+      // A User-organized Event has no Community at all (see
+      // event-community.util.ts) - there is nothing to check membership
+      // against, and module policy deliberately rejects inventing a
+      // synthetic one, so any User may be granted a role on it.
+      const community = eventCommunity(event);
+      if (community) {
+        const isMember = await this.eventAccessService.isActiveCommunityMember(
+          em,
+          community.id,
+          input.userId,
+        );
+        if (!isMember) {
+          throw new ConflictException({
+            code: 'EVENT_ROLE_TARGET_NOT_COMMUNITY_MEMBER',
+            message:
+              "The target user must be an active member of this event's community",
+          });
+        }
       }
 
       const existing = await em.findOne(EventRoleAssignment, {
@@ -268,17 +275,21 @@ export class EventRolesService {
         });
       }
 
-      const isMember = await this.eventAccessService.isActiveCommunityMember(
-        em,
-        eventCommunity(event).id,
-        input.toUserId,
-      );
-      if (!isMember) {
-        throw new ConflictException({
-          code: 'EVENT_ROLE_TARGET_NOT_COMMUNITY_MEMBER',
-          message:
-            "The target user must be an active member of this event's community",
-        });
+      // Same "no Community, no membership check" rule as grantRole above.
+      const community = eventCommunity(event);
+      if (community) {
+        const isMember = await this.eventAccessService.isActiveCommunityMember(
+          em,
+          community.id,
+          input.toUserId,
+        );
+        if (!isMember) {
+          throw new ConflictException({
+            code: 'EVENT_ROLE_TARGET_NOT_COMMUNITY_MEMBER',
+            message:
+              "The target user must be an active member of this event's community",
+          });
+        }
       }
 
       await em.remove(currentOwnerAssignment).flush();
@@ -320,5 +331,27 @@ export class EventRolesService {
           event.status === EventStatus.DRAFT ||
           event.status === EventStatus.PUBLISHED,
       );
+  }
+
+  /**
+   * Every Event where this User is the public organizer identity
+   * (Event.organizerUser) - regardless of status, unlike
+   * findOwnedActiveEvents above. Used by
+   * EventsService.closeOrganizedEventsForAccountDeletion (itself called
+   * from UserService.deleteLocalAccountData) to force-close every one of
+   * them - never to block deletion outright: unlike EventRole.OWNER above,
+   * organizerUser has no transfer mechanism (module decision: "Nie
+   * implementuj... możliwości zmiany publicznego organizatora po create"),
+   * but it is also allowed to go null on its own (ON DELETE SET NULL - see
+   * event.entity.ts's organizerUser field) once the Event's
+   * organizerType/organizerUserDisplayName snapshot has taken over as the
+   * durable identity - so this account being organizerUser is never, by
+   * itself, a reason account deletion cannot proceed.
+   */
+  async findOrganizedEvents(
+    em: EntityManager,
+    userId: string,
+  ): Promise<Event[]> {
+    return em.find(Event, { organizerUser: userId });
   }
 }

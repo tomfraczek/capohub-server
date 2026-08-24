@@ -5,12 +5,23 @@ import { EventVisibility } from '../enums/event-visibility.enum';
 import { EventWaitlistPolicy } from '../enums/event-waitlist-policy.enum';
 import { EventCapabilitiesDto } from './event-capabilities.dto';
 import { EventCommunityRefDto } from './event-community-ref.dto';
+import { EventOrganizerRefDto } from './event-organizer-ref.dto';
 
 // Used for both the list endpoint and the detail endpoint - Events, like
 // Academy/Cohort, has no separate "summary" shape (see academy-response.dto.ts).
 export interface EventResponseDto {
   id: string;
-  community: EventCommunityRefDto;
+  // The single, always-present public organizer identity (USER/GROUP/
+  // SECTION) - see event-organizer-ref.dto.ts. Prefer this over
+  // `community` below for anything organizer-facing (name, avatar) - the
+  // frontend should never need a second request just to resolve who is
+  // organizing this Event.
+  organizer: EventOrganizerRefDto;
+  // Kept for backward compatibility and existing Group/Section navigation
+  // flows (see event-community-ref.mapper.ts) - null exactly when
+  // `organizer.type === 'USER'`, since a User-organized Event belongs to
+  // no Group/Section (see event-community.util.ts).
+  community: EventCommunityRefDto | null;
   createdByUserId: string | null;
   type: EventType;
   customTypeLabel: string | null;

@@ -67,7 +67,9 @@ export interface CareerTimelineEventRefDto {
   type: EventType;
   startsAt: string;
   endsAt: string;
-  community: EventCommunityRefDto;
+  // Null for a User-organized Event (see EventResponseDto.community and
+  // events/event-community.util.ts) - it belongs to no Group/Section.
+  community: EventCommunityRefDto | null;
   locationName: string | null;
   locationAddress: string | null;
 }

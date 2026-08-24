@@ -34,6 +34,7 @@ import { EventRoleAssignment } from '../src/events/entities/event-role-assignmen
 import { EventStatusHistory } from '../src/events/entities/event-status-history.entity';
 import { Event } from '../src/events/entities/event.entity';
 import { EventRole } from '../src/events/enums/event-role.enum';
+import { EventStatus } from '../src/events/enums/event-status.enum';
 import { EventVisibility } from '../src/events/enums/event-visibility.enum';
 import { EventWaitlistPolicy } from '../src/events/enums/event-waitlist-policy.enum';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
@@ -43,12 +44,26 @@ const ORGANIZER_TOKEN = 'valid-events-organizer-token';
 const MODERATOR_TOKEN = 'valid-events-moderator-token';
 const MEMBER_TOKEN = 'valid-events-member-token';
 const OUTSIDER_TOKEN = 'valid-events-outsider-token';
+// Dedicated, single-use identities for DELETE /users/me tests below - never
+// reused for anything else in this file, since deleting the account behind
+// a token would otherwise silently recreate a *new* User row (a different
+// id) for every later request that authenticates with it (see
+// UserService.findOrCreateFromClerk), invalidating any earlier
+// localUserIdByToken lookup for the shared OWNER/ORGANIZER/MODERATOR/
+// MEMBER/OUTSIDER identities every other describe block in this file
+// depends on.
+const DELETABLE_HISTORICAL_TOKEN = 'valid-events-deletable-historical-token';
+const DELETABLE_PUBLISHED_TOKEN = 'valid-events-deletable-published-token';
+const DELETABLE_STILL_OWNER_TOKEN = 'valid-events-deletable-still-owner-token';
 
 const OWNER_CLERK_ID = 'user_test_events_owner';
 const ORGANIZER_CLERK_ID = 'user_test_events_organizer';
 const MODERATOR_CLERK_ID = 'user_test_events_moderator';
 const MEMBER_CLERK_ID = 'user_test_events_member';
 const OUTSIDER_CLERK_ID = 'user_test_events_outsider';
+const DELETABLE_HISTORICAL_CLERK_ID = 'user_test_events_deletable_historical';
+const DELETABLE_PUBLISHED_CLERK_ID = 'user_test_events_deletable_published';
+const DELETABLE_STILL_OWNER_CLERK_ID = 'user_test_events_deletable_still_owner';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
   [OWNER_TOKEN]: {
@@ -81,6 +96,33 @@ const TOKEN_TO_AUTH: Record<string, AuthContext> = {
     tokenType: 'session_token',
     claims: { sub: OUTSIDER_CLERK_ID, sid: 'sess_events_outsider' },
   },
+  [DELETABLE_HISTORICAL_TOKEN]: {
+    userId: DELETABLE_HISTORICAL_CLERK_ID,
+    sessionId: 'sess_events_deletable_historical',
+    tokenType: 'session_token',
+    claims: {
+      sub: DELETABLE_HISTORICAL_CLERK_ID,
+      sid: 'sess_events_deletable_historical',
+    },
+  },
+  [DELETABLE_PUBLISHED_TOKEN]: {
+    userId: DELETABLE_PUBLISHED_CLERK_ID,
+    sessionId: 'sess_events_deletable_published',
+    tokenType: 'session_token',
+    claims: {
+      sub: DELETABLE_PUBLISHED_CLERK_ID,
+      sid: 'sess_events_deletable_published',
+    },
+  },
+  [DELETABLE_STILL_OWNER_TOKEN]: {
+    userId: DELETABLE_STILL_OWNER_CLERK_ID,
+    sessionId: 'sess_events_deletable_still_owner',
+    tokenType: 'session_token',
+    claims: {
+      sub: DELETABLE_STILL_OWNER_CLERK_ID,
+      sid: 'sess_events_deletable_still_owner',
+    },
+  },
 };
 
 const FIXTURE_CLERK_PROFILES: Record<
@@ -106,6 +148,24 @@ const FIXTURE_CLERK_PROFILES: Record<
   [OUTSIDER_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/events-outsider.png',
     primaryEmailAddress: { emailAddress: 'events.outsider@example.com' },
+  },
+  [DELETABLE_HISTORICAL_CLERK_ID]: {
+    imageUrl: 'https://img.clerk.com/events-deletable-historical.png',
+    primaryEmailAddress: {
+      emailAddress: 'events.deletable.historical@example.com',
+    },
+  },
+  [DELETABLE_PUBLISHED_CLERK_ID]: {
+    imageUrl: 'https://img.clerk.com/events-deletable-published.png',
+    primaryEmailAddress: {
+      emailAddress: 'events.deletable.published@example.com',
+    },
+  },
+  [DELETABLE_STILL_OWNER_CLERK_ID]: {
+    imageUrl: 'https://img.clerk.com/events-deletable-still-owner.png',
+    primaryEmailAddress: {
+      emailAddress: 'events.deletable.still.owner@example.com',
+    },
   },
 };
 
@@ -144,6 +204,10 @@ async function bodyOf<T>(req: request.Test): Promise<T> {
 describe('Events (e2e)', () => {
   let app: INestApplication<App>;
   const createdGroupIds: string[] = [];
+  // Separate from createdGroupIds - a User-organized Event has no
+  // Group/Section at all (see event-community.util.ts), so it is never
+  // reachable through the community-scoped cleanup filters below.
+  const createdPersonalEventIds: string[] = [];
   const localUserIdByToken = new Map<string, string>();
 
   beforeAll(async () => {
@@ -203,6 +267,24 @@ describe('Events (e2e)', () => {
           { communitySection: { $in: createdGroupIds } },
         ],
       });
+
+      // User-organized Events - cleaned up by their own ids, not by
+      // community (they have none). Must run before the User rows below
+      // are deleted: Event.organizerUser is `deleteRule: 'no action'` (see
+      // event.entity.ts), so a User row still referenced as organizerUser
+      // cannot be deleted first.
+      if (createdPersonalEventIds.length > 0) {
+        const eventIsPersonal = { event: { $in: createdPersonalEventIds } };
+        await cleanup.nativeDelete(EventGuardianAssignment, eventIsPersonal);
+        await cleanup.nativeDelete(EventAttendee, eventIsPersonal);
+        await cleanup.nativeDelete(EventInvitation, eventIsPersonal);
+        await cleanup.nativeDelete(EventRoleAssignment, eventIsPersonal);
+        await cleanup.nativeDelete(EventStatusHistory, eventIsPersonal);
+        await cleanup.nativeDelete(Event, {
+          id: { $in: createdPersonalEventIds },
+        });
+      }
+
       await cleanup.nativeDelete(RoleAssignment, {
         $or: [
           { group: { $in: createdGroupIds } },
@@ -362,6 +444,27 @@ describe('Events (e2e)', () => {
     );
   }
 
+  // POST /events - creates an Event organized by `token`'s own User,
+  // never a Group/Section (see EventsService.createPersonal). Tracks the
+  // created id separately from createdGroupIds so afterAll can clean it up
+  // by its own id (see createdPersonalEventIds above).
+  async function createPersonalEvent(
+    token: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<EventResponseDto> {
+    const created = await bodyOf<EventResponseDto>(
+      request(app.getHttpServer())
+        .post('/api/v1/events')
+        .set('Authorization', `Bearer ${token}`)
+        .send(
+          eventPayload({ visibility: EventVisibility.PUBLIC, ...overrides }),
+        )
+        .expect(201),
+    );
+    createdPersonalEventIds.push(created.id);
+    return created;
+  }
+
   describe('create + community-level permission gate', () => {
     it('lets a Community Admin/Owner create an Event, auto-granting them OWNER', async () => {
       const community = await createCommunityWithMembers();
@@ -376,6 +479,15 @@ describe('Events (e2e)', () => {
         canManageOrganizers: true,
         canTransferOwnership: true,
       });
+      // Organizer identity resolves to the Group, with its logo passed
+      // through as the organizer's image - `community` stays populated too
+      // for backward compatibility (see event-response.dto.ts).
+      expect(created.organizer).toMatchObject({
+        type: 'GROUP',
+        id: community.id,
+        name: community.name,
+      });
+      expect(created.community).not.toBeNull();
     });
 
     it('rejects creation by a plain MEMBER - 403 INSUFFICIENT_GROUP_PERMISSIONS (a Group has no MEMBER tier at all, so this is exercised on a Section)', async () => {
@@ -456,6 +568,10 @@ describe('Events (e2e)', () => {
           .expect(201),
       );
       expect(created.status).toBe('DRAFT');
+      expect(created.organizer).toMatchObject({
+        type: 'SECTION',
+        id: section.id,
+      });
 
       const list = await bodyOf<{ items: EventResponseDto[] }>(
         request(app.getHttpServer())
@@ -1478,6 +1594,514 @@ describe('Events (e2e)', () => {
 
       const ownerFeed = await fetchGlobalFeed(OWNER_TOKEN);
       expect(ownerFeed.some((e) => e.id === draft.id)).toBe(true);
+    });
+  });
+
+  describe('User-organized Events (POST /events)', () => {
+    it('creates an Event organized by the caller themselves, with no community', async () => {
+      const created = await createPersonalEvent(OWNER_TOKEN, {
+        name: 'Workshop Mestre Acordeon',
+      });
+
+      expect(created.status).toBe('DRAFT');
+      expect(created.createdByUserId).toBe(localUserIdByToken.get(OWNER_TOKEN));
+      expect(created.community).toBeNull();
+      expect(created.organizer).toEqual({
+        type: 'USER',
+        id: localUserIdByToken.get(OWNER_TOKEN),
+        // Seeded from the Clerk fixture profile at first login (see
+        // FIXTURE_CLERK_PROFILES/generateDisplayNameFromEmail).
+        name: 'Events Owner',
+        image: {
+          type: 'CLERK',
+          url: 'https://img.clerk.com/events-owner.png',
+          presetAvatarId: null,
+        },
+      });
+    });
+
+    it('grants the creator EventRole.OWNER, with matching capabilities', async () => {
+      const created = await createPersonalEvent(OWNER_TOKEN);
+
+      expect(created.viewerRoles).toEqual(['OWNER']);
+      expect(created.capabilities).toMatchObject({
+        canEdit: true,
+        canPublish: true,
+        canManageOrganizers: true,
+        canTransferOwnership: true,
+      });
+    });
+
+    it('rejects COMMUNITY_MEMBERS visibility with a 400 EVENT_VISIBILITY_REQUIRES_COMMUNITY', async () => {
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post('/api/v1/events')
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(eventPayload({ visibility: EventVisibility.COMMUNITY_MEMBERS }))
+          .expect(400),
+      );
+
+      expect(response.code).toBe('EVENT_VISIBILITY_REQUIRES_COMMUNITY');
+    });
+
+    it('is reachable via direct GET /events/:eventId', async () => {
+      const created = await createPersonalEvent(OWNER_TOKEN);
+
+      const fetched = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/events/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+
+      expect(fetched.id).toBe(created.id);
+      expect(fetched.organizer.type).toBe('USER');
+    });
+
+    it('cannot change organizer identity via PATCH, and rejects switching to COMMUNITY_MEMBERS visibility', async () => {
+      const created = await createPersonalEvent(OWNER_TOKEN, {
+        name: 'Immutable Organizer Event',
+      });
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/events/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(
+            eventPayload({
+              name: 'Immutable Organizer Event',
+              visibility: EventVisibility.COMMUNITY_MEMBERS,
+            }),
+          )
+          .expect(400),
+      );
+      expect(response.code).toBe('EVENT_VISIBILITY_REQUIRES_COMMUNITY');
+
+      // A normal PUBLIC update still works, and the organizer never moves -
+      // UpdateEventRequest has no organizer-identity field at all (see
+      // update-event.schema.ts).
+      const updated = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/events/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(
+            eventPayload({
+              name: 'Renamed, Still Mine',
+              visibility: EventVisibility.PUBLIC,
+            }),
+          )
+          .expect(200),
+      );
+      expect(updated.name).toBe('Renamed, Still Mine');
+      expect(updated.organizer).toEqual(created.organizer);
+    });
+
+    it('transferring EventRole.OWNER moves administrative control but never the public organizer identity', async () => {
+      const created = await createPersonalEvent(OWNER_TOKEN, {
+        name: 'Ownership Transfer Personal Event',
+      });
+      const originalOrganizer = created.organizer;
+
+      // No Community membership exists to check here at all - transferring
+      // to a User with no relationship whatsoever to the creator still
+      // succeeds (see EventRolesService.transferOwnership).
+      const transfer = await bodyOf<EventRoleAssignmentResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/events/${created.id}/transfer-ownership`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({ toUserId: localUserIdByToken.get(OUTSIDER_TOKEN) })
+          .expect(201),
+      );
+      expect(transfer.userId).toBe(localUserIdByToken.get(OUTSIDER_TOKEN));
+
+      const afterTransfer = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/events/${created.id}`)
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+          .expect(200),
+      );
+      // The new Owner now has full management capabilities...
+      expect(afterTransfer.viewerRoles).toEqual(['OWNER']);
+      expect(afterTransfer.capabilities.canEdit).toBe(true);
+      // ...but the public organizer identity is unchanged - it is still the
+      // original creator, not the new Owner (see event.entity.ts's class
+      // comment: organizerUser has no transfer mechanism).
+      expect(afterTransfer.organizer).toEqual(originalOrganizer);
+    });
+
+    describe('listing', () => {
+      function personalFeedEvent(
+        overrides: Record<string, unknown> = {},
+      ): Record<string, unknown> {
+        return eventPayload({
+          startsAt: '2032-04-01T10:00:00.000Z',
+          endsAt: '2032-04-01T18:00:00.000Z',
+          visibility: EventVisibility.PUBLIC,
+          ...overrides,
+        });
+      }
+
+      async function fetchGlobalFeed(
+        token: string,
+      ): Promise<EventResponseDto[]> {
+        const result = await bodyOf<{ items: EventResponseDto[] }>(
+          request(app.getHttpServer())
+            .get('/api/v1/events')
+            .query({
+              from: '2032-03-30T00:00:00.000Z',
+              to: '2032-04-02T00:00:00.000Z',
+              limit: 100,
+            })
+            .set('Authorization', `Bearer ${token}`)
+            .expect(200),
+        );
+        return result.items;
+      }
+
+      it('does not appear under GET /groups/:id/events or GET /sections/:id/events - it belongs to no community', async () => {
+        const community = await createCommunityWithMembers();
+        const personal = await createPersonalEvent(
+          OWNER_TOKEN,
+          personalFeedEvent({ name: 'Personal Event Not In Group List' }),
+        );
+
+        const groupList = await bodyOf<{ items: EventResponseDto[] }>(
+          request(app.getHttpServer())
+            .get(`/api/v1/groups/${community.id}/events`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(200),
+        );
+        expect(groupList.items.some((e) => e.id === personal.id)).toBe(false);
+      });
+
+      it('is visible to any signed-in user via the global feed once PUBLISHED', async () => {
+        const personal = await createPersonalEvent(
+          OWNER_TOKEN,
+          personalFeedEvent({ name: 'Personal Event In Global Feed' }),
+        );
+        await publishEvent(OWNER_TOKEN, personal.id);
+
+        const feed = await fetchGlobalFeed(OUTSIDER_TOKEN);
+        expect(feed.some((e) => e.id === personal.id)).toBe(true);
+      });
+
+      it("is included in the creator's own feed via My Events, even as a DRAFT", async () => {
+        const personal = await createPersonalEvent(
+          OWNER_TOKEN,
+          personalFeedEvent({ name: 'Personal Draft Event For Owner' }),
+        );
+
+        const ownFeed = await fetchGlobalFeed(OWNER_TOKEN);
+        expect(ownFeed.some((e) => e.id === personal.id)).toBe(true);
+
+        const strangerFeed = await fetchGlobalFeed(OUTSIDER_TOKEN);
+        expect(strangerFeed.some((e) => e.id === personal.id)).toBe(false);
+      });
+    });
+
+    describe('archive lifecycle', () => {
+      // Fast-forwards a PUBLISHED Event into the past and reads it once,
+      // triggering the same lazy PUBLISHED -> FINISHED reconciliation used
+      // throughout "status lifecycle guards" above.
+      async function forceFinish(
+        eventId: string,
+        token: string,
+      ): Promise<EventResponseDto> {
+        const em = app.get(EntityManager).fork();
+        await em.nativeUpdate(
+          Event,
+          { id: eventId },
+          {
+            startsAt: new Date('2020-01-10T10:00:00.000Z'),
+            endsAt: new Date('2020-01-10T18:00:00.000Z'),
+          },
+        );
+        return bodyOf<EventResponseDto>(
+          request(app.getHttpServer())
+            .get(`/api/v1/events/${eventId}`)
+            .set('Authorization', `Bearer ${token}`)
+            .expect(200),
+        );
+      }
+
+      it('archives a FINISHED Event: it stays readable with history, but every operational capability is false and management/register are blocked', async () => {
+        const created = await createPersonalEvent(OWNER_TOKEN, {
+          name: 'Archive Lifecycle Event',
+        });
+        await publishEvent(OWNER_TOKEN, created.id);
+        const finished = await forceFinish(created.id, OWNER_TOKEN);
+        expect(finished.status).toBe('FINISHED');
+
+        const archived = await bodyOf<EventResponseDto>(
+          request(app.getHttpServer())
+            .post(`/api/v1/events/${created.id}/archive`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(201),
+        );
+        expect(archived.status).toBe('ARCHIVED');
+
+        // Details and history both still resolve for a historical Event.
+        const details = await bodyOf<EventResponseDto>(
+          request(app.getHttpServer())
+            .get(`/api/v1/events/${created.id}`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(200),
+        );
+        expect(details.status).toBe('ARCHIVED');
+        expect(details.organizer.type).toBe('USER');
+
+        const history = await bodyOf<EventStatusHistoryResponseDto[]>(
+          request(app.getHttpServer())
+            .get(`/api/v1/events/${created.id}/history`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(200),
+        );
+        expect(history.some((h) => h.toStatus === EventStatus.ARCHIVED)).toBe(
+          true,
+        );
+
+        // Every operational capability is false - read access
+        // (canViewManagement) is the only one still true for a role holder.
+        expect(details.capabilities).toEqual({
+          canViewManagement: true,
+          canEdit: false,
+          canPublish: false,
+          canCancel: false,
+          canFinish: false,
+          canManageOrganizers: false,
+          canManageModerators: false,
+          canTransferOwnership: false,
+          canManageInvitations: false,
+          canManageParticipants: false,
+          canCheckIn: false,
+          canRegister: false,
+        });
+
+        const patchResponse = await bodyOf<HttpErrorResponse>(
+          request(app.getHttpServer())
+            .patch(`/api/v1/events/${created.id}`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .send(
+              eventPayload({
+                name: 'Should never apply',
+                visibility: EventVisibility.PUBLIC,
+              }),
+            )
+            .expect(409),
+        );
+        expect(patchResponse.code).toBe('EVENT_ARCHIVED');
+
+        const registerResponse = await bodyOf<HttpErrorResponse>(
+          request(app.getHttpServer())
+            .post(`/api/v1/events/${created.id}/register`)
+            .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+            .send({ attendSelf: true, children: [] })
+            .expect(409),
+        );
+        expect(registerResponse.code).toBe('EVENT_ARCHIVED');
+      });
+
+      it('rejects archiving a DRAFT or PUBLISHED Event - only FINISHED/CANCELLED qualify', async () => {
+        const draft = await createPersonalEvent(OWNER_TOKEN, {
+          name: 'Draft Cannot Archive',
+        });
+        const draftResponse = await bodyOf<HttpErrorResponse>(
+          request(app.getHttpServer())
+            .post(`/api/v1/events/${draft.id}/archive`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(409),
+        );
+        expect(draftResponse.code).toBe('EVENT_DRAFT');
+
+        const published = await createPersonalEvent(OWNER_TOKEN, {
+          name: 'Published Cannot Archive Directly',
+        });
+        await publishEvent(OWNER_TOKEN, published.id);
+        const publishedResponse = await bodyOf<HttpErrorResponse>(
+          request(app.getHttpServer())
+            .post(`/api/v1/events/${published.id}/archive`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(409),
+        );
+        expect(publishedResponse.code).toBe('EVENT_PUBLISHED');
+      });
+
+      it('rejects re-archiving an already-ARCHIVED Event', async () => {
+        const created = await createPersonalEvent(OWNER_TOKEN, {
+          name: 'Re-archive Rejected',
+        });
+        await publishEvent(OWNER_TOKEN, created.id);
+        await forceFinish(created.id, OWNER_TOKEN);
+        await request(app.getHttpServer())
+          .post(`/api/v1/events/${created.id}/archive`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(201);
+
+        const reArchiveResponse = await bodyOf<HttpErrorResponse>(
+          request(app.getHttpServer())
+            .post(`/api/v1/events/${created.id}/archive`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(409),
+        );
+        expect(reArchiveResponse.code).toBe('EVENT_ARCHIVED');
+      });
+
+      it('also archives a Group-organized Event - no regression from the USER-organized case', async () => {
+        const community = await createCommunityWithMembers();
+        const event = await createEvent(OWNER_TOKEN, community.id);
+        await publishEvent(OWNER_TOKEN, event.id);
+        await request(app.getHttpServer())
+          .post(`/api/v1/events/${event.id}/cancel`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({})
+          .expect(201);
+
+        const archived = await bodyOf<EventResponseDto>(
+          request(app.getHttpServer())
+            .post(`/api/v1/events/${event.id}/archive`)
+            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .expect(201),
+        );
+        expect(archived.status).toBe('ARCHIVED');
+        expect(archived.organizer.type).toBe('GROUP');
+      });
+    });
+
+    describe('account deletion of the organizer', () => {
+      it("a FINISHED Event's organizer can delete their account - the Event survives, auto-archives, and keeps the organizer's historical name with no live profile", async () => {
+        const created = await createPersonalEvent(DELETABLE_HISTORICAL_TOKEN, {
+          name: 'Historical Organizer Deletion Event',
+        });
+        await publishEvent(DELETABLE_HISTORICAL_TOKEN, created.id);
+
+        const em = app.get(EntityManager).fork();
+        await em.nativeUpdate(
+          Event,
+          { id: created.id },
+          {
+            startsAt: new Date('2020-01-10T10:00:00.000Z'),
+            endsAt: new Date('2020-01-10T18:00:00.000Z'),
+          },
+        );
+        // Trigger the lazy FINISHED reconciliation before deleting the
+        // account - same technique as the archive lifecycle tests above.
+        await request(app.getHttpServer())
+          .get(`/api/v1/events/${created.id}`)
+          .set('Authorization', `Bearer ${DELETABLE_HISTORICAL_TOKEN}`)
+          .expect(200);
+
+        await request(app.getHttpServer())
+          .delete('/api/v1/users/me')
+          .set('Authorization', `Bearer ${DELETABLE_HISTORICAL_TOKEN}`)
+          .expect(204);
+
+        // The local User row is really gone.
+        const deletedUser = await em.findOne(User, {
+          clerkUserId: DELETABLE_HISTORICAL_CLERK_ID,
+        });
+        expect(deletedUser).toBeNull();
+
+        // The Event survives, and reading it does not require the deleted
+        // account - any signed-in user can, since visibility is PUBLIC.
+        const afterDeletion = await bodyOf<EventResponseDto>(
+          request(app.getHttpServer())
+            .get(`/api/v1/events/${created.id}`)
+            .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+            .expect(200),
+        );
+        // A terminal (FINISHED) Event organized by a User who then deletes
+        // their account is auto-archived by
+        // EventsService.closeOrganizedEventsForAccountDeletion.
+        expect(afterDeletion.status).toBe('ARCHIVED');
+        // The historical organizer name survives via the snapshot taken at
+        // creation - but there is no live profile left: id and image are
+        // both null (see event-organizer-ref.mapper.ts).
+        expect(afterDeletion.organizer).toEqual({
+          type: 'USER',
+          id: null,
+          name: 'Events Deletable Historical',
+          image: null,
+        });
+      });
+
+      it('a PUBLISHED Event whose organizer deletes their account is force-cancelled then archived - never left live with no organizer', async () => {
+        const created = await createPersonalEvent(DELETABLE_PUBLISHED_TOKEN, {
+          name: 'Published Organizer Deletion Event',
+        });
+        await publishEvent(DELETABLE_PUBLISHED_TOKEN, created.id);
+
+        // The creator is also EventRole.OWNER by default - that (pre-
+        // existing, unchanged) gate blocks account deletion outright while
+        // it holds OWNER on a live Event (see
+        // EventRolesService.findOwnedActiveEvents), independently of
+        // organizerUser. Transferring OWNER away - to an otherwise
+        // unrelated User, since a personal Event has no Community
+        // membership to check (see EventRolesService.transferOwnership) -
+        // clears that gate while leaving organizerUser exactly as it was;
+        // this is the actual scenario closeOrganizedEventsForAccountDeletion
+        // exists for (see its own comment).
+        await request(app.getHttpServer())
+          .post(`/api/v1/events/${created.id}/transfer-ownership`)
+          .set('Authorization', `Bearer ${DELETABLE_PUBLISHED_TOKEN}`)
+          .send({ toUserId: localUserIdByToken.get(OUTSIDER_TOKEN) })
+          .expect(201);
+
+        await request(app.getHttpServer())
+          .delete('/api/v1/users/me')
+          .set('Authorization', `Bearer ${DELETABLE_PUBLISHED_TOKEN}`)
+          .expect(204);
+
+        const em = app.get(EntityManager).fork();
+        const deletedUser = await em.findOne(User, {
+          clerkUserId: DELETABLE_PUBLISHED_CLERK_ID,
+        });
+        expect(deletedUser).toBeNull();
+
+        const afterDeletion = await bodyOf<EventResponseDto>(
+          request(app.getHttpServer())
+            .get(`/api/v1/events/${created.id}`)
+            .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+            .expect(200),
+        );
+        expect(afterDeletion.status).toBe('ARCHIVED');
+        expect(afterDeletion.organizer).toEqual({
+          type: 'USER',
+          id: null,
+          name: 'Events Deletable Published',
+          image: null,
+        });
+      });
+
+      it('still blocks account deletion while the organizer also holds EventRole.OWNER on a live Event - the pre-existing gate is untouched by the organizer-snapshot model', async () => {
+        const created = await createPersonalEvent(DELETABLE_STILL_OWNER_TOKEN, {
+          name: 'Still Owner Blocks Deletion',
+        });
+        await publishEvent(DELETABLE_STILL_OWNER_TOKEN, created.id);
+
+        const blocked = await bodyOf<HttpErrorResponse>(
+          request(app.getHttpServer())
+            .delete('/api/v1/users/me')
+            .set('Authorization', `Bearer ${DELETABLE_STILL_OWNER_TOKEN}`)
+            .expect(409),
+        );
+        expect(blocked.code).toBe('CANNOT_DELETE_ACCOUNT_OWNS_EVENTS');
+
+        // Blocked before anything is touched - the account, and the Event,
+        // are both still exactly as they were.
+        const em = app.get(EntityManager).fork();
+        const stillThere = await em.findOne(User, {
+          clerkUserId: DELETABLE_STILL_OWNER_CLERK_ID,
+        });
+        expect(stillThere).not.toBeNull();
+
+        const stillPublished = await bodyOf<EventResponseDto>(
+          request(app.getHttpServer())
+            .get(`/api/v1/events/${created.id}`)
+            .set('Authorization', `Bearer ${DELETABLE_STILL_OWNER_TOKEN}`)
+            .expect(200),
+        );
+        expect(stillPublished.status).toBe('PUBLISHED');
+      });
     });
   });
 });

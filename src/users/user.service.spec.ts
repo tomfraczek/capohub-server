@@ -3,7 +3,9 @@ import { EntityManager, EntityRepository } from '@mikro-orm/postgresql';
 import type { ClerkClient } from '@clerk/backend';
 import { AuthContext } from '../auth/types/auth-context.type';
 import { GlobalRole } from '../auth/permissions/global-role.enum';
+import { EventRoleAssignment } from '../events/entities/event-role-assignment.entity';
 import { EventRolesService } from '../events/event-roles.service';
+import { EventsService } from '../events/events.service';
 import { Group } from '../groups/entities/group.entity';
 import { RoleAssignment } from '../groups/entities/role-assignment.entity';
 import { SectionMembership } from '../groups/entities/section-membership.entity';
@@ -50,6 +52,7 @@ describe('UserService', () => {
     deleteUser?: jest.Mock;
     findOwnedAssignments?: jest.Mock;
     findOwnedActiveEvents?: jest.Mock;
+    closeOrganizedEventsForAccountDeletion?: jest.Mock;
     nativeDelete?: jest.Mock;
     findOneOrFailUser?: jest.Mock;
     emFindOne?: jest.Mock;
@@ -66,7 +69,12 @@ describe('UserService', () => {
     };
     userRepository: { findOne: jest.Mock };
     clerkClient: { users: { getUser: jest.Mock; deleteUser: jest.Mock } };
-    eventRolesService: { findOwnedActiveEvents: jest.Mock };
+    eventRolesService: {
+      findOwnedActiveEvents: jest.Mock;
+    };
+    eventsService: {
+      closeOrganizedEventsForAccountDeletion: jest.Mock;
+    };
   } {
     const em: Record<string, jest.Mock> = {
       flush: jest.fn().mockResolvedValue(undefined),
@@ -95,12 +103,18 @@ describe('UserService', () => {
       findOwnedActiveEvents:
         options.findOwnedActiveEvents ?? jest.fn().mockResolvedValue([]),
     };
+    const eventsService = {
+      closeOrganizedEventsForAccountDeletion:
+        options.closeOrganizedEventsForAccountDeletion ??
+        jest.fn().mockResolvedValue(undefined),
+    };
 
     const service = new UserService(
       em as unknown as EntityManager,
       userRepository as unknown as EntityRepository<User>,
       clerkClient as unknown as ClerkClient,
       eventRolesService as unknown as EventRolesService,
+      eventsService as unknown as EventsService,
     );
 
     return {
@@ -109,6 +123,7 @@ describe('UserService', () => {
       userRepository,
       clerkClient,
       eventRolesService,
+      eventsService,
     };
   }
 
@@ -384,12 +399,13 @@ describe('UserService', () => {
 
     // Tracks every nativeDelete/deleteUser call in invocation order, keyed
     // by what was deleted - used to assert both ordering (local before
-    // Clerk, RoleAssignments before SectionMemberships before the User row)
-    // and that each step actually ran.
+    // Clerk, EventRoleAssignments/RoleAssignments before SectionMemberships
+    // before the User row) and that each step actually ran.
     function buildTrackedEm(deleteUser: jest.Mock) {
       const calls: string[] = [];
       const nativeDelete = jest.fn((entity: unknown) => {
-        if (entity === RoleAssignment) calls.push('roleAssignments');
+        if (entity === EventRoleAssignment) calls.push('eventRoleAssignments');
+        else if (entity === RoleAssignment) calls.push('roleAssignments');
         else if (entity === SectionMembership) calls.push('sectionMemberships');
         else if (entity === User) calls.push('user');
         return Promise.resolve(0);
@@ -413,6 +429,7 @@ describe('UserService', () => {
       await service.deleteAccount(buildUser());
 
       expect(calls).toEqual([
+        'eventRoleAssignments',
         'roleAssignments',
         'sectionMemberships',
         'user',
@@ -455,6 +472,22 @@ describe('UserService', () => {
       });
     });
 
+    it('deletes every EventRoleAssignment the user holds, so a still-held terminal-Event OWNER row never blocks the final User delete', async () => {
+      const deleteUser = jest.fn();
+      const nativeDelete = jest.fn().mockResolvedValue(0);
+      const { service } = buildService({
+        deleteUser,
+        nativeDelete,
+        findOwnedAssignments: jest.fn().mockResolvedValue([]),
+      });
+
+      await service.deleteAccount(buildUser());
+
+      expect(nativeDelete).toHaveBeenCalledWith(EventRoleAssignment, {
+        user: 'user-1',
+      });
+    });
+
     it('deletes every SectionMembership belonging to the user', async () => {
       const deleteUser = jest.fn();
       const nativeDelete = jest.fn().mockResolvedValue(0);
@@ -469,6 +502,38 @@ describe('UserService', () => {
       expect(nativeDelete).toHaveBeenCalledWith(SectionMembership, {
         user: 'user-1',
       });
+    });
+
+    it("does not block deletion just because the account is a User-organized Event's organizerUser - it force-closes those Events instead", async () => {
+      const deleteUser = jest.fn();
+      const { calls, nativeDelete } = buildTrackedEm(deleteUser);
+      const closeOrganizedEventsForAccountDeletion = jest
+        .fn()
+        .mockResolvedValue(undefined);
+      const { service } = buildService({
+        deleteUser,
+        nativeDelete,
+        findOwnedAssignments: jest.fn().mockResolvedValue([]),
+        closeOrganizedEventsForAccountDeletion,
+      });
+      const user = buildUser();
+
+      await service.deleteAccount(user);
+
+      // Organizer identity is closed out before the User row itself is
+      // removed - see EventsService.closeOrganizedEventsForAccountDeletion.
+      expect(closeOrganizedEventsForAccountDeletion).toHaveBeenCalledWith(
+        expect.anything(),
+        'user-1',
+        user,
+      );
+      expect(calls).toEqual([
+        'eventRoleAssignments',
+        'roleAssignments',
+        'sectionMemberships',
+        'user',
+        'clerk',
+      ]);
     });
 
     it('rejects with CANNOT_DELETE_ACCOUNT_OWNS_GROUPS when the account owns an active Group', async () => {
@@ -517,6 +582,7 @@ describe('UserService', () => {
       await service.deleteAccount(buildUser());
 
       expect(calls).toEqual([
+        'eventRoleAssignments',
         'roleAssignments',
         'sectionMemberships',
         'user',
