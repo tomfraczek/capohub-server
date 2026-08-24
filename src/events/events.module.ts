@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { UserCheckInIdentityService } from '../common/identity/user-check-in-identity.service';
 import { GroupsModule } from '../groups/groups.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { StorageModule } from '../storage/storage.module';
 import { EventAccessService } from './event-access.service';
 import { EventAttendanceController } from './event-attendance.controller';
 import { EventAttendanceService } from './event-attendance.service';
@@ -33,7 +34,12 @@ import { EventPermissionService } from './permissions/event-permission.service';
 // never the reverse (ADR-024: Group Domain independence; Events is
 // explicitly out of scope for it).
 @Module({
-  imports: [GroupsModule, NotificationsModule],
+  // StorageModule is imported for the Event cover-image upload/delete
+  // endpoints (see EventsService.uploadCoverImage/deleteCoverImage) and
+  // for resolving coverImageUrl/organizer image URLs in every
+  // EventResponseDto (see mappers/event.mapper.ts,
+  // mappers/event-organizer-ref.mapper.ts).
+  imports: [GroupsModule, NotificationsModule, StorageModule],
   controllers: [
     EventsController,
     MyEventsController,

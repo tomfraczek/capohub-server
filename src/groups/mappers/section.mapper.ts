@@ -1,13 +1,24 @@
+import {
+  PublicUrlBuilder,
+  resolveImageUrl,
+} from '../../storage/image-url.util';
 import { Section } from '../entities/section.entity';
 import { SectionResponseDto } from '../dto/section-response.dto';
 
-export function toSectionResponseDto(section: Section): SectionResponseDto {
+export function toSectionResponseDto(
+  section: Section,
+  urlBuilder: PublicUrlBuilder,
+): SectionResponseDto {
   return {
     id: section.id,
     parentGroupId: section.parentGroup?.id ?? null,
     name: section.name,
     description: section.description,
-    logoUrl: section.logoUrl,
+    logoUrl: resolveImageUrl(
+      section.profileImageKey,
+      section.logoUrl,
+      urlBuilder,
+    ),
     coverImageUrl: section.coverImageUrl,
     contactEmail: section.contactEmail,
     contactPhone: section.contactPhone,

@@ -10,6 +10,8 @@ import {
   Patch,
   Put,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PermissionService } from '../auth/permissions/permission.service';
@@ -20,6 +22,11 @@ import { FavoriteSongsListResponseDto } from '../song-library/dto/favorite-songs
 import { LearningSongsListResponseDto } from '../song-library/dto/learning-songs-list-response.dto';
 import { FavoriteSongsService } from '../song-library/favorite-songs.service';
 import { LearningStatusService } from '../song-library/learning-status.service';
+import {
+  assertImageFilePresent,
+  imageUploadInterceptor,
+} from '../storage/multer-image.interceptor';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { SetAvatarPresetDto } from './dto/set-avatar-preset.schema';
 import { FormalGroupResponseDto } from './dto/formal-group-response.dto';
 import { PublicUserProfileResponseDto } from './dto/public-user-profile-response.dto';
@@ -49,6 +56,7 @@ export class UsersController {
     private readonly favoriteSongsService: FavoriteSongsService,
     private readonly learningStatusService: LearningStatusService,
     private readonly permissionService: PermissionService,
+    private readonly r2StorageService: R2StorageService,
   ) {}
 
   // Shared by every route below that returns a UserResponseDto - keeps
@@ -59,6 +67,7 @@ export class UsersController {
     return toUserResponseDto(
       user,
       buildSongCapabilities(user.globalRole, this.permissionService),
+      this.r2StorageService,
     );
   }
 
@@ -97,6 +106,29 @@ export class UsersController {
     @CurrentUser() user: User,
   ): Promise<UserResponseDto> {
     const updated = await this.userService.resetAvatarToClerk(user);
+    return this.toResponseDto(updated);
+  }
+
+  // PUT /users/me/profile-image (module: "R2: upload/replace/delete zdjęć"
+  // §16) - uploads/replaces this User's own R2-hosted avatar. Auth-only,
+  // same as every other me/* route - `userId` is never accepted from the
+  // client (module spec §17), only ever `@CurrentUser()`.
+  @Put('me/profile-image')
+  @UseInterceptors(imageUploadInterceptor())
+  async uploadProfileImage(
+    @CurrentUser() user: User,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ): Promise<UserResponseDto> {
+    assertImageFilePresent(file);
+    const updated = await this.userService.uploadAvatar(user, file);
+    return this.toResponseDto(updated);
+  }
+
+  @Delete('me/profile-image')
+  async deleteProfileImage(
+    @CurrentUser() user: User,
+  ): Promise<UserResponseDto> {
+    const updated = await this.userService.deleteAvatar(user);
     return this.toResponseDto(updated);
   }
 

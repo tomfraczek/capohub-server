@@ -3,6 +3,11 @@ import { AvatarType } from './enums/avatar-type.enum';
 import { SongCapabilitiesDto } from './dto/song-capabilities.dto';
 import { User } from './entities/user.entity';
 import { toUserResponseDto } from './user.mapper';
+import { PublicUrlBuilder } from '../storage/image-url.util';
+
+function buildUrlBuilder(): PublicUrlBuilder {
+  return { buildPublicUrl: (key) => `https://cdn.example.com/${key}` };
+}
 
 const NO_SONG_CAPABILITIES: SongCapabilitiesDto = {
   canCreate: false,
@@ -35,7 +40,9 @@ describe('toUserResponseDto', () => {
   it('maps the exposed fields', () => {
     const user = buildUser();
 
-    expect(toUserResponseDto(user, NO_SONG_CAPABILITIES)).toEqual({
+    expect(
+      toUserResponseDto(user, NO_SONG_CAPABILITIES, buildUrlBuilder()),
+    ).toEqual({
       id: 'user-uuid-1',
       email: 'dev@example.com',
       displayName: 'Ada Lovelace',
@@ -61,14 +68,18 @@ describe('toUserResponseDto', () => {
       canDeleteAnyDraft: true,
     };
 
-    expect(toUserResponseDto(user, capabilities).songCapabilities).toEqual(
-      capabilities,
-    );
+    expect(
+      toUserResponseDto(user, capabilities, buildUrlBuilder()).songCapabilities,
+    ).toEqual(capabilities);
   });
 
   it('serializes dates as ISO 8601 strings', () => {
     const user = buildUser();
-    const dto = toUserResponseDto(user, NO_SONG_CAPABILITIES);
+    const dto = toUserResponseDto(
+      user,
+      NO_SONG_CAPABILITIES,
+      buildUrlBuilder(),
+    );
 
     expect(dto.createdAt).toBe(user.createdAt.toISOString());
     expect(dto.updatedAt).toBe(user.updatedAt.toISOString());
@@ -77,7 +88,9 @@ describe('toUserResponseDto', () => {
   it('passes through null for avatarUrl', () => {
     const user = buildUser({ avatarUrl: null });
 
-    expect(toUserResponseDto(user, NO_SONG_CAPABILITIES)).toMatchObject({
+    expect(
+      toUserResponseDto(user, NO_SONG_CAPABILITIES, buildUrlBuilder()),
+    ).toMatchObject({
       avatarUrl: null,
     });
   });
@@ -89,16 +102,41 @@ describe('toUserResponseDto', () => {
       avatarUrl: null,
     });
 
-    expect(toUserResponseDto(user, NO_SONG_CAPABILITIES)).toMatchObject({
+    expect(
+      toUserResponseDto(user, NO_SONG_CAPABILITIES, buildUrlBuilder()),
+    ).toMatchObject({
       avatarType: AvatarType.PRESET,
       presetAvatarId: 'berimbau-01',
       avatarUrl: null,
     });
   });
 
+  it('prefers the R2 public URL derived from avatarImageKey over the legacy avatarUrl for an UPLOAD avatar', () => {
+    const user = buildUser({
+      avatarType: AvatarType.UPLOAD,
+      avatarUrl: null,
+      avatarImageKey: 'users/user-uuid-1/profile/uuid.webp',
+      presetAvatarId: null,
+    });
+
+    const dto = toUserResponseDto(
+      user,
+      NO_SONG_CAPABILITIES,
+      buildUrlBuilder(),
+    );
+
+    expect(dto.avatarUrl).toBe(
+      'https://cdn.example.com/users/user-uuid-1/profile/uuid.webp',
+    );
+  });
+
   it('never includes clerkUserId, isActive, or lastLoginAt', () => {
     const user = buildUser();
-    const dto = toUserResponseDto(user, NO_SONG_CAPABILITIES);
+    const dto = toUserResponseDto(
+      user,
+      NO_SONG_CAPABILITIES,
+      buildUrlBuilder(),
+    );
 
     expect(dto).not.toHaveProperty('clerkUserId');
     expect(dto).not.toHaveProperty('isActive');
@@ -107,7 +145,11 @@ describe('toUserResponseDto', () => {
 
   it('never includes firstName or lastName', () => {
     const user = buildUser();
-    const dto = toUserResponseDto(user, NO_SONG_CAPABILITIES);
+    const dto = toUserResponseDto(
+      user,
+      NO_SONG_CAPABILITIES,
+      buildUrlBuilder(),
+    );
 
     expect(dto).not.toHaveProperty('firstName');
     expect(dto).not.toHaveProperty('lastName');

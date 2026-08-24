@@ -57,6 +57,21 @@ const clerkAuthorizedPartiesSchema = z
     message: 'CLERK_AUTHORIZED_PARTIES must contain only valid URLs',
   });
 
+// R2 (Cloudflare, S3-compatible) storage config for the User/Group/Section/
+// Event profile-image and cover-image upload endpoints (see
+// storage/r2-client.provider.ts). Deliberately NOT required here the way
+// CLERK_SECRET_KEY is - this project has no per-environment "does this env
+// use storage" flag, and making all five mandatory at the global env-schema
+// level would force every one of this file's ~30 pre-existing unit tests
+// (env.schema.spec.ts) to grow unrelated fixture noise for a module they
+// don't exercise. Instead each stays an optional, default-empty string
+// here, and R2StorageService's own provider factory is the single place
+// that actually enforces "all five must be non-empty" - failing fast at
+// Nest bootstrap/DI-resolution time (same "fail readable at the moment the
+// low-level client is built" pattern as clerk-client.provider.ts), not
+// silently at first upload request. See r2-client.provider.ts.
+const r2OptionalStringSchema = z.string().default('');
+
 export const envSchema = z
   .object({
     NODE_ENV: z
@@ -72,6 +87,11 @@ export const envSchema = z
     CLERK_PUBLISHABLE_KEY: clerkPublishableKeySchema,
     CLERK_JWT_KEY: clerkJwtKeySchema,
     CLERK_AUTHORIZED_PARTIES: clerkAuthorizedPartiesSchema,
+    R2_ENDPOINT: r2OptionalStringSchema,
+    R2_ACCESS_KEY_ID: r2OptionalStringSchema,
+    R2_SECRET_ACCESS_KEY: r2OptionalStringSchema,
+    R2_BUCKET: r2OptionalStringSchema,
+    R2_PUBLIC_URL: r2OptionalStringSchema,
   })
   .transform((env) => ({
     ...env,

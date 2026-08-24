@@ -17,6 +17,9 @@ import { SectionMembership } from '../groups/entities/section-membership.entity'
 import { RoleAssignment } from '../groups/entities/role-assignment.entity';
 import { GroupRole } from '../groups/enums/group-role.enum';
 import { GroupStatus } from '../groups/enums/group-status.enum';
+import { ImageAssetService } from '../storage/image-asset.service';
+import { ImageProcessingService } from '../storage/image-processing.service';
+import { buildUserProfileImageKey } from '../storage/object-keys.util';
 import { ClerkProfile } from './clerk-profile.type';
 import { AvatarType } from './enums/avatar-type.enum';
 import {
@@ -42,6 +45,8 @@ export class UserService {
     private readonly clerkClient: ClerkClient,
     private readonly eventRolesService: EventRolesService,
     private readonly eventsService: EventsService,
+    private readonly imageProcessingService: ImageProcessingService,
+    private readonly imageAssetService: ImageAssetService,
   ) {}
 
   /**
@@ -248,11 +253,27 @@ export class UserService {
   // PUT /users/me/avatar/preset. Switches the avatar to a built-in preset
   // identified only by id - the backend does not know or validate the list
   // of valid presets, that lives in the mobile app as static assets.
+  //
+  // Module: "R2: upload/replace/delete zdjęć" §24 - if the avatar being
+  // replaced was an R2 upload, that object must not linger in the bucket
+  // just because the user switched to a preset. Order: remember the old
+  // key, persist the preset change unconditionally (this is a real state
+  // change either way, unlike DELETE - see ImageAssetService.remove's own
+  // comment on why that one is conditionally idempotent and this is not),
+  // then best-effort delete the old R2 object - a delete failure here is
+  // logged, never thrown (the avatar switch itself already succeeded).
   async setAvatarPreset(user: User, presetAvatarId: string): Promise<User> {
+    const previousUploadKey = user.avatarImageKey;
     user.avatarType = AvatarType.PRESET;
     user.presetAvatarId = presetAvatarId;
     user.avatarUrl = null;
+    user.avatarImageKey = null;
     await this.em.flush();
+    await this.imageAssetService.cleanupOrphan(
+      previousUploadKey,
+      { resourceType: 'user-avatar', resourceId: user.id },
+      'avatar switched to a preset',
+    );
     return user;
   }
 
@@ -260,12 +281,93 @@ export class UserService {
   // the current profile rather than trusting whatever was last synced, since
   // the user's avatar may have changed on Clerk's side while UPLOAD/PRESET
   // was active and applyProfileChanges would not have picked it up.
+  //
+  // Same R2 cleanup as setAvatarPreset above (module spec §25) - if the
+  // avatar being replaced was an R2 upload, delete it after the DB switch
+  // commits.
   async resetAvatarToClerk(user: User): Promise<User> {
     const profile = await this.fetchClerkProfile(user.clerkUserId);
+    const previousUploadKey = user.avatarImageKey;
     user.avatarType = AvatarType.CLERK;
     user.avatarUrl = profile.avatarUrl;
     user.presetAvatarId = null;
+    user.avatarImageKey = null;
     await this.em.flush();
+    await this.imageAssetService.cleanupOrphan(
+      previousUploadKey,
+      { resourceType: 'user-avatar', resourceId: user.id },
+      'avatar reset to Clerk',
+    );
+    return user;
+  }
+
+  // PUT /users/me/profile-image (module spec §16/§26) - uploads (or
+  // replaces) this User's own avatar as an R2-hosted image. Always sets
+  // avatarType to UPLOAD and clears presetAvatarId (module spec §23) -
+  // mirrors setAvatarPreset/resetAvatarToClerk's own "the three avatar
+  // fields always change together" invariant (see avatarType's own comment
+  // on user.entity.ts). avatarUrl is cleared alongside avatarImageKey so
+  // the two legacy/R2 fields never disagree about which is authoritative
+  // (see user.entity.ts's avatarUrl comment) - the response's avatarUrl is
+  // always resolved from avatarImageKey once this returns (see
+  // resolveUserAvatarUrl).
+  async uploadAvatar(user: User, file: Express.Multer.File): Promise<User> {
+    const processed = await this.imageProcessingService.processProfileImage(
+      file.buffer,
+    );
+    const newKey = buildUserProfileImageKey(user.id);
+    await this.imageAssetService.replace({
+      processedBuffer: processed,
+      newKey,
+      oldKey: user.avatarImageKey,
+      persist: async (key) => {
+        user.avatarType = AvatarType.UPLOAD;
+        user.avatarImageKey = key;
+        user.avatarUrl = null;
+        user.presetAvatarId = null;
+        await this.em.flush();
+      },
+      logContext: { resourceType: 'user-avatar', resourceId: user.id },
+    });
+    return user;
+  }
+
+  // DELETE /users/me/profile-image (module spec §26). Only meaningful for
+  // an UPLOAD avatar - PRESET/CLERK have no R2 object to remove, and
+  // deleting "the current image" for either of those is answered by their
+  // own dedicated endpoints (avatar/preset, avatar/clerk), not this one, so
+  // this is a plain no-op for them (idempotent success, same as an UPLOAD
+  // avatar being deleted twice in a row - module spec §42).
+  //
+  // Falls back to CLERK when the account has a usable Clerk avatar URL,
+  // otherwise falls back to PRESET with no presetAvatarId (module spec: "a
+  // neutral fallback consistent with the current architecture" - there is
+  // no third avatarType to invent, and PRESET with a null id is already a
+  // valid, renderable state the frontend must already handle for a
+  // brand-new account that has never picked a preset).
+  async deleteAvatar(user: User): Promise<User> {
+    if (user.avatarType !== AvatarType.UPLOAD) {
+      return user;
+    }
+    const oldKey = user.avatarImageKey;
+    await this.imageAssetService.remove({
+      oldKey,
+      persist: async () => {
+        const profile = await this.fetchClerkProfile(user.clerkUserId);
+        if (profile.avatarUrl) {
+          user.avatarType = AvatarType.CLERK;
+          user.avatarUrl = profile.avatarUrl;
+          user.presetAvatarId = null;
+        } else {
+          user.avatarType = AvatarType.PRESET;
+          user.avatarUrl = null;
+          user.presetAvatarId = null;
+        }
+        user.avatarImageKey = null;
+        await this.em.flush();
+      },
+      logContext: { resourceType: 'user-avatar', resourceId: user.id },
+    });
     return user;
   }
 

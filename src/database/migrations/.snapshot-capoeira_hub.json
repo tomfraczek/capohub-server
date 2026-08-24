@@ -4317,6 +4317,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "string"
+        },
+        "cover_image_key": {
+          "name": "cover_image_key",
+          "type": "varchar(512)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 512,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "events",
@@ -6094,6 +6110,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "boolean"
+        },
+        "profile_image_key": {
+          "name": "profile_image_key",
+          "type": "varchar(512)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 512,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "groups",
@@ -11565,6 +11597,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "string"
+        },
+        "profile_image_key": {
+          "name": "profile_image_key",
+          "type": "varchar(512)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 512,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "sections",
@@ -16314,6 +16362,22 @@
           "nullable": false,
           "unique": true,
           "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "avatar_image_key": {
+          "name": "avatar_image_key",
+          "type": "varchar(512)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 512,
           "precision": null,
           "scale": null,
           "default": null,

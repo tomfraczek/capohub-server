@@ -1,3 +1,4 @@
+import { PublicUrlBuilder } from '../../storage/image-url.util';
 import { SectionMembership } from '../entities/section-membership.entity';
 import { Group } from '../entities/group.entity';
 import { Section } from '../entities/section.entity';
@@ -12,6 +13,10 @@ import {
   toGroupSummaryResponseDto,
   toRoleAssignmentResponseDto,
 } from './group.mapper';
+
+function buildUrlBuilder(): PublicUrlBuilder {
+  return { buildPublicUrl: (key) => `https://cdn.example.com/${key}` };
+}
 
 function buildGroup(overrides: Partial<Group> = {}): Group {
   const group = new Group();
@@ -46,10 +51,11 @@ describe('group.mapper', () => {
     it('maps every field, including timestamps as ISO strings', () => {
       const group = buildGroup({ logoUrl: 'https://example.com/logo.png' });
 
-      const dto = toGroupResponseDto(group, {
-        childGroupsCount: 2,
-        directSectionsCount: 3,
-      });
+      const dto = toGroupResponseDto(
+        group,
+        { childGroupsCount: 2, directSectionsCount: 3 },
+        buildUrlBuilder(),
+      );
 
       expect(dto).toMatchObject({
         id: 'group-1',
@@ -68,16 +74,48 @@ describe('group.mapper', () => {
       expect(dto.createdAt).toBe(group.createdAt.toISOString());
       expect(dto.updatedAt).toBe(group.updatedAt.toISOString());
     });
+
+    it('prefers the R2 public URL derived from profileImageKey over the legacy logoUrl', () => {
+      const group = buildGroup({
+        logoUrl: 'https://legacy.example.com/old-logo.png',
+        profileImageKey: 'groups/group-1/profile/uuid.webp',
+      });
+
+      const dto = toGroupResponseDto(
+        group,
+        { childGroupsCount: 0, directSectionsCount: 0 },
+        buildUrlBuilder(),
+      );
+
+      expect(dto.logoUrl).toBe(
+        'https://cdn.example.com/groups/group-1/profile/uuid.webp',
+      );
+    });
+
+    it('falls back to the legacy logoUrl when profileImageKey is unset', () => {
+      const group = buildGroup({
+        logoUrl: 'https://legacy.example.com/old-logo.png',
+      });
+
+      const dto = toGroupResponseDto(
+        group,
+        { childGroupsCount: 0, directSectionsCount: 0 },
+        buildUrlBuilder(),
+      );
+
+      expect(dto.logoUrl).toBe('https://legacy.example.com/old-logo.png');
+    });
   });
 
   describe('toGroupSummaryResponseDto', () => {
     it('embeds every Role the caller holds for the Group alongside the group card fields', () => {
       const group = buildGroup();
 
-      const dto = toGroupSummaryResponseDto(group, [
-        GroupRole.ADMIN,
-        GroupRole.OWNER,
-      ]);
+      const dto = toGroupSummaryResponseDto(
+        group,
+        [GroupRole.ADMIN, GroupRole.OWNER],
+        buildUrlBuilder(),
+      );
 
       expect(dto).toEqual({
         id: 'group-1',
@@ -94,7 +132,7 @@ describe('group.mapper', () => {
     it('sets myRoles to an empty array when no Role Assignment exists for the group', () => {
       const group = buildGroup();
 
-      const dto = toGroupSummaryResponseDto(group, []);
+      const dto = toGroupSummaryResponseDto(group, [], buildUrlBuilder());
 
       expect(dto.myRoles).toEqual([]);
     });

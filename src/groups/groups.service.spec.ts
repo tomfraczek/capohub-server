@@ -7,6 +7,9 @@ import { Section } from './entities/section.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
+import { ImageAssetService } from '../storage/image-asset.service';
+import { ImageProcessingService } from '../storage/image-processing.service';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { AuditLogService } from './audit-log.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupsService } from './groups.service';
@@ -151,10 +154,47 @@ function buildService(em: EntityManager) {
     groupHierarchyService,
     auditLogService,
   );
+  const r2StorageService = {
+    buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
+  } as unknown as R2StorageService;
+  const imageProcessingService = {
+    processProfileImage: jest.fn().mockResolvedValue(Buffer.from('webp')),
+  } as unknown as ImageProcessingService;
+  // Not cast to ImageAssetService directly (unlike the mocks above) - tests
+  // read `imageAssetService.replace`/`.remove` back off the returned object
+  // to assert on them, and casting to the real class type there trips
+  // @typescript-eslint/unbound-method (see event-roles.service.spec.ts's
+  // identical fix in the "Event Organizer" module for the same reason).
+  const imageAssetService = {
+    replace: jest
+      .fn()
+      .mockImplementation(
+        async (params: {
+          newKey: string;
+          persist: (key: string) => Promise<void>;
+        }) => params.persist(params.newKey),
+      ),
+    remove: jest
+      .fn()
+      .mockImplementation(
+        async (params: {
+          oldKey: string | null;
+          persist: () => Promise<void>;
+        }) => (params.oldKey ? params.persist() : undefined),
+      ),
+  };
 
   return {
-    service: new GroupsService(em, roleAssignmentsService, auditLogService),
+    service: new GroupsService(
+      em,
+      roleAssignmentsService,
+      auditLogService,
+      r2StorageService,
+      imageProcessingService,
+      imageAssetService as unknown as ImageAssetService,
+    ),
     auditLogService,
+    imageAssetService,
   };
 }
 
@@ -290,6 +330,93 @@ describe('GroupsService', () => {
       );
 
       expect(existing.name).toBe('New Name');
+    });
+  });
+
+  describe('uploadProfileImage', () => {
+    function buildUploadedFile(): Express.Multer.File {
+      return { buffer: Buffer.from('raw-bytes') } as Express.Multer.File;
+    }
+
+    it('processes the file, uploads it under a fresh key, sets profileImageKey and clears the legacy logoUrl', async () => {
+      const existing = buildGroup({
+        id: 'group-1',
+        logoUrl: 'https://legacy.example.com/old-logo.png',
+      });
+      const { em } = buildMockEm({ groupResults: [existing] });
+      const { service } = buildService(em);
+
+      const dto = await service.uploadProfileImage(
+        'group-1',
+        buildUploadedFile(),
+      );
+
+      expect(existing.profileImageKey).toMatch(
+        /^groups\/group-1\/profile\/.+\.webp$/,
+      );
+      expect(existing.logoUrl).toBeNull();
+      expect(dto.logoUrl).toBe(
+        `https://cdn.example.com/${existing.profileImageKey}`,
+      );
+    });
+
+    it('passes the previous profileImageKey as oldKey to ImageAssetService.replace', async () => {
+      const existing = buildGroup({
+        id: 'group-1',
+        profileImageKey: 'groups/group-1/profile/old.webp',
+      });
+      const { em } = buildMockEm({ groupResults: [existing] });
+      const { service, imageAssetService } = buildService(em);
+
+      await service.uploadProfileImage('group-1', buildUploadedFile());
+
+      expect(imageAssetService.replace).toHaveBeenCalledWith(
+        expect.objectContaining({
+          oldKey: 'groups/group-1/profile/old.webp',
+          logContext: {
+            resourceType: 'group-profile-image',
+            resourceId: 'group-1',
+          },
+        }),
+      );
+    });
+
+    it('throws NotFoundException when the group does not exist', async () => {
+      const { em } = buildMockEm({ groupResults: [null] });
+      const { service } = buildService(em);
+
+      await expect(
+        service.uploadProfileImage('missing-id', buildUploadedFile()),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('deleteProfileImage', () => {
+    it('clears profileImageKey and does not restore the legacy logoUrl', async () => {
+      const existing = buildGroup({
+        id: 'group-1',
+        logoUrl: null,
+        profileImageKey: 'groups/group-1/profile/old.webp',
+      });
+      const { em } = buildMockEm({ groupResults: [existing] });
+      const { service } = buildService(em);
+
+      const dto = await service.deleteProfileImage('group-1');
+
+      expect(existing.profileImageKey).toBeNull();
+      expect(dto.logoUrl).toBeNull();
+    });
+
+    it('is idempotent when there is no profile image to delete', async () => {
+      const existing = buildGroup({ id: 'group-1', profileImageKey: null });
+      const { em } = buildMockEm({ groupResults: [existing] });
+      const { service, imageAssetService } = buildService(em);
+
+      await service.deleteProfileImage('group-1');
+
+      expect(imageAssetService.remove).toHaveBeenCalledWith(
+        expect.objectContaining({ oldKey: null }),
+      );
     });
   });
 

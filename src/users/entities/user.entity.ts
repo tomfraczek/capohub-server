@@ -49,7 +49,14 @@ export class User extends BaseEntity {
   @Enum({ items: () => Object.values(AvatarType) })
   avatarType: AvatarType = AvatarType.CLERK;
 
-  // Holds the image URL for CLERK and UPLOAD; always null for PRESET.
+  // Legacy URL field - holds the image URL for CLERK always, and for UPLOAD
+  // only pre-R2 (there was no upload endpoint before the R2 storage module,
+  // so no real account should ever have avatarType UPLOAD with this set and
+  // avatarImageKey null - kept only as a defensive fallback, see
+  // storage/image-url.util.ts's resolveUserAvatarUrl). Always null for
+  // PRESET. Cleared to null the moment a User uploads their first R2 avatar
+  // (see UserService.uploadAvatar) - kept in sync with avatarImageKey below
+  // so the two never disagree about which one is authoritative.
   @Property({ nullable: true, type: 'string' })
   avatarUrl: string | null = null;
 
@@ -58,6 +65,16 @@ export class User extends BaseEntity {
   // the list of valid ids.
   @Property({ nullable: true, length: 100 })
   presetAvatarId: string | null = null;
+
+  // R2 object key ("users/{id}/profile/{uuid}.webp" - see
+  // storage/object-keys.util.ts) for an UPLOAD avatar; always null for
+  // CLERK/PRESET. The source of truth for UPLOAD's public avatarUrl once
+  // set (see resolveUserAvatarUrl) - a fresh key on every re-upload, never
+  // reused, and the previous R2 object is physically deleted on
+  // replace/preset-switch/clerk-reset/delete (see UserService - no image
+  // history is kept, module: "R2: upload/replace/delete zdjęć").
+  @Property({ nullable: true, length: 512 })
+  avatarImageKey: string | null = null;
 
   @Enum({ items: () => THEMES })
   theme: Theme = 'system';

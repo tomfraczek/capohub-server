@@ -17,6 +17,15 @@ const DEFAULT_CODES_BY_STATUS: Record<number, string> = {
   [HttpStatus.UNAUTHORIZED]: 'UNAUTHORIZED',
   [HttpStatus.FORBIDDEN]: 'FORBIDDEN',
   [HttpStatus.NOT_FOUND]: 'NOT_FOUND',
+  // Nest's own FileInterceptor auto-converts multer's LIMIT_FILE_SIZE
+  // MulterError into a bare PayloadTooLargeException with no body/code of
+  // its own (see @nestjs/platform-express's transformException) - there is
+  // no interceptor-level hook to attach IMAGE_TOO_LARGE before that
+  // happens, so this fallback is what actually gives every oversized image
+  // upload (User avatar, Group/Section profile image, Event cover - see
+  // storage/multer-image.interceptor.ts) a stable, documented error code.
+  // No other 413 exists anywhere else in this codebase today.
+  [HttpStatus.PAYLOAD_TOO_LARGE]: 'IMAGE_TOO_LARGE',
   [HttpStatus.INTERNAL_SERVER_ERROR]: 'INTERNAL_SERVER_ERROR',
   [HttpStatus.SERVICE_UNAVAILABLE]: 'SERVICE_UNAVAILABLE',
 };

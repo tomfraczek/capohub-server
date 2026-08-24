@@ -52,6 +52,29 @@ export class AppConfigService {
     });
   }
 
+  // Possibly empty strings - see env.schema.ts's own comment on why these
+  // are not validated as required here. R2StorageService's provider
+  // factory is what actually enforces non-empty (see r2-client.provider.ts).
+  get r2Endpoint(): string {
+    return this.configService.get('R2_ENDPOINT', { infer: true });
+  }
+
+  get r2AccessKeyId(): string {
+    return this.configService.get('R2_ACCESS_KEY_ID', { infer: true });
+  }
+
+  get r2SecretAccessKey(): string {
+    return this.configService.get('R2_SECRET_ACCESS_KEY', { infer: true });
+  }
+
+  get r2Bucket(): string {
+    return this.configService.get('R2_BUCKET', { infer: true });
+  }
+
+  get r2PublicUrl(): string {
+    return this.configService.get('R2_PUBLIC_URL', { infer: true });
+  }
+
   get isDevelopment(): boolean {
     return this.nodeEnv === 'development';
   }

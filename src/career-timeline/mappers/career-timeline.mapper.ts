@@ -3,6 +3,7 @@ import { Event } from '../../events/entities/event.entity';
 import { toEventCommunityRefDto } from '../../events/mappers/event-community-ref.mapper';
 import { FormalGroupAffiliation } from '../../groups/entities/formal-group-affiliation.entity';
 import { FormalRankAssignment } from '../../graduation/entities/formal-rank-assignment.entity';
+import { PublicUrlBuilder } from '../../storage/image-url.util';
 import { User } from '../../users/entities/user.entity';
 import { CareerTimelineEntry } from '../entities/career-timeline-entry.entity';
 import { CareerTimelineCategory } from '../enums/career-timeline-category.enum';
@@ -122,7 +123,10 @@ export function buildFormalRankItem(
   };
 }
 
-export function buildEventItem(event: Event): EventTimelineItemDto {
+export function buildEventItem(
+  event: Event,
+  urlBuilder: PublicUrlBuilder,
+): EventTimelineItemDto {
   return {
     id: eventItemId(event.id),
     category: CareerTimelineCategory.EVENT,
@@ -135,7 +139,7 @@ export function buildEventItem(event: Event): EventTimelineItemDto {
       type: event.type,
       startsAt: event.startsAt.toISOString(),
       endsAt: event.endsAt.toISOString(),
-      community: toEventCommunityRefDto(eventCommunity(event)),
+      community: toEventCommunityRefDto(eventCommunity(event), urlBuilder),
       locationName: event.locationName,
       locationAddress: event.locationAddress,
     },

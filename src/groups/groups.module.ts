@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { StorageModule } from '../storage/storage.module';
 import { AcademiesController } from './academies.controller';
 import { AcademiesService } from './academies.service';
 import { AuditLogController } from './audit-log.controller';
@@ -37,7 +38,12 @@ import { StandaloneSectionsController } from './standalone-sections.controller';
 // wired to auth/permissions/permissions.module.ts - see
 // group-role-permissions.map.ts.
 @Module({
-  imports: [NotificationsModule],
+  // StorageModule is imported for the Group/Section profile-image
+  // upload/delete endpoints (see GroupsService.uploadProfileImage/
+  // SectionsService.uploadProfileImage) and for resolving logoUrl in every
+  // Group/Section response DTO (see mappers/group.mapper.ts,
+  // mappers/section.mapper.ts).
+  imports: [NotificationsModule, StorageModule],
   controllers: [
     GroupsController,
     SectionsController,

@@ -20,6 +20,9 @@ import { EventsService } from './events.service';
 import { EventPermissionService } from './permissions/event-permission.service';
 import { CreateEventInput } from './dto/create-event.schema';
 import { UpdateEventInput } from './dto/update-event.schema';
+import { ImageAssetService } from '../storage/image-asset.service';
+import { ImageProcessingService } from '../storage/image-processing.service';
+import { R2StorageService } from '../storage/r2-storage.service';
 
 const ACTOR = {
   id: 'actor-1',
@@ -165,6 +168,7 @@ function buildService(
     canRegister?: boolean;
     communityRoles?: EventRole[] | 'none';
     communityForCreate?: Group | null;
+    imageAssetService?: Partial<ImageAssetService>;
   } = {},
 ) {
   const event = options.event ?? buildEvent();
@@ -217,6 +221,32 @@ function buildService(
     notify: jest.fn().mockResolvedValue(undefined),
   } as unknown as EventNotificationsService;
 
+  const r2StorageService = {
+    buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
+  } as unknown as R2StorageService;
+  const imageProcessingService = {
+    processEventCover: jest.fn().mockResolvedValue(Buffer.from('webp')),
+  } as unknown as ImageProcessingService;
+  const imageAssetService = {
+    replace: jest
+      .fn()
+      .mockImplementation(
+        async (params: {
+          newKey: string;
+          persist: (key: string) => Promise<void>;
+        }) => params.persist(params.newKey),
+      ),
+    remove: jest
+      .fn()
+      .mockImplementation(
+        async (params: {
+          oldKey: string | null;
+          persist: () => Promise<void>;
+        }) => (params.oldKey ? params.persist() : undefined),
+      ),
+    ...options.imageAssetService,
+  } as unknown as ImageAssetService;
+
   return new EventsService(
     em,
     eventAccessService,
@@ -226,6 +256,9 @@ function buildService(
     groupPermissionService,
     groupHierarchyService,
     eventNotificationsService,
+    r2StorageService,
+    imageProcessingService,
+    imageAssetService,
   );
 }
 
@@ -618,6 +651,108 @@ describe('EventsService', () => {
     });
   });
 
+  describe('uploadCoverImage', () => {
+    function buildUploadedFile(): Express.Multer.File {
+      return { buffer: Buffer.from('raw-bytes') } as Express.Multer.File;
+    }
+
+    it('processes the file, uploads it under a fresh key, sets coverImageKey and clears the legacy coverImageUrl', async () => {
+      const { em } = buildMockEm();
+      const event = buildEvent({
+        status: EventStatus.DRAFT,
+        coverImageUrl: 'https://legacy.example.com/old-cover.png',
+      });
+      const service = buildService(em, {
+        event,
+        viewerRoles: [EventRole.OWNER],
+      });
+
+      const result = await service.uploadCoverImage(
+        'event-1',
+        buildUploadedFile(),
+        ACTOR,
+      );
+
+      expect(event.coverImageKey).toMatch(/^events\/event-1\/cover\/.+\.webp$/);
+      expect(event.coverImageUrl).toBeNull();
+      expect(result.coverImageUrl).toBe(
+        `https://cdn.example.com/${event.coverImageKey}`,
+      );
+    });
+
+    it('allows the cover to be changed while PUBLISHED', async () => {
+      const { em } = buildMockEm();
+      const event = buildEvent({ status: EventStatus.PUBLISHED });
+      const service = buildService(em, {
+        event,
+        viewerRoles: [EventRole.OWNER],
+      });
+
+      const result = await service.uploadCoverImage(
+        'event-1',
+        buildUploadedFile(),
+        ACTOR,
+      );
+
+      expect(typeof result.coverImageUrl).toBe('string');
+    });
+
+    it.each([
+      EventStatus.FINISHED,
+      EventStatus.CANCELLED,
+      EventStatus.ARCHIVED,
+    ])(
+      'rejects changing the cover once the event is %s',
+      async (status: EventStatus) => {
+        const { em } = buildMockEm();
+        const event = buildEvent({ status });
+        const service = buildService(em, {
+          event,
+          viewerRoles: [EventRole.OWNER],
+        });
+
+        await expect(
+          service.uploadCoverImage('event-1', buildUploadedFile(), ACTOR),
+        ).rejects.toMatchObject({
+          response: { code: `EVENT_${status}` },
+        });
+      },
+    );
+  });
+
+  describe('deleteCoverImage', () => {
+    it('clears coverImageKey and does not restore the legacy coverImageUrl', async () => {
+      const { em } = buildMockEm();
+      const event = buildEvent({
+        status: EventStatus.DRAFT,
+        coverImageUrl: null,
+        coverImageKey: 'events/event-1/cover/old.webp',
+      });
+      const service = buildService(em, {
+        event,
+        viewerRoles: [EventRole.OWNER],
+      });
+
+      const result = await service.deleteCoverImage('event-1', ACTOR);
+
+      expect(event.coverImageKey).toBeNull();
+      expect(result.coverImageUrl).toBeNull();
+    });
+
+    it('rejects deleting the cover once the event is ARCHIVED', async () => {
+      const { em } = buildMockEm();
+      const event = buildEvent({ status: EventStatus.ARCHIVED });
+      const service = buildService(em, {
+        event,
+        viewerRoles: [EventRole.OWNER],
+      });
+
+      await expect(
+        service.deleteCoverImage('event-1', ACTOR),
+      ).rejects.toMatchObject({ response: { code: 'EVENT_ARCHIVED' } });
+    });
+  });
+
   describe('closeOrganizedEventsForAccountDeletion', () => {
     // Bypasses buildService - needs eventRolesService.findOrganizedEvents
     // mocked to return arbitrary Events, and eventNotificationsService.notify
@@ -643,6 +778,9 @@ describe('EventsService', () => {
         new GroupPermissionService(),
         {} as unknown as GroupHierarchyService,
         eventNotificationsService,
+        {} as unknown as R2StorageService,
+        {} as unknown as ImageProcessingService,
+        {} as unknown as ImageAssetService,
       );
       return { service, notify };
     }

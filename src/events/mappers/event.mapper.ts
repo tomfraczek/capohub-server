@@ -1,4 +1,8 @@
 import { buildEventQrPayload } from '../../common/identity/qr-payload.util';
+import {
+  PublicUrlBuilder,
+  resolveImageUrl,
+} from '../../storage/image-url.util';
 import { Event } from '../entities/event.entity';
 import { eventCommunity } from '../event-community.util';
 import { EventCapabilitiesDto } from '../dto/event-capabilities.dto';
@@ -31,17 +35,25 @@ function computeIsMultiDay(startsAt: Date, endsAt: Date): boolean {
 export function toEventResponseDto(
   event: Event,
   context: EventAggregateContext,
+  urlBuilder: PublicUrlBuilder,
 ): EventResponseDto {
   return {
     id: event.id,
-    organizer: toEventOrganizerRefDto(event),
-    community: toEventCommunityRefDto(eventCommunity(event)),
+    organizer: toEventOrganizerRefDto(event, urlBuilder),
+    community: toEventCommunityRefDto(eventCommunity(event), urlBuilder),
     createdByUserId: event.createdBy?.id ?? null,
     type: event.type,
     customTypeLabel: event.customTypeLabel,
     name: event.name,
     description: event.description,
-    coverImageUrl: event.coverImageUrl,
+    // Prefers the R2 public URL derived from coverImageKey over the legacy
+    // coverImageUrl column once an upload exists - see
+    // storage/image-url.util.ts's resolveImageUrl.
+    coverImageUrl: resolveImageUrl(
+      event.coverImageKey,
+      event.coverImageUrl,
+      urlBuilder,
+    ),
     startsAt: event.startsAt.toISOString(),
     endsAt: event.endsAt.toISOString(),
     isMultiDay: computeIsMultiDay(event.startsAt, event.endsAt),

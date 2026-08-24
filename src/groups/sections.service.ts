@@ -5,6 +5,10 @@ import {
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { generateUniquePublicCode } from '../common/utils/public-code';
+import { ImageAssetService } from '../storage/image-asset.service';
+import { ImageProcessingService } from '../storage/image-processing.service';
+import { buildSectionProfileImageKey } from '../storage/object-keys.util';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
 import { CreateSectionInput } from './dto/create-section.schema';
@@ -41,7 +45,57 @@ export class SectionsService {
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly groupHierarchyService: GroupHierarchyService,
     private readonly auditLogService: AuditLogService,
+    private readonly r2StorageService: R2StorageService,
+    private readonly imageProcessingService: ImageProcessingService,
+    private readonly imageAssetService: ImageAssetService,
   ) {}
+
+  // PUT :sectionId/profile-image - mirrors GroupsService.uploadProfileImage,
+  // see that method's own comment for the replace-flow/legacy-clearing
+  // rationale (module spec §16/§19).
+  async uploadProfileImage(
+    sectionId: string,
+    file: Express.Multer.File,
+  ): Promise<SectionResponseDto> {
+    const section = await this.loadOrFail(sectionId);
+    const processed = await this.imageProcessingService.processProfileImage(
+      file.buffer,
+    );
+    const newKey = buildSectionProfileImageKey(section.id);
+    await this.imageAssetService.replace({
+      processedBuffer: processed,
+      newKey,
+      oldKey: section.profileImageKey,
+      persist: async (key) => {
+        section.profileImageKey = key;
+        section.logoUrl = null;
+        await this.em.flush();
+      },
+      logContext: {
+        resourceType: 'section-profile-image',
+        resourceId: section.id,
+      },
+    });
+    return toSectionResponseDto(section, this.r2StorageService);
+  }
+
+  // DELETE :sectionId/profile-image - mirrors
+  // GroupsService.deleteProfileImage, see that method's own comment.
+  async deleteProfileImage(sectionId: string): Promise<SectionResponseDto> {
+    const section = await this.loadOrFail(sectionId);
+    await this.imageAssetService.remove({
+      oldKey: section.profileImageKey,
+      persist: async () => {
+        section.profileImageKey = null;
+        await this.em.flush();
+      },
+      logContext: {
+        resourceType: 'section-profile-image',
+        resourceId: section.id,
+      },
+    });
+    return toSectionResponseDto(section, this.r2StorageService);
+  }
 
   // The parent's existence and the caller's SECTION_CREATE permission there
   // are already established by GroupPermissionsGuard before this ever runs
@@ -142,7 +196,7 @@ export class SectionsService {
       return section;
     });
 
-    return toSectionResponseDto(section);
+    return toSectionResponseDto(section, this.r2StorageService);
   }
 
   private async resolveParentForCreate(
@@ -175,12 +229,14 @@ export class SectionsService {
 
   async list(parentId: string): Promise<SectionResponseDto[]> {
     const sections = await this.em.find(Section, { parentGroup: parentId });
-    return sections.map(toSectionResponseDto);
+    return sections.map((section) =>
+      toSectionResponseDto(section, this.r2StorageService),
+    );
   }
 
   async getById(sectionId: string): Promise<SectionResponseDto> {
     const section = await this.loadOrFail(sectionId);
-    return toSectionResponseDto(section);
+    return toSectionResponseDto(section, this.r2StorageService);
   }
 
   async update(
@@ -198,7 +254,7 @@ export class SectionsService {
         actor,
       );
       await em.flush();
-      return toSectionResponseDto(section);
+      return toSectionResponseDto(section, this.r2StorageService);
     });
   }
 
@@ -240,7 +296,7 @@ export class SectionsService {
       section.status = GroupStatus.DELETED;
       this.recordCommunityAudit(em, section, AuditAction.DELETE, actor);
       await em.flush();
-      return toSectionResponseDto(section);
+      return toSectionResponseDto(section, this.r2StorageService);
     });
   }
 
@@ -257,7 +313,7 @@ export class SectionsService {
         this.recordCommunityAudit(em, section, auditAction, actor);
       }
       await em.flush();
-      return toSectionResponseDto(section);
+      return toSectionResponseDto(section, this.r2StorageService);
     });
   }
 

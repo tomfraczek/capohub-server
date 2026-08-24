@@ -1,3 +1,8 @@
+import {
+  PublicUrlBuilder,
+  resolveImageUrl,
+  resolveUserAvatarUrl,
+} from '../../storage/image-url.util';
 import { Section } from '../../groups/entities/section.entity';
 import { Event } from '../entities/event.entity';
 import { eventCommunity } from '../event-community.util';
@@ -7,7 +12,10 @@ import { EventOrganizerRefDto } from '../dto/event-organizer-ref.dto';
 // Builds the single public organizer identity for `event` - requires
 // `organizerUser`/`communityGroup`/`communitySection` to already be
 // populated (see EventAccessService.loadOrFail's default populate list).
-export function toEventOrganizerRefDto(event: Event): EventOrganizerRefDto {
+export function toEventOrganizerRefDto(
+  event: Event,
+  urlBuilder: PublicUrlBuilder,
+): EventOrganizerRefDto {
   if (event.organizerType === EventOrganizerType.USER) {
     if (event.organizerUser) {
       const user = event.organizerUser;
@@ -17,7 +25,10 @@ export function toEventOrganizerRefDto(event: Event): EventOrganizerRefDto {
         name: user.displayName,
         image: {
           type: user.avatarType,
-          url: user.avatarUrl,
+          // Prefers the R2 public URL derived from avatarImageKey over the
+          // legacy avatarUrl column once an UPLOAD avatar exists - see
+          // storage/image-url.util.ts's resolveUserAvatarUrl.
+          url: resolveUserAvatarUrl(user, urlBuilder),
           presetAvatarId: user.presetAvatarId,
         },
       };
@@ -46,6 +57,15 @@ export function toEventOrganizerRefDto(event: Event): EventOrganizerRefDto {
     type: community instanceof Section ? 'SECTION' : 'GROUP',
     id: community.id,
     name: community.name,
-    image: { url: community.logoUrl },
+    // Prefers the R2 public URL derived from profileImageKey over the
+    // legacy logoUrl column once an upload exists - see
+    // storage/image-url.util.ts's resolveImageUrl.
+    image: {
+      url: resolveImageUrl(
+        community.profileImageKey,
+        community.logoUrl,
+        urlBuilder,
+      ),
+    },
   };
 }

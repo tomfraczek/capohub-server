@@ -7,6 +7,7 @@ import { PARTICIPATING_RSVP_STATUSES } from '../events/event-participation.util'
 import { FormalRankCorrectionService } from '../graduation/formal-rank-correction.service';
 import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignment.entity';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { CareerTimelineQueryInput } from './dto/career-timeline-query.schema';
 import { CareerTimelineItemDto } from './dto/career-timeline-item.dto';
@@ -53,6 +54,7 @@ export class CareerTimelineAggregationService {
     private readonly em: EntityManager,
     private readonly formalRankCorrectionService: FormalRankCorrectionService,
     private readonly eventAccessService: EventAccessService,
+    private readonly r2StorageService: R2StorageService,
   ) {}
 
   async getTimeline(
@@ -198,7 +200,7 @@ export class CareerTimelineAggregationService {
         ) {
           continue;
         }
-        items.push(buildEventItem(event));
+        items.push(buildEventItem(event, this.r2StorageService));
       }
     }
 

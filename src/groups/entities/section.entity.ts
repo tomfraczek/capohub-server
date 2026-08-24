@@ -48,11 +48,22 @@ export class Section extends BaseEntity {
   @Property({ nullable: true, type: 'text' })
   description: string | null = null;
 
+  // Legacy URL field - see the identical comment on Group.logoUrl
+  // (group.entity.ts): still PATCH-able, still rendered as a fallback, but
+  // no longer authoritative once profileImageKey is set. No Section
+  // *cover* upload exists in this module either - coverImageUrl below has
+  // no R2 counterpart.
   @Property({ nullable: true, length: 2048 })
   logoUrl: string | null = null;
 
   @Property({ nullable: true, length: 2048 })
   coverImageUrl: string | null = null;
+
+  // R2 object key ("sections/{id}/profile/{uuid}.webp" - see
+  // storage/object-keys.util.ts) for this Section's uploaded profile
+  // image; null until the first upload.
+  @Property({ nullable: true, length: 512 })
+  profileImageKey: string | null = null;
 
   @Property({ nullable: true, length: 255 })
   contactEmail: string | null = null;

@@ -8,10 +8,17 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import {
+  assertImageFilePresent,
+  imageUploadInterceptor,
+} from '../storage/multer-image.interceptor';
 import { User } from '../users/entities/user.entity';
 import { CreateGroupDto, createGroupSchema } from './dto/create-group.schema';
 import {
@@ -107,6 +114,32 @@ export class GroupsController {
     @CurrentUser() user: User,
   ): Promise<GroupResponseDto> {
     return this.groupsService.update(id, dto, user);
+  }
+
+  // PUT/DELETE :id/profile-image (module: "R2: upload/replace/delete
+  // zdjęć" §16/§18) - deliberately separate multipart endpoints, not
+  // folded into the JSON PATCH above (module spec §16: "Nie mieszaj
+  // multipart z istniejącymi JSON PATCH endpoints"). Same GROUP_EDIT gate
+  // and @RequireGroupKind(GroupKind.ROOT) as update() - no new permission.
+  @Put(':id/profile-image')
+  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupKind(GroupKind.ROOT)
+  @UseInterceptors(imageUploadInterceptor())
+  uploadProfileImage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ): Promise<GroupResponseDto> {
+    assertImageFilePresent(file);
+    return this.groupsService.uploadProfileImage(id, file);
+  }
+
+  @Delete(':id/profile-image')
+  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupKind(GroupKind.ROOT)
+  deleteProfileImage(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<GroupResponseDto> {
+    return this.groupsService.deleteProfileImage(id);
   }
 
   // Valid from both ACTIVE and READ_ONLY (spec transition table); already

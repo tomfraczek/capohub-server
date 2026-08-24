@@ -1,16 +1,24 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import {
+  assertImageFilePresent,
+  imageUploadInterceptor,
+} from '../storage/multer-image.interceptor';
 import { CancelEventDto, cancelEventSchema } from './dto/cancel-event.schema';
 import { EventResponseDto } from './dto/event-response.dto';
 import { EventStatusHistoryResponseDto } from './dto/event-status-history-response.dto';
@@ -97,6 +105,35 @@ export class EventController {
     @CurrentUser() user: User,
   ): Promise<EventResponseDto> {
     return this.eventsService.archive(eventId, user);
+  }
+
+  // PUT/DELETE cover-image (module: "R2: upload/replace/delete zdjęć"
+  // §16/§20) - deliberately separate multipart endpoints, not folded into
+  // the JSON PATCH above (module spec §16). Same EVENT_EDIT gate as
+  // update() - see EventsService.uploadCoverImage/deleteCoverImage for the
+  // lifecycle-status rule that blocks this once the Event is
+  // FINISHED/CANCELLED/ARCHIVED.
+  @Put('cover-image')
+  @UseGuards(EventPermissionsGuard)
+  @RequireEventPermission(EventPermission.EVENT_EDIT)
+  @UseInterceptors(imageUploadInterceptor())
+  uploadCoverImage(
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @CurrentUser() user: User,
+  ): Promise<EventResponseDto> {
+    assertImageFilePresent(file);
+    return this.eventsService.uploadCoverImage(eventId, file, user);
+  }
+
+  @Delete('cover-image')
+  @UseGuards(EventPermissionsGuard)
+  @RequireEventPermission(EventPermission.EVENT_EDIT)
+  deleteCoverImage(
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @CurrentUser() user: User,
+  ): Promise<EventResponseDto> {
+    return this.eventsService.deleteCoverImage(eventId, user);
   }
 
   @Get('history')

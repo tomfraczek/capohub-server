@@ -5,6 +5,10 @@ import {
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { generateUniquePublicCode } from '../common/utils/public-code';
+import { ImageAssetService } from '../storage/image-asset.service';
+import { ImageProcessingService } from '../storage/image-processing.service';
+import { buildGroupProfileImageKey } from '../storage/object-keys.util';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
 import { CreateGroupInput } from './dto/create-group.schema';
@@ -29,7 +33,61 @@ export class GroupsService {
     private readonly em: EntityManager,
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly auditLogService: AuditLogService,
+    private readonly r2StorageService: R2StorageService,
+    private readonly imageProcessingService: ImageProcessingService,
+    private readonly imageAssetService: ImageAssetService,
   ) {}
+
+  // PUT /groups/:id/profile-image (module: "R2: upload/replace/delete
+  // zdjęć" §16/§18) - gated by GroupPermission.GROUP_EDIT, same as
+  // update() (see groups.controller.ts). Clears the legacy logoUrl column
+  // alongside setting profileImageKey (module spec §28) - see
+  // group.entity.ts's logoUrl comment for why: it keeps the two fields
+  // from ever disagreeing about which is authoritative, and is what makes
+  // a later DELETE correctly return to "no logo" instead of resurrecting
+  // whatever logoUrl held before the first R2 upload (module spec §27).
+  async uploadProfileImage(
+    groupId: string,
+    file: Express.Multer.File,
+  ): Promise<GroupResponseDto> {
+    const group = await this.loadGroupOrFail(groupId);
+    const processed = await this.imageProcessingService.processProfileImage(
+      file.buffer,
+    );
+    const newKey = buildGroupProfileImageKey(group.id);
+    await this.imageAssetService.replace({
+      processedBuffer: processed,
+      newKey,
+      oldKey: group.profileImageKey,
+      persist: async (key) => {
+        group.profileImageKey = key;
+        group.logoUrl = null;
+        await this.em.flush();
+      },
+      logContext: { resourceType: 'group-profile-image', resourceId: group.id },
+    });
+    return this.toResponseDto(this.em, group);
+  }
+
+  // DELETE /groups/:id/profile-image - idempotent (module spec §42): a
+  // Group with no R2 profile image simply returns its current state, no
+  // DB write. logoUrl is deliberately NOT restored here (module spec §27 -
+  // "delete nie może powodować powrotu do wcześniej zastąpionego starego
+  // legacy logo") - it already went null the moment the R2 image was
+  // uploaded (see uploadProfileImage above), so there is nothing to
+  // restore, only profileImageKey to clear.
+  async deleteProfileImage(groupId: string): Promise<GroupResponseDto> {
+    const group = await this.loadGroupOrFail(groupId);
+    await this.imageAssetService.remove({
+      oldKey: group.profileImageKey,
+      persist: async () => {
+        group.profileImageKey = null;
+        await this.em.flush();
+      },
+      logContext: { resourceType: 'group-profile-image', resourceId: group.id },
+    });
+    return this.toResponseDto(this.em, group);
+  }
 
   // The creator automatically becomes OWNER (spec: "Po utworzeniu grupy
   // użytkownik automatycznie staje się OWNER") - Group and its creator's
@@ -97,7 +155,7 @@ export class GroupsService {
       .map((group) => {
         const roles =
           participation.find((row) => row.groupId === group.id)?.roles ?? [];
-        return toGroupSummaryResponseDto(group, roles);
+        return toGroupSummaryResponseDto(group, roles, this.r2StorageService);
       });
   }
 
@@ -268,7 +326,11 @@ export class GroupsService {
     const directSectionsCount = await em.count(Section, {
       parentGroup: group.id,
     });
-    return toGroupResponseDto(group, { childGroupsCount, directSectionsCount });
+    return toGroupResponseDto(
+      group,
+      { childGroupsCount, directSectionsCount },
+      this.r2StorageService,
+    );
   }
 
   private async loadGroupOrFail(

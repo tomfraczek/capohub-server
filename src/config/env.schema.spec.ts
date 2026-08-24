@@ -30,6 +30,13 @@ describe('validateEnv', () => {
       CLERK_PUBLISHABLE_KEY: 'pk_live_fixture_not_a_real_key_xyz',
       CLERK_JWT_KEY: undefined,
       CLERK_AUTHORIZED_PARTIES: [],
+      // Default-empty when not provided - see env.schema.ts's own comment
+      // on why R2_* is not validated as required at this layer.
+      R2_ENDPOINT: '',
+      R2_ACCESS_KEY_ID: '',
+      R2_SECRET_ACCESS_KEY: '',
+      R2_BUCKET: '',
+      R2_PUBLIC_URL: '',
     });
   });
 

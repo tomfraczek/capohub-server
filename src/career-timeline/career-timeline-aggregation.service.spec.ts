@@ -14,6 +14,7 @@ import { Rank } from '../graduation/entities/rank.entity';
 import { RankTrack } from '../graduation/enums/rank-track.enum';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
 import { Group } from '../groups/entities/group.entity';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { CareerTimelineAggregationService } from './career-timeline-aggregation.service';
 import { CareerTimelineEntry } from './entities/career-timeline-entry.entity';
@@ -117,6 +118,17 @@ function buildMockEventAccessService(
   } as unknown as EventAccessService;
 }
 
+// Deterministic fake - none of the fixtures below give their Event a
+// communityGroup/communitySection with a profileImageKey set, so
+// buildPublicUrl is never actually invoked; it only needs to satisfy
+// buildEventItem's PublicUrlBuilder shape (see event-organizer-ref.mapper's
+// own spec for dedicated key-priority coverage).
+function buildMockR2StorageService(): R2StorageService {
+  return {
+    buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
+  } as unknown as R2StorageService;
+}
+
 describe('CareerTimelineAggregationService', () => {
   describe('CAPOEIRA_START', () => {
     it('includes an entry for the owner when capoeiraStartedAt is set', async () => {
@@ -126,6 +138,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService().service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(user, user.id, {
@@ -148,6 +161,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService().service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(user, user.id, {
@@ -173,6 +187,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService().service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(viewer, target.id, {
@@ -199,6 +214,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService().service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(viewer, target.id, {
@@ -236,6 +252,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService(() => Promise.resolve(false)).service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(viewer, target.id, {
@@ -255,6 +272,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         correctionService,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(user, user.id, {
@@ -293,6 +311,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService().service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(user, user.id, {
@@ -329,6 +348,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService().service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(user, user.id, {
@@ -369,6 +389,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService().service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(user, user.id, {
@@ -396,6 +417,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService().service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(user, user.id, {
@@ -422,6 +444,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService().service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(user, user.id, {
@@ -447,6 +470,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService().service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(user, user.id, {
@@ -473,6 +497,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService().service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(user, user.id, {
@@ -507,6 +532,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService().service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const full = await service.getTimeline(user, user.id, {
@@ -555,6 +581,7 @@ describe('CareerTimelineAggregationService', () => {
         em,
         buildMockCorrectionService().service,
         buildMockEventAccessService(),
+        buildMockR2StorageService(),
       );
 
       const result = await service.getTimeline(user, user.id, {

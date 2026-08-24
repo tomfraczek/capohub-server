@@ -48,11 +48,27 @@ export class Group extends BaseEntity {
   @Property({ nullable: true, type: 'text' })
   description: string | null = null;
 
+  // Legacy URL field - still settable via PATCH /groups/:id (see
+  // update-group.schema.ts) and still rendered whenever profileImageKey is
+  // unset, but no longer the source of truth once an R2 profile image has
+  // been uploaded (see storage/image-url.util.ts's resolveImageUrl) -
+  // cleared to null the moment that first upload happens (see
+  // GroupsService.uploadProfileImage), so the two fields never disagree
+  // about which is authoritative. There is no Group *cover* upload in this
+  // module (module spec: "Nie implementuj uploadu Group/Section cover") -
+  // coverImageUrl below stays a plain legacy field with no R2 counterpart.
   @Property({ nullable: true, length: 2048 })
   logoUrl: string | null = null;
 
   @Property({ nullable: true, length: 2048 })
   coverImageUrl: string | null = null;
+
+  // R2 object key ("groups/{id}/profile/{uuid}.webp" - see
+  // storage/object-keys.util.ts) for this Group's uploaded profile image;
+  // null until the first upload. See logoUrl's own comment above for how
+  // the two fields relate.
+  @Property({ nullable: true, length: 512 })
+  profileImageKey: string | null = null;
 
   @Property({ nullable: true, length: 255 })
   contactEmail: string | null = null;

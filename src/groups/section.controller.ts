@@ -8,10 +8,17 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import {
+  assertImageFilePresent,
+  imageUploadInterceptor,
+} from '../storage/multer-image.interceptor';
 import { User } from '../users/entities/user.entity';
 import { AddMemberDto, addMemberSchema } from './dto/add-member.schema';
 import { BanMemberDto, banMemberSchema } from './dto/ban-member.schema';
@@ -94,6 +101,31 @@ export class SectionController {
     @CurrentUser() user: User,
   ): Promise<SectionResponseDto> {
     return this.sectionsService.update(sectionId, dto, user);
+  }
+
+  // PUT/DELETE profile-image (module: "R2: upload/replace/delete zdjęć"
+  // §16/§19) - same GROUP_EDIT gate as update() above, not inherited from
+  // the parent Group (module spec §19: "Nie dziedzicz permission z parent
+  // Group").
+  @Put('profile-image')
+  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupKind(GroupKind.SECTION)
+  @UseInterceptors(imageUploadInterceptor())
+  uploadProfileImage(
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ): Promise<SectionResponseDto> {
+    assertImageFilePresent(file);
+    return this.sectionsService.uploadProfileImage(sectionId, file);
+  }
+
+  @Delete('profile-image')
+  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupKind(GroupKind.SECTION)
+  deleteProfileImage(
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+  ): Promise<SectionResponseDto> {
+    return this.sectionsService.deleteProfileImage(sectionId);
   }
 
   // Valid from both ACTIVE and READ_ONLY, mirrors GroupsController.archive.

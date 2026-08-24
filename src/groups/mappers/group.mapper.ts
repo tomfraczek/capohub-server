@@ -1,3 +1,7 @@
+import {
+  PublicUrlBuilder,
+  resolveImageUrl,
+} from '../../storage/image-url.util';
 import { SectionMembership } from '../entities/section-membership.entity';
 import { Group } from '../entities/group.entity';
 import { RoleAssignment } from '../entities/role-assignment.entity';
@@ -15,13 +19,17 @@ import {
 export function toGroupResponseDto(
   group: Group,
   counts: { childGroupsCount: number; directSectionsCount: number },
+  urlBuilder: PublicUrlBuilder,
 ): GroupResponseDto {
   return {
     id: group.id,
     parentGroupId: group.parentGroup?.id ?? null,
     name: group.name,
     description: group.description,
-    logoUrl: group.logoUrl,
+    // Prefers the R2 public URL derived from profileImageKey over the
+    // legacy logoUrl column once an upload exists - see
+    // storage/image-url.util.ts's resolveImageUrl.
+    logoUrl: resolveImageUrl(group.profileImageKey, group.logoUrl, urlBuilder),
     coverImageUrl: group.coverImageUrl,
     contactEmail: group.contactEmail,
     contactPhone: group.contactPhone,
@@ -46,11 +54,12 @@ export function toGroupResponseDto(
 export function toGroupSummaryResponseDto(
   group: Group,
   myRoles: GroupRole[],
+  urlBuilder: PublicUrlBuilder,
 ): GroupSummaryResponseDto {
   return {
     id: group.id,
     name: group.name,
-    logoUrl: group.logoUrl,
+    logoUrl: resolveImageUrl(group.profileImageKey, group.logoUrl, urlBuilder),
     isPublic: group.isPublic,
     isHidden: group.isHidden,
     publicCode: group.publicCode,

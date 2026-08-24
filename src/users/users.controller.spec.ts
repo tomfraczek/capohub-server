@@ -8,6 +8,7 @@ import { UserProfileService } from './user-profile.service';
 import { UserService } from './user.service';
 import { User } from './entities/user.entity';
 import { UsersController } from './users.controller';
+import { R2StorageService } from '../storage/r2-storage.service';
 
 // Unused by every describe block below - none of these tests exercise the
 // profile/formal-group routes (see user-profile.service.spec.ts instead).
@@ -20,6 +21,14 @@ const userIdentityService = {} as unknown as UserIdentityService;
 // would defeat the point of asserting songCapabilities reflects the real
 // permission system.
 const permissionService = new PermissionService();
+// Deterministic fake - avatarUrl in these fixtures always comes from the
+// legacy CLERK avatarUrl field (avatarImageKey unset), so buildPublicUrl is
+// never actually invoked by any test below; it only needs to satisfy the
+// UsersController constructor's shape (see user.mapper.ts's own spec for
+// dedicated avatarImageKey-priority coverage).
+const r2StorageService = {
+  buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
+} as unknown as R2StorageService;
 
 // USER holds only SONG_READ (see role-permissions.map.ts), so every
 // Songs capability is false for it.
@@ -61,6 +70,7 @@ describe('UsersController', () => {
         favoriteSongsService,
         learningStatusService,
         permissionService,
+        r2StorageService,
       );
       const user = buildUser();
 
@@ -90,6 +100,7 @@ describe('UsersController', () => {
         favoriteSongsService,
         learningStatusService,
         permissionService,
+        r2StorageService,
       );
 
       const response = controller.getMe(buildUser());
@@ -108,6 +119,7 @@ describe('UsersController', () => {
         favoriteSongsService,
         learningStatusService,
         permissionService,
+        r2StorageService,
       );
       const user = buildUser();
       user.globalRole = GlobalRole.ADMIN;
@@ -136,6 +148,7 @@ describe('UsersController', () => {
         favoriteSongsService,
         learningStatusService,
         permissionService,
+        r2StorageService,
       );
 
       const response = await controller.updateMe(user, {
@@ -167,6 +180,7 @@ describe('UsersController', () => {
         favoriteSongsService,
         learningStatusService,
         permissionService,
+        r2StorageService,
       );
 
       const response = await controller.setAvatarPreset(user, {
@@ -197,6 +211,7 @@ describe('UsersController', () => {
         favoriteSongsService,
         learningStatusService,
         permissionService,
+        r2StorageService,
       );
 
       const response = await controller.resetAvatarToClerk(user);
@@ -220,6 +235,7 @@ describe('UsersController', () => {
         favoriteSongsService,
         learningStatusService,
         permissionService,
+        r2StorageService,
       );
 
       await controller.deleteMe(user);
@@ -244,6 +260,7 @@ describe('UsersController', () => {
         favoritesService,
         learningStatusService,
         permissionService,
+        r2StorageService,
       );
 
       const response = await controller.getFavoriteSongs(user);
@@ -269,6 +286,7 @@ describe('UsersController', () => {
         favoriteSongsService,
         learningService,
         permissionService,
+        r2StorageService,
       );
 
       const response = await controller.getLearningSongs(user);

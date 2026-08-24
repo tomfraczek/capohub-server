@@ -1,3 +1,7 @@
+import {
+  PublicUrlBuilder,
+  resolveUserAvatarUrl,
+} from '../storage/image-url.util';
 import { UserResponseDto } from './dto/user-response.dto';
 import { SongCapabilitiesDto } from './dto/song-capabilities.dto';
 import { User } from './entities/user.entity';
@@ -6,13 +10,17 @@ import { User } from './entities/user.entity';
 export function toUserResponseDto(
   user: User,
   songCapabilities: SongCapabilitiesDto,
+  urlBuilder: PublicUrlBuilder,
 ): UserResponseDto {
   return {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
     avatarType: user.avatarType,
-    avatarUrl: user.avatarUrl,
+    // Prefers the R2 public URL derived from avatarImageKey over the plain
+    // avatarUrl column once an UPLOAD avatar exists - see
+    // storage/image-url.util.ts's resolveUserAvatarUrl.
+    avatarUrl: resolveUserAvatarUrl(user, urlBuilder),
     presetAvatarId: user.presetAvatarId,
     theme: user.theme,
     notificationsEnabled: user.notificationsEnabled,

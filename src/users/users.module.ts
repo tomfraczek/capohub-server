@@ -5,6 +5,7 @@ import { PermissionsModule } from '../auth/permissions/permissions.module';
 import { EventsModule } from '../events/events.module';
 import { GroupsModule } from '../groups/groups.module';
 import { SongLibraryModule } from '../song-library/song-library.module';
+import { StorageModule } from '../storage/storage.module';
 import { User } from './entities/user.entity';
 import { UserIdentityService } from './user-identity.service';
 import { UserProfileService } from './user-profile.service';
@@ -33,6 +34,11 @@ import { UsersController } from './users.controller';
     GroupsModule,
     EventsModule,
     PermissionsModule,
+    // For the R2-backed avatar upload/replace/delete endpoints (see
+    // UserService.uploadAvatar/deleteAvatar and users.controller.ts's
+    // profile-image routes) and for resolving avatarUrl in every
+    // UserResponseDto (see user.mapper.ts's resolveUserAvatarUrl).
+    StorageModule,
   ],
   controllers: [UsersController],
   providers: [UserService, UserProfileService, UserIdentityService],

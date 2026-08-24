@@ -17,6 +17,10 @@ import { GroupPermission } from '../groups/permissions/group-permission.enum';
 import { GroupPermissionService } from '../groups/permissions/group-permission.service';
 import { RoleAssignmentsService } from '../groups/role-assignments.service';
 import { NotificationType } from '../notifications/enums/notification-type.enum';
+import { ImageAssetService } from '../storage/image-asset.service';
+import { ImageProcessingService } from '../storage/image-processing.service';
+import { buildEventCoverImageKey } from '../storage/object-keys.util';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { CancelEventInput } from './dto/cancel-event.schema';
 import { CreateEventInput } from './dto/create-event.schema';
@@ -77,6 +81,9 @@ export class EventsService {
     private readonly groupPermissionService: GroupPermissionService,
     private readonly groupHierarchyService: GroupHierarchyService,
     private readonly eventNotificationsService: EventNotificationsService,
+    private readonly r2StorageService: R2StorageService,
+    private readonly imageProcessingService: ImageProcessingService,
+    private readonly imageAssetService: ImageAssetService,
   ) {}
 
   async create(
@@ -322,6 +329,91 @@ export class EventsService {
       ]);
       assertEventStatusAllowed(event, ARCHIVABLE_STATUSES);
       await this.transitionStatus(em, event, EventStatus.ARCHIVED, actor, null);
+
+      const roles = await this.eventRolesService.getRolesForUser(
+        em,
+        eventId,
+        actor.id,
+      );
+      return this.buildResponse(em, event, actor, roles);
+    });
+  }
+
+  /**
+   * PUT /events/:eventId/cover-image (module: "R2: upload/replace/delete
+   * zdjęć" §16/§20) - gated by EventPermission.EVENT_EDIT, the same
+   * permission and lifecycle-status gate as update() above
+   * (ADMIN_OPERATION_STATUSES, i.e. DRAFT/PUBLISHED only) - an ARCHIVED (or
+   * FINISHED/CANCELLED) Event's cover cannot be changed, the same as every
+   * other field (module spec §20: "nie powinien pozwalać na zmianę cover,
+   * jeśli canEdit=false" - derived here from the same status check
+   * `canEdit` itself is derived from, never re-implemented against a role
+   * directly). Clears the legacy coverImageUrl column alongside setting
+   * coverImageKey - see event.entity.ts's coverImageUrl comment.
+   */
+  async uploadCoverImage(
+    eventId: string,
+    file: Express.Multer.File,
+    actor: User,
+  ): Promise<EventResponseDto> {
+    return this.em.transactional(async (em) => {
+      const event = await this.eventAccessService.loadOrFail(em, eventId, [
+        'communityGroup',
+        'communitySection',
+        'organizerUser',
+      ]);
+      assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
+
+      const processed = await this.imageProcessingService.processEventCover(
+        file.buffer,
+      );
+      const newKey = buildEventCoverImageKey(event.id);
+      await this.imageAssetService.replace({
+        processedBuffer: processed,
+        newKey,
+        oldKey: event.coverImageKey,
+        persist: async (key) => {
+          event.coverImageKey = key;
+          event.coverImageUrl = null;
+          await em.flush();
+        },
+        logContext: { resourceType: 'event-cover-image', resourceId: event.id },
+      });
+
+      const roles = await this.eventRolesService.getRolesForUser(
+        em,
+        eventId,
+        actor.id,
+      );
+      return this.buildResponse(em, event, actor, roles);
+    });
+  }
+
+  /**
+   * DELETE /events/:eventId/cover-image - same gate/status rule as
+   * uploadCoverImage above. Idempotent (module spec §42): an Event with no
+   * R2 cover simply returns its current state.
+   */
+  async deleteCoverImage(
+    eventId: string,
+    actor: User,
+  ): Promise<EventResponseDto> {
+    return this.em.transactional(async (em) => {
+      const event = await this.eventAccessService.loadOrFail(em, eventId, [
+        'communityGroup',
+        'communitySection',
+        'organizerUser',
+      ]);
+      assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
+
+      await this.imageAssetService.remove({
+        oldKey: event.coverImageKey,
+        persist: async () => {
+          event.coverImageKey = null;
+          await em.flush();
+        },
+        logContext: { resourceType: 'event-cover-image', resourceId: event.id },
+      });
 
       const roles = await this.eventRolesService.getRolesForUser(
         em,
@@ -1079,16 +1171,20 @@ export class EventsService {
       event.status,
     );
 
-    return toEventResponseDto(event, {
-      viewerRoles,
-      capabilities,
-      seatsTaken: attendeeCounts.seatsTaken,
-      seatsAvailable:
-        event.capacity == null
-          ? null
-          : Math.max(event.capacity - attendeeCounts.seatsTaken, 0),
-      waitlistCount: attendeeCounts.waitlistCount,
-    });
+    return toEventResponseDto(
+      event,
+      {
+        viewerRoles,
+        capabilities,
+        seatsTaken: attendeeCounts.seatsTaken,
+        seatsAvailable:
+          event.capacity == null
+            ? null
+            : Math.max(event.capacity - attendeeCounts.seatsTaken, 0),
+        waitlistCount: attendeeCounts.waitlistCount,
+      },
+      this.r2StorageService,
+    );
   }
 
   private async countAttendees(

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { EventsModule } from '../events/events.module';
 import { GraduationModule } from '../graduation/graduation.module';
+import { StorageModule } from '../storage/storage.module';
 import { CareerTimelineAggregationService } from './career-timeline-aggregation.service';
 import { CareerTimelineEntriesController } from './career-timeline-entries.controller';
 import { CareerTimelineEntriesService } from './career-timeline-entries.service';
@@ -24,7 +25,7 @@ import {
 // static-before-wildcard ordering as UsersController's `me/profile` vs
 // `:userId/profile`.
 @Module({
-  imports: [EventsModule, GraduationModule],
+  imports: [EventsModule, GraduationModule, StorageModule],
   controllers: [
     MyCareerTimelineController,
     CareerTimelineController,

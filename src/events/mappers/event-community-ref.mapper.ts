@@ -1,5 +1,9 @@
 import { Group } from '../../groups/entities/group.entity';
 import { Community } from '../../groups/group-hierarchy.service';
+import {
+  PublicUrlBuilder,
+  resolveImageUrl,
+} from '../../storage/image-url.util';
 import { EventCommunityRefDto } from '../dto/event-community-ref.dto';
 
 // Returns null for a User-organized Event (see event-community.util.ts's
@@ -9,6 +13,7 @@ import { EventCommunityRefDto } from '../dto/event-community-ref.dto';
 // directly (see EventOrganizerRefDto for the field that always resolves).
 export function toEventCommunityRefDto(
   community: Community | null,
+  urlBuilder: PublicUrlBuilder,
 ): EventCommunityRefDto | null {
   if (!community) {
     return null;
@@ -16,7 +21,11 @@ export function toEventCommunityRefDto(
   return {
     id: community.id,
     name: community.name,
-    logoUrl: community.logoUrl,
+    logoUrl: resolveImageUrl(
+      community.profileImageKey,
+      community.logoUrl,
+      urlBuilder,
+    ),
     // Type-based, not a `parentGroup === null` check - see the
     // organizational-domain rebuild, stage 1: a Section is never "root"
     // regardless of whether it currently has a parent.

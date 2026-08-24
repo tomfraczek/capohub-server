@@ -167,8 +167,23 @@ export class Event extends BaseEntity {
   @Property({ nullable: true, type: 'text' })
   description: string | null = null;
 
+  // Legacy URL field - still settable via PATCH (see update-event.schema.ts)
+  // and still rendered as a fallback whenever coverImageKey is unset, but
+  // no longer authoritative once an R2 cover has been uploaded (see
+  // storage/image-url.util.ts's resolveImageUrl) - cleared to null the
+  // moment that first upload happens (see EventsService.uploadCoverImage).
+  // Deliberately distinct from the organizer's own avatar/logo (see
+  // organizerUser/communityGroup/communitySection above) - an Event has no
+  // separate uploaded "profile image", only this cover (module spec:
+  // "Event NIE ma osobnego uploadowanego profile image").
   @Property({ nullable: true, length: 2048 })
   coverImageUrl: string | null = null;
+
+  // R2 object key ("events/{id}/cover/{uuid}.webp" - see
+  // storage/object-keys.util.ts) for this Event's uploaded cover image;
+  // null until the first upload.
+  @Property({ nullable: true, length: 512 })
+  coverImageKey: string | null = null;
 
   @Index()
   @Property({ type: 'timestamptz' })
