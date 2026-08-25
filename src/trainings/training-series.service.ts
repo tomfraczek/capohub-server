@@ -8,6 +8,7 @@ import { AuditLogService } from '../groups/audit-log.service';
 import { AuditAction } from '../groups/enums/audit-action.enum';
 import { AuditTargetType } from '../groups/enums/audit-target-type.enum';
 import { Section } from '../groups/entities/section.entity';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { CancelTrainingSeriesInput } from './dto/cancel-training-series.schema';
 import { CreateTrainingSeriesInput } from './dto/create-training-series.schema';
@@ -44,6 +45,7 @@ export class TrainingSeriesService {
     private readonly trainingAccessService: TrainingAccessService,
     private readonly auditLogService: AuditLogService,
     private readonly trainingNotificationsService: TrainingNotificationsService,
+    private readonly r2StorageService: R2StorageService,
   ) {}
 
   async create(
@@ -104,7 +106,11 @@ export class TrainingSeriesService {
       });
       await em.flush();
 
-      return toTrainingSeriesResponseDto(series, dates.length);
+      return toTrainingSeriesResponseDto(
+        series,
+        dates.length,
+        this.r2StorageService,
+      );
     });
   }
 
@@ -126,7 +132,9 @@ export class TrainingSeriesService {
     const results: TrainingSeriesResponseDto[] = [];
     for (const series of seriesList) {
       const count = await em.count(Training, { series: series.id });
-      results.push(toTrainingSeriesResponseDto(series, count));
+      results.push(
+        toTrainingSeriesResponseDto(series, count, this.r2StorageService),
+      );
     }
     return results;
   }
@@ -138,7 +146,7 @@ export class TrainingSeriesService {
     const em = this.em;
     const series = await this.loadOwnedOrFail(em, sectionId, seriesId);
     const count = await em.count(Training, { series: series.id });
-    return toTrainingSeriesResponseDto(series, count);
+    return toTrainingSeriesResponseDto(series, count, this.r2StorageService);
   }
 
   async update(
@@ -338,7 +346,7 @@ export class TrainingSeriesService {
         );
       }
       const count = await em.count(Training, { series: series.id });
-      return toTrainingSeriesResponseDto(series, count);
+      return toTrainingSeriesResponseDto(series, count, this.r2StorageService);
     });
   }
 
@@ -384,7 +392,7 @@ export class TrainingSeriesService {
       }
 
       const count = await em.count(Training, { series: series.id });
-      return toTrainingSeriesResponseDto(series, count);
+      return toTrainingSeriesResponseDto(series, count, this.r2StorageService);
     });
   }
 

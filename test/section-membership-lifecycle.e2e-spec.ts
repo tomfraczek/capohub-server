@@ -29,6 +29,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { randomUUID } from 'node:crypto';
+import { generateNumericCode } from '../src/common/utils/numeric-code';
 import { generatePublicCode } from '../src/common/utils/public-code';
 import { AppModule } from '../src/app.module';
 import { closeE2eApp } from './close-e2e-app.helper';
@@ -97,6 +98,14 @@ describe('Section membership/role lifecycle (e2e)', () => {
     user.email = `lifecycle-${suffix}@example.com`;
     user.displayName = 'Lifecycle Test User';
     user.publicCode = generatePublicCode();
+    // Required, NOT NULL (see user.entity.ts) - this fixture never went
+    // through UserService.findOrCreateFromClerk (the only place that
+    // normally assigns it), so it must be set explicitly here, the same
+    // way publicCode already is on the line above. Plain generation, no
+    // uniqueness retry - the same simplification already accepted for
+    // publicCode in this file, safe for the handful of users a single e2e
+    // run creates.
+    user.numericCode = generateNumericCode();
     await em.persist(user).flush();
     createdUserIds.push(user.id);
     return user;

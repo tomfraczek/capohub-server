@@ -1,4 +1,5 @@
-import type { EntityManager } from '@mikro-orm/postgresql';
+import { RequestContext } from '@mikro-orm/core';
+import { EntityManager } from '@mikro-orm/postgresql';
 import { EventAttendee } from '../events/entities/event-attendee.entity';
 import { Event } from '../events/entities/event.entity';
 import { EventRsvpStatus } from '../events/enums/event-rsvp-status.enum';
@@ -128,12 +129,40 @@ function buildMockEm(routing: Routing = {}) {
 
   const getReference = jest.fn((_entity: unknown, id: string) => buildUser(id));
 
+  const mockEm = buildMockEmBase({ find, getReference });
+
   return {
-    em: { find, getReference } as unknown as EntityManager,
+    em: mockEm,
     find,
     training,
     event,
   };
+}
+
+// `run()` is decorated with `@CreateRequestContext()` (see
+// notification-reminder.scheduler.ts's own comment on why), whose
+// auto-detection requires `this.em instanceof EntityManager` from
+// `@mikro-orm/core` (see resolveContextProvider.js) - a plain object mock
+// fails that check outright with "@CreateRequestContext() decorator can
+// only be applied to methods of classes with `orm: MikroORM` property,
+// `em: EntityManager` property...". `Object.create(EntityManager.prototype)`
+// satisfies `instanceof` (SqlEntityManager - the concrete class this
+// project injects everywhere, see user.service.ts etc. - extends core's
+// EntityManager) while every method call still resolves to the jest.fn()
+// stubs assigned as own properties, which shadow the real prototype
+// methods. `.name`/`.fork()` are exercised for real by every test in this
+// file, not stubbed away: `RequestContext.createContext(em)` reads
+// `em.name` and calls `em.fork(...)` before `run()`'s own body ever
+// executes - a mock missing either would fail every test with a
+// TypeError before reaching any business logic, which is itself a
+// meaningful regression signal for "the context-creation wiring broke".
+function buildMockEmBase(methods: Record<string, jest.Mock>): EntityManager {
+  const mockEm = Object.assign(Object.create(EntityManager.prototype), {
+    name: 'default',
+    ...methods,
+  }) as EntityManager & Record<string, unknown>;
+  mockEm.fork = jest.fn().mockReturnValue(mockEm);
+  return mockEm;
 }
 
 function buildNotificationsService(): {
@@ -273,12 +302,37 @@ describe('NotificationReminderScheduler', () => {
   });
 
   it('a tick failure is caught and logged, never thrown to the caller', async () => {
-    const em = {
+    const em = buildMockEmBase({
       find: jest.fn().mockRejectedValue(new Error('db down')),
-    } as unknown as EntityManager;
+    });
     const { service } = buildNotificationsService();
     const scheduler = new NotificationReminderScheduler(em, service);
 
     await expect(scheduler.run()).resolves.toBeUndefined();
+  });
+
+  // Regression test for the exact production bug this module's own
+  // @CreateRequestContext() comment describes: without it, every tick
+  // used the raw global EntityManager and crashed with "Using global
+  // EntityManager instance methods for context specific actions is
+  // disallowed" (allowGlobalContext: false - see
+  // mikro-orm-options.factory.ts). This test would fail (contextDuringRun
+  // stays undefined) if that decorator were ever removed.
+  it('runs inside a MikroORM RequestContext', async () => {
+    const { em } = buildMockEm({
+      memberships: [buildMembership('member-1')],
+    });
+    const { service, createMany } = buildNotificationsService();
+    let contextDuringRun: RequestContext | undefined;
+    createMany.mockImplementation(() => {
+      contextDuringRun = RequestContext.currentRequestContext();
+      return Promise.resolve([]);
+    });
+    const scheduler = new NotificationReminderScheduler(em, service);
+
+    await scheduler.run();
+
+    expect(createMany).toHaveBeenCalled();
+    expect(contextDuringRun).toBeDefined();
   });
 });

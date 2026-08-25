@@ -13,6 +13,7 @@ import { RoleAssignmentsService } from '../groups/role-assignments.service';
 import { Section } from '../groups/entities/section.entity';
 import { SectionMembership } from '../groups/entities/section-membership.entity';
 import { SectionMembershipStatus } from '../groups/enums/section-membership-status.enum';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { CancelTrainingInput } from './dto/cancel-training.schema';
 import { CreateTrainingInput } from './dto/create-training.schema';
@@ -62,6 +63,7 @@ export class TrainingsService {
     private readonly trainingAccessService: TrainingAccessService,
     private readonly auditLogService: AuditLogService,
     private readonly trainingNotificationsService: TrainingNotificationsService,
+    private readonly r2StorageService: R2StorageService,
   ) {}
 
   async create(
@@ -548,22 +550,26 @@ export class TrainingsService {
       GroupPermission.TRAINING_MANAGE,
     );
 
-    return toTrainingResponseDto(training, {
-      rsvpCounts,
-      viewerRsvp,
-      management: canManagePlanNotes
-        ? {
-            trainingPlan: training.trainingPlan,
-            trainerNotes: training.trainerNotes,
-          }
-        : null,
-      capabilities: {
-        canEdit: canManage,
-        canCancel: canManage,
-        canManageAttendance,
-        canManagePlanNotes,
+    return toTrainingResponseDto(
+      training,
+      {
+        rsvpCounts,
+        viewerRsvp,
+        management: canManagePlanNotes
+          ? {
+              trainingPlan: training.trainingPlan,
+              trainerNotes: training.trainerNotes,
+            }
+          : null,
+        capabilities: {
+          canEdit: canManage,
+          canCancel: canManage,
+          canManageAttendance,
+          canManagePlanNotes,
+        },
       },
-    });
+      this.r2StorageService,
+    );
   }
 
   private async loadOwnedOrFail(

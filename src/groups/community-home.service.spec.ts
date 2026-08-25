@@ -23,6 +23,7 @@ import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupPermissionService } from './permissions/group-permission.service';
 import { RoleAssignmentsService } from './role-assignments.service';
 import { MembershipRequestsService } from './membership-requests.service';
+import { R2StorageService } from '../storage/r2-storage.service';
 
 function buildUser(overrides: Partial<User> = {}): User {
   const user = new User();
@@ -99,6 +100,9 @@ function buildService(setup: Setup) {
   } as unknown as MembershipRequestsService;
 
   const groupPermissionService = new GroupPermissionService();
+  const r2StorageService = {
+    buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
+  } as unknown as R2StorageService;
 
   const service = new CommunityHomeService(
     em,
@@ -106,6 +110,7 @@ function buildService(setup: Setup) {
     roleAssignmentsService,
     groupHierarchyService,
     membershipRequestsService,
+    r2StorageService,
   );
 
   return { service, em };

@@ -782,6 +782,7 @@ describe('Announcements (e2e)', () => {
             title: 'Updated title',
             body: 'Updated body',
             isPinned: true,
+            isImportant: false,
             expiresAt: futureIso(60),
           })
           .expect(200),
@@ -808,6 +809,7 @@ describe('Announcements (e2e)', () => {
             title: payload.title,
             body: payload.body,
             isPinned: payload.isPinned,
+            isImportant: created.isImportant,
             expiresAt: created.expiresAt,
           })
           .expect(200),
@@ -863,6 +865,7 @@ describe('Announcements (e2e)', () => {
             title: 'Still trainers only',
             body: created.body,
             isPinned: created.isPinned,
+            isImportant: created.isImportant,
             expiresAt: created.expiresAt,
             // Extra fields a malicious/confused client might try to send -
             // the schema has no such fields at all, so these are silently
@@ -968,6 +971,7 @@ describe('Announcements (e2e)', () => {
           title: created.title,
           body: created.body,
           isPinned: created.isPinned,
+          isImportant: created.isImportant,
           expiresAt: futureIso(90),
         })
         .expect(404);

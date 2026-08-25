@@ -24,6 +24,8 @@ import {
 } from './group-hierarchy.service';
 import { toRecipientGroupResponseDto } from './mappers/recipient-group.mapper';
 import { RoleAssignmentsService } from './role-assignments.service';
+import { resolveUserAvatarUrl } from '../storage/image-url.util';
+import { R2StorageService } from '../storage/r2-storage.service';
 
 // Recipient Group existence/status of its *Group* is already enforced by
 // GroupPermissionsGuard (via :groupId/:sectionId) before any handler here
@@ -37,6 +39,7 @@ export class RecipientGroupsService {
     private readonly em: EntityManager,
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly groupHierarchyService: GroupHierarchyService,
+    private readonly r2StorageService: R2StorageService,
   ) {}
 
   async create(
@@ -130,7 +133,10 @@ export class RecipientGroupsService {
       items: items.map((user) => ({
         id: user.id,
         displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
+        // Prefers the R2 public URL derived from avatarImageKey over the
+        // legacy avatarUrl column once an UPLOAD avatar exists - see
+        // storage/image-url.util.ts's resolveUserAvatarUrl.
+        avatarUrl: resolveUserAvatarUrl(user, this.r2StorageService),
       })),
       total,
       hasMore: query.offset + items.length < total,

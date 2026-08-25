@@ -2,6 +2,10 @@ import { Group } from '../entities/group.entity';
 import { Community } from '../group-hierarchy.service';
 import { MembershipRequestResponseDto } from '../dto/membership-request-response.dto';
 import {
+  PublicUrlBuilder,
+  resolveImageUrl,
+} from '../../storage/image-url.util';
+import {
   CommunityHomeCommunityDto,
   CommunityHomeCommunityRefDto,
   CommunityHomeInvitationDto,
@@ -11,11 +15,19 @@ import { GroupRole } from '../enums/group-role.enum';
 
 export function toCommunityHomeCommunityRefDto(
   community: Community,
+  urlBuilder: PublicUrlBuilder,
 ): CommunityHomeCommunityRefDto {
   return {
     id: community.id,
     name: community.name,
-    logoUrl: community.logoUrl,
+    // Prefers the R2 public URL derived from profileImageKey over the
+    // legacy logoUrl column once an upload exists - see
+    // storage/image-url.util.ts's resolveImageUrl.
+    logoUrl: resolveImageUrl(
+      community.profileImageKey,
+      community.logoUrl,
+      urlBuilder,
+    ),
     isGroup: community instanceof Group,
   };
 }
@@ -24,12 +36,19 @@ export function toCommunityHomeCommunityDto(
   community: Community,
   rootGroupId: string,
   myRoles: GroupRole[],
+  urlBuilder: PublicUrlBuilder,
 ): CommunityHomeCommunityDto {
   return {
     id: community.id,
     name: community.name,
     description: community.description,
-    logoUrl: community.logoUrl,
+    logoUrl: resolveImageUrl(
+      community.profileImageKey,
+      community.logoUrl,
+      urlBuilder,
+    ),
+    // No R2 cover upload for Group/Section (module spec) - stays a plain
+    // legacy passthrough.
     coverImageUrl: community.coverImageUrl,
     parentId: community.parentGroup ? community.parentGroup.id : null,
     rootGroupId,

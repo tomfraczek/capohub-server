@@ -4,6 +4,7 @@ import {
 } from '@mikro-orm/core';
 import { Test, TestingModule } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
+import { generateNumericCode } from '../src/common/utils/numeric-code';
 import { generatePublicCode } from '../src/common/utils/public-code';
 import { ConfigModule } from '../src/config/config.module';
 import { DatabaseModule } from '../src/database/database.module';
@@ -97,6 +98,9 @@ describe('Songbook model (integration)', () => {
     user.email = `model-test-${suffix}@example.com`;
     user.displayName = 'Model Test User';
     user.publicCode = generatePublicCode();
+    // Required, NOT NULL (see user.entity.ts) - same fix/rationale as
+    // section-membership-lifecycle.e2e-spec.ts's identical buildUser().
+    user.numericCode = generateNumericCode();
     userIds.push(user.id);
     return user;
   }

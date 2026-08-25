@@ -190,6 +190,21 @@ describe('Event Attendance (e2e)', () => {
         group: { $in: createdGroupIds },
       });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // Safety net, scoped directly by user id rather than through
+      // Event/Group tracking: EventRoleAssignment.user is a non-nullable,
+      // `deleteRule: 'no action'` FK (see event-role-assignment.entity.ts),
+      // so ANY row still referencing one of this file's fixture users -
+      // regardless of which Group/Event it was granted on, or whether the
+      // `eventInCommunity`-scoped delete above already caught it - must be
+      // cleared before the User delete below, or that delete fails outright
+      // with a raw FK violation (observed in practice: some
+      // setupStandardFixture()-created Events/Groups were not reliably
+      // covered by createdGroupIds at cleanup time). Mirrors
+      // UserService.deleteLocalAccountData's own EventRoleAssignment
+      // cleanup step for the identical reason.
+      await cleanup.nativeDelete(EventRoleAssignment, {
+        user: { $in: [...localUserIdByToken.values()] },
+      });
       await cleanup.nativeDelete(User, {
         clerkUserId: { $in: TEST_CLERK_USER_IDS },
       });

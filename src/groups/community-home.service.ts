@@ -23,6 +23,7 @@ import { MembershipRequestsService } from './membership-requests.service';
 import { GroupPermission } from './permissions/group-permission.enum';
 import { GroupPermissionService } from './permissions/group-permission.service';
 import { RoleAssignmentsService } from './role-assignments.service';
+import { R2StorageService } from '../storage/r2-storage.service';
 
 // Dashboard sections are capped, not paginated (Community Home is not a
 // management screen). `total`/`hasMore` always describe the full matching
@@ -52,6 +53,7 @@ export class CommunityHomeService {
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly groupHierarchyService: GroupHierarchyService,
     private readonly membershipRequestsService: MembershipRequestsService,
+    private readonly r2StorageService: R2StorageService,
   ) {}
 
   async getHome(user: User): Promise<CommunityHomeResponseDto> {
@@ -101,7 +103,7 @@ export class CommunityHomeService {
         return [
           toCommunityHomeInvitationDto(
             invitation,
-            toCommunityHomeCommunityRefDto(community),
+            toCommunityHomeCommunityRefDto(community, this.r2StorageService),
           ),
         ];
       });
@@ -114,7 +116,7 @@ export class CommunityHomeService {
         return [
           toCommunityHomeJoinRequestDto(
             request,
-            toCommunityHomeCommunityRefDto(community),
+            toCommunityHomeCommunityRefDto(community, this.r2StorageService),
           ),
         ];
       });
@@ -309,7 +311,12 @@ export class CommunityHomeService {
       if (community.status !== GroupStatus.ARCHIVED) {
         const rootGroupId = await resolveRootGroupId(community);
         communities.push(
-          toCommunityHomeCommunityDto(community, rootGroupId, row.roles),
+          toCommunityHomeCommunityDto(
+            community,
+            rootGroupId,
+            row.roles,
+            this.r2StorageService,
+          ),
         );
       }
 

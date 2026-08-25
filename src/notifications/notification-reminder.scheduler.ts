@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { CreateRequestContext } from '@mikro-orm/core';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { EventAttendee } from '../events/entities/event-attendee.entity';
 import { Event } from '../events/entities/event.entity';
@@ -46,7 +47,27 @@ export class NotificationReminderScheduler {
     private readonly notificationsService: NotificationsService,
   ) {}
 
+  /**
+   * `@CreateRequestContext()` is required here, not optional decoration:
+   * `@nestjs/schedule`'s CronJob fires from a timer, entirely outside the
+   * Express request pipeline, so `@mikro-orm/nestjs`'s own
+   * `MikroOrmMiddleware` (which wraps every real HTTP request in a
+   * `RequestContext` - see MikroOrmCoreModule.configure()) never runs for
+   * it. Without this decorator, `this.em` here is the raw, unforked global
+   * EntityManager, and - because this project sets `allowGlobalContext:
+   * false` (see mikro-orm-options.factory.ts) - every single tick would
+   * throw "Using global EntityManager instance methods for context
+   * specific actions is disallowed" (confirmed: this is exactly what was
+   * happening before this fix, silently swallowed by the try/catch below,
+   * every 5 minutes, in every environment - reminders have never actually
+   * been sent). The decorator forks `this.em` fresh and runs the method
+   * body inside a new `RequestContext` (AsyncLocalStorage), the same
+   * mechanism a real HTTP request gets for free - see
+   * notification-reminder.scheduler.spec.ts's "runs inside a MikroORM
+   * RequestContext" regression test.
+   */
   @Cron(CronExpression.EVERY_5_MINUTES)
+  @CreateRequestContext()
   async run(): Promise<void> {
     try {
       await this.processTrainingReminders(24);

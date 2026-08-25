@@ -309,6 +309,21 @@ describe('Events (e2e)', () => {
         { parentGroup: null },
       );
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // Safety net, scoped directly by user id rather than through
+      // Event/Group tracking - mirrors
+      // event-attendance.e2e-spec.ts's identical fix and
+      // UserService.deleteLocalAccountData's own EventRoleAssignment
+      // cleanup step. EventRoleAssignment.user is a non-nullable,
+      // `deleteRule: 'no action'` FK (see event-role-assignment.entity.ts),
+      // so ANY row still referencing one of this file's fixture users -
+      // regardless of which Group/Event/personal-Event it was granted on -
+      // must be cleared before the User delete below, or that delete fails
+      // outright with a raw FK violation (observed in practice: not every
+      // Event created across this file's many describe blocks is reliably
+      // covered by createdGroupIds/createdPersonalEventIds at cleanup time).
+      await cleanup.nativeDelete(EventRoleAssignment, {
+        user: { $in: [...localUserIdByToken.values()] },
+      });
       await cleanup.nativeDelete(User, {
         clerkUserId: { $in: TEST_CLERK_USER_IDS },
       });

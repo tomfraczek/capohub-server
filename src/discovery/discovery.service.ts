@@ -5,6 +5,12 @@ import { createPaginationMeta } from '../common/pagination/pagination.utils';
 import { Group } from '../groups/entities/group.entity';
 import { MembershipRequest } from '../groups/entities/membership-request.entity';
 import { Section } from '../groups/entities/section.entity';
+import {
+  PublicUrlBuilder,
+  resolveImageUrl,
+  resolveUserAvatarUrl,
+} from '../storage/image-url.util';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import {
   Community,
@@ -27,6 +33,7 @@ export class DiscoveryService {
     private readonly em: EntityManager,
     private readonly groupHierarchyService: GroupHierarchyService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
+    private readonly r2StorageService: R2StorageService,
   ) {}
 
   /**
@@ -53,7 +60,7 @@ export class DiscoveryService {
       const resourceType = community instanceof Group ? 'GROUP' : 'SECTION';
       return {
         resourceType,
-        group: toPublicCommunityProfile(community),
+        group: toPublicCommunityProfile(community, this.r2StorageService),
         user: null,
         isMember,
         hasPendingRequest,
@@ -66,7 +73,7 @@ export class DiscoveryService {
       return {
         resourceType: 'USER',
         group: null,
-        user: toPublicUserProfile(user),
+        user: toPublicUserProfile(user, this.r2StorageService),
         isMember: false,
         hasPendingRequest: false,
       };
@@ -148,10 +155,11 @@ export class DiscoveryService {
         toCommunitySearchResultDtoForGroup(
           group,
           sectionsCountByGroupId.get(group.id) ?? 0,
+          this.r2StorageService,
         ),
       ),
       ...sections.map((section) =>
-        toCommunitySearchResultDtoForSection(section),
+        toCommunitySearchResultDtoForSection(section, this.r2StorageService),
       ),
     ].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -252,12 +260,24 @@ export class DiscoveryService {
 
 // ─── Mappers ─────────────────────────────────────────────────────────────────
 
-function toPublicCommunityProfile(community: Community): PublicGroupProfileDto {
+function toPublicCommunityProfile(
+  community: Community,
+  urlBuilder: PublicUrlBuilder,
+): PublicGroupProfileDto {
   return {
     id: community.id,
     name: community.name,
     description: community.description,
-    logoUrl: community.logoUrl,
+    // Prefers the R2 public URL derived from profileImageKey over the
+    // legacy logoUrl column once an upload exists - see
+    // storage/image-url.util.ts's resolveImageUrl. coverImageUrl has no R2
+    // counterpart for Group/Section (module spec: no cover upload for
+    // either) - stays a plain legacy passthrough.
+    logoUrl: resolveImageUrl(
+      community.profileImageKey,
+      community.logoUrl,
+      urlBuilder,
+    ),
     coverImageUrl: community.coverImageUrl,
     websiteUrl: community.websiteUrl,
     status: community.status,
@@ -270,11 +290,17 @@ function toPublicCommunityProfile(community: Community): PublicGroupProfileDto {
   };
 }
 
-function toPublicUserProfile(user: User): PublicUserProfileDto {
+function toPublicUserProfile(
+  user: User,
+  urlBuilder: PublicUrlBuilder,
+): PublicUserProfileDto {
   return {
     id: user.id,
     displayName: user.displayName,
-    avatarUrl: user.avatarUrl,
+    // Prefers the R2 public URL derived from avatarImageKey over the
+    // legacy avatarUrl column once an UPLOAD avatar exists - see
+    // storage/image-url.util.ts's resolveUserAvatarUrl.
+    avatarUrl: resolveUserAvatarUrl(user, urlBuilder),
     publicCode: user.publicCode,
   };
 }
@@ -282,13 +308,14 @@ function toPublicUserProfile(user: User): PublicUserProfileDto {
 function toCommunitySearchResultDtoForGroup(
   group: Group,
   directSectionsCount: number,
+  urlBuilder: PublicUrlBuilder,
 ): CommunitySearchResultDto {
   return {
     id: group.id,
     type: 'GROUP',
     name: group.name,
     publicCode: group.publicCode,
-    logoUrl: group.logoUrl,
+    logoUrl: resolveImageUrl(group.profileImageKey, group.logoUrl, urlBuilder),
     country: null,
     city: null,
     description: group.description,
@@ -302,13 +329,18 @@ function toCommunitySearchResultDtoForGroup(
 
 function toCommunitySearchResultDtoForSection(
   section: Section,
+  urlBuilder: PublicUrlBuilder,
 ): CommunitySearchResultDto {
   return {
     id: section.id,
     type: 'SECTION',
     name: section.name,
     publicCode: section.publicCode,
-    logoUrl: section.logoUrl,
+    logoUrl: resolveImageUrl(
+      section.profileImageKey,
+      section.logoUrl,
+      urlBuilder,
+    ),
     country: section.country,
     city: section.city,
     description: section.description,

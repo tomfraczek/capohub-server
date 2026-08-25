@@ -17,12 +17,17 @@ import { NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { Group } from '../groups/entities/group.entity';
 import { Section } from '../groups/entities/section.entity';
+import { PublicUrlBuilder } from '../storage/image-url.util';
 import { User } from '../users/entities/user.entity';
 import { GroupStatus } from '../groups/enums/group-status.enum';
 import { GroupHierarchyService } from '../groups/group-hierarchy.service';
 import { RoleAssignmentsService } from '../groups/role-assignments.service';
 import { DiscoveryService } from './discovery.service';
 import { DiscoverySearchQuery } from './dto/discovery-search-query.schema';
+
+function buildUrlBuilder(): PublicUrlBuilder {
+  return { buildPublicUrl: (key) => `https://cdn.example.com/${key}` };
+}
 
 // ─── Builders ────────────────────────────────────────────────────────────────
 
@@ -125,6 +130,7 @@ function buildService(em: EntityManager) {
     em,
     buildGroupHierarchyService(em),
     roleAssignmentsService,
+    buildUrlBuilder() as never,
   );
 }
 
@@ -181,6 +187,38 @@ describe('DiscoveryService', () => {
       expect(result.user).not.toBeNull();
       expect(result.user!.id).toBe('user-1');
       expect(result.group).toBeNull();
+    });
+
+    it('prefers the R2 public URL derived from profileImageKey over the legacy logoUrl for a Group', async () => {
+      const group = buildGroup({
+        logoUrl: 'https://legacy.example.com/old-logo.png',
+        profileImageKey: 'groups/root-1/profile/uuid.webp',
+      });
+      const { em } = buildMockEm({ groupFindOneResult: group });
+      const service = buildService(em);
+
+      const result = await service.resolveByCode('CBRA-0001', requestingUser);
+
+      expect(result.group!.logoUrl).toBe(
+        'https://cdn.example.com/groups/root-1/profile/uuid.webp',
+      );
+    });
+
+    it('prefers the R2 public URL derived from avatarImageKey over the legacy avatarUrl for a User', async () => {
+      const user = buildUser({
+        publicCode: 'USR-0001',
+        avatarType: 'UPLOAD' as never,
+        avatarUrl: null,
+        avatarImageKey: 'users/user-1/profile/uuid.webp',
+      });
+      const { em } = buildMockEm({ userFindOneResult: user });
+      const service = buildService(em);
+
+      const result = await service.resolveByCode('USR-0001', requestingUser);
+
+      expect(result.user!.avatarUrl).toBe(
+        'https://cdn.example.com/users/user-1/profile/uuid.webp',
+      );
     });
 
     it('normalizes the code to uppercase before lookup', async () => {
@@ -340,6 +378,60 @@ describe('DiscoveryService', () => {
         parentId: 'root-1',
         sectionsCount: null,
       });
+    });
+
+    it('prefers the R2 public URL derived from profileImageKey over the legacy logoUrl for a Group result', async () => {
+      const group = buildGroup({
+        logoUrl: 'https://legacy.example.com/old-logo.png',
+        profileImageKey: 'groups/root-1/profile/uuid.webp',
+      });
+      const { em } = buildMockEm({ groupFindResult: [group] });
+      const service = buildService(em);
+
+      const result = await service.search(buildQuery({ name: 'brasil' }));
+
+      expect(result.data.find((r) => r.id === 'root-1')?.logoUrl).toBe(
+        'https://cdn.example.com/groups/root-1/profile/uuid.webp',
+      );
+    });
+
+    it('falls back to the legacy logoUrl for a Group result when profileImageKey is unset', async () => {
+      const group = buildGroup({
+        logoUrl: 'https://legacy.example.com/old-logo.png',
+      });
+      const { em } = buildMockEm({ groupFindResult: [group] });
+      const service = buildService(em);
+
+      const result = await service.search(buildQuery({ name: 'brasil' }));
+
+      expect(result.data.find((r) => r.id === 'root-1')?.logoUrl).toBe(
+        'https://legacy.example.com/old-logo.png',
+      );
+    });
+
+    it('returns null logoUrl for a Group result when neither profileImageKey nor legacy logoUrl is set', async () => {
+      const group = buildGroup();
+      const { em } = buildMockEm({ groupFindResult: [group] });
+      const service = buildService(em);
+
+      const result = await service.search(buildQuery({ name: 'brasil' }));
+
+      expect(result.data.find((r) => r.id === 'root-1')?.logoUrl).toBeNull();
+    });
+
+    it('prefers the R2 public URL derived from profileImageKey over the legacy logoUrl for a Section result', async () => {
+      const section = buildSection({
+        logoUrl: 'https://legacy.example.com/old-section-logo.png',
+        profileImageKey: 'sections/section-1/profile/uuid.webp',
+      });
+      const { em } = buildMockEm({ sectionFindResult: [section] });
+      const service = buildService(em);
+
+      const result = await service.search(buildQuery({ name: 'brasil' }));
+
+      expect(result.data.find((r) => r.id === 'section-1')?.logoUrl).toBe(
+        'https://cdn.example.com/sections/section-1/profile/uuid.webp',
+      );
     });
 
     it('hidden Groups/Sections are excluded because the query filter prevents them from being returned', async () => {
