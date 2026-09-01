@@ -497,6 +497,21 @@ describe('Playlists (e2e)', () => {
         .send({ songId: song.id })
         .expect(201);
 
+      // GET /songs/:id is PUBLISHED-only (see the songbook visibility
+      // rule) - publish before either viewer fetches it. OTHER_TOKEN
+      // (never the song's own creator) briefly holds CONTENT_APPROVE just
+      // to do that, then is reset back to its default USER tier.
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/submit`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(201);
+      await grantGlobalRole(OTHER_TOKEN, GlobalRole.MODERATOR);
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/publish`)
+        .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+        .expect(201);
+      await grantGlobalRole(OTHER_TOKEN, GlobalRole.USER);
+
       const ownerDetails = await bodyOf<SongDetailsResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/songs/${song.id}`)

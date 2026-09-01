@@ -11,9 +11,9 @@ import { buildSongCapabilities } from './song-capabilities.dto';
 describe('buildSongCapabilities', () => {
   const permissionService = new PermissionService();
 
-  it('USER: none of the four (only SONG_READ)', () => {
+  it('USER: canCreate only (SONG_READ/SONG_CREATE/SONG_EDIT_OWN, no moderation/deletion permissions)', () => {
     expect(buildSongCapabilities(GlobalRole.USER, permissionService)).toEqual({
-      canCreate: false,
+      canCreate: true,
       canApproveContent: false,
       canHideContent: false,
       canDeleteAnyDraft: false,

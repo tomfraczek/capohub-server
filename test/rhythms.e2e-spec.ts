@@ -673,7 +673,11 @@ describe('Rhythms (e2e)', () => {
         .expect(404);
     });
 
-    it("only shows songs visible to the requesting user in a rhythm's details", async () => {
+    // A rhythm's song list reuses the exact same PUBLISHED-only visibility
+    // rule as the public songbook (see applyVisibility in
+    // songs-list-query.ts) - a DRAFT song never appears here, not even for
+    // its own creator.
+    it("only shows PUBLISHED songs in a rhythm's details, regardless of caller", async () => {
       const ownerDraftSong = await createSong(OWNER_TOKEN);
       const publishedSong = await createSong(OWNER_TOKEN);
       await publishSong(OWNER_TOKEN, publishedSong.id);
@@ -694,7 +698,7 @@ describe('Rhythms (e2e)', () => {
           .expect(200),
       );
       const ownerSongIds = ownerView.songs.map((song) => song.id);
-      expect(ownerSongIds).toContain(ownerDraftSong.id);
+      expect(ownerSongIds).not.toContain(ownerDraftSong.id);
       expect(ownerSongIds).toContain(publishedSong.id);
 
       const otherView = await bodyOf<RhythmDetailsResponseDto>(
@@ -756,6 +760,9 @@ describe('Rhythms (e2e)', () => {
           ],
         }),
       );
+      // GET /songs/:id is PUBLISHED-only (see the songbook visibility
+      // rule) - publish before fetching through it.
+      await publishSong(OWNER_TOKEN, song.id);
 
       const details = await bodyOf<SongDetailsResponseDto>(
         request(app.getHttpServer())
@@ -784,6 +791,7 @@ describe('Rhythms (e2e)', () => {
           songLinks: [{ songId: song.id, isPrimary: false, description: null }],
         }),
       );
+      await publishSong(OWNER_TOKEN, song.id);
 
       const details = await bodyOf<SongDetailsResponseDto>(
         request(app.getHttpServer())

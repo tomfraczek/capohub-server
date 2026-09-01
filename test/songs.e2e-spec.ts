@@ -343,6 +343,10 @@ describe('Songs (e2e)', () => {
     await grantGlobalRole(token, GlobalRole.MODERATOR);
   }
 
+  // Public songbook detail - PUBLISHED only (see
+  // SongsService.getPublicDetails). Never use this for a DRAFT/
+  // PENDING_REVIEW/REJECTED/HIDDEN fixture, even the caller's own - use
+  // getMySubmissionDetails or getModerationDetails instead.
   async function getSongDetails(
     token: string,
     songId: string,
@@ -350,6 +354,59 @@ describe('Songs (e2e)', () => {
     return bodyOf<SongDetailsResponseDto>(
       request(app.getHttpServer())
         .get(`/api/v1/songs/${songId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200),
+    );
+  }
+
+  // The caller's own private submission - GET /songs/my-submissions/:id.
+  async function getMySubmissionDetails(
+    token: string,
+    songId: string,
+  ): Promise<SongDetailsResponseDto> {
+    return bodyOf<SongDetailsResponseDto>(
+      request(app.getHttpServer())
+        .get(`/api/v1/songs/my-submissions/${songId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200),
+    );
+  }
+
+  // A moderator's unrestricted view of any song - GET
+  // /moderation/songs/:id (CONTENT_APPROVE required).
+  async function getModerationDetails(
+    token: string,
+    songId: string,
+  ): Promise<SongDetailsResponseDto> {
+    return bodyOf<SongDetailsResponseDto>(
+      request(app.getHttpServer())
+        .get(`/api/v1/moderation/songs/${songId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200),
+    );
+  }
+
+  async function listMySubmissions(
+    token: string,
+    query: Record<string, string | number> = {},
+  ): Promise<PaginatedResponse<SongSummaryResponseDto>> {
+    return bodyOf<PaginatedResponse<SongSummaryResponseDto>>(
+      request(app.getHttpServer())
+        .get('/api/v1/songs/my-submissions')
+        .query(query)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200),
+    );
+  }
+
+  async function listModerationQueue(
+    token: string,
+    query: Record<string, string | number> = {},
+  ): Promise<PaginatedResponse<SongSummaryResponseDto>> {
+    return bodyOf<PaginatedResponse<SongSummaryResponseDto>>(
+      request(app.getHttpServer())
+        .get('/api/v1/moderation/songs')
+        .query(query)
         .set('Authorization', `Bearer ${token}`)
         .expect(200),
     );
@@ -439,12 +496,11 @@ describe('Songs (e2e)', () => {
 
       const songId = created.id;
 
-      const fetched = await bodyOf<SongDetailsResponseDto>(
-        request(app.getHttpServer())
-          .get(`/api/v1/songs/${songId}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .expect(200),
-      );
+      // Still DRAFT at this point - fetched via GET
+      // /songs/my-submissions/:id, not the public GET /songs/:id (which
+      // 404s for anything but PUBLISHED, even for the song's own creator -
+      // see the "GET /songs/:id visibility" describe block below).
+      const fetched = await getMySubmissionDetails(OWNER_TOKEN, songId);
       expect(fetched).toEqual(created);
 
       const newTag = await createTag(
@@ -522,10 +578,101 @@ describe('Songs (e2e)', () => {
     });
   });
 
+  // GET /songs/:id is the public songbook's detail view - PUBLISHED only,
+  // 404 for everything else, for every caller including the song's own
+  // creator and a MODERATOR+ (who instead uses GET /moderation/songs/:id -
+  // see the "moderation queue" describe block).
+  describe('GET /songs/:id visibility', () => {
+    it('returns 200 for a PUBLISHED song', async () => {
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await publishSong(OWNER_TOKEN, song.id);
+
+      const details = await getSongDetails(OWNER_TOKEN, song.id);
+      expect(details.status).toBe('PUBLISHED');
+    });
+
+    it('returns 404 for DRAFT, even for its own creator', async () => {
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/songs/${song.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(404);
+    });
+
+    it('returns 404 for PENDING_REVIEW, even for a MODERATOR', async () => {
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/submit`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/songs/${song.id}`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .expect(404);
+    });
+
+    it('returns 404 for REJECTED', async () => {
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/submit`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/reject`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .send({ reason: 'Not ready' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/songs/${song.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(404);
+    });
+
+    it('returns 404 for HIDDEN, even for a MODERATOR', async () => {
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await publishSong(OWNER_TOKEN, song.id);
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/hide`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/songs/${song.id}`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .expect(404);
+    });
+  });
+
   describe('list', () => {
     it('paginates results using the standard PaginatedResponse shape', async () => {
-      await createSong(OWNER_TOKEN, minimalSongPayload(category.id));
-      await createSong(OWNER_TOKEN, minimalSongPayload(category.id));
+      const first = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      const second = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await publishSong(OWNER_TOKEN, first.id);
+      await publishSong(OWNER_TOKEN, second.id);
 
       const response = await listSongs(OWNER_TOKEN, {
         page: 1,
@@ -539,28 +686,72 @@ describe('Songs (e2e)', () => {
       expect(response.meta.hasNextPage).toBe(true);
     });
 
-    it("hides another user's DRAFT songs by default, but shows PUBLISHED ones", async () => {
-      const ownDraft = await createSong(
-        OWNER_TOKEN,
-        minimalSongPayload(category.id),
-      );
-      const otherDraft = await createSong(
-        OTHER_TOKEN,
-        minimalSongPayload(category.id),
-      );
-      const otherPublished = await createSong(
-        OTHER_TOKEN,
-        minimalSongPayload(category.id),
-      );
-      await publishSong(OTHER_TOKEN, otherPublished.id);
+    // The central regression test for the moderation model: GET /songs is
+    // the public songbook, so it must show PUBLISHED and nothing else -
+    // not the caller's own DRAFT/PENDING_REVIEW/REJECTED, not another
+    // user's, and never HIDDEN - regardless of the caller's globalRole.
+    // Run for both a plain USER and a MODERATOR to prove the rule is not
+    // role-dependent (see songs-list-query.ts's applyVisibility).
+    it.each([
+      ['USER', PLAIN_USER_TOKEN] as const,
+      ['MODERATOR', MODERATOR_TOKEN] as const,
+    ])(
+      'GET /songs returns PUBLISHED songs only, for %s too',
+      async (_label, viewerToken) => {
+        const draftSong = await createSong(
+          PLAIN_USER_TOKEN,
+          minimalSongPayload(category.id),
+        );
 
-      const response = await listSongs(OWNER_TOKEN, { page: 1, limit: 50 });
+        const pendingSong = await createSong(
+          PLAIN_USER_TOKEN,
+          minimalSongPayload(category.id),
+        );
+        await request(app.getHttpServer())
+          .post(`/api/v1/songs/${pendingSong.id}/submit`)
+          .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+          .expect(201);
 
-      const ids = response.data.map((s) => s.id);
-      expect(ids).toContain(ownDraft.id);
-      expect(ids).toContain(otherPublished.id);
-      expect(ids).not.toContain(otherDraft.id);
-    });
+        const rejectedSong = await createSong(
+          PLAIN_USER_TOKEN,
+          minimalSongPayload(category.id),
+        );
+        await request(app.getHttpServer())
+          .post(`/api/v1/songs/${rejectedSong.id}/submit`)
+          .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+          .expect(201);
+        await request(app.getHttpServer())
+          .post(`/api/v1/songs/${rejectedSong.id}/reject`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+          .send({ reason: 'Needs work' })
+          .expect(201);
+
+        const publishedSong = await createSong(
+          PLAIN_USER_TOKEN,
+          minimalSongPayload(category.id),
+        );
+        await publishSong(PLAIN_USER_TOKEN, publishedSong.id);
+
+        const hiddenSong = await createSong(
+          PLAIN_USER_TOKEN,
+          minimalSongPayload(category.id),
+        );
+        await publishSong(PLAIN_USER_TOKEN, hiddenSong.id);
+        await request(app.getHttpServer())
+          .post(`/api/v1/songs/${hiddenSong.id}/hide`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+          .expect(201);
+
+        const response = await listSongs(viewerToken, { page: 1, limit: 50 });
+        const ids = response.data.map((s) => s.id);
+
+        expect(ids).toContain(publishedSong.id);
+        expect(ids).not.toContain(draftSong.id);
+        expect(ids).not.toContain(pendingSong.id);
+        expect(ids).not.toContain(rejectedSong.id);
+        expect(ids).not.toContain(hiddenSong.id);
+      },
+    );
 
     it('search matches title, alternativeTitles.title, authorName, and line originalText', async () => {
       const marker = randomUUID().slice(0, 8);
@@ -606,6 +797,13 @@ describe('Songs (e2e)', () => {
         }),
       );
 
+      // GET /songs only searches PUBLISHED content (see the songbook
+      // visibility rule) - every fixture must be published first.
+      await publishSong(OWNER_TOKEN, byTitle.id);
+      await publishSong(OWNER_TOKEN, byAltTitle.id);
+      await publishSong(OWNER_TOKEN, byAuthor.id);
+      await publishSong(OWNER_TOKEN, byLine.id);
+
       const cases: [string, string][] = [
         [`titlemarker-${marker}`, byTitle.id],
         [`altmarker-${marker}`, byAltTitle.id],
@@ -634,6 +832,8 @@ describe('Songs (e2e)', () => {
         OWNER_TOKEN,
         minimalSongPayload(secondCategory.id),
       );
+      await publishSong(OWNER_TOKEN, inCategory.id);
+      await publishSong(OWNER_TOKEN, inOtherCategory.id);
 
       const response = await listSongs(OWNER_TOKEN, {
         page: 1,
@@ -659,6 +859,8 @@ describe('Songs (e2e)', () => {
         OWNER_TOKEN,
         minimalSongPayload(category.id, { tagIds: [tagA.id] }),
       );
+      await publishSong(OWNER_TOKEN, both.id);
+      await publishSong(OWNER_TOKEN, onlyA.id);
 
       const response = await listSongs(OWNER_TOKEN, {
         page: 1,
@@ -720,6 +922,8 @@ describe('Songs (e2e)', () => {
           media: [],
         }),
       );
+      await publishSong(OWNER_TOKEN, withEverything.id);
+      await publishSong(OWNER_TOKEN, withNothing.id);
 
       async function idsFor(query: Record<string, string>): Promise<string[]> {
         const response = await listSongs(OWNER_TOKEN, {
@@ -773,6 +977,8 @@ describe('Songs (e2e)', () => {
           alternativeTitles: [],
         }),
       );
+      await publishSong(OWNER_TOKEN, first.id);
+      await publishSong(OWNER_TOKEN, second.id);
 
       const ascByTitle = await listSongs(OWNER_TOKEN, {
         page: 1,
@@ -912,12 +1118,68 @@ describe('Songs (e2e)', () => {
       await grantGlobalRole(OWNER_TOKEN, GlobalRole.EDITOR);
     });
 
-    it('rejects create without SONG_CREATE (plain USER) with 403', async () => {
+    // Central regression test for the moderation model's goal #1: every
+    // signed-in USER (no elevated globalRole needed) can add a song - see
+    // role-permissions.map.ts giving USER SONG_CREATE/SONG_EDIT_OWN. It
+    // must land as a private DRAFT, never auto-published.
+    it('lets a plain USER create a song - 201, DRAFT, owned by them', async () => {
+      const created = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
+      expect(created.status).toBe('DRAFT');
+
+      const em = app.get(EntityManager).fork();
+      const auth = TOKEN_TO_AUTH[PLAIN_USER_TOKEN];
+      const plainUser = await em.findOneOrFail(User, {
+        clerkUserId: auth.userId,
+      });
+      expect(created.createdBy?.id).toBe(plainUser.id);
+    });
+
+    it('lets a plain USER edit their own DRAFT (SONG_EDIT_OWN)', async () => {
+      const song = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
+      const patched = await bodyOf<SongDetailsResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/songs/${song.id}`)
+          .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+          .send(minimalSongPayload(category.id, { title: 'Edited by USER' }))
+          .expect(200),
+      );
+      expect(patched.title).toBe('Edited by USER');
+    });
+
+    it("rejects a plain USER editing another user's DRAFT with 403 - no SONG_EDIT_ANY", async () => {
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
       await request(app.getHttpServer())
-        .post('/api/v1/songs')
+        .patch(`/api/v1/songs/${song.id}`)
         .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
         .send(minimalSongPayload(category.id))
         .expect(403);
+    });
+
+    it('lets a plain USER submit their own DRAFT for review', async () => {
+      const song = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
+      const submitted = await bodyOf<SongDetailsResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/songs/${song.id}/submit`)
+          .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+          .expect(201),
+      );
+      expect(submitted.status).toBe('PENDING_REVIEW');
     });
 
     it("rejects submitting another user's DRAFT without SONG_EDIT_ANY with 403", async () => {
@@ -1006,6 +1268,13 @@ describe('Songs (e2e)', () => {
       );
       const mediaId = song.media[0].id;
       expect(song.media[0].isVerified).toBe(false);
+      // Submitted so it's actually part of the moderation workflow -
+      // GET /moderation/songs/:id only resolves PENDING_REVIEW/REJECTED
+      // (see SongsService.getModerationDetails), not a bare DRAFT.
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/submit`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(201);
 
       const verified = await bodyOf<SongMediaDetailsResponseDto>(
         request(app.getHttpServer())
@@ -1019,11 +1288,11 @@ describe('Songs (e2e)', () => {
         isVerified: true,
       });
 
-      const detailsAfterVerify = await bodyOf<SongDetailsResponseDto>(
-        request(app.getHttpServer())
-          .get(`/api/v1/songs/${song.id}`)
-          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
-          .expect(200),
+      // PENDING_REVIEW at this point - fetched via the moderation detail
+      // endpoint, not the public GET /songs/:id (PUBLISHED-only).
+      const detailsAfterVerify = await getModerationDetails(
+        MODERATOR_TOKEN,
+        song.id,
       );
       expect(detailsAfterVerify.media[0].isVerified).toBe(true);
 
@@ -1170,7 +1439,7 @@ describe('Songs (e2e)', () => {
         isVotedByCurrentUser: true,
       });
 
-      const afterFirstVote = await getSongDetails(OWNER_TOKEN, song.id);
+      const afterFirstVote = await getMySubmissionDetails(OWNER_TOKEN, song.id);
       expect(afterFirstVote.media.find((m) => m.id === mediaA)).toMatchObject({
         voteCount: 1,
         isVotedByCurrentUser: true,
@@ -1195,7 +1464,7 @@ describe('Songs (e2e)', () => {
       });
       expect(voteCountForOwner).toBe(1);
 
-      const afterMove = await getSongDetails(OWNER_TOKEN, song.id);
+      const afterMove = await getMySubmissionDetails(OWNER_TOKEN, song.id);
       expect(afterMove.media.find((m) => m.id === mediaA)).toMatchObject({
         voteCount: 0,
         isVotedByCurrentUser: false,
@@ -1213,7 +1482,10 @@ describe('Songs (e2e)', () => {
       const secondVote = await voteFor(OTHER_TOKEN, song.id, mediaB);
       expect(secondVote).toMatchObject({ mediaId: mediaB, voteCount: 2 });
 
-      const afterSecondVoter = await getSongDetails(OWNER_TOKEN, song.id);
+      const afterSecondVoter = await getMySubmissionDetails(
+        OWNER_TOKEN,
+        song.id,
+      );
       expect(afterSecondVoter.media.find((m) => m.id === mediaB)).toMatchObject(
         {
           voteCount: 2,
@@ -1227,7 +1499,7 @@ describe('Songs (e2e)', () => {
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(204);
 
-      const afterRemove = await getSongDetails(OWNER_TOKEN, song.id);
+      const afterRemove = await getMySubmissionDetails(OWNER_TOKEN, song.id);
       expect(afterRemove.media.find((m) => m.id === mediaB)).toMatchObject({
         voteCount: 1,
         isVotedByCurrentUser: false,
@@ -1254,7 +1526,7 @@ describe('Songs (e2e)', () => {
         isVotedByCurrentUser: true,
       });
 
-      const detailsA = await getSongDetails(OWNER_TOKEN, songA.id);
+      const detailsA = await getMySubmissionDetails(OWNER_TOKEN, songA.id);
       expect(
         detailsA.media.find((m) => m.id === songA.media[0].id),
       ).toMatchObject({ isVotedByCurrentUser: true });
@@ -1537,7 +1809,10 @@ describe('Songs (e2e)', () => {
           ['id', 'title', 'firstLine', 'status', 'similarity'].sort(),
         );
 
-        const afterAttempt = await getSongDetails(OTHER_TOKEN, attempt.id);
+        const afterAttempt = await getMySubmissionDetails(
+          OTHER_TOKEN,
+          attempt.id,
+        );
         expect(afterAttempt.status).toBe('DRAFT');
       });
 
@@ -1703,6 +1978,403 @@ describe('Songs (e2e)', () => {
 
         expect(response.duplicates?.length).toBeLessThanOrEqual(3);
       });
+    });
+  });
+
+  describe('GET /songs/my-submissions', () => {
+    it("returns only the caller's own DRAFT/PENDING_REVIEW/REJECTED songs, never another user's", async () => {
+      const a1 = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      const a2 = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${a2.id}/submit`)
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .expect(201);
+      const a3 = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${a3.id}/submit`)
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${a3.id}/reject`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .send({ reason: 'Needs work' })
+        .expect(201);
+
+      const b1 = await createSong(OTHER_TOKEN, minimalSongPayload(category.id));
+      const b2 = await createSong(OTHER_TOKEN, minimalSongPayload(category.id));
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${b2.id}/submit`)
+        .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+        .expect(201);
+
+      const response = await listMySubmissions(PLAIN_USER_TOKEN, {
+        page: 1,
+        limit: 50,
+      });
+      const ids = response.data.map((s) => s.id);
+
+      expect(ids).toEqual(expect.arrayContaining([a1.id, a2.id, a3.id]));
+      expect(ids).not.toContain(b1.id);
+      expect(ids).not.toContain(b2.id);
+    });
+
+    it('filters by status', async () => {
+      const draft = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      const pending = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${pending.id}/submit`)
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .expect(201);
+
+      const response = await listMySubmissions(PLAIN_USER_TOKEN, {
+        page: 1,
+        limit: 50,
+        status: 'PENDING_REVIEW',
+      });
+      const ids = response.data.map((s) => s.id);
+
+      expect(ids).toContain(pending.id);
+      expect(ids).not.toContain(draft.id);
+    });
+
+    it('never includes a PUBLISHED song - that belongs in GET /songs', async () => {
+      const song = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await publishSong(PLAIN_USER_TOKEN, song.id);
+
+      const response = await listMySubmissions(PLAIN_USER_TOKEN, {
+        page: 1,
+        limit: 50,
+      });
+      expect(response.data.map((s) => s.id)).not.toContain(song.id);
+    });
+
+    it("GET /songs/my-submissions/:id 404s for another user's submission", async () => {
+      const song = await createSong(
+        OTHER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/songs/my-submissions/${song.id}`)
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .expect(404);
+    });
+
+    it('rejects an unauthenticated request with 401', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/songs/my-submissions')
+        .expect(401);
+    });
+  });
+
+  describe('GET /moderation/songs (moderation queue)', () => {
+    it('defaults to PENDING_REVIEW across every submitter, excluding DRAFT', async () => {
+      const songA = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${songA.id}/submit`)
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .expect(201);
+
+      const songB = await createSong(
+        OTHER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${songB.id}/submit`)
+        .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+        .expect(201);
+
+      const songC = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
+      const response = await listModerationQueue(MODERATOR_TOKEN, {
+        page: 1,
+        limit: 50,
+      });
+      const ids = response.data.map((s) => s.id);
+
+      expect(ids).toEqual(expect.arrayContaining([songA.id, songB.id]));
+      expect(ids).not.toContain(songC.id);
+    });
+
+    it('?status=REJECTED surfaces recently-decided submissions instead', async () => {
+      const song = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/submit`)
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/reject`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .send({ reason: 'Not ready' })
+        .expect(201);
+
+      const defaultQueue = await listModerationQueue(MODERATOR_TOKEN, {
+        page: 1,
+        limit: 50,
+      });
+      expect(defaultQueue.data.map((s) => s.id)).not.toContain(song.id);
+
+      const rejectedQueue = await listModerationQueue(MODERATOR_TOKEN, {
+        page: 1,
+        limit: 50,
+        status: 'REJECTED',
+      });
+      expect(rejectedQueue.data.map((s) => s.id)).toContain(song.id);
+    });
+
+    it('rejects a plain USER with 403', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/moderation/songs')
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .expect(403);
+    });
+
+    it('GET /moderation/songs/:id lets a MODERATOR open a submission by id', async () => {
+      const song = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/submit`)
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .expect(201);
+
+      const details = await getModerationDetails(MODERATOR_TOKEN, song.id);
+      expect(details.status).toBe('PENDING_REVIEW');
+    });
+
+    it('GET /moderation/songs/:id rejects a plain USER with 403', async () => {
+      const song = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/moderation/songs/${song.id}`)
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .expect(403);
+    });
+
+    // GET /moderation/songs/:id is narrower than "any Song a MODERATOR can
+    // read" - it only ever resolves a Song actually in the new-song
+    // moderation workflow (PENDING_REVIEW/REJECTED, the same set
+    // GET /moderation/songs itself defaults/filters to). Anything else
+    // 404s even for a MODERATOR, exactly like a Song that doesn't exist -
+    // see SongsService.getModerationDetails's own comment.
+    it('GET /moderation/songs/:id returns 200 for REJECTED too', async () => {
+      const song = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/submit`)
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/reject`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .send({ reason: 'Not ready' })
+        .expect(201);
+
+      const details = await getModerationDetails(MODERATOR_TOKEN, song.id);
+      expect(details.status).toBe('REJECTED');
+    });
+
+    it('GET /moderation/songs/:id returns 404 for DRAFT, even for a MODERATOR', async () => {
+      const song = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/moderation/songs/${song.id}`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .expect(404);
+    });
+
+    it('GET /moderation/songs/:id returns 404 for PUBLISHED, even though GET /songs/:id returns it', async () => {
+      const song = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await publishSong(PLAIN_USER_TOKEN, song.id);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/moderation/songs/${song.id}`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .expect(404);
+
+      // The public songbook is unaffected - still 200 there.
+      const publicDetails = await getSongDetails(PLAIN_USER_TOKEN, song.id);
+      expect(publicDetails.status).toBe('PUBLISHED');
+    });
+
+    it('GET /moderation/songs/:id returns 404 for HIDDEN, even for a MODERATOR', async () => {
+      const song = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await publishSong(PLAIN_USER_TOKEN, song.id);
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/hide`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/moderation/songs/${song.id}`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .expect(404);
+    });
+  });
+
+  describe('full moderation workflow', () => {
+    it('create -> submit -> moderation queue -> publish -> visible in the songbook', async () => {
+      const created = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      expect(created.status).toBe('DRAFT');
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/songs/${created.id}`)
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .send(minimalSongPayload(category.id, { title: 'Ready for review' }))
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${created.id}/submit`)
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .expect(201);
+
+      // Not yet part of the songbook.
+      const beforePublish = await listSongs(PLAIN_USER_TOKEN, {
+        page: 1,
+        limit: 50,
+      });
+      expect(beforePublish.data.map((s) => s.id)).not.toContain(created.id);
+
+      // The moderator sees it in the queue and can open its details.
+      const queue = await listModerationQueue(MODERATOR_TOKEN, {
+        page: 1,
+        limit: 50,
+      });
+      expect(queue.data.map((s) => s.id)).toContain(created.id);
+
+      const moderationDetails = await getModerationDetails(
+        MODERATOR_TOKEN,
+        created.id,
+      );
+      expect(moderationDetails.title).toBe('Ready for review');
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${created.id}/publish`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .expect(201);
+
+      // Now it's part of the public songbook.
+      const afterPublish = await listSongs(PLAIN_USER_TOKEN, {
+        page: 1,
+        limit: 50,
+      });
+      expect(afterPublish.data.map((s) => s.id)).toContain(created.id);
+
+      const publicDetails = await getSongDetails(PLAIN_USER_TOKEN, created.id);
+      expect(publicDetails.status).toBe('PUBLISHED');
+    });
+
+    it('create -> submit -> reject -> not in songbook -> visible to author and moderator -> resubmit reopens the queue', async () => {
+      const created = await createSong(
+        PLAIN_USER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${created.id}/submit`)
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .expect(201);
+
+      const rejected = await bodyOf<SongDetailsResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/songs/${created.id}/reject`)
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+          .send({ reason: 'Please add a translation' })
+          .expect(201),
+      );
+      expect(rejected.status).toBe('REJECTED');
+
+      const songbook = await listSongs(PLAIN_USER_TOKEN, {
+        page: 1,
+        limit: 50,
+      });
+      expect(songbook.data.map((s) => s.id)).not.toContain(created.id);
+
+      const mySubmissions = await listMySubmissions(PLAIN_USER_TOKEN, {
+        page: 1,
+        limit: 50,
+      });
+      expect(mySubmissions.data.map((s) => s.id)).toContain(created.id);
+
+      const defaultQueue = await listModerationQueue(MODERATOR_TOKEN, {
+        page: 1,
+        limit: 50,
+      });
+      expect(defaultQueue.data.map((s) => s.id)).not.toContain(created.id);
+
+      const rejectedQueue = await listModerationQueue(MODERATOR_TOKEN, {
+        page: 1,
+        limit: 50,
+        status: 'REJECTED',
+      });
+      expect(rejectedQueue.data.map((s) => s.id)).toContain(created.id);
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/songs/${created.id}`)
+        .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+        .send(
+          minimalSongPayload(category.id, { title: 'Fixed after rejection' }),
+        )
+        .expect(200);
+
+      const resubmitted = await bodyOf<SongDetailsResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/songs/${created.id}/submit`)
+          .set('Authorization', `Bearer ${PLAIN_USER_TOKEN}`)
+          .expect(201),
+      );
+      expect(resubmitted.status).toBe('PENDING_REVIEW');
+      expect(resubmitted.rejectionReason).toBeNull();
+
+      const pendingQueue = await listModerationQueue(MODERATOR_TOKEN, {
+        page: 1,
+        limit: 50,
+      });
+      expect(pendingQueue.data.map((s) => s.id)).toContain(created.id);
     });
   });
 });

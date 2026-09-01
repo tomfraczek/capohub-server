@@ -9,16 +9,14 @@ import { RhythmSongRefDto } from './dto/rhythm-song-ref.dto';
 import { SongRhythm } from './entities/song-rhythm.entity';
 
 /**
- * Songs linked to one rhythm, restricted to whatever `currentUserId` may
- * see under the exact same visibility rule as GET /songs (see
- * applyVisibility in songs-list-query.ts) - used by the public
- * GET /rhythms/:slug endpoint. Never returns a song the caller couldn't
- * otherwise see (spec section 8).
+ * Songs linked to one rhythm, restricted to the exact same PUBLISHED-only
+ * visibility rule as GET /songs (see applyVisibility in
+ * songs-list-query.ts) - used by the public GET /rhythms/:slug endpoint.
+ * Never returns a song that isn't part of the public songbook.
  */
 export async function loadVisibleSongsForRhythm(
   em: EntityManager,
   rhythmId: string,
-  currentUserId: string,
 ): Promise<RhythmSongRefDto[]> {
   const qb = em
     .createQueryBuilder(Song, 's')
@@ -28,7 +26,7 @@ export async function loadVisibleSongsForRhythm(
       [rhythmId],
     )
     .orderBy({ title: 'asc' });
-  applyVisibility(qb, currentUserId, undefined);
+  applyVisibility(qb);
 
   const rows = await qb.execute<{ id: string }[]>('all');
   const songIds = rows.map((row) => row.id);

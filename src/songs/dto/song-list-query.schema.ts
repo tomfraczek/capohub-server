@@ -6,7 +6,6 @@ import {
   uuidQuerySchema,
 } from '../../common/validation/query.schemas';
 import { createZodDto } from '../../common/dto/create-zod-dto';
-import { SongStatus } from '../enums/song-status.enum';
 import {
   enumValuesSchema,
   LANGUAGE_CODE_PATTERN,
@@ -50,11 +49,16 @@ const tagIdsQuerySchema = z
   .transform((ids) => Array.from(new Set(ids)))
   .optional();
 
+// GET /songs is the public songbook - it always shows PUBLISHED songs only
+// (see applyVisibility in songs-list-query.ts), so there is deliberately no
+// `status` filter here: a caller can never ask this endpoint for
+// DRAFT/PENDING_REVIEW/REJECTED/HIDDEN, regardless of globalRole. See
+// GET /songs/my-submissions for a caller's own non-published songs and
+// GET /moderation/songs for the moderation queue.
 export const listSongsQuerySchema = paginationQuerySchema.extend({
   search: optionalTrimmedStringQuerySchema,
   categoryId: uuidQuerySchema.optional(),
   tagIds: tagIdsQuerySchema,
-  status: enumValuesSchema(Object.values(SongStatus)).optional(),
   hasTranslation: booleanQuerySchema.optional(),
   translationLanguage: translationLanguageQuerySchema,
   hasPhonetics: booleanQuerySchema.optional(),

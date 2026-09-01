@@ -531,6 +531,187 @@ describe('SongsService', () => {
     });
   });
 
+  describe('getPublicDetails', () => {
+    it('returns the song when it is PUBLISHED', async () => {
+      const em = buildMockEm({
+        detailsSong: buildPopulatedSong({ status: SongStatus.PUBLISHED }),
+      });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      const result = await service.getPublicDetails('song-1', 'user-1');
+
+      expect(result.status).toBe(SongStatus.PUBLISHED);
+    });
+
+    it('throws 404 (not a leaked detail) for a non-PUBLISHED song, even DRAFT', async () => {
+      const em = buildMockEm({
+        detailsSong: buildPopulatedSong({ status: SongStatus.DRAFT }),
+      });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      await expect(
+        service.getPublicDetails('song-1', 'user-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it.each([
+      SongStatus.PENDING_REVIEW,
+      SongStatus.REJECTED,
+      SongStatus.HIDDEN,
+    ])('throws 404 for a %s song', async (status) => {
+      const em = buildMockEm({ detailsSong: buildPopulatedSong({ status }) });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      await expect(
+        service.getPublicDetails('song-1', 'user-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws 404 when the song does not exist', async () => {
+      const em = buildMockEm({ detailsSong: null });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      await expect(
+        service.getPublicDetails('missing-id', 'user-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getMySubmission', () => {
+    it.each([SongStatus.DRAFT, SongStatus.PENDING_REVIEW, SongStatus.REJECTED])(
+      "returns the caller's own %s song",
+      async (status) => {
+        const owner = buildUser({ id: 'user-1' });
+        const em = buildMockEm({
+          detailsSong: buildPopulatedSong({ status, createdBy: owner }),
+        });
+        const service = new SongsService(
+          em,
+          buildMockDuplicateService(),
+          ...buildMockUserContextServices(),
+        );
+
+        const result = await service.getMySubmission('song-1', 'user-1');
+
+        expect(result.status).toBe(status);
+      },
+    );
+
+    it("throws 404 (not a leaked detail) for another user's DRAFT", async () => {
+      const owner = buildUser({ id: 'someone-else' });
+      const em = buildMockEm({
+        detailsSong: buildPopulatedSong({
+          status: SongStatus.DRAFT,
+          createdBy: owner,
+        }),
+      });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      await expect(service.getMySubmission('song-1', 'user-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it("throws 404 for the caller's own PUBLISHED song - that belongs in GET /songs, not my-submissions", async () => {
+      const owner = buildUser({ id: 'user-1' });
+      const em = buildMockEm({
+        detailsSong: buildPopulatedSong({
+          status: SongStatus.PUBLISHED,
+          createdBy: owner,
+        }),
+      });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      await expect(service.getMySubmission('song-1', 'user-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws 404 when the song does not exist', async () => {
+      const em = buildMockEm({ detailsSong: null });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      await expect(
+        service.getMySubmission('missing-id', 'user-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getModerationDetails', () => {
+    it.each([SongStatus.PENDING_REVIEW, SongStatus.REJECTED])(
+      'returns a %s song - part of the new-song moderation workflow',
+      async (status) => {
+        const em = buildMockEm({ detailsSong: buildPopulatedSong({ status }) });
+        const service = new SongsService(
+          em,
+          buildMockDuplicateService(),
+          ...buildMockUserContextServices(),
+        );
+
+        const result = await service.getModerationDetails('song-1', 'mod-1');
+
+        expect(result.status).toBe(status);
+      },
+    );
+
+    it.each([SongStatus.DRAFT, SongStatus.PUBLISHED, SongStatus.HIDDEN])(
+      'throws 404 (not a leaked detail) for a %s song - not in the moderation workflow, even for a caller holding CONTENT_APPROVE',
+      async (status) => {
+        const em = buildMockEm({ detailsSong: buildPopulatedSong({ status }) });
+        const service = new SongsService(
+          em,
+          buildMockDuplicateService(),
+          ...buildMockUserContextServices(),
+        );
+
+        await expect(
+          service.getModerationDetails('song-1', 'mod-1'),
+        ).rejects.toThrow(NotFoundException);
+      },
+    );
+
+    it('throws 404 when the song does not exist', async () => {
+      const em = buildMockEm({ detailsSong: null });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      await expect(
+        service.getModerationDetails('missing-id', 'mod-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('getDuplicateSuggestions', () => {
     it('delegates to SongDuplicateService.findSuggestions and wraps the result in { items }', async () => {
       const em = buildMockEm();
@@ -743,7 +924,10 @@ describe('SongsService', () => {
       expect(song.title).toBe('Moderator edit');
     });
 
-    it('rejects a USER-role owner (no SONG_EDIT_OWN) from editing their own DRAFT with 403 - ownership alone is never sufficient', async () => {
+    // A plain USER holds SONG_EDIT_OWN (see role-permissions.map.ts) - the
+    // moderation model's goal #1 is exactly that every signed-in user can
+    // create and edit their own song, with no elevated globalRole needed.
+    it('allows a plain USER-role owner to edit their own DRAFT', async () => {
       const owner = buildUser({ globalRole: GlobalRole.USER });
       const song = buildPopulatedSong({
         status: SongStatus.DRAFT,
@@ -756,8 +940,34 @@ describe('SongsService', () => {
         ...buildMockUserContextServices(),
       );
 
+      await service.update(
+        song.id,
+        owner,
+        buildCreateInput({ title: 'Edited by USER' }),
+      );
+
+      expect(song.title).toBe('Edited by USER');
+    });
+
+    it("still rejects a plain USER-role non-owner (no SONG_EDIT_ANY) from editing someone else's DRAFT with 403", async () => {
+      const owner = buildUser({ email: 'owner@example.com' });
+      const nonOwner = buildUser({
+        email: 'other@example.com',
+        globalRole: GlobalRole.USER,
+      });
+      const song = buildPopulatedSong({
+        status: SongStatus.DRAFT,
+        createdBy: owner,
+      });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
       await expect(
-        service.update(song.id, owner, buildCreateInput()),
+        service.update(song.id, nonOwner, buildCreateInput()),
       ).rejects.toThrow(ForbiddenException);
     });
   });

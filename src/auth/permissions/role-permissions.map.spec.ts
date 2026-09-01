@@ -52,8 +52,30 @@ describe('ROLE_PERMISSIONS', () => {
     });
   });
 
-  it('gives USER only read access to songs', () => {
-    expect(ROLE_PERMISSIONS[GlobalRole.USER]).toEqual([Permission.SONG_READ]);
+  it('gives USER read/create/edit-own access to songs, but nothing moderation-related', () => {
+    expect([...ROLE_PERMISSIONS[GlobalRole.USER]].sort()).toEqual(
+      [
+        Permission.SONG_READ,
+        Permission.SONG_CREATE,
+        Permission.SONG_EDIT_OWN,
+      ].sort(),
+    );
+
+    const userPermissions = ROLE_PERMISSIONS[GlobalRole.USER];
+    expect(userPermissions).not.toContain(Permission.SONG_EDIT_ANY);
+    expect(userPermissions).not.toContain(Permission.SONG_DELETE);
+    expect(userPermissions).not.toContain(Permission.CONTENT_APPROVE);
+    expect(userPermissions).not.toContain(Permission.CONTENT_HIDE);
+  });
+
+  it('gives MODERATOR the full song moderation toolkit, on top of everything USER has', () => {
+    const moderatorPermissions = ROLE_PERMISSIONS[GlobalRole.MODERATOR];
+
+    expect(moderatorPermissions).toContain(Permission.SONG_CREATE);
+    expect(moderatorPermissions).toContain(Permission.SONG_EDIT_OWN);
+    expect(moderatorPermissions).toContain(Permission.SONG_EDIT_ANY);
+    expect(moderatorPermissions).toContain(Permission.CONTENT_APPROVE);
+    expect(moderatorPermissions).toContain(Permission.CONTENT_HIDE);
   });
 
   it('gives ADMIN USER_MANAGE', () => {

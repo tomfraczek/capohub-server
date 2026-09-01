@@ -5,12 +5,19 @@ import { Permission } from './permission.enum';
 // what's new, so a permission is never listed twice. SUPER_ADMIN always
 // gets every Permission that exists, automatically.
 
-const USER_PERMISSIONS: readonly Permission[] = [Permission.SONG_READ];
+// Every signed-in USER may add a song to their own queue and edit it while
+// it's still theirs (DRAFT/REJECTED) - see the moderation model. It is
+// never auto-published: SONG_CREATE only ever produces a DRAFT (see
+// SongsService.create), and reaching the public songbook still requires
+// CONTENT_APPROVE from someone else entirely (see MODERATOR_PERMISSIONS).
+const USER_PERMISSIONS: readonly Permission[] = [
+  Permission.SONG_READ,
+  Permission.SONG_CREATE,
+  Permission.SONG_EDIT_OWN,
+];
 
 const EDITOR_PERMISSIONS: readonly Permission[] = [
   ...USER_PERMISSIONS,
-  Permission.SONG_CREATE,
-  Permission.SONG_EDIT_OWN,
   Permission.TRANSLATION_CREATE,
   Permission.TRANSLATION_EDIT,
   Permission.PHONETIC_CREATE,

@@ -55,10 +55,7 @@ export class RhythmsService {
     return this.mapByIdOrder(ids, rhythms, toRhythmListItemResponseDto);
   }
 
-  async getPublicBySlug(
-    slug: string,
-    currentUserId: string,
-  ): Promise<RhythmDetailsResponseDto> {
+  async getPublicBySlug(slug: string): Promise<RhythmDetailsResponseDto> {
     const rhythm = await this.em.findOne(
       Rhythm,
       { slug, isActive: true },
@@ -72,7 +69,7 @@ export class RhythmsService {
       loadInstrumentsForRhythm(this.em, rhythm.id, {
         includeInactiveInstruments: false,
       }),
-      loadVisibleSongsForRhythm(this.em, rhythm.id, currentUserId),
+      loadVisibleSongsForRhythm(this.em, rhythm.id),
     ]);
     return toRhythmDetailsResponseDto(rhythm, instruments, songs);
   }

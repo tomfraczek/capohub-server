@@ -138,17 +138,52 @@ describe('SongsController', () => {
   });
 
   describe('getDetails', () => {
-    it('delegates to SongsService.getDetails with the id param and current user id', async () => {
+    it('delegates to SongsService.getPublicDetails (PUBLISHED-only) with the id param and current user id', async () => {
       const user = buildUser();
       const dto = buildDetailsResponse();
-      const getDetails = jest.fn().mockResolvedValue(dto);
+      const getPublicDetails = jest.fn().mockResolvedValue(dto);
       const controller = new SongsController({
-        getDetails,
+        getPublicDetails,
       } as unknown as SongsService);
 
       const response = await controller.getDetails('song-uuid-1', user);
 
-      expect(getDetails).toHaveBeenCalledWith('song-uuid-1', user.id);
+      expect(getPublicDetails).toHaveBeenCalledWith('song-uuid-1', user.id);
+      expect(response).toBe(dto);
+    });
+  });
+
+  describe('listMySubmissions', () => {
+    it('delegates to SongsService.listMySubmissions with @CurrentUser() and the validated query', async () => {
+      const user = buildUser();
+      const paginated = { data: [], meta: {} } as never;
+      const listMySubmissions = jest.fn().mockResolvedValue(paginated);
+      const controller = new SongsController({
+        listMySubmissions,
+      } as unknown as SongsService);
+
+      const query = { page: 1, limit: 20 } as unknown as Parameters<
+        SongsController['listMySubmissions']
+      >[1];
+      const response = await controller.listMySubmissions(user, query);
+
+      expect(listMySubmissions).toHaveBeenCalledWith(user, query);
+      expect(response).toBe(paginated);
+    });
+  });
+
+  describe('getMySubmission', () => {
+    it('delegates to SongsService.getMySubmission with the id param and current user id', async () => {
+      const user = buildUser();
+      const dto = buildDetailsResponse({ status: SongStatus.PENDING_REVIEW });
+      const getMySubmission = jest.fn().mockResolvedValue(dto);
+      const controller = new SongsController({
+        getMySubmission,
+      } as unknown as SongsService);
+
+      const response = await controller.getMySubmission('song-uuid-1', user);
+
+      expect(getMySubmission).toHaveBeenCalledWith('song-uuid-1', user.id);
       expect(response).toBe(dto);
     });
   });

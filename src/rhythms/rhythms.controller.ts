@@ -1,7 +1,5 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { User } from '../users/entities/user.entity';
 import { RhythmDetailsResponseDto } from './dto/rhythm-details-response.dto';
 import { RhythmListItemResponseDto } from './dto/rhythm-list-item-response.dto';
 import {
@@ -25,10 +23,7 @@ export class RhythmsController {
   }
 
   @Get(':slug')
-  getBySlug(
-    @Param('slug') slug: string,
-    @CurrentUser() user: User,
-  ): Promise<RhythmDetailsResponseDto> {
-    return this.rhythmsService.getPublicBySlug(slug, user.id);
+  getBySlug(@Param('slug') slug: string): Promise<RhythmDetailsResponseDto> {
+    return this.rhythmsService.getPublicBySlug(slug);
   }
 }

@@ -1,14 +1,5 @@
-import { User } from '../users/entities/user.entity';
 import { RhythmsController } from './rhythms.controller';
 import { RhythmsService } from './rhythms.service';
-
-function buildUser(): User {
-  const user = new User();
-  user.id = 'user-1';
-  user.email = 'user@example.com';
-  user.displayName = 'Test User';
-  return user;
-}
 
 describe('RhythmsController', () => {
   describe('list', () => {
@@ -30,20 +21,16 @@ describe('RhythmsController', () => {
   });
 
   describe('getBySlug', () => {
-    it('delegates to RhythmsService.getPublicBySlug with the slug and current user id', async () => {
+    it('delegates to RhythmsService.getPublicBySlug with the slug', async () => {
       const dto = { id: 'rhythm-1' } as never;
       const getPublicBySlug = jest.fn().mockResolvedValue(dto);
       const controller = new RhythmsController({
         getPublicBySlug,
       } as unknown as RhythmsService);
-      const user = buildUser();
 
-      const response = await controller.getBySlug('sao-bento-grande', user);
+      const response = await controller.getBySlug('sao-bento-grande');
 
-      expect(getPublicBySlug).toHaveBeenCalledWith(
-        'sao-bento-grande',
-        'user-1',
-      );
+      expect(getPublicBySlug).toHaveBeenCalledWith('sao-bento-grande');
       expect(response).toBe(dto);
     });
   });

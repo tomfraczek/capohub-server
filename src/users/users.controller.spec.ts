@@ -30,10 +30,11 @@ const r2StorageService = {
   buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
 } as unknown as R2StorageService;
 
-// USER holds only SONG_READ (see role-permissions.map.ts), so every
-// Songs capability is false for it.
+// USER holds SONG_READ/SONG_CREATE/SONG_EDIT_OWN (see
+// role-permissions.map.ts) - it can create and edit its own songs, but has
+// no moderation or deletion capability.
 const USER_SONG_CAPABILITIES = {
-  canCreate: false,
+  canCreate: true,
   canApproveContent: false,
   canHideContent: false,
   canDeleteAnyDraft: false,

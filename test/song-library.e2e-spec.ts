@@ -215,13 +215,18 @@ describe('Song library (e2e) - favorites, learning status, notes', () => {
     return created;
   }
 
+  // Every song this file creates is a private DRAFT (never submitted or
+  // published - see createSong) that only its own creator can see, so
+  // fetching it goes through GET /songs/my-submissions/:id, not the public
+  // GET /songs/:id (PUBLISHED-only - see the songbook visibility rule).
+  // Every call site below passes the song's own creator as `token`.
   async function getSongDetails(
     token: string,
     songId: string,
   ): Promise<SongDetailsResponseDto> {
     return bodyOf<SongDetailsResponseDto>(
       request(app.getHttpServer())
-        .get(`/api/v1/songs/${songId}`)
+        .get(`/api/v1/songs/my-submissions/${songId}`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200),
     );
@@ -297,8 +302,13 @@ describe('Song library (e2e) - favorites, learning status, notes', () => {
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .expect(201);
 
-      const otherDetails = await getSongDetails(OTHER_TOKEN, song.id);
-      expect(otherDetails.isFavorite).toBe(false);
+      // OTHER_TOKEN cannot see this DRAFT song's details at all - not even
+      // to discover whether its owner favorited it (see the songbook
+      // visibility rule: a DRAFT is invisible to everyone but its creator).
+      await request(app.getHttpServer())
+        .get(`/api/v1/songs/${song.id}`)
+        .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+        .expect(404);
 
       const otherList = await bodyOf<FavoriteSongsListResponseDto>(
         request(app.getHttpServer())
@@ -383,8 +393,10 @@ describe('Song library (e2e) - favorites, learning status, notes', () => {
         .send({ status: 'CAN_LEAD' })
         .expect(200);
 
-      const otherDetails = await getSongDetails(OTHER_TOKEN, song.id);
-      expect(otherDetails.learningStatus).toBeNull();
+      await request(app.getHttpServer())
+        .get(`/api/v1/songs/${song.id}`)
+        .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+        .expect(404);
     });
 
     it('removing a status that was never set is a no-op 204', async () => {
@@ -473,8 +485,10 @@ describe('Song library (e2e) - favorites, learning status, notes', () => {
       );
       expect(otherNote.content).toBeNull();
 
-      const otherDetails = await getSongDetails(OTHER_TOKEN, song.id);
-      expect(otherDetails.myNote).toBeNull();
+      await request(app.getHttpServer())
+        .get(`/api/v1/songs/${song.id}`)
+        .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+        .expect(404);
     });
 
     it('deleting a note that never existed is a no-op 204', async () => {

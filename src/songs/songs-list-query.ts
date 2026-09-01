@@ -1,6 +1,11 @@
 import type { EntityManager, QueryBuilder } from '@mikro-orm/postgresql';
 import { parseSortParam } from '../common/sorting/parse-sort-param';
 import { SortDirection } from '../common/sorting/sorting.types';
+import { ModerationQueueQuery } from './dto/moderation-queue-query.schema';
+import {
+  MY_SUBMISSION_STATUSES,
+  MySubmissionsQuery,
+} from './dto/my-submissions-query.schema';
 import { ListSongsQuery } from './dto/song-list-query.schema';
 import { Song } from './entities/song.entity';
 import { SongStatus } from './enums/song-status.enum';
@@ -8,25 +13,18 @@ import { SongStatus } from './enums/song-status.enum';
 const SONG_SORT_FIELDS = ['title', 'createdAt', 'updatedAt'] as const;
 type SongSortField = (typeof SONG_SORT_FIELDS)[number];
 
-const NON_PUBLISHED_STATUSES = [
-  SongStatus.DRAFT,
-  SongStatus.PENDING_REVIEW,
-  SongStatus.REJECTED,
-  SongStatus.HIDDEN,
-];
-
 export interface SongListPage {
   ids: string[];
   totalItems: number;
 }
 
 /**
- * Builds and runs the id-only, paginated/sorted query behind GET /songs.
- * Every collection-shaped filter (search, tagIds, hasPhonetics, hasMedia,
- * hasTranslation/translationLanguage) is expressed as a correlated EXISTS
- * subquery against `s.id` rather than a JOIN, so the `songs` table is never
- * actually joined and no de-duplication step is needed - see Etap 8.2
- * report section 22/38.
+ * Builds and runs the id-only, paginated/sorted query behind GET /songs -
+ * the public songbook. Every collection-shaped filter (search, tagIds,
+ * hasPhonetics, hasMedia, hasTranslation/translationLanguage) is expressed
+ * as a correlated EXISTS subquery against `s.id` rather than a JOIN, so the
+ * `songs` table is never actually joined and no de-duplication step is
+ * needed - see Etap 8.2 report section 22/38.
  */
 export async function queryVisibleSongIds(
   em: EntityManager,
@@ -35,7 +33,7 @@ export async function queryVisibleSongIds(
 ): Promise<SongListPage> {
   const qb = em.createQueryBuilder(Song, 's').select('s.id');
 
-  applyVisibility(qb, currentUserId, query.status);
+  applyVisibility(qb);
 
   if (query.createdByMe) {
     qb.andWhere({ createdBy: currentUserId });
@@ -81,34 +79,78 @@ export async function queryVisibleSongIds(
   return { ids: rows.map((row) => row.id), totalItems };
 }
 
-// PUBLISHED is visible to everyone; every other status is visible only to
-// the song's own createdBy. This is a deliberately temporary, hard-coded
-// rule (see Etap 8.2 report) pending the PermissionService-based visibility
-// that will ship with moderator roles.
+// The public songbook shows PUBLISHED content only - full stop, regardless
+// of the caller's globalRole or any query param. A DRAFT/PENDING_REVIEW/
+// REJECTED/HIDDEN song is never reachable through GET /songs or GET
+// /songs/:id, not even for its own creator (see GET /songs/my-submissions)
+// and not even for a MODERATOR+ (see GET /moderation/songs) - see the
+// moderation model's central rule that only an approved Song is part of the
+// songbook.
 //
-// Exported so other modules that need "is this song visible to this user"
-// (e.g. rhythms/rhythm-song-links.query.ts, for a rhythm's related songs)
-// reuse this exact rule instead of re-implementing it - see spec section 8.
-export function applyVisibility(
-  qb: QueryBuilder<Song>,
-  currentUserId: string,
-  statusFilter: SongStatus | undefined,
-): void {
-  if (statusFilter) {
-    if (statusFilter === SongStatus.PUBLISHED) {
-      qb.andWhere({ status: SongStatus.PUBLISHED });
-    } else {
-      qb.andWhere({ status: statusFilter, createdBy: currentUserId });
-    }
-    return;
-  }
+// Exported so other modules that need "is this song part of the public
+// songbook" (e.g. rhythms/rhythm-song-links.query.ts, for a rhythm's related
+// songs) reuse this exact rule instead of re-implementing it.
+export function applyVisibility(qb: QueryBuilder<Song>): void {
+  qb.andWhere({ status: SongStatus.PUBLISHED });
+}
 
-  qb.andWhere({
-    $or: [
-      { status: SongStatus.PUBLISHED },
-      { status: { $in: NON_PUBLISHED_STATUSES }, createdBy: currentUserId },
-    ],
-  });
+/**
+ * Builds and runs the id-only, paginated query behind GET
+ * /songs/my-submissions - the caller's own not-yet-(or no-longer-)public
+ * songs (DRAFT/PENDING_REVIEW/REJECTED). PUBLISHED is deliberately excluded
+ * (that's GET /songs) and so is HIDDEN (moderation history, not an
+ * in-progress submission - see MY_SUBMISSION_STATUSES's own comment).
+ * Deliberately simpler than queryVisibleSongIds - no search/tag/media
+ * filters, just status + pagination, since this is a personal worklist, not
+ * the full songbook browsing experience.
+ */
+export async function queryMySubmissionIds(
+  em: EntityManager,
+  userId: string,
+  query: MySubmissionsQuery,
+): Promise<SongListPage> {
+  const statuses = query.status ? [query.status] : MY_SUBMISSION_STATUSES;
+
+  const qb = em
+    .createQueryBuilder(Song, 's')
+    .select('s.id')
+    .andWhere({ createdBy: userId, status: { $in: statuses } });
+
+  const totalItems = await qb.clone().getCount();
+
+  const offset = (query.page - 1) * query.limit;
+  qb.orderBy({ createdAt: 'desc' }).limit(query.limit, offset);
+
+  const rows = await qb.execute<{ id: string }[]>('all');
+  return { ids: rows.map((row) => row.id), totalItems };
+}
+
+/**
+ * Builds and runs the id-only, paginated query behind GET
+ * /moderation/songs - every Song in the given status, regardless of who
+ * created it (this is the one place ownership is deliberately NOT
+ * filtered - see ModerationSongsController, CONTENT_APPROVE-gated).
+ * Defaults to oldest-first (updatedAt ASC): submit()/reject() both bump
+ * updatedAt (see BaseEntity), so it doubles as "time entered this status"
+ * without a dedicated submittedAt/reviewedAt column, which is deliberately
+ * not added yet - see the moderation model audit.
+ */
+export async function queryModerationQueueIds(
+  em: EntityManager,
+  query: ModerationQueueQuery,
+): Promise<SongListPage> {
+  const qb = em
+    .createQueryBuilder(Song, 's')
+    .select('s.id')
+    .andWhere({ status: query.status });
+
+  const totalItems = await qb.clone().getCount();
+
+  const offset = (query.page - 1) * query.limit;
+  qb.orderBy({ updatedAt: 'asc' }).limit(query.limit, offset);
+
+  const rows = await qb.execute<{ id: string }[]>('all');
+  return { ids: rows.map((row) => row.id), totalItems };
 }
 
 function applySearch(qb: QueryBuilder<Song>, search: string): void {

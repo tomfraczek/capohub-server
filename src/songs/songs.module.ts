@@ -11,6 +11,7 @@ import { SongContentService } from './song-content.service';
 import { SongDuplicateService } from './song-duplicate.service';
 import { SongEditProposalsController } from './song-edit-proposals.controller';
 import { SongEditProposalsService } from './song-edit-proposals.service';
+import { ModerationSongsController } from './moderation-songs.controller';
 import { SongsController } from './songs.controller';
 import { SongsService } from './songs.service';
 import { TagsController } from './tags.controller';
@@ -36,6 +37,7 @@ import { TagsService } from './tags.service';
   ],
   controllers: [
     SongsController,
+    ModerationSongsController,
     SongEditProposalsController,
     SongCategoriesController,
     TagsController,

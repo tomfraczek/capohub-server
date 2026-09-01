@@ -18,7 +18,7 @@ describe('PermissionService', () => {
 
     it('returns false when the role lacks the permission', () => {
       expect(
-        service.hasPermission(GlobalRole.USER, Permission.SONG_CREATE),
+        service.hasPermission(GlobalRole.USER, Permission.CONTENT_APPROVE),
       ).toBe(false);
     });
 
@@ -50,7 +50,7 @@ describe('PermissionService', () => {
     it('returns false if none match', () => {
       expect(
         service.hasAnyPermission(GlobalRole.USER, [
-          Permission.SONG_CREATE,
+          Permission.CONTENT_APPROVE,
           Permission.SONG_DELETE,
         ]),
       ).toBe(false);
@@ -87,9 +87,15 @@ describe('PermissionService', () => {
 
   describe('getPermissionsForRole', () => {
     it('returns the exact permission list for a role', () => {
-      expect(service.getPermissionsForRole(GlobalRole.USER)).toEqual([
-        Permission.SONG_READ,
-      ]);
+      expect(
+        [...service.getPermissionsForRole(GlobalRole.USER)].sort(),
+      ).toEqual(
+        [
+          Permission.SONG_READ,
+          Permission.SONG_CREATE,
+          Permission.SONG_EDIT_OWN,
+        ].sort(),
+      );
     });
 
     it('returns every permission for SUPER_ADMIN', () => {

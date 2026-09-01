@@ -22,7 +22,15 @@ import { SongNotesService } from '../song-library/song-notes.service';
 import { User } from '../users/entities/user.entity';
 import { CreateSongInput } from './dto/create-song.schema';
 import { DuplicateSuggestionsResponseDto } from './dto/duplicate-suggestion-response.dto';
+import {
+  MODERATION_QUEUE_STATUSES,
+  ModerationQueueQuery,
+} from './dto/moderation-queue-query.schema';
 import { ModerationReasonInput } from './dto/moderation-reason.schema';
+import {
+  MY_SUBMISSION_STATUSES,
+  MySubmissionsQuery,
+} from './dto/my-submissions-query.schema';
 import { ListSongsQuery } from './dto/song-list-query.schema';
 import { SongDetailsResponseDto } from './dto/song-details-response.dto';
 import { SongMediaDetailsResponseDto } from './dto/song-media-details-response.dto';
@@ -44,6 +52,8 @@ import { SongContentService } from './song-content.service';
 import { SongDuplicateService } from './song-duplicate.service';
 import {
   loadSongSummaryAggregates,
+  queryModerationQueueIds,
+  queryMySubmissionIds,
   queryVisibleSongIds,
 } from './songs-list-query';
 
@@ -145,6 +155,71 @@ export class SongsService {
     return toSongDetailsResponseDto(song, voteAggregates, userContext, rhythms);
   }
 
+  // GET /songs/:id - the public songbook's detail view. Deliberately NOT
+  // just getDetails(): a DRAFT/PENDING_REVIEW/REJECTED/HIDDEN song must 404
+  // here, for every caller including a MODERATOR+ (who instead uses GET
+  // /moderation/songs/:id - see ModerationSongsController), so that the
+  // public API never reveals whether an unpublished id exists.
+  async getPublicDetails(
+    id: string,
+    currentUserId: string,
+  ): Promise<SongDetailsResponseDto> {
+    const song = await this.em.findOne(Song, { id });
+    if (!song || song.status !== SongStatus.PUBLISHED) {
+      throw this.notFound();
+    }
+    return this.getDetails(id, currentUserId);
+  }
+
+  // GET /songs/my-submissions/:id - a caller's own single, still-private
+  // submission. Only ever resolves a song this exact user created and that
+  // hasn't (yet, or no longer) reached the public songbook - see
+  // MY_SUBMISSION_STATUSES's own comment for why PUBLISHED/HIDDEN are
+  // excluded. Anything else (wrong owner, wrong status, or missing) 404s,
+  // same non-leaking reasoning as getPublicDetails.
+  async getMySubmission(
+    id: string,
+    userId: string,
+  ): Promise<SongDetailsResponseDto> {
+    const song = await this.em.findOne(Song, { id });
+    if (
+      !song ||
+      song.createdBy?.id !== userId ||
+      !(MY_SUBMISSION_STATUSES as readonly SongStatus[]).includes(song.status)
+    ) {
+      throw this.notFound();
+    }
+    return this.getDetails(id, userId);
+  }
+
+  // GET /moderation/songs/:id - a moderator's view of one submission.
+  // Deliberately narrower than the general getDetails(): only a Song that
+  // is actually part of the new-song moderation workflow
+  // (PENDING_REVIEW/REJECTED - the exact same set GET /moderation/songs
+  // defaults/filters to, see MODERATION_QUEUE_STATUSES) resolves here.
+  // DRAFT (not submitted yet - nobody's queue but its own author's, see
+  // getMySubmission), PUBLISHED and HIDDEN (already decided and live/
+  // taken down - a SongEditProposal concern, not this one) all 404, even
+  // for a caller holding CONTENT_APPROVE: if a Song exists but isn't in
+  // the moderation queue, this endpoint must behave as if it doesn't
+  // exist, the same non-leaking reasoning as getPublicDetails/
+  // getMySubmission.
+  async getModerationDetails(
+    id: string,
+    currentUserId: string,
+  ): Promise<SongDetailsResponseDto> {
+    const song = await this.em.findOne(Song, { id });
+    if (
+      !song ||
+      !(MODERATION_QUEUE_STATUSES as readonly SongStatus[]).includes(
+        song.status,
+      )
+    ) {
+      throw this.notFound();
+    }
+    return this.getDetails(id, currentUserId);
+  }
+
   // Every field is private to currentUserId (spec section 6). currentUserId
   // is null for internal callers with no meaningful "current viewer" (see
   // the comment on getDetails' parameter) - in that case every field
@@ -178,6 +253,11 @@ export class SongsService {
     };
   }
 
+  // The public songbook - PUBLISHED songs only, for every caller regardless
+  // of globalRole (see applyVisibility/queryVisibleSongIds in
+  // songs-list-query.ts). Never a caller's own DRAFT/PENDING_REVIEW/
+  // REJECTED/HIDDEN songs - see listMySubmissions for those, and
+  // listModerationQueue for the moderator-only cross-user queue.
   async list(
     user: User,
     query: ListSongsQuery,
@@ -187,15 +267,52 @@ export class SongsService {
       user.id,
       query,
     );
+    return this.buildSummaryPage(ids, totalItems, query.page, query.limit);
+  }
 
+  // The caller's own not-yet-(or no-longer-)public songs - GET
+  // /songs/my-submissions. Always scoped to `user.id` server-side; there is
+  // no way for a caller to pass a different userId (see
+  // ModerationSongsController for the only place another user's
+  // PENDING_REVIEW/REJECTED songs are visible, and only to CONTENT_APPROVE
+  // holders).
+  async listMySubmissions(
+    user: User,
+    query: MySubmissionsQuery,
+  ): Promise<PaginatedResponse<SongSummaryResponseDto>> {
+    const { ids, totalItems } = await queryMySubmissionIds(
+      this.em,
+      user.id,
+      query,
+    );
+    return this.buildSummaryPage(ids, totalItems, query.page, query.limit);
+  }
+
+  // The moderation queue - GET /moderation/songs. CONTENT_APPROVE-gated at
+  // the controller (ModerationSongsController) - deliberately not scoped by
+  // createdBy, unlike every other list method here: a moderator must see
+  // everyone's pending submissions, not just their own.
+  async listModerationQueue(
+    query: ModerationQueueQuery,
+  ): Promise<PaginatedResponse<SongSummaryResponseDto>> {
+    const { ids, totalItems } = await queryModerationQueueIds(this.em, query);
+    return this.buildSummaryPage(ids, totalItems, query.page, query.limit);
+  }
+
+  // Shared by list()/listMySubmissions()/listModerationQueue() - each
+  // computes its own id-only page (different visibility rule per method),
+  // then this loads and maps the actual rows in id order the exact same
+  // way for all three.
+  private async buildSummaryPage(
+    ids: string[],
+    totalItems: number,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedResponse<SongSummaryResponseDto>> {
     if (ids.length === 0) {
       return {
         data: [],
-        meta: createPaginationMeta({
-          page: query.page,
-          limit: query.limit,
-          totalItems,
-        }),
+        meta: createPaginationMeta({ page, limit, totalItems }),
       };
     }
 
@@ -226,11 +343,7 @@ export class SongsService {
 
     return {
       data,
-      meta: createPaginationMeta({
-        page: query.page,
-        limit: query.limit,
-        totalItems,
-      }),
+      meta: createPaginationMeta({ page, limit, totalItems }),
     };
   }
 

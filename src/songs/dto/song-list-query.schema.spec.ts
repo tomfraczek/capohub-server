@@ -70,13 +70,16 @@ describe('listSongsQuerySchema', () => {
     }
   });
 
-  it('rejects an invalid status value', () => {
+  it('has no status filter - GET /songs always means PUBLISHED only, so a status param is silently ignored rather than rejected', () => {
     const result = listSongsQuerySchema.safeParse({
       page: '1',
       limit: '20',
-      status: 'ARCHIVED',
+      status: 'PENDING_REVIEW',
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect('status' in result.data).toBe(false);
+    }
   });
 
   it.each(['true', 'false'])('parses hasPhonetics=%s as a boolean', (value) => {

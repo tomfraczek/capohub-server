@@ -29,6 +29,10 @@ import {
   ModerationReasonDto,
   moderationReasonSchema,
 } from './dto/moderation-reason.schema';
+import {
+  MySubmissionsQueryDto,
+  mySubmissionsQuerySchema,
+} from './dto/my-submissions-query.schema';
 import { SongDetailsResponseDto } from './dto/song-details-response.dto';
 import {
   ListSongsQueryDto,
@@ -80,12 +84,39 @@ export class SongsController {
     );
   }
 
+  // GET /songs/my-submissions(/:id) - the caller's own DRAFT/PENDING_REVIEW/
+  // REJECTED songs (see SongsService.listMySubmissions/getMySubmission).
+  // Must stay registered before GET /:id for the same routing reason as
+  // duplicate-suggestions above - "my-submissions" would otherwise be
+  // swallowed by the :id param route.
+  @Get('my-submissions')
+  listMySubmissions(
+    @CurrentUser() user: User,
+    @Query(new ZodValidationPipe(mySubmissionsQuerySchema))
+    query: MySubmissionsQueryDto,
+  ): Promise<PaginatedResponse<SongSummaryResponseDto>> {
+    return this.songsService.listMySubmissions(user, query);
+  }
+
+  @Get('my-submissions/:id')
+  getMySubmission(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<SongDetailsResponseDto> {
+    return this.songsService.getMySubmission(id, user.id);
+  }
+
+  // The public songbook's detail view - PUBLISHED only, 404 otherwise, even
+  // for a MODERATOR+ and even for the song's own creator. See
+  // SongsService.getPublicDetails's own comment; use GET
+  // /songs/my-submissions/:id for one's own pending/rejected/draft song, or
+  // GET /moderation/songs/:id to review someone else's.
   @Get(':id')
   getDetails(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
   ): Promise<SongDetailsResponseDto> {
-    return this.songsService.getDetails(id, user.id);
+    return this.songsService.getPublicDetails(id, user.id);
   }
 
   // No declarative @Permissions() here - unlike create(), which/whether a
