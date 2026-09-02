@@ -73,11 +73,34 @@ const translationsSchema = z
     );
   });
 
+// One phonetic transcription per language a moderator/author has filled in
+// (mirrors translationItemSchema/translationsSchema exactly) - never a
+// single flat phoneticText, since the same Portuguese line reads
+// differently depending on the reader's own language.
+const phoneticItemSchema = z
+  .object({
+    languageCode: languageCodeSchema,
+    text: z.string().trim().min(1).max(2000),
+  })
+  .strict();
+
+const phoneticsSchema = z
+  .array(phoneticItemSchema)
+  .default([])
+  .superRefine((items, ctx) => {
+    checkNoDuplicates(
+      items,
+      (item) => item.languageCode,
+      'phonetics must not contain duplicate languageCode values',
+      ctx,
+    );
+  });
+
 const lineItemSchema = z
   .object({
     originalText: z.string().trim().min(1).max(2000),
-    phoneticText: optionalNullableText(2000),
     position: z.number().int().min(1),
+    phonetics: phoneticsSchema,
     translations: translationsSchema,
   })
   .strict();
@@ -162,4 +185,5 @@ export type CreateSongAlternativeTitleInput = z.infer<
 export type CreateSongPartInput = z.infer<typeof partItemSchema>;
 export type CreateSongLineInput = z.infer<typeof lineItemSchema>;
 export type CreateSongTranslationInput = z.infer<typeof translationItemSchema>;
+export type CreateSongPhoneticInput = z.infer<typeof phoneticItemSchema>;
 export type CreateSongMediaInput = z.infer<typeof mediaItemSchema>;

@@ -110,8 +110,8 @@ function minimalSongPayload(
         lines: [
           {
             originalText: 'Some lyric line',
-            phoneticText: null,
             position: 1,
+            phonetics: [],
             translations: [],
           },
         ],

@@ -188,11 +188,10 @@ function applyHasPhonetics(
   hasPhonetics: boolean,
 ): void {
   const existsSql = `exists (
-    select 1 from song_lines sl
+    select 1 from song_line_phonetics slp
+    inner join song_lines sl on sl.id = slp.line_id
     inner join song_parts sp on sp.id = sl.part_id
     where sp.song_id = s.id
-      and sl.phonetic_text is not null
-      and length(trim(sl.phonetic_text)) > 0
   )`;
   qb.andWhere(hasPhonetics ? existsSql : `not ${existsSql}`);
 }
@@ -274,11 +273,10 @@ export async function loadSongSummaryAggregates(
   const [phoneticRows, mediaRows, translationRows] = await Promise.all([
     connection.execute<{ songId: string }[]>(
       `select distinct sp.song_id as "songId"
-       from song_lines sl
+       from song_line_phonetics slp
+       inner join song_lines sl on sl.id = slp.line_id
        inner join song_parts sp on sp.id = sl.part_id
-       where sp.song_id in (?)
-         and sl.phonetic_text is not null
-         and length(trim(sl.phonetic_text)) > 0`,
+       where sp.song_id in (?)`,
       [songIds],
     ),
     connection.execute<{ songId: string }[]>(

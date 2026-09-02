@@ -17,6 +17,7 @@ import {
 import { SongAlternativeTitle } from './entities/song-alternative-title.entity';
 import { SongCategory } from './entities/song-category.entity';
 import { SongLine } from './entities/song-line.entity';
+import { SongLinePhonetic } from './entities/song-line-phonetic.entity';
 import { SongLineTranslation } from './entities/song-line-translation.entity';
 import { SongMedia } from './entities/song-media.entity';
 import { SongPart } from './entities/song-part.entity';
@@ -36,9 +37,9 @@ import { Tag } from './entities/tag.entity';
  *
  * This guarantees the three call sites can never drift: the exact same
  * validation (active category/tags), the exact same replace-all rebuild of
- * alternativeTitles/tags/parts/lines/translations/media, and the exact same
- * conflict handling apply everywhere, regardless of which caller triggered
- * it or why.
+ * alternativeTitles/tags/parts/lines/phonetics/translations/media, and the
+ * exact same conflict handling apply everywhere, regardless of which caller
+ * triggered it or why.
  */
 @Injectable()
 export class SongContentService {
@@ -162,9 +163,16 @@ export class SongContentService {
         const line = new SongLine();
         line.part = part;
         line.originalText = lineInput.originalText;
-        line.phoneticText = lineInput.phoneticText;
         line.position = lineInput.position;
         entities.push(line);
+
+        for (const phoneticInput of lineInput.phonetics) {
+          const phonetic = new SongLinePhonetic();
+          phonetic.line = line;
+          phonetic.languageCode = phoneticInput.languageCode;
+          phonetic.text = phoneticInput.text;
+          entities.push(phonetic);
+        }
 
         for (const translationInput of lineInput.translations) {
           const translation = new SongLineTranslation();

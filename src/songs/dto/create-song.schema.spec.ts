@@ -17,8 +17,10 @@ function validPayload(): Record<string, unknown> {
         lines: [
           {
             originalText: 'Paranauê, paranauê Paraná',
-            phoneticText: 'Paranau-e, paranau-e Parana',
             position: 1,
+            phonetics: [
+              { languageCode: 'pt', text: 'Paranau-e, paranau-e Parana' },
+            ],
             translations: [
               { languageCode: 'pl', text: 'Paranauê, paranauê Paraná' },
             ],
@@ -31,8 +33,8 @@ function validPayload(): Record<string, unknown> {
         lines: [
           {
             originalText: 'Meu mestre mandou chamar',
-            phoneticText: null,
             position: 1,
+            phonetics: [],
             translations: [],
           },
         ],
@@ -110,6 +112,18 @@ describe('createSongSchema', () => {
     (
       payload.parts as { lines: { originalText: string }[] }[]
     )[0].lines[0].originalText = '   ';
+    const result = createSongSchema.safeParse(payload);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects duplicate phonetic languageCode within a line', () => {
+    const payload = validPayload();
+    const line = (payload.parts as { lines: { phonetics: unknown[] }[] }[])[0]
+      .lines[0];
+    line.phonetics = [
+      { languageCode: 'pt', text: 'a' },
+      { languageCode: 'PT', text: 'b' },
+    ];
     const result = createSongSchema.safeParse(payload);
     expect(result.success).toBe(false);
   });
@@ -277,8 +291,8 @@ describe('createSongSchema', () => {
         lines: [
           {
             originalText: 'a',
-            phoneticText: null,
             position: 1,
+            phonetics: [],
             translations: [],
           },
         ],
@@ -289,8 +303,8 @@ describe('createSongSchema', () => {
         lines: [
           {
             originalText: 'b',
-            phoneticText: null,
             position: 1,
+            phonetics: [],
             translations: [],
           },
         ],

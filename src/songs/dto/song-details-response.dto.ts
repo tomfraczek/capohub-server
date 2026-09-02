@@ -14,11 +14,21 @@ export interface SongLineTranslationResponseDto {
   text: string;
 }
 
+// One phonetic transcription per language (mirrors
+// SongLineTranslationResponseDto exactly) - never a single flat
+// phoneticText, since the same Portuguese line reads differently depending
+// on the reader's own language.
+export interface SongLinePhoneticResponseDto {
+  id: string;
+  languageCode: string;
+  text: string;
+}
+
 export interface SongLineResponseDto {
   id: string;
   originalText: string;
-  phoneticText: string | null;
   position: number;
+  phonetics: SongLinePhoneticResponseDto[];
   translations: SongLineTranslationResponseDto[];
 }
 

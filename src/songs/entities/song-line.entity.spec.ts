@@ -1,17 +1,16 @@
 import { SongLine } from './song-line.entity';
 
 describe('SongLine', () => {
-  it('defaults phoneticText to null', () => {
+  it('starts with empty phonetics and translations collections', () => {
     const line = new SongLine();
-    expect(line.phoneticText).toBeNull();
+    expect(line.phonetics.getItems()).toEqual([]);
+    expect(line.translations.getItems()).toEqual([]);
   });
 
-  it('accepts a set phoneticText alongside originalText', () => {
+  it('holds originalText independently of phonetics/translations', () => {
     const line = new SongLine();
     line.originalText = 'Paranauê, paranauê Paraná';
-    line.phoneticText = 'pa-ra-na-oo-eh';
 
     expect(line.originalText).toBe('Paranauê, paranauê Paraná');
-    expect(line.phoneticText).toBe('pa-ra-na-oo-eh');
   });
 });

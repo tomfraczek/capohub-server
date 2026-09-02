@@ -22,7 +22,7 @@ export const languageCodeSchema = z
  * A string field that is optional/nullable end-to-end: a missing key, an
  * explicit null, or an empty/whitespace-only string all normalize to `null`.
  * Used for every "optional text" field in the Song aggregate (authorName,
- * meaning*, phoneticText, media title) per the Etap 8.2 spec.
+ * meaning*, media title) per the Etap 8.2 spec.
  */
 export function optionalNullableText(maxLength: number) {
   return z

@@ -153,8 +153,8 @@ function minimalSongPayload(
         lines: [
           {
             originalText: 'Paranauê, paranauê Paraná',
-            phoneticText: null,
             position: 1,
+            phonetics: [],
             translations: [{ languageCode: 'pl', text: 'Wersja polska' }],
           },
         ],
@@ -460,8 +460,8 @@ describe('Song Edit Proposals (e2e)', () => {
             lines: [
               {
                 originalText: 'Nova linha',
-                phoneticText: 'no-va li-nya',
                 position: 1,
+                phonetics: [{ languageCode: 'pt', text: 'no-va li-nya' }],
                 translations: [
                   { languageCode: 'pl', text: 'Nowa linia' },
                   { languageCode: 'en', text: 'New line' },
@@ -499,6 +499,10 @@ describe('Song Edit Proposals (e2e)', () => {
         'es',
         'pl',
       ]);
+      expect(after.parts[0].lines[0].phonetics[0]).toMatchObject({
+        languageCode: 'pt',
+        text: 'no-va li-nya',
+      });
     });
 
     it('requires CONTENT_APPROVE with 403 otherwise', async () => {

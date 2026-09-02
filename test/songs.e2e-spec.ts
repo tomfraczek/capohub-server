@@ -142,8 +142,8 @@ function minimalSongPayload(
         lines: [
           {
             originalText: 'Paranauê, paranauê Paraná',
-            phoneticText: 'Paranau-e',
             position: 1,
+            phonetics: [{ languageCode: 'pt', text: 'Paranau-e' }],
             translations: [{ languageCode: 'pl', text: 'Tłumaczenie chorus' }],
           },
         ],
@@ -154,8 +154,8 @@ function minimalSongPayload(
         lines: [
           {
             originalText: 'Meu mestre mandou chamar',
-            phoneticText: null,
             position: 1,
+            phonetics: [],
             translations: [],
           },
         ],
@@ -445,8 +445,8 @@ describe('Songs (e2e)', () => {
           lines: [
             {
               originalText: firstLine,
-              phoneticText: null,
               position: 1,
+              phonetics: [],
               translations: [],
             },
           ],
@@ -493,6 +493,10 @@ describe('Songs (e2e)', () => {
       expect(created.parts[0].position).toBe(1);
       expect(created.parts[1].position).toBe(2);
       expect(created.parts[0].lines[0].translations[0].languageCode).toBe('pl');
+      expect(created.parts[0].lines[0].phonetics[0]).toMatchObject({
+        languageCode: 'pt',
+        text: 'Paranau-e',
+      });
 
       const songId = created.id;
 
@@ -516,8 +520,8 @@ describe('Songs (e2e)', () => {
             lines: [
               {
                 originalText: 'Only one line now',
-                phoneticText: null,
                 position: 1,
+                phonetics: [],
                 translations: [],
               },
             ],
@@ -787,8 +791,8 @@ describe('Songs (e2e)', () => {
               lines: [
                 {
                   originalText: `LineMarker-${marker}`,
-                  phoneticText: null,
                   position: 1,
+                  phonetics: [],
                   translations: [],
                 },
               ],
@@ -885,8 +889,8 @@ describe('Songs (e2e)', () => {
               lines: [
                 {
                   originalText: 'Has phonetics and pl translation',
-                  phoneticText: 'fonetyka',
                   position: 1,
+                  phonetics: [{ languageCode: 'pt', text: 'fonetyka' }],
                   translations: [{ languageCode: 'pl', text: 'a' }],
                 },
               ],
@@ -912,8 +916,8 @@ describe('Songs (e2e)', () => {
               lines: [
                 {
                   originalText: 'No extras',
-                  phoneticText: null,
                   position: 1,
+                  phonetics: [],
                   translations: [],
                 },
               ],
@@ -1703,14 +1707,14 @@ describe('Songs (e2e)', () => {
                 lines: [
                   {
                     originalText: 'The actual first line',
-                    phoneticText: null,
                     position: 1,
+                    phonetics: [],
                     translations: [],
                   },
                   {
                     originalText: 'The second line',
-                    phoneticText: null,
                     position: 2,
+                    phonetics: [],
                     translations: [],
                   },
                 ],
@@ -1721,8 +1725,8 @@ describe('Songs (e2e)', () => {
                 lines: [
                   {
                     originalText: 'A later part line',
-                    phoneticText: null,
                     position: 1,
+                    phonetics: [],
                     translations: [],
                   },
                 ],

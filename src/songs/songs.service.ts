@@ -62,6 +62,7 @@ const DETAILS_POPULATE = [
   'createdBy',
   'alternativeTitles',
   'tags.tag',
+  'parts.lines.phonetics',
   'parts.lines.translations',
   'media.createdBy',
 ] as const;

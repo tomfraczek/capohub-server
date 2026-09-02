@@ -540,8 +540,8 @@ describe('Home (e2e)', () => {
           lines: [
             {
               originalText: 'Some lyric line',
-              phoneticText: null,
               position: 1,
+              phonetics: [],
               translations: [],
             },
           ],

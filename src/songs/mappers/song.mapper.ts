@@ -60,7 +60,7 @@ export function toSongUserRefDto(user: User | null): SongUserRefDto | null {
 
 /**
  * Maps a fully-populated Song (category, createdBy, alternativeTitles, tags
- * + tag, parts + lines + translations, media + createdBy) to the response
+ * + tag, parts + lines + phonetics + translations, media + createdBy) to the response
  * shape for GET/POST/PATCH /songs/:id. Every child collection is already
  * ordered by `position` at the ORM level (see the entities' `orderBy`
  * options), so no sorting happens here.
@@ -97,8 +97,12 @@ export function toSongDetailsResponseDto(
       lines: part.lines.getItems().map((line): SongLineResponseDto => ({
         id: line.id,
         originalText: line.originalText,
-        phoneticText: line.phoneticText,
         position: line.position,
+        phonetics: line.phonetics.getItems().map((phonetic) => ({
+          id: phonetic.id,
+          languageCode: phonetic.languageCode,
+          text: phonetic.text,
+        })),
         translations: line.translations.getItems().map((translation) => ({
           id: translation.id,
           languageCode: translation.languageCode,

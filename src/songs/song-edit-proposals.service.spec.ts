@@ -51,8 +51,8 @@ function buildInput(
         lines: [
           {
             originalText: 'a',
-            phoneticText: null,
             position: 1,
+            phonetics: [],
             translations: [],
           },
         ],
