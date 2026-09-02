@@ -206,10 +206,11 @@ describe('App (e2e)', () => {
         theme: 'system',
         notificationsEnabled: true,
         globalRole: GlobalRole.USER,
-        // USER holds only SONG_READ (see role-permissions.map.ts), so
-        // every Songs capability is false.
+        // USER holds SONG_READ/SONG_CREATE/SONG_EDIT_OWN (see
+        // role-permissions.map.ts) - it can create/edit its own songs, but
+        // has no moderation or deletion capability.
         songCapabilities: {
-          canCreate: false,
+          canCreate: true,
           canApproveContent: false,
           canHideContent: false,
           canDeleteAnyDraft: false,
