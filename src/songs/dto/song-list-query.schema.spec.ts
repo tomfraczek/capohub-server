@@ -70,16 +70,31 @@ describe('listSongsQuerySchema', () => {
     }
   });
 
-  it('has no status filter - GET /songs always means PUBLISHED only, so a status param is silently ignored rather than rejected', () => {
+  // Schema-level, `status` is always accepted regardless of createdByMe -
+  // it only takes effect together with createdByMe=true, but that's
+  // enforced by queryVisibleSongIds (the query builder), not this schema.
+  it.each(['DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'REJECTED', 'HIDDEN'])(
+    'accepts status=%s',
+    (status) => {
+      const result = listSongsQuerySchema.safeParse({
+        page: '1',
+        limit: '20',
+        status,
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.status).toBe(status);
+      }
+    },
+  );
+
+  it('rejects an unsupported status token', () => {
     const result = listSongsQuerySchema.safeParse({
       page: '1',
       limit: '20',
-      status: 'PENDING_REVIEW',
+      status: 'ARCHIVED',
     });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect('status' in result.data).toBe(false);
-    }
+    expect(result.success).toBe(false);
   });
 
   it.each(['true', 'false'])('parses hasPhonetics=%s as a boolean', (value) => {

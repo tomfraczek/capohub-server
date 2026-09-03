@@ -757,6 +757,115 @@ describe('Songs (e2e)', () => {
       },
     );
 
+    // createdByMe=true is the one documented exception to the rule above -
+    // the caller's own songs of any status are visible to them here (see
+    // queryVisibleSongIds's own comment), the same subset GET
+    // /songs/my-submissions already exposes via its own endpoint.
+    it("GET /songs?createdByMe=true returns the caller's own songs of every status, never another user's", async () => {
+      const ownDraft = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      const ownPublished = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await publishSong(OWNER_TOKEN, ownPublished.id);
+
+      const othersDraft = await createSong(
+        OTHER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
+      const response = await listSongs(OWNER_TOKEN, {
+        page: 1,
+        limit: 50,
+        createdByMe: 'true',
+      });
+      const ids = response.data.map((s) => s.id);
+
+      expect(ids).toContain(ownDraft.id);
+      expect(ids).toContain(ownPublished.id);
+      expect(ids).not.toContain(othersDraft.id);
+    });
+
+    // The frontend's own "Tylko moje piosenki" + Status filter combo
+    // (SongFiltersModal) relies on exactly this: status narrows the
+    // createdByMe=true set instead of being silently ignored.
+    it("GET /songs?createdByMe=true&status=X narrows to the caller's own songs in that status only", async () => {
+      const ownRejected = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${ownRejected.id}/submit`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${ownRejected.id}/reject`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .send({ reason: 'Needs work' })
+        .expect(201);
+
+      const ownDraft = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+
+      const othersRejected = await createSong(
+        OTHER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${othersRejected.id}/submit`)
+        .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${othersRejected.id}/reject`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .send({ reason: 'Needs work' })
+        .expect(201);
+
+      const response = await listSongs(OWNER_TOKEN, {
+        page: 1,
+        limit: 50,
+        createdByMe: 'true',
+        status: 'REJECTED',
+      });
+      const ids = response.data.map((s) => s.id);
+
+      expect(ids).toContain(ownRejected.id);
+      expect(ids).not.toContain(ownDraft.id);
+      expect(ids).not.toContain(othersRejected.id);
+    });
+
+    // Without createdByMe, `status` must never let anyone (including the
+    // song's own creator) see past the public songbook's PUBLISHED-only
+    // rule - the exception above is opt-in, not a general status filter.
+    it('GET /songs ignores status without createdByMe - still PUBLISHED only', async () => {
+      const ownRejected = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${ownRejected.id}/submit`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${ownRejected.id}/reject`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .send({ reason: 'Needs work' })
+        .expect(201);
+
+      const response = await listSongs(OWNER_TOKEN, {
+        page: 1,
+        limit: 50,
+        status: 'REJECTED',
+      });
+
+      expect(response.data.map((s) => s.id)).not.toContain(ownRejected.id);
+    });
+
     it('search matches title, alternativeTitles.title, authorName, and line originalText', async () => {
       const marker = randomUUID().slice(0, 8);
 

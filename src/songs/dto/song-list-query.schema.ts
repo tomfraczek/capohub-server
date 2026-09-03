@@ -6,6 +6,7 @@ import {
   uuidQuerySchema,
 } from '../../common/validation/query.schemas';
 import { createZodDto } from '../../common/dto/create-zod-dto';
+import { SongStatus } from '../enums/song-status.enum';
 import {
   enumValuesSchema,
   LANGUAGE_CODE_PATTERN,
@@ -49,12 +50,23 @@ const tagIdsQuerySchema = z
   .transform((ids) => Array.from(new Set(ids)))
   .optional();
 
-// GET /songs is the public songbook - it always shows PUBLISHED songs only
-// (see applyVisibility in songs-list-query.ts), so there is deliberately no
-// `status` filter here: a caller can never ask this endpoint for
-// DRAFT/PENDING_REVIEW/REJECTED/HIDDEN, regardless of globalRole. See
-// GET /songs/my-submissions for a caller's own non-published songs and
-// GET /moderation/songs for the moderation queue.
+// GET /songs is the public songbook - for anyone else's songs it always
+// shows PUBLISHED only (see applyVisibility in songs-list-query.ts),
+// regardless of globalRole or this `status` value. `status` only takes
+// effect together with createdByMe=true - a caller filtering to their own
+// songs may narrow by any status (mirrors GET /songs/my-submissions'
+// DRAFT/PENDING_REVIEW/REJECTED, plus PUBLISHED/HIDDEN too, all reachable
+// here through one list instead of a dedicated endpoint). See
+// GET /moderation/songs for the moderation queue's own view across every
+// user's PENDING_REVIEW/REJECTED songs.
+const OWN_SONG_LIST_STATUSES = [
+  SongStatus.DRAFT,
+  SongStatus.PENDING_REVIEW,
+  SongStatus.PUBLISHED,
+  SongStatus.REJECTED,
+  SongStatus.HIDDEN,
+] as const;
+
 export const listSongsQuerySchema = paginationQuerySchema.extend({
   search: optionalTrimmedStringQuerySchema,
   categoryId: uuidQuerySchema.optional(),
@@ -64,6 +76,7 @@ export const listSongsQuerySchema = paginationQuerySchema.extend({
   hasPhonetics: booleanQuerySchema.optional(),
   hasMedia: booleanQuerySchema.optional(),
   createdByMe: booleanQuerySchema.optional(),
+  status: enumValuesSchema(OWN_SONG_LIST_STATUSES).optional(),
   sort: enumValuesSchema(SONG_SORT_VALUES).default('-createdAt'),
 });
 

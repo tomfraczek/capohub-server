@@ -25,6 +25,14 @@ export interface SongListPage {
  * as a correlated EXISTS subquery against `s.id` rather than a JOIN, so the
  * `songs` table is never actually joined and no de-duplication step is
  * needed - see Etap 8.2 report section 22/38.
+ *
+ * createdByMe=true is the one case that sees past PUBLISHED-only: the
+ * caller's own songs of any status are visible to them here (optionally
+ * narrowed further by `status`), the exact same subset GET
+ * /songs/my-submissions already exposes, just reachable through this
+ * list's own filters instead of a dedicated endpoint. Every other caller's
+ * songs are unaffected - applyVisibility (PUBLISHED-only) still applies
+ * whenever createdByMe isn't set, and `status` has no effect in that case.
  */
 export async function queryVisibleSongIds(
   em: EntityManager,
@@ -33,10 +41,13 @@ export async function queryVisibleSongIds(
 ): Promise<SongListPage> {
   const qb = em.createQueryBuilder(Song, 's').select('s.id');
 
-  applyVisibility(qb);
-
   if (query.createdByMe) {
     qb.andWhere({ createdBy: currentUserId });
+    if (query.status) {
+      qb.andWhere({ status: query.status });
+    }
+  } else {
+    applyVisibility(qb);
   }
 
   if (query.categoryId) {

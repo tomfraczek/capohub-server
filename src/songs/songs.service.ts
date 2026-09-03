@@ -256,9 +256,11 @@ export class SongsService {
 
   // The public songbook - PUBLISHED songs only, for every caller regardless
   // of globalRole (see applyVisibility/queryVisibleSongIds in
-  // songs-list-query.ts). Never a caller's own DRAFT/PENDING_REVIEW/
-  // REJECTED/HIDDEN songs - see listMySubmissions for those, and
-  // listModerationQueue for the moderator-only cross-user queue.
+  // songs-list-query.ts) - EXCEPT the caller's own songs when
+  // createdByMe=true, which may be any status (optionally narrowed further
+  // by `status`), the same subset listMySubmissions below already exposes
+  // via its own endpoint. listModerationQueue is still the only way to see
+  // another user's DRAFT/PENDING_REVIEW/REJECTED/HIDDEN songs.
   async list(
     user: User,
     query: ListSongsQuery,
