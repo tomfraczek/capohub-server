@@ -52,13 +52,15 @@ const tagIdsQuerySchema = z
 
 // GET /songs is the public songbook - for anyone else's songs it always
 // shows PUBLISHED only (see applyVisibility in songs-list-query.ts),
-// regardless of globalRole or this `status` value. `status` only takes
-// effect together with createdByMe=true - a caller filtering to their own
-// songs may narrow by any status (mirrors GET /songs/my-submissions'
-// DRAFT/PENDING_REVIEW/REJECTED, plus PUBLISHED/HIDDEN too, all reachable
-// here through one list instead of a dedicated endpoint). See
-// GET /moderation/songs for the moderation queue's own view across every
-// user's PENDING_REVIEW/REJECTED songs.
+// regardless of globalRole or this `status` value. Requesting any other
+// status here (with or without createdByMe=true) implicitly scopes the
+// whole query to the caller's own songs instead - nobody else's
+// DRAFT/PENDING_REVIEW/REJECTED/HIDDEN song is ever visible here, so a
+// non-PUBLISHED status can only ever mean "my own" (mirrors GET
+// /songs/my-submissions, just reachable through this list's own filters
+// instead of a dedicated endpoint - see queryVisibleSongIds for the exact
+// rule). See GET /moderation/songs for the moderation queue's own view
+// across every user's PENDING_REVIEW/REJECTED songs.
 const OWN_SONG_LIST_STATUSES = [
   SongStatus.DRAFT,
   SongStatus.PENDING_REVIEW,

@@ -1145,6 +1145,27 @@ describe('SongsService', () => {
       expect(song.status).toBe(SongStatus.PENDING_REVIEW);
     });
 
+    // SUPER_ADMIN is the one exception to the rule above - it already holds
+    // every Permission unconditionally (role-permissions.map.ts), so the
+    // self-approval block must not apply to it either.
+    it('publish: allows self-approval for a SUPER_ADMIN', async () => {
+      const author = buildUser({ globalRole: GlobalRole.SUPER_ADMIN });
+      const song = buildPopulatedSong({
+        status: SongStatus.PENDING_REVIEW,
+        createdBy: author,
+      });
+      const em = buildMockEm({ detailsSong: song });
+      const service = new SongsService(
+        em,
+        buildMockDuplicateService(),
+        ...buildMockUserContextServices(),
+      );
+
+      await service.publish(song.id, author);
+
+      expect(song.status).toBe(SongStatus.PUBLISHED);
+    });
+
     it('reject: PENDING_REVIEW -> REJECTED, storing the rejection reason', async () => {
       const song = buildPopulatedSong({ status: SongStatus.PENDING_REVIEW });
       const em = buildMockEm({ detailsSong: song });

@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager, LockMode } from '@mikro-orm/postgresql';
+import { GlobalRole } from '../auth/permissions/global-role.enum';
 import { User } from '../users/entities/user.entity';
 import { CreateSongEditProposalInput } from './dto/create-song-edit-proposal.schema';
 import { ModerationReasonInput } from './dto/moderation-reason.schema';
@@ -196,9 +197,13 @@ export class SongEditProposalsService {
 
   // The proposer can never review (approve or reject) their own proposal,
   // even when they separately hold CONTENT_APPROVE - mirrors
-  // SongsService.assertNotSelfApproval for the original submission.
+  // SongsService.assertNotSelfApproval for the original submission, SUPER_ADMIN
+  // exception included (see that method's own comment for why).
   private assertNotSelfReview(proposal: SongEditProposal, actor: User): void {
-    if (proposal.proposedBy?.id === actor.id) {
+    if (
+      proposal.proposedBy?.id === actor.id &&
+      actor.globalRole !== GlobalRole.SUPER_ADMIN
+    ) {
       throw new ForbiddenException({
         code: 'SELF_APPROVAL_FORBIDDEN',
         message: 'You cannot approve or reject your own edit proposal',

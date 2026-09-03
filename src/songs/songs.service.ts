@@ -10,6 +10,7 @@ import { UniqueConstraintViolationException } from '@mikro-orm/core';
 // runtime symbol (see @mikro-orm/postgresql's EntityManager = SqlEntityManager,
 // which adds createQueryBuilder over the plain @mikro-orm/core EntityManager).
 import { EntityManager } from '@mikro-orm/postgresql';
+import { GlobalRole } from '../auth/permissions/global-role.enum';
 import { Permission } from '../auth/permissions/permission.enum';
 import { PermissionService } from '../auth/permissions/permission.service';
 import { PaginatedResponse } from '../common/pagination/pagination.types';
@@ -256,11 +257,11 @@ export class SongsService {
 
   // The public songbook - PUBLISHED songs only, for every caller regardless
   // of globalRole (see applyVisibility/queryVisibleSongIds in
-  // songs-list-query.ts) - EXCEPT the caller's own songs when
-  // createdByMe=true, which may be any status (optionally narrowed further
-  // by `status`), the same subset listMySubmissions below already exposes
-  // via its own endpoint. listModerationQueue is still the only way to see
-  // another user's DRAFT/PENDING_REVIEW/REJECTED/HIDDEN songs.
+  // songs-list-query.ts) - EXCEPT the caller's own songs, reachable here in
+  // any status via createdByMe=true and/or a non-PUBLISHED `status` (the
+  // same subset listMySubmissions below already exposes via its own
+  // endpoint). listModerationQueue is still the only way to see another
+  // user's DRAFT/PENDING_REVIEW/REJECTED/HIDDEN songs.
   async list(
     user: User,
     query: ListSongsQuery,
@@ -769,9 +770,16 @@ export class SongsService {
   // Backs publish()/reject(): the song's own creator may never approve or
   // reject their own submission, even when they separately hold
   // CONTENT_APPROVE (e.g. a MODERATOR reviewing their own draft) - see the
-  // moderation model's self-approval rule.
+  // moderation model's self-approval rule. SUPER_ADMIN is the one
+  // exception - role-permissions.map.ts already gives it every Permission
+  // that exists, unconditionally, and this row-level rule would otherwise
+  // be the sole place left where that "can do everything" promise doesn't
+  // actually hold.
   private assertNotSelfApproval(song: Song, actor: User): void {
-    if (song.createdBy?.id === actor.id) {
+    if (
+      song.createdBy?.id === actor.id &&
+      actor.globalRole !== GlobalRole.SUPER_ADMIN
+    ) {
       throw new ForbiddenException({
         code: 'SELF_APPROVAL_FORBIDDEN',
         message: 'You cannot publish or reject a song you submitted yourself',

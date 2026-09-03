@@ -839,10 +839,12 @@ describe('Songs (e2e)', () => {
       expect(ids).not.toContain(othersRejected.id);
     });
 
-    // Without createdByMe, `status` must never let anyone (including the
-    // song's own creator) see past the public songbook's PUBLISHED-only
-    // rule - the exception above is opt-in, not a general status filter.
-    it('GET /songs ignores status without createdByMe - still PUBLISHED only', async () => {
+    // A non-PUBLISHED `status` implicitly means "my own songs" even
+    // without createdByMe=true - there is no one else's DRAFT/
+    // PENDING_REVIEW/REJECTED/HIDDEN song this endpoint could ever show, so
+    // SongFiltersModal's Status picker must work standalone (this is what
+    // the frontend actually sends - see song-filters-modal.tsx).
+    it("GET /songs?status=X (no createdByMe) still scopes to the caller's own songs, never another user's", async () => {
       const ownRejected = await createSong(
         OWNER_TOKEN,
         minimalSongPayload(category.id),
@@ -857,13 +859,48 @@ describe('Songs (e2e)', () => {
         .send({ reason: 'Needs work' })
         .expect(201);
 
+      const othersRejected = await createSong(
+        OTHER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${othersRejected.id}/submit`)
+        .set('Authorization', `Bearer ${OTHER_TOKEN}`)
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${othersRejected.id}/reject`)
+        .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+        .send({ reason: 'Needs work' })
+        .expect(201);
+
       const response = await listSongs(OWNER_TOKEN, {
         page: 1,
         limit: 50,
         status: 'REJECTED',
       });
+      const ids = response.data.map((s) => s.id);
 
-      expect(response.data.map((s) => s.id)).not.toContain(ownRejected.id);
+      expect(ids).toContain(ownRejected.id);
+      expect(ids).not.toContain(othersRejected.id);
+    });
+
+    // status=PUBLISHED (explicit or by omission) is the one status value
+    // that never implies "my own" - it's just the routine public songbook
+    // view, same as no filter at all.
+    it('GET /songs?status=PUBLISHED (no createdByMe) is the normal public view, not scoped to the caller', async () => {
+      const othersPublished = await createSong(
+        OTHER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await publishSong(OTHER_TOKEN, othersPublished.id);
+
+      const response = await listSongs(OWNER_TOKEN, {
+        page: 1,
+        limit: 50,
+        status: 'PUBLISHED',
+      });
+
+      expect(response.data.map((s) => s.id)).toContain(othersPublished.id);
     });
 
     it('search matches title, alternativeTitles.title, authorName, and line originalText', async () => {
@@ -1225,6 +1262,33 @@ describe('Songs (e2e)', () => {
           .expect(403),
       );
       expect(response.code).toBe('SELF_APPROVAL_FORBIDDEN');
+
+      // Restore OWNER_TOKEN back to its normal EDITOR tier for every other
+      // test in this file.
+      await grantGlobalRole(OWNER_TOKEN, GlobalRole.EDITOR);
+    });
+
+    // SUPER_ADMIN is the one exception to the rule above - it already
+    // holds every Permission unconditionally (role-permissions.map.ts), so
+    // assertNotSelfApproval must not block it either.
+    it('allows self-approval for a SUPER_ADMIN', async () => {
+      await grantGlobalRole(OWNER_TOKEN, GlobalRole.SUPER_ADMIN);
+      const song = await createSong(
+        OWNER_TOKEN,
+        minimalSongPayload(category.id),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/songs/${song.id}/submit`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .expect(201);
+
+      const published = await bodyOf<SongDetailsResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/songs/${song.id}/publish`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(201),
+      );
+      expect(published.status).toBe('PUBLISHED');
 
       // Restore OWNER_TOKEN back to its normal EDITOR tier for every other
       // test in this file.

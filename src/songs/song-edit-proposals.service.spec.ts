@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
+import { GlobalRole } from '../auth/permissions/global-role.enum';
 import { User } from '../users/entities/user.entity';
 import { CreateSongEditProposalInput } from './dto/create-song-edit-proposal.schema';
 import { SongCategory } from './entities/song-category.entity';
@@ -319,6 +320,23 @@ describe('SongEditProposalsService', () => {
       // eslint-disable-next-line @typescript-eslint/unbound-method -- assertion target only
       expect(songContentService.replaceContent).not.toHaveBeenCalled();
       expect(proposal.status).toBe(SongEditProposalStatus.PENDING);
+    });
+
+    // SUPER_ADMIN is the one exception to the rule above - it already holds
+    // every Permission unconditionally (role-permissions.map.ts), mirrors
+    // SongsService's own publish/reject exception for the original
+    // submission.
+    it('allows self-approval for a SUPER_ADMIN', async () => {
+      const author = buildUser({ globalRole: GlobalRole.SUPER_ADMIN });
+      const song = buildSong();
+      const proposal = buildProposal({ song, proposedBy: author });
+      const em = buildMockEm({ song, proposal });
+      const songContentService = buildMockSongContentService();
+      const service = new SongEditProposalsService(em, songContentService);
+
+      await service.approve(song.id, proposal.id, author);
+
+      expect(proposal.status).toBe(SongEditProposalStatus.APPROVED);
     });
   });
 

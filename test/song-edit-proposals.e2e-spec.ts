@@ -553,6 +553,32 @@ describe('Song Edit Proposals (e2e)', () => {
       expect(response.code).toBe('SELF_APPROVAL_FORBIDDEN');
     });
 
+    // SUPER_ADMIN is the one exception to the rule above - it already
+    // holds every Permission unconditionally (role-permissions.map.ts), so
+    // assertNotSelfReview must not block it either.
+    it('allows self-review (approve) for a SUPER_ADMIN', async () => {
+      const song = await createPublishedSong();
+      const proposal = await createProposal(
+        MODERATOR_TOKEN,
+        song.id,
+        minimalSongPayload(category.id),
+      );
+
+      await grantGlobalRole(MODERATOR_TOKEN, GlobalRole.SUPER_ADMIN);
+      try {
+        await request(app.getHttpServer())
+          .post(
+            `/api/v1/songs/${song.id}/edit-proposals/${proposal.id}/approve`,
+          )
+          .set('Authorization', `Bearer ${MODERATOR_TOKEN}`)
+          .expect(201);
+      } finally {
+        // Restore MODERATOR_TOKEN back to its normal tier for every other
+        // test in this file.
+        await grantGlobalRole(MODERATOR_TOKEN, GlobalRole.MODERATOR);
+      }
+    });
+
     it('rejects approving an already-approved proposal again with 409', async () => {
       const song = await createPublishedSong();
       const proposal = await createProposal(
