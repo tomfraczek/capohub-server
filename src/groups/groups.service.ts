@@ -307,8 +307,6 @@ export class GroupsService {
     group.isPublic = input.isPublic;
     group.isHidden = input.isHidden;
     group.memberInvitesAllowed = input.memberInvitesAllowed;
-    group.timezone = input.timezone;
-    group.currencyCode = input.currencyCode;
   }
 
   // childGroupsCount/directSectionsCount are direct-children counts only

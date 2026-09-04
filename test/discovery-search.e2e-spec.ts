@@ -144,8 +144,6 @@ describe('Discovery search (e2e)', () => {
   function groupPayload(overrides: Record<string, unknown> = {}) {
     return {
       name: `${uniqueSuffix} Group`,
-      timezone: 'Europe/Warsaw',
-      currencyCode: 'PLN',
       isPublic: true,
       isHidden: false,
       ...overrides,

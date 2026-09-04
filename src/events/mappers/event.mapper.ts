@@ -24,8 +24,9 @@ export interface EventAggregateContext {
 // timestamps. A boundary case (e.g. 23:00-01:00 in a non-UTC local time
 // zone landing on the same UTC day) can disagree with the organizer's own
 // local-time intuition - Event has no per-record time zone field (unlike
-// Group.timezone), so there is no better reference frame available today;
-// flagged as a known limitation, not a bug.
+// Section.timezone, or the organizer User's own timezone), so there is no
+// better reference frame available today; flagged as a known limitation,
+// not a bug.
 function computeIsMultiDay(startsAt: Date, endsAt: Date): boolean {
   return (
     startsAt.toISOString().slice(0, 10) !== endsAt.toISOString().slice(0, 10)

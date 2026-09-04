@@ -30,6 +30,11 @@ import { Section } from './section.entity';
 // those live on Section only, since a Group is an organizational umbrella
 // that may span many places (or none), while a Section always operates in
 // one specific place.
+//
+// Also deliberately has no timezone/currencyCode (unlike Section, which
+// still has its own) - those are set once, per-User, from the owner's own
+// profile settings (see users/entities/user.entity.ts) rather than
+// per-Group. See create-group.schema.ts for the request-shape side of this.
 @Entity({ tableName: 'groups' })
 export class Group extends BaseEntity {
   @Index()
@@ -119,10 +124,4 @@ export class Group extends BaseEntity {
   @Index()
   @Enum({ items: () => Object.values(GroupStatus) })
   status: GroupStatus = GroupStatus.ACTIVE;
-
-  @Property({ length: 100 })
-  timezone!: string;
-
-  @Property({ length: 3 })
-  currencyCode!: string;
 }

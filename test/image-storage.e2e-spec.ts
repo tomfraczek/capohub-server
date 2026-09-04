@@ -257,8 +257,6 @@ describe('Image storage (R2) (e2e)', () => {
           isPublic: true,
           isHidden: false,
           memberInvitesAllowed: false,
-          timezone: 'Europe/Warsaw',
-          currencyCode: 'PLN',
         })
         .expect(201),
     );

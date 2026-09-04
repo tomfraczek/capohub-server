@@ -222,8 +222,6 @@ describe('MembershipRequests + Discovery (e2e)', () => {
       isPublic: true,
       isHidden: false,
       memberInvitesAllowed: false,
-      timezone: 'Europe/Warsaw',
-      currencyCode: 'PLN',
       ...overrides,
     };
   }

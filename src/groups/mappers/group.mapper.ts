@@ -42,8 +42,6 @@ export function toGroupResponseDto(
     memberInvitesAllowed: group.memberInvitesAllowed,
     publicCode: group.publicCode,
     status: group.status,
-    timezone: group.timezone,
-    currencyCode: group.currencyCode,
     childGroupsCount: counts.childGroupsCount,
     directSectionsCount: counts.directSectionsCount,
     createdAt: group.createdAt.toISOString(),

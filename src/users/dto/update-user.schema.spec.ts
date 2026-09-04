@@ -75,6 +75,28 @@ describe('updateUserSchema', () => {
     const result = updateUserSchema.parse({ displayName: 'Ada' });
     expect(result.theme).toBeUndefined();
     expect(result.notificationsEnabled).toBeUndefined();
+    expect(result.timezone).toBeUndefined();
+    expect(result.currencyCode).toBeUndefined();
+  });
+
+  it('accepts a valid IANA timezone', () => {
+    const result = updateUserSchema.safeParse({ timezone: 'Europe/Warsaw' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a timezone that is not a real IANA identifier', () => {
+    const result = updateUserSchema.safeParse({ timezone: 'Not/AZone' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts and uppercases a lowercase currencyCode', () => {
+    const result = updateUserSchema.parse({ currencyCode: 'pln' });
+    expect(result.currencyCode).toBe('PLN');
+  });
+
+  it('rejects a currencyCode that is not 3 letters', () => {
+    const result = updateUserSchema.safeParse({ currencyCode: 'ZŁ' });
+    expect(result.success).toBe(false);
   });
 
   it('rejects an unknown field like email', () => {

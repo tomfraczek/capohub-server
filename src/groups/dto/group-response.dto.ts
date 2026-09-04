@@ -23,8 +23,6 @@ export interface GroupResponseDto {
   memberInvitesAllowed: boolean;
   publicCode: string | null;
   status: GroupStatus;
-  timezone: string;
-  currencyCode: string;
   // Direct child Groups only (one level down) - not recursive.
   childGroupsCount: number;
   // Direct Sections only (one level down) - not recursive.

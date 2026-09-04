@@ -151,3 +151,36 @@ export function optionalNullableUrl(maxLength: number) {
     .nullish()
     .transform((value) => (value ? value : null));
 }
+
+// A bare domain, optionally with a scheme and/or "www." - matches how a
+// person actually types a website/Facebook/Instagram/YouTube address by
+// hand: "example.com", "www.example.com", "http(s)://example.com",
+// "https://www.example.com/path?x=1". Requires at least a two-label
+// domain (so "localhost" or a single word is still rejected) but is
+// otherwise permissive - this is a "does it look like a URL at all" check,
+// not a strict RFC 3986 parse (see optionalNullableUrl above for that).
+const LENIENT_URL_PATTERN =
+  /^(https?:\/\/)?(www\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?::\d+)?([/?#]\S*)?$/i;
+
+/**
+ * Same optional/nullable/max-length shape as optionalNullableUrl, but
+ * accepts any of the formats LENIENT_URL_PATTERN describes and normalizes
+ * the result to a fully-qualified https:// URL (only when no scheme was
+ * given) so downstream consumers that require one (e.g. the mobile app's
+ * Linking.openURL) always get a usable link, without forcing the caller to
+ * type "https://" themselves.
+ */
+export function optionalNullableSocialUrl(maxLength: number) {
+  return z
+    .string()
+    .trim()
+    .max(maxLength, `Must be at most ${maxLength} characters`)
+    .regex(LENIENT_URL_PATTERN, 'Must be a valid URL')
+    .nullish()
+    .transform((value) => {
+      if (!value) {
+        return null;
+      }
+      return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+    });
+}

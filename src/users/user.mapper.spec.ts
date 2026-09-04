@@ -27,6 +27,8 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.presetAvatarId = null;
   user.theme = 'dark';
   user.notificationsEnabled = false;
+  user.timezone = 'Europe/Warsaw';
+  user.currencyCode = 'PLN';
   user.globalRole = GlobalRole.EDITOR;
   user.isActive = true;
   user.publicCode = 'ABCD-1234';
@@ -51,6 +53,8 @@ describe('toUserResponseDto', () => {
       presetAvatarId: null,
       theme: 'dark',
       notificationsEnabled: false,
+      timezone: 'Europe/Warsaw',
+      currencyCode: 'PLN',
       globalRole: GlobalRole.EDITOR,
       songCapabilities: NO_SONG_CAPABILITIES,
       publicCode: 'ABCD-1234',

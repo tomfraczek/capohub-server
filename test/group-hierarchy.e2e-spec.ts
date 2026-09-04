@@ -220,8 +220,6 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
       isPublic: true,
       isHidden: false,
       memberInvitesAllowed: false,
-      timezone: 'Europe/Warsaw',
-      currencyCode: 'PLN',
       ...overrides,
     };
   }

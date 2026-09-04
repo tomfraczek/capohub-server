@@ -55,6 +55,8 @@ function buildUser(): User {
   user.publicCode = 'ADA00001';
   user.theme = 'system';
   user.notificationsEnabled = true;
+  user.timezone = 'Europe/Warsaw';
+  user.currencyCode = 'PLN';
   user.globalRole = GlobalRole.USER;
   user.isActive = true;
   user.lastLoginAt = new Date('2026-07-10T10:00:00.000Z');
@@ -88,6 +90,8 @@ describe('UsersController', () => {
         presetAvatarId: null,
         theme: 'system',
         notificationsEnabled: true,
+        timezone: 'Europe/Warsaw',
+        currencyCode: 'PLN',
         globalRole: GlobalRole.USER,
         songCapabilities: USER_SONG_CAPABILITIES,
         publicCode: 'ADA00001',

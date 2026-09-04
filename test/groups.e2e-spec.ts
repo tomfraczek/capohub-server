@@ -207,8 +207,6 @@ describe('Groups (e2e)', () => {
       isPublic: true,
       isHidden: false,
       memberInvitesAllowed: false,
-      timezone: 'Europe/Warsaw',
-      currencyCode: 'PLN',
       ...overrides,
     };
   }
@@ -442,6 +440,20 @@ describe('Groups (e2e)', () => {
         .patch(`/api/v1/groups/${created.id}`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
         .send(groupPayload({ country: 'DE', city: 'Berlin' }))
+        .expect(400);
+    });
+
+    // Regional settings (timezone/currencyCode) moved to per-User account
+    // settings (PATCH /users/me) - a Group never has them, so `groupPayload`
+    // above no longer includes them and submitting them here is rejected
+    // the same way the location fields above are.
+    it('rejects an edit payload carrying the now-removed timezone/currencyCode fields', async () => {
+      const created = await createGroup(OWNER_TOKEN);
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/groups/${created.id}`)
+        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .send(groupPayload({ timezone: 'Europe/Warsaw', currencyCode: 'PLN' }))
         .expect(400);
     });
   });

@@ -32,8 +32,6 @@ function buildCreateInput(
     isPublic: true,
     isHidden: false,
     memberInvitesAllowed: false,
-    timezone: 'Europe/Warsaw',
-    currencyCode: 'PLN',
     ...overrides,
   };
 }

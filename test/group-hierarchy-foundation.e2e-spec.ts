@@ -30,14 +30,16 @@ import { Section } from '../src/groups/entities/section.entity';
 import { GroupStatus } from '../src/groups/enums/group-status.enum';
 import { GroupHierarchyService } from '../src/groups/group-hierarchy.service';
 
+// Shared by both makeGroup and makeSection below. No timezone/currencyCode
+// here - Group no longer has them (regional settings moved to per-User
+// account settings), and Section's own copy is set directly in makeSection
+// instead, since the two entities no longer share that shape.
 function communityDefaults() {
   return {
     isPublic: true,
     isHidden: false,
     memberInvitesAllowed: false,
     status: GroupStatus.ACTIVE,
-    timezone: 'Europe/Warsaw',
-    currencyCode: 'PLN',
   };
 }
 
@@ -96,6 +98,8 @@ describe('Group/Section foundation (e2e)', () => {
     section.publicCode = `TST-${randomUUID().slice(0, 8).toUpperCase()}`;
     section.parentGroup = parent;
     Object.assign(section, communityDefaults());
+    section.timezone = 'Europe/Warsaw';
+    section.currencyCode = 'PLN';
     await em.persist(section).flush();
     createdSectionIds.push(section.id);
     return section;

@@ -4,7 +4,9 @@ import { updateGroupSchema } from './update-group.schema';
 // live on Section only (see group.entity.ts / section.entity.ts, the
 // Group/Section physical-split ADR) - see update-section.schema.spec.ts
 // for the equivalent geonameId/country/city/region validation, which
-// still applies there.
+// still applies there. Also no timezone/currencyCode (unlike Section,
+// which still has its own) - those are set once, per-User, from
+// PATCH /users/me.
 function validUpdateInput(overrides: Record<string, unknown> = {}) {
   return {
     name: 'Capoeira Angola SP',
@@ -20,8 +22,6 @@ function validUpdateInput(overrides: Record<string, unknown> = {}) {
     isPublic: true,
     isHidden: false,
     memberInvitesAllowed: false,
-    timezone: 'Europe/Warsaw',
-    currencyCode: 'PLN',
     ...overrides,
   };
 }
@@ -50,6 +50,13 @@ describe('updateGroupSchema', () => {
   it('rejects the now-removed location fields (country/city/region/geonameId)', () => {
     const result = updateGroupSchema.safeParse(
       validUpdateInput({ country: 'PL', city: 'Poznań' }),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects the now-removed timezone/currencyCode fields', () => {
+    const result = updateGroupSchema.safeParse(
+      validUpdateInput({ timezone: 'Europe/Warsaw', currencyCode: 'PLN' }),
     );
     expect(result.success).toBe(false);
   });

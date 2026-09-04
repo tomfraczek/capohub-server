@@ -12,6 +12,11 @@ export interface UserResponseDto {
   presetAvatarId: string | null;
   theme: Theme;
   notificationsEnabled: boolean;
+  // Regional settings - see user.entity.ts's own comment; set from
+  // PATCH /users/me (module: "ustawienia regionalne z poziomu ustawień
+  // profilu"), never from Group/Section creation.
+  timezone: string;
+  currencyCode: string;
   globalRole: GlobalRole;
   // Global Songs-module permissions for this user, derived server-side from
   // globalRole via PermissionService - see song-capabilities.dto.ts. The

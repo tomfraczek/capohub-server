@@ -219,8 +219,6 @@ describe('Training Check-In (e2e)', () => {
       isPublic: true,
       isHidden: false,
       memberInvitesAllowed: false,
-      timezone: 'Europe/Warsaw',
-      currencyCode: 'PLN',
     };
   }
 

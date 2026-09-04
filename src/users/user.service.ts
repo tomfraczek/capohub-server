@@ -33,6 +33,8 @@ export interface UpdateUserProfileInput {
   displayName?: string;
   theme?: Theme;
   notificationsEnabled?: boolean;
+  timezone?: string;
+  currencyCode?: string;
 }
 
 @Injectable()
@@ -245,6 +247,12 @@ export class UserService {
     }
     if (changes.notificationsEnabled !== undefined) {
       user.notificationsEnabled = changes.notificationsEnabled;
+    }
+    if (changes.timezone !== undefined) {
+      user.timezone = changes.timezone;
+    }
+    if (changes.currencyCode !== undefined) {
+      user.currencyCode = changes.currencyCode;
     }
     await this.em.flush();
     return user;

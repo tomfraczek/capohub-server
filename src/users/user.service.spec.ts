@@ -1014,6 +1014,28 @@ describe('UserService', () => {
       expect(updated.notificationsEnabled).toBe(false);
     });
 
+    it('updates timezone', async () => {
+      const user = new User();
+      const { service } = buildService({});
+
+      const updated = await service.updateProfile(user, {
+        timezone: 'America/Sao_Paulo',
+      });
+
+      expect(updated.timezone).toBe('America/Sao_Paulo');
+    });
+
+    it('updates currencyCode', async () => {
+      const user = new User();
+      const { service } = buildService({});
+
+      const updated = await service.updateProfile(user, {
+        currencyCode: 'BRL',
+      });
+
+      expect(updated.currencyCode).toBe('BRL');
+    });
+
     it('leaves fields untouched when omitted (undefined)', async () => {
       const user = new User();
       user.displayName = 'Keep Me';

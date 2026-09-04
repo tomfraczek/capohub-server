@@ -27,8 +27,6 @@ function buildGroup(overrides: Partial<Group> = {}): Group {
   group.memberInvitesAllowed = false;
   group.publicCode = 'ABCD-1234';
   group.status = GroupStatus.ACTIVE;
-  group.timezone = 'Europe/Warsaw';
-  group.currencyCode = 'PLN';
   return Object.assign(group, overrides);
 }
 
@@ -66,8 +64,6 @@ describe('group.mapper', () => {
         isHidden: false,
         publicCode: 'ABCD-1234',
         status: GroupStatus.ACTIVE,
-        timezone: 'Europe/Warsaw',
-        currencyCode: 'PLN',
         childGroupsCount: 2,
         directSectionsCount: 3,
       });

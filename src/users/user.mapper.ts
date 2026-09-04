@@ -24,6 +24,8 @@ export function toUserResponseDto(
     presetAvatarId: user.presetAvatarId,
     theme: user.theme,
     notificationsEnabled: user.notificationsEnabled,
+    timezone: user.timezone,
+    currencyCode: user.currencyCode,
     globalRole: user.globalRole,
     songCapabilities,
     publicCode: user.publicCode,

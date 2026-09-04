@@ -82,6 +82,20 @@ export class User extends BaseEntity {
   @Property()
   notificationsEnabled: boolean = true;
 
+  // Regional settings - previously set per-Group at creation time (see the
+  // Group/Section physical-split ADR era), moved here so they are set once
+  // per-User instead (module: "ustawienia regionalne z poziomu ustawień
+  // profilu"). Not (yet) applied anywhere automatically - see
+  // group.entity.ts's own comment on why Group no longer carries these.
+  // Same IANA-timezone / 3-letter-ISO-4217-shape validation as Section's
+  // own timezone/currencyCode (see groups/dto/group-validation.helpers.ts,
+  // reused from update-user.schema.ts).
+  @Property({ length: 100 })
+  timezone: string = 'Europe/Warsaw';
+
+  @Property({ length: 3 })
+  currencyCode: string = 'PLN';
+
   @Property()
   isActive: boolean = true;
 
