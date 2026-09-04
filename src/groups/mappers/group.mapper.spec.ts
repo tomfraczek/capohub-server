@@ -101,6 +101,37 @@ describe('group.mapper', () => {
 
       expect(dto.logoUrl).toBe('https://legacy.example.com/old-logo.png');
     });
+
+    it('prefers the R2 public URL derived from coverImageKey over the legacy coverImageUrl', () => {
+      const group = buildGroup({
+        coverImageUrl: 'https://legacy.example.com/old-cover.png',
+        coverImageKey: 'groups/group-1/cover/uuid.webp',
+      });
+
+      const dto = toGroupResponseDto(
+        group,
+        { childGroupsCount: 0, directSectionsCount: 0 },
+        buildUrlBuilder(),
+      );
+
+      expect(dto.coverImageUrl).toBe(
+        'https://cdn.example.com/groups/group-1/cover/uuid.webp',
+      );
+    });
+
+    it('falls back to the legacy coverImageUrl when coverImageKey is unset', () => {
+      const group = buildGroup({
+        coverImageUrl: 'https://legacy.example.com/old-cover.png',
+      });
+
+      const dto = toGroupResponseDto(
+        group,
+        { childGroupsCount: 0, directSectionsCount: 0 },
+        buildUrlBuilder(),
+      );
+
+      expect(dto.coverImageUrl).toBe('https://legacy.example.com/old-cover.png');
+    });
   });
 
   describe('toGroupSummaryResponseDto', () => {

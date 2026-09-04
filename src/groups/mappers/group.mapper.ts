@@ -30,7 +30,9 @@ export function toGroupResponseDto(
     // legacy logoUrl column once an upload exists - see
     // storage/image-url.util.ts's resolveImageUrl.
     logoUrl: resolveImageUrl(group.profileImageKey, group.logoUrl, urlBuilder),
-    coverImageUrl: group.coverImageUrl,
+    // Same profileImageKey-vs-logoUrl precedence as above, just for the
+    // cover image (see GroupsService.uploadCoverImage).
+    coverImageUrl: resolveImageUrl(group.coverImageKey, group.coverImageUrl, urlBuilder),
     contactEmail: group.contactEmail,
     contactPhone: group.contactPhone,
     websiteUrl: group.websiteUrl,

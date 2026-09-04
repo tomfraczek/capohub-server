@@ -1,9 +1,9 @@
 /**
  * E2E tests for Cloudflare R2 image storage (module: "R2: upload/replace/
- * delete zdjęć dla User/Group/Section/Event"): the four multipart
+ * delete zdjęć dla User/Group/Section/Event"): the five multipart
  * upload/delete endpoints (PUT/DELETE .../profile-image ×3,
- * PUT/DELETE .../cover-image ×1) - replace flow, delete flow, invalid
- * MIME, oversize, and permission gating.
+ * PUT/DELETE .../cover-image ×2 - Event and Group) - replace flow, delete
+ * flow, invalid MIME, oversize, and permission gating.
  *
  * R2StorageService is overridden with an in-memory fake (see
  * FakeR2StorageService below) - no request ever reaches real Cloudflare
@@ -530,6 +530,72 @@ describe('Image storage (R2) (e2e)', () => {
         .put(`/api/v1/groups/${group.id}/profile-image`)
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .attach('file', await buildJpeg(), 'logo.jpg')
+        .expect(404);
+
+      expect((res.body as HttpErrorResponse).code).toBe('GROUP_NOT_FOUND');
+    });
+  });
+
+  // ─── Group cover image ──────────────────────────────────────────────────
+
+  describe('Group cover-image (PUT/DELETE /groups/:id/cover-image)', () => {
+    it('uploads a 1600x900 cover, clearing the legacy coverImageUrl', async () => {
+      const group = await createGroup();
+
+      const dto = await bodyOf<GroupResponseDto>(
+        request(app.getHttpServer())
+          .put(`/api/v1/groups/${group.id}/cover-image`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .attach('file', await buildJpeg(), 'cover.jpg')
+          .expect(200),
+      );
+
+      expect(dto.coverImageUrl).toMatch(
+        /^https:\/\/fake-r2\.test\/groups\/.+\/cover\/.+\.webp$/,
+      );
+    });
+
+    it('replace then delete: the old object is physically removed each time, and delete never restores the pre-upload legacy coverImageUrl', async () => {
+      const group = await createGroup();
+
+      const first = await bodyOf<GroupResponseDto>(
+        request(app.getHttpServer())
+          .put(`/api/v1/groups/${group.id}/cover-image`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .attach('file', await buildJpeg(), 'cover1.jpg')
+          .expect(200),
+      );
+      const firstKey = first.coverImageUrl!.replace('https://fake-r2.test/', '');
+
+      const second = await bodyOf<GroupResponseDto>(
+        request(app.getHttpServer())
+          .put(`/api/v1/groups/${group.id}/cover-image`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .attach('file', await buildPng(), 'cover2.png')
+          .expect(200),
+      );
+      const secondKey = second.coverImageUrl!.replace('https://fake-r2.test/', '');
+      expect(fakeR2Storage.objects.has(firstKey)).toBe(false);
+      expect(fakeR2Storage.objects.has(secondKey)).toBe(true);
+
+      const deleted = await bodyOf<GroupResponseDto>(
+        request(app.getHttpServer())
+          .delete(`/api/v1/groups/${group.id}/cover-image`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+
+      expect(fakeR2Storage.objects.has(secondKey)).toBe(false);
+      expect(deleted.coverImageUrl).toBeNull();
+    });
+
+    it('denies a caller with no Role Assignment at all on the Group (404, never 403)', async () => {
+      const group = await createGroup();
+
+      const res = await request(app.getHttpServer())
+        .put(`/api/v1/groups/${group.id}/cover-image`)
+        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+        .attach('file', await buildJpeg(), 'cover.jpg')
         .expect(404);
 
       expect((res.body as HttpErrorResponse).code).toBe('GROUP_NOT_FOUND');

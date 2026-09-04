@@ -364,7 +364,7 @@ export class EventsService {
       ]);
       assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
 
-      const processed = await this.imageProcessingService.processEventCover(
+      const processed = await this.imageProcessingService.processCoverImage(
         file.buffer,
       );
       const newKey = buildEventCoverImageKey(event.id);

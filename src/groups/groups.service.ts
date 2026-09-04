@@ -7,7 +7,10 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { generateUniquePublicCode } from '../common/utils/public-code';
 import { ImageAssetService } from '../storage/image-asset.service';
 import { ImageProcessingService } from '../storage/image-processing.service';
-import { buildGroupProfileImageKey } from '../storage/object-keys.util';
+import {
+  buildGroupCoverImageKey,
+  buildGroupProfileImageKey,
+} from '../storage/object-keys.util';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
@@ -85,6 +88,50 @@ export class GroupsService {
         await this.em.flush();
       },
       logContext: { resourceType: 'group-profile-image', resourceId: group.id },
+    });
+    return this.toResponseDto(this.em, group);
+  }
+
+  // PUT /groups/:id/cover-image - same shape/gating as uploadProfileImage
+  // above, just for the cover image (16:9, see
+  // ImageProcessingService.processCoverImage) instead of the square
+  // profile image. Clears the legacy coverImageUrl column alongside
+  // setting coverImageKey, same "the two fields never disagree" reasoning
+  // as logoUrl/profileImageKey (see group.entity.ts).
+  async uploadCoverImage(
+    groupId: string,
+    file: Express.Multer.File,
+  ): Promise<GroupResponseDto> {
+    const group = await this.loadGroupOrFail(groupId);
+    const processed = await this.imageProcessingService.processCoverImage(
+      file.buffer,
+    );
+    const newKey = buildGroupCoverImageKey(group.id);
+    await this.imageAssetService.replace({
+      processedBuffer: processed,
+      newKey,
+      oldKey: group.coverImageKey,
+      persist: async (key) => {
+        group.coverImageKey = key;
+        group.coverImageUrl = null;
+        await this.em.flush();
+      },
+      logContext: { resourceType: 'group-cover-image', resourceId: group.id },
+    });
+    return this.toResponseDto(this.em, group);
+  }
+
+  // DELETE /groups/:id/cover-image - idempotent, same as
+  // deleteProfileImage above.
+  async deleteCoverImage(groupId: string): Promise<GroupResponseDto> {
+    const group = await this.loadGroupOrFail(groupId);
+    await this.imageAssetService.remove({
+      oldKey: group.coverImageKey,
+      persist: async () => {
+        group.coverImageKey = null;
+        await this.em.flush();
+      },
+      logContext: { resourceType: 'group-cover-image', resourceId: group.id },
     });
     return this.toResponseDto(this.em, group);
   }

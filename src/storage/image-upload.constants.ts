@@ -34,11 +34,15 @@ export function isAllowedImageMimeType(
 export const IMAGE_OUTPUT_CONTENT_TYPE = 'image/webp';
 
 // Square, cover-cropped - User avatar, Group profile image, Section
-// profile image (module spec §6). Event cover uses its own 16:9 shape,
-// see EVENT_COVER_DIMENSIONS below.
+// profile image (module spec §6). A "cover" image (Event, Group) uses its
+// own 16:9 shape, see COVER_IMAGE_DIMENSIONS below.
 export const PROFILE_IMAGE_DIMENSIONS = { width: 512, height: 512 } as const;
 
-export const EVENT_COVER_DIMENSIONS = { width: 1600, height: 900 } as const;
+// Shared 16:9 shape for every *cover* image this module processes - Event
+// cover and Group cover (Section has no cover upload, see
+// sections.service.ts). Despite the name predating Group's own cover
+// upload, there is nothing Event-specific about the dimensions themselves.
+export const COVER_IMAGE_DIMENSIONS = { width: 1600, height: 900 } as const;
 
 // 82-85 per the module spec ("quality około 82-85") - a single fixed value
 // rather than a per-resource range, since nothing here calls for tuning it

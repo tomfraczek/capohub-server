@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import sharp from 'sharp';
 import {
-  EVENT_COVER_DIMENSIONS,
+  COVER_IMAGE_DIMENSIONS,
   IMAGE_OUTPUT_QUALITY,
   PROFILE_IMAGE_DIMENSIONS,
 } from './image-upload.constants';
@@ -26,8 +26,11 @@ export class ImageProcessingService {
     return this.process(buffer, PROFILE_IMAGE_DIMENSIONS);
   }
 
-  async processEventCover(buffer: Buffer): Promise<Buffer> {
-    return this.process(buffer, EVENT_COVER_DIMENSIONS);
+  // Shared by Event cover and Group cover uploads (the name predates
+  // Group's own cover upload, see events.service.ts/groups.service.ts) -
+  // both use the same 16:9 COVER_IMAGE_DIMENSIONS shape.
+  async processCoverImage(buffer: Buffer): Promise<Buffer> {
+    return this.process(buffer, COVER_IMAGE_DIMENSIONS);
   }
 
   private async process(

@@ -225,7 +225,7 @@ function buildService(
     buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
   } as unknown as R2StorageService;
   const imageProcessingService = {
-    processEventCover: jest.fn().mockResolvedValue(Buffer.from('webp')),
+    processCoverImage: jest.fn().mockResolvedValue(Buffer.from('webp')),
   } as unknown as ImageProcessingService;
   const imageAssetService = {
     replace: jest

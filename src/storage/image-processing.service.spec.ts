@@ -92,9 +92,9 @@ describe('ImageProcessingService', () => {
     });
   });
 
-  describe('processEventCover', () => {
+  describe('processCoverImage', () => {
     it('turns a JPEG into a 1600x900 WebP', async () => {
-      const output = await service.processEventCover(await buildJpeg());
+      const output = await service.processCoverImage(await buildJpeg());
       const metadata = await sharp(output).metadata();
 
       expect(metadata.format).toBe('webp');
@@ -106,7 +106,7 @@ describe('ImageProcessingService', () => {
       // A tall, narrow input (300x900) - a naive non-cropping resize would
       // squash it; `fit: cover` must crop instead, so the output stays
       // exactly 1600x900 with no stretching.
-      const output = await service.processEventCover(await buildPng(300, 900));
+      const output = await service.processCoverImage(await buildPng(300, 900));
       const metadata = await sharp(output).metadata();
 
       expect(metadata.format).toBe('webp');
@@ -117,7 +117,7 @@ describe('ImageProcessingService', () => {
     it('rejects a truncated/corrupt buffer with IMAGE_INVALID', async () => {
       const truncated = (await buildJpeg()).subarray(0, 50);
 
-      await expect(service.processEventCover(truncated)).rejects.toMatchObject({
+      await expect(service.processCoverImage(truncated)).rejects.toMatchObject({
         response: { code: 'IMAGE_INVALID' },
       });
     });

@@ -157,6 +157,7 @@ function buildService(em: EntityManager) {
   } as unknown as R2StorageService;
   const imageProcessingService = {
     processProfileImage: jest.fn().mockResolvedValue(Buffer.from('webp')),
+    processCoverImage: jest.fn().mockResolvedValue(Buffer.from('webp')),
   } as unknown as ImageProcessingService;
   // Not cast to ImageAssetService directly (unlike the mocks above) - tests
   // read `imageAssetService.replace`/`.remove` back off the returned object
@@ -411,6 +412,93 @@ describe('GroupsService', () => {
       const { service, imageAssetService } = buildService(em);
 
       await service.deleteProfileImage('group-1');
+
+      expect(imageAssetService.remove).toHaveBeenCalledWith(
+        expect.objectContaining({ oldKey: null }),
+      );
+    });
+  });
+
+  describe('uploadCoverImage', () => {
+    function buildUploadedFile(): Express.Multer.File {
+      return { buffer: Buffer.from('raw-bytes') } as Express.Multer.File;
+    }
+
+    it('processes the file, uploads it under a fresh key, sets coverImageKey and clears the legacy coverImageUrl', async () => {
+      const existing = buildGroup({
+        id: 'group-1',
+        coverImageUrl: 'https://legacy.example.com/old-cover.png',
+      });
+      const { em } = buildMockEm({ groupResults: [existing] });
+      const { service } = buildService(em);
+
+      const dto = await service.uploadCoverImage(
+        'group-1',
+        buildUploadedFile(),
+      );
+
+      expect(existing.coverImageKey).toMatch(
+        /^groups\/group-1\/cover\/.+\.webp$/,
+      );
+      expect(existing.coverImageUrl).toBeNull();
+      expect(dto.coverImageUrl).toBe(
+        `https://cdn.example.com/${existing.coverImageKey}`,
+      );
+    });
+
+    it('passes the previous coverImageKey as oldKey to ImageAssetService.replace', async () => {
+      const existing = buildGroup({
+        id: 'group-1',
+        coverImageKey: 'groups/group-1/cover/old.webp',
+      });
+      const { em } = buildMockEm({ groupResults: [existing] });
+      const { service, imageAssetService } = buildService(em);
+
+      await service.uploadCoverImage('group-1', buildUploadedFile());
+
+      expect(imageAssetService.replace).toHaveBeenCalledWith(
+        expect.objectContaining({
+          oldKey: 'groups/group-1/cover/old.webp',
+          logContext: {
+            resourceType: 'group-cover-image',
+            resourceId: 'group-1',
+          },
+        }),
+      );
+    });
+
+    it('throws NotFoundException when the group does not exist', async () => {
+      const { em } = buildMockEm({ groupResults: [null] });
+      const { service } = buildService(em);
+
+      await expect(
+        service.uploadCoverImage('missing-id', buildUploadedFile()),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('deleteCoverImage', () => {
+    it('clears coverImageKey and does not restore the legacy coverImageUrl', async () => {
+      const existing = buildGroup({
+        id: 'group-1',
+        coverImageUrl: null,
+        coverImageKey: 'groups/group-1/cover/old.webp',
+      });
+      const { em } = buildMockEm({ groupResults: [existing] });
+      const { service } = buildService(em);
+
+      const dto = await service.deleteCoverImage('group-1');
+
+      expect(existing.coverImageKey).toBeNull();
+      expect(dto.coverImageUrl).toBeNull();
+    });
+
+    it('is idempotent when there is no cover image to delete', async () => {
+      const existing = buildGroup({ id: 'group-1', coverImageKey: null });
+      const { em } = buildMockEm({ groupResults: [existing] });
+      const { service, imageAssetService } = buildService(em);
+
+      await service.deleteCoverImage('group-1');
 
       expect(imageAssetService.remove).toHaveBeenCalledWith(
         expect.objectContaining({ oldKey: null }),

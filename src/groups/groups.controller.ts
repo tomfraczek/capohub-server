@@ -142,6 +142,29 @@ export class GroupsController {
     return this.groupsService.deleteProfileImage(id);
   }
 
+  // PUT/DELETE :id/cover-image - same shape/gating as the profile-image
+  // pair above, just for the cover image.
+  @Put(':id/cover-image')
+  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupKind(GroupKind.ROOT)
+  @UseInterceptors(imageUploadInterceptor())
+  uploadCoverImage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ): Promise<GroupResponseDto> {
+    assertImageFilePresent(file);
+    return this.groupsService.uploadCoverImage(id, file);
+  }
+
+  @Delete(':id/cover-image')
+  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupKind(GroupKind.ROOT)
+  deleteCoverImage(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<GroupResponseDto> {
+    return this.groupsService.deleteCoverImage(id);
+  }
+
   // Valid from both ACTIVE and READ_ONLY (spec transition table); already
   // ARCHIVED is blocked by the guard with 409 GROUP_ARCHIVED.
   @Post(':id/archive')

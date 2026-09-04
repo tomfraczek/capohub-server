@@ -22,3 +22,7 @@ export function buildSectionProfileImageKey(sectionId: string): string {
 export function buildEventCoverImageKey(eventId: string): string {
   return `events/${eventId}/cover/${randomUUID()}.webp`;
 }
+
+export function buildGroupCoverImageKey(groupId: string): string {
+  return `groups/${groupId}/cover/${randomUUID()}.webp`;
+}
