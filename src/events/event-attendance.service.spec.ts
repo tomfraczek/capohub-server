@@ -507,12 +507,12 @@ describe('EventAttendanceService.checkInByIdentity', () => {
 
     const result = await service.checkInByIdentity(
       'event-1',
-      'capohub:v1:u:042981',
+      'https://capohub.test/u/042981',
       buildUser({ id: 'actor-1' }),
     );
 
     expect(resolve).toHaveBeenCalledWith(
-      'capohub:v1:u:042981',
+      'https://capohub.test/u/042981',
       expect.anything(),
     );
     expect(result.attended).toBe(true);

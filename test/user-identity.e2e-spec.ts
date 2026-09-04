@@ -26,6 +26,8 @@ import { User } from '../src/users/entities/user.entity';
 import { UserProfileResponseDto } from '../src/users/dto/user-profile-response.dto';
 import { PublicUserProfileResponseDto } from '../src/users/dto/public-user-profile-response.dto';
 
+const CONFIGURED_WEB_BASE_URL = 'https://capohub.test';
+
 const OWNER_TOKEN = 'valid-user-identity-owner-token';
 const VIEWER_TOKEN = 'valid-user-identity-viewer-token';
 
@@ -93,6 +95,7 @@ async function bodyOf<T>(req: request.Test): Promise<T> {
 
 describe('User Identity (e2e)', () => {
   let app: INestApplication<App>;
+  let appConfig: AppConfigService;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -105,7 +108,7 @@ describe('User Identity (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
-    const appConfig = app.get(AppConfigService);
+    appConfig = app.get(AppConfigService);
     app.setGlobalPrefix(appConfig.apiPrefix);
     app.enableVersioning({
       type: VersioningType.URI,
@@ -114,6 +117,16 @@ describe('User Identity (e2e)', () => {
     });
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
+
+    // This suite exercises the User QR/qrPayload flow end-to-end, which
+    // needs a real, deterministic PUBLIC_WEB_BASE_URL regardless of
+    // whatever the actual .env does or doesn't have configured (see
+    // qr-payload.util.ts) - overridden here rather than relying on the
+    // ambient environment, same approach as event-attendance.e2e-spec.ts/
+    // training-check-in.e2e-spec.ts's own check-in-by-QR tests.
+    jest
+      .spyOn(appConfig, 'publicWebBaseUrl', 'get')
+      .mockReturnValue(CONFIGURED_WEB_BASE_URL);
 
     for (const token of Object.keys(TOKEN_TO_AUTH)) {
       await request(app.getHttpServer())
@@ -141,11 +154,25 @@ describe('User Identity (e2e)', () => {
     );
   }
 
-  it("returns the caller's own numericCode and a matching versioned qrPayload", async () => {
+  it("returns the caller's own numericCode and a matching public https:// qrPayload", async () => {
     const profile = await getOwnProfile(OWNER_TOKEN);
 
     expect(profile.numericCode).toMatch(/^[0-9]{6}$/);
-    expect(profile.qrPayload).toBe(`capohub:v1:u:${profile.numericCode}`);
+    expect(profile.qrPayload).toBe(
+      `${CONFIGURED_WEB_BASE_URL}/u/${profile.numericCode}`,
+    );
+  });
+
+  it('returns qrPayload: null - never a fabricated placeholder - when no public web domain is configured', async () => {
+    jest.spyOn(appConfig, 'publicWebBaseUrl', 'get').mockReturnValue(undefined);
+    try {
+      const profile = await getOwnProfile(OWNER_TOKEN);
+      expect(profile.qrPayload).toBeNull();
+    } finally {
+      jest
+        .spyOn(appConfig, 'publicWebBaseUrl', 'get')
+        .mockReturnValue(CONFIGURED_WEB_BASE_URL);
+    }
   });
 
   it('never changes numericCode across an unrelated profile update (PATCH /users/me/profile)', async () => {
@@ -291,6 +318,136 @@ describe('User Identity (e2e)', () => {
     it('returns 401 for an unauthenticated lookup', async () => {
       await request(app.getHttpServer())
         .get('/api/v1/users/by-code/042981')
+        .expect(401);
+    });
+  });
+
+  // GET /users/resolve-identity - backs the mobile "scan/type someone's
+  // code to view their profile" flow (Profile module). Deliberately reuses
+  // UserCheckInIdentityService verbatim (see users.controller.ts's own
+  // comment) rather than a second identity parser, so it accepts exactly
+  // the same three input shapes check-in already does, just for a
+  // different (non-check-in) purpose - and returns only `userId`, never
+  // profile data, so the real (privacy-filtered) profile always still goes
+  // through GET /:userId/profile.
+  describe('GET /users/resolve-identity', () => {
+    it('resolves a raw 6-digit numericCode to {userId}', async () => {
+      const owner = await getOwnProfile(OWNER_TOKEN);
+
+      const result = await bodyOf<{ userId: string }>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/resolve-identity')
+          .query({ identity: owner.numericCode })
+          .set('Authorization', `Bearer ${VIEWER_TOKEN}`)
+          .expect(200),
+      );
+      expect(result.userId).toBe(owner.userId);
+      expect(Object.keys(result)).toEqual(['userId']);
+    });
+
+    it('resolves the frontend "U123-456" display form to {userId}', async () => {
+      const owner = await getOwnProfile(OWNER_TOKEN);
+      const display = `U${owner.numericCode.slice(0, 3)}-${owner.numericCode.slice(3)}`;
+
+      const result = await bodyOf<{ userId: string }>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/resolve-identity')
+          .query({ identity: display })
+          .set('Authorization', `Bearer ${VIEWER_TOKEN}`)
+          .expect(200),
+      );
+      expect(result.userId).toBe(owner.userId);
+    });
+
+    it('resolves a full User QR payload to {userId}', async () => {
+      const owner = await getOwnProfile(OWNER_TOKEN);
+
+      const result = await bodyOf<{ userId: string }>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/resolve-identity')
+          .query({ identity: owner.qrPayload })
+          .set('Authorization', `Bearer ${VIEWER_TOKEN}`)
+          .expect(200),
+      );
+      expect(result.userId).toBe(owner.userId);
+    });
+
+    it('rejects a User QR from a different host than the configured PUBLIC_WEB_BASE_URL', async () => {
+      const owner = await getOwnProfile(OWNER_TOKEN);
+      const foreignPayload = owner.qrPayload!.replace(
+        CONFIGURED_WEB_BASE_URL,
+        'https://evil.example',
+      );
+
+      const error = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/resolve-identity')
+          .query({ identity: foreignPayload })
+          .set('Authorization', `Bearer ${VIEWER_TOKEN}`)
+          .expect(400),
+      );
+      expect(error.code).toBe('INVALID_CHECK_IN_IDENTITY');
+    });
+
+    // The app has no public users yet (see the task history) - these are
+    // no longer "legacy, still accepted" shapes, they are plain
+    // unrecognized input now, same as any other malformed string.
+    it.each(['capohub:v1:u:042981', 'capohub://u/042981'])(
+      'no longer resolves the removed legacy User QR shape %p',
+      async (removed) => {
+        const error = await bodyOf<HttpErrorResponse>(
+          request(app.getHttpServer())
+            .get('/api/v1/users/resolve-identity')
+            .query({ identity: removed })
+            .set('Authorization', `Bearer ${VIEWER_TOKEN}`)
+            .expect(400),
+        );
+        expect(error.code).toBe('INVALID_CHECK_IN_IDENTITY');
+      },
+    );
+
+    it('rejects a well-formed Event QR payload with WRONG_IDENTITY_TYPE, never resolving it as a User', async () => {
+      const error = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/resolve-identity')
+          .query({ identity: 'capohub:v1:f:123456' })
+          .set('Authorization', `Bearer ${VIEWER_TOKEN}`)
+          .expect(400),
+      );
+      expect(error.code).toBe('WRONG_IDENTITY_TYPE');
+    });
+
+    it.each(['garbage', 'capohub:v2:u:123456', '12345', ''])(
+      'returns 400 INVALID_CHECK_IN_IDENTITY (never 500) for malformed identity %p',
+      async (malformed) => {
+        const error = await bodyOf<HttpErrorResponse>(
+          request(app.getHttpServer())
+            .get('/api/v1/users/resolve-identity')
+            .query({ identity: malformed })
+            .set('Authorization', `Bearer ${VIEWER_TOKEN}`)
+            .expect((res) => {
+              expect(res.status).toBeLessThan(500);
+            }),
+        );
+        expect(error.statusCode).toBeLessThan(500);
+      },
+    );
+
+    it('returns 404 USER_NOT_FOUND for a well-formed but unassigned code', async () => {
+      const error = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/resolve-identity')
+          .query({ identity: '000000' })
+          .set('Authorization', `Bearer ${VIEWER_TOKEN}`)
+          .expect(404),
+      );
+      expect(error.code).toBe('USER_NOT_FOUND');
+    });
+
+    it('returns 401 for an unauthenticated lookup', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/users/resolve-identity')
+        .query({ identity: '042981' })
         .expect(401);
     });
   });

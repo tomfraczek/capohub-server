@@ -1,12 +1,26 @@
+import { Collection } from '@mikro-orm/core';
 import { Group } from '../groups/entities/group.entity';
 import { Section } from '../groups/entities/section.entity';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
+import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignment.entity';
+import { Rank } from '../graduation/entities/rank.entity';
+import { RankCordSegment } from '../graduation/entities/rank-cord-segment.entity';
+import { RankTrack } from '../graduation/enums/rank-track.enum';
+import { GroupRole } from '../groups/enums/group-role.enum';
+import { PublicUrlBuilder } from '../storage/image-url.util';
 import { User } from './entities/user.entity';
 import {
   toPublicUserProfileResponseDto,
   toUserProfileResponseDto,
   toUserSearchResultDto,
 } from './user-profile.mapper';
+
+// Trivial, structural stand-in for R2StorageService - same approach every
+// other mapper spec in this module uses (see image-url.util.ts's own
+// PublicUrlBuilder comment).
+const urlBuilder: PublicUrlBuilder = {
+  buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
+};
 
 function buildUser(overrides: Partial<User> = {}): User {
   const user = new User();
@@ -62,6 +76,28 @@ function buildFormalGroupAffiliation(
   return affiliation;
 }
 
+function buildFormalRankAssignment(
+  overrides: Partial<FormalRankAssignment> = {},
+): FormalRankAssignment {
+  const rank = new Rank();
+  rank.id = 'rank-1';
+  rank.name = 'Corda Verde';
+  rank.track = RankTrack.ADULT;
+  const segment = new RankCordSegment();
+  segment.position = 0;
+  segment.colorHex = '#00FF00';
+  segment.proportion = 1;
+  rank.cordSegments = new Collection<RankCordSegment>(rank, [segment]);
+
+  const assignment = new FormalRankAssignment();
+  assignment.rank = rank;
+  assignment.sourceGroup = buildGroup();
+  assignment.startedOn = new Date('2021-03-01T00:00:00.000Z');
+  assignment.endedOn = null;
+  Object.assign(assignment, overrides);
+  return assignment;
+}
+
 describe('toUserProfileResponseDto', () => {
   it('computes profileComplete=false when either name is missing', () => {
     expect(
@@ -77,10 +113,19 @@ describe('toUserProfileResponseDto', () => {
     );
   });
 
-  it('returns the numericCode verbatim and a matching versioned qrPayload', () => {
+  it('returns the numericCode verbatim and qrPayload null - never a fabricated placeholder - when no public web domain is configured', () => {
     const dto = toUserProfileResponseDto(buildUser(), null);
     expect(dto.numericCode).toBe('042981');
-    expect(dto.qrPayload).toBe('capohub:v1:u:042981');
+    expect(dto.qrPayload).toBeNull();
+  });
+
+  it('builds a public https:// qrPayload once a web base URL is passed through', () => {
+    const dto = toUserProfileResponseDto(
+      buildUser(),
+      null,
+      'https://capohub.pl',
+    );
+    expect(dto.qrPayload).toBe('https://capohub.pl/u/042981');
   });
 
   it('computes profileComplete=true once both names are set', () => {
@@ -132,12 +177,24 @@ describe('toPublicUserProfileResponseDto', () => {
     canSeeLocation: false,
     canSeeCapoeiraStartedAt: false,
     sections: null,
+    sectionRoles: new Map<string, GroupRole[]>(),
     formalGroup: null,
+    formalRank: null,
+    urlBuilder,
   };
 
   it('never reuses User.displayName, even though it could contain a real name', () => {
     const dto = toPublicUserProfileResponseDto(buildUser(), baseCtx);
     expect(dto.displayName).not.toBe('Ada Real Name');
+  });
+
+  it('always includes the avatar, unconditionally - never privacy-gated', () => {
+    const dto = toPublicUserProfileResponseDto(
+      buildUser({ presetAvatarId: 'avatar-01' }),
+      baseCtx,
+    );
+    expect(dto.avatarType).toBe('CLERK');
+    expect(dto.presetAvatarId).toBe('avatar-01');
   });
 
   it('shows the full name only when visible and both parts are set', () => {
@@ -207,22 +264,81 @@ describe('toPublicUserProfileResponseDto', () => {
     expect(visible.country).toBe('BR');
   });
 
-  it('maps sections/formalGroup to id+name refs only, never role/status data', () => {
+  it('maps sections to id/name/logoUrl/roles, and formalGroup to id+name', () => {
     const dto = toPublicUserProfileResponseDto(buildUser(), {
       ...baseCtx,
-      sections: [buildSection()],
+      sections: [buildSection({ profileImageKey: 'sections/section-1.png' })],
+      sectionRoles: new Map([
+        ['section-1', [GroupRole.MEMBER, GroupRole.INSTRUCTOR]],
+      ]),
       formalGroup: buildFormalGroupAffiliation(),
     });
     expect(dto.sections).toEqual([
-      { id: 'section-1', name: 'Downtown Section' },
+      {
+        id: 'section-1',
+        name: 'Downtown Section',
+        logoUrl: 'https://cdn.example.com/sections/section-1.png',
+        // MEMBER is filtered out - it carries no information a viewer
+        // doesn't already have from the section merely being listed.
+        roles: [GroupRole.INSTRUCTOR],
+      },
     ]);
     expect(dto.formalGroup).toEqual({ id: 'group-1', name: 'Cordao de Ouro' });
   });
 
-  it('leaves sections/formalGroup null when not visible, distinct from an empty list', () => {
+  // The original, reversed design decision's actual concern (leaking who
+  // holds administrative power over a Section) still fully applies to
+  // OWNER/ADMIN - only INSTRUCTOR/ASSISTANT are capoeira-representative
+  // enough to ever reach a profile.
+  it("never includes OWNER/ADMIN in a section's public roles, even when the target genuinely holds them", () => {
+    const dto = toPublicUserProfileResponseDto(buildUser(), {
+      ...baseCtx,
+      sections: [buildSection()],
+      sectionRoles: new Map([
+        ['section-1', [GroupRole.MEMBER, GroupRole.OWNER, GroupRole.ADMIN]],
+      ]),
+    });
+    expect(dto.sections?.[0].roles).toEqual([]);
+  });
+
+  it('defaults a section missing from sectionRoles to an empty roles array, never throws', () => {
+    const dto = toPublicUserProfileResponseDto(buildUser(), {
+      ...baseCtx,
+      sections: [buildSection()],
+    });
+    expect(dto.sections).toEqual([
+      { id: 'section-1', name: 'Downtown Section', logoUrl: null, roles: [] },
+    ]);
+  });
+
+  it('leaves sections/formalGroup/formalRank null when not visible, distinct from an empty list', () => {
     const dto = toPublicUserProfileResponseDto(buildUser(), baseCtx);
     expect(dto.sections).toBeNull();
     expect(dto.formalGroup).toBeNull();
+    expect(dto.formalRank).toBeNull();
+  });
+
+  it('maps a visible formal rank to name/cordSegments/sourceGroup/startedOn only', () => {
+    const dto = toPublicUserProfileResponseDto(buildUser(), {
+      ...baseCtx,
+      formalRank: buildFormalRankAssignment(),
+    });
+    expect(dto.formalRank).toEqual({
+      name: 'Corda Verde',
+      cordSegments: [{ position: 0, colorHex: '#00FF00', proportion: 1 }],
+      sourceGroup: { id: 'group-1', name: 'Cordao de Ouro' },
+      startedOn: '2021-03-01',
+    });
+  });
+
+  it('maps a formal rank with no sourceGroup to sourceGroup: null', () => {
+    const dto = toPublicUserProfileResponseDto(buildUser(), {
+      ...baseCtx,
+      formalRank: buildFormalRankAssignment({
+        sourceGroup: undefined as never,
+      }),
+    });
+    expect(dto.formalRank?.sourceGroup).toBeNull();
   });
 });
 

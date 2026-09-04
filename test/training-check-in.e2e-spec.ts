@@ -40,6 +40,8 @@ import { TrainingAttendance } from '../src/trainings/entities/training-attendanc
 import { TrainingRsvp } from '../src/trainings/entities/training-rsvp.entity';
 import { TrainingVisibility } from '../src/trainings/enums/training-visibility.enum';
 
+const CONFIGURED_WEB_BASE_URL = 'https://capohub.test';
+
 const OWNER_TOKEN = 'valid-training-checkin-owner-token';
 const ADMIN_TOKEN = 'valid-training-checkin-admin-token';
 const INSTRUCTOR_TOKEN = 'valid-training-checkin-instructor-token';
@@ -130,6 +132,13 @@ describe('Training Check-In (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     const appConfig = app.get(AppConfigService);
+    // The "checks in by User QR payload" test below needs a real,
+    // deterministic PUBLIC_WEB_BASE_URL to build a resolvable QR link
+    // against, regardless of whatever the ambient .env does or doesn't
+    // have configured - see qr-payload.util.ts.
+    jest
+      .spyOn(appConfig, 'publicWebBaseUrl', 'get')
+      .mockReturnValue(CONFIGURED_WEB_BASE_URL);
     app.setGlobalPrefix(appConfig.apiPrefix);
     app.enableVersioning({
       type: VersioningType.URI,
@@ -519,7 +528,11 @@ describe('Training Check-In (e2e)', () => {
     const code = await getNumericCode(MEMBER_TOKEN);
 
     const result = await bodyOf<TrainingCheckInResultDto>(
-      checkIn(OWNER_TOKEN, training.id, `capohub:v1:u:${code}`).expect(201),
+      checkIn(
+        OWNER_TOKEN,
+        training.id,
+        `${CONFIGURED_WEB_BASE_URL}/u/${code}`,
+      ).expect(201),
     );
     expect(result.attended).toBe(true);
   });

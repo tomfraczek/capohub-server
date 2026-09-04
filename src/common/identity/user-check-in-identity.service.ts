@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
+import { AppConfigService } from '../../config/app.config';
 import { User } from '../../users/entities/user.entity';
 import { normalizeNumericCodeInput } from '../utils/numeric-code';
 import { parseQrPayload } from './qr-payload.util';
@@ -24,28 +25,36 @@ export interface ResolvedCheckInIdentity {
 // spec §3). Deliberately does NOT live in UsersModule: UsersModule already
 // imports EventsModule (see users.module.ts), so EventsModule/
 // TrainingsModule importing UsersModule back would be circular - this
-// service only needs EntityManager, so it is provided directly by each
-// module that needs it instead (no shared module wrapper needed for one
-// stateless class - see events.module.ts/trainings.module.ts).
+// service only needs EntityManager and the globally-available
+// AppConfigService, so it is provided directly by each module that needs
+// it instead (no shared module wrapper needed for one stateless class -
+// see events.module.ts/trainings.module.ts).
 //
 // Accepts exactly two input shapes, matching the identity system's own
 // fundamental rule (numericCode and QR are two encodings of the same
-// identity - see the module spec §2):
+// identity):
 //  - a numeric code: "123456", "123-456", or the frontend's "U123-456"
 //    human-display form (a leading U is stripped before validating - the
 //    display prefix is a presentation convention, not part of the stored
 //    code),
-//  - a User QR payload: "capohub:v1:u:123456".
+//  - a User QR payload: "https://<PUBLIC_WEB_BASE_URL's host>/u/123456" -
+//    the exact same link "Mój kod"/profile lookup use (see
+//    qr-payload.util.ts) - there is only one User identity QR in this
+//    app, not a separate check-in-only format. When no public domain is
+//    configured, no QR-shaped input can ever resolve here - only the
+//    numeric code path can (see parseQrPayload's own comment).
 // A well-formed Event QR payload (capohub:v1:<f|w|r|e>:...) is explicitly
 // rejected with WRONG_IDENTITY_TYPE, never silently ignored or
-// misinterpreted as a numeric code - see the module spec §3/§18. This
-// service only *identifies* the User; it never checks any check-in
-// permission or eligibility itself (that is each caller's own concern,
-// after resolving the User here - see EventAttendanceService/
-// TrainingAttendanceController).
+// misinterpreted as a numeric code. This service only *identifies* the
+// User; it never checks any check-in permission or eligibility itself
+// (that is each caller's own concern, after resolving the User here - see
+// EventAttendanceService/TrainingAttendanceController).
 @Injectable()
 export class UserCheckInIdentityService {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly appConfigService: AppConfigService,
+  ) {}
 
   async resolve(
     identity: string,
@@ -53,7 +62,10 @@ export class UserCheckInIdentityService {
   ): Promise<ResolvedCheckInIdentity> {
     const trimmed = identity.trim();
 
-    const qrPayload = parseQrPayload(trimmed);
+    const qrPayload = parseQrPayload(
+      trimmed,
+      this.appConfigService.publicWebBaseUrl,
+    );
     if (qrPayload) {
       if (qrPayload.entityType !== 'USER') {
         throw new BadRequestException({

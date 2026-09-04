@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
+import { AppConfigService } from '../config/app.config';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
 import { normalizeNumericCodeInput } from '../common/utils/numeric-code';
 import { Group } from '../groups/entities/group.entity';
@@ -19,9 +20,12 @@ import { GroupHierarchyService } from '../groups/group-hierarchy.service';
 import { GroupRole } from '../groups/enums/group-role.enum';
 import { GroupStatus } from '../groups/enums/group-status.enum';
 import { SectionMembershipStatus } from '../groups/enums/section-membership-status.enum';
+import { RoleAssignmentsService } from '../groups/role-assignments.service';
 import { EventRoleAssignment } from '../events/entities/event-role-assignment.entity';
 import { EventRole } from '../events/enums/event-role.enum';
 import { EventRsvpStatus } from '../events/enums/event-rsvp-status.enum';
+import { FormalRankService } from '../graduation/formal-rank.service';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { FormalGroupResponseDto } from './dto/formal-group-response.dto';
 import { PublicUserProfileResponseDto } from './dto/public-user-profile-response.dto';
 import { UpdateUserProfileInput } from './dto/update-user-profile.schema';
@@ -69,11 +73,19 @@ export class UserProfileService {
   constructor(
     private readonly em: EntityManager,
     private readonly groupHierarchyService: GroupHierarchyService,
+    private readonly roleAssignmentsService: RoleAssignmentsService,
+    private readonly formalRankService: FormalRankService,
+    private readonly r2StorageService: R2StorageService,
+    private readonly appConfigService: AppConfigService,
   ) {}
 
   async getOwnProfile(user: User): Promise<UserProfileResponseDto> {
     const formalGroup = await this.loadActiveFormalGroup(user.id);
-    return toUserProfileResponseDto(user, formalGroup);
+    return toUserProfileResponseDto(
+      user,
+      formalGroup,
+      this.appConfigService.publicWebBaseUrl,
+    );
   }
 
   async updateOwnProfile(
@@ -159,12 +171,22 @@ export class UserProfileService {
     const canSeeCapoeiraStartedAt = isOwner || target.showCapoeiraStartedAt;
     const canSeeSections = isOwner || target.showSections;
     const canSeeFormalGroup = isOwner || target.showFormalGroup;
+    const canSeeFormalRank = isOwner || target.showFormalRank;
 
     const sections = canSeeSections
       ? await this.loadActiveSections(target.id)
       : null;
+    const sectionRoles = sections
+      ? await this.loadSectionRoles(
+          target.id,
+          sections.map((section) => section.id),
+        )
+      : new Map<string, GroupRole[]>();
     const formalGroup = canSeeFormalGroup
       ? await this.loadActiveFormalGroup(target.id)
+      : null;
+    const formalRank = canSeeFormalRank
+      ? await this.formalRankService.getCurrentOrNull(target.id)
       : null;
 
     return toPublicUserProfileResponseDto(target, {
@@ -173,7 +195,10 @@ export class UserProfileService {
       canSeeLocation,
       canSeeCapoeiraStartedAt,
       sections,
+      sectionRoles,
       formalGroup,
+      formalRank,
+      urlBuilder: this.r2StorageService,
     });
   }
 
@@ -381,6 +406,37 @@ export class UserProfileService {
       { populate: ['section'] },
     );
     return memberships.map((membership) => membership.section);
+  }
+
+  /**
+   * The target's Role(s) per Section id, for exactly the Sections already
+   * resolved by loadActiveSections above - same source
+   * (RoleAssignmentsService.getGroupParticipationForUsers) and same
+   * membership+MEMBER-role pairing invariant CommunityHomeService relies on
+   * (see community-home.service.ts's buildParticipation), just for a single
+   * target user instead of the caller. Filtered to `sectionIds` since
+   * getGroupParticipationForUsers also returns the target's Group-level
+   * roles (e.g. OWNER/ADMIN of a Group they administer), which must never
+   * leak onto the public profile's Section list (see
+   * public-user-profile-response.dto.ts's own "no `groups` field" note).
+   */
+  private async loadSectionRoles(
+    userId: string,
+    sectionIds: string[],
+  ): Promise<Map<string, GroupRole[]>> {
+    if (sectionIds.length === 0) {
+      return new Map();
+    }
+    const participation =
+      await this.roleAssignmentsService.getGroupParticipationForUsers([userId]);
+    const sectionIdSet = new Set(sectionIds);
+    const roles = new Map<string, GroupRole[]>();
+    for (const row of participation) {
+      if (sectionIdSet.has(row.groupId)) {
+        roles.set(row.groupId, row.roles);
+      }
+    }
+    return roles;
   }
 
   /**

@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { ClerkModule } from '../auth/clerk/clerk.module';
 import { PermissionsModule } from '../auth/permissions/permissions.module';
+import { UserCheckInIdentityService } from '../common/identity/user-check-in-identity.service';
 import { EventsModule } from '../events/events.module';
+import { GraduationModule } from '../graduation/graduation.module';
 import { GroupsModule } from '../groups/groups.module';
 import { SongLibraryModule } from '../song-library/song-library.module';
 import { StorageModule } from '../storage/storage.module';
@@ -33,6 +35,10 @@ import { UsersController } from './users.controller';
     SongLibraryModule,
     GroupsModule,
     EventsModule,
+    // For UserProfileService's public-profile formal-rank field (see
+    // getPublicProfile) - FormalRankService.getCurrentOrNull. One-
+    // directional: GraduationModule never imports UsersModule back.
+    GraduationModule,
     PermissionsModule,
     // For the R2-backed avatar upload/replace/delete endpoints (see
     // UserService.uploadAvatar/deleteAvatar and users.controller.ts's
@@ -41,7 +47,16 @@ import { UsersController } from './users.controller';
     StorageModule,
   ],
   controllers: [UsersController],
-  providers: [UserService, UserProfileService, UserIdentityService],
+  providers: [
+    UserService,
+    UserProfileService,
+    UserIdentityService,
+    // Not imported via a module - a stateless class (only depends on
+    // EntityManager), provided directly here the same way EventsModule/
+    // TrainingsModule already do (see the service's own comment) - backs
+    // GET /users/resolve-identity (see users.controller.ts).
+    UserCheckInIdentityService,
+  ],
   // UserIdentityService is additionally exported so a future
   // attendance/check-in module can call resolveUserByNumericCode without
   // this module needing to change (see that service's own comment) - not

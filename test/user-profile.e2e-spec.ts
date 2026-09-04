@@ -22,6 +22,10 @@ import { PublicUserProfileResponseDto } from '../src/users/dto/public-user-profi
 import { FormalGroupResponseDto } from '../src/users/dto/formal-group-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
+import { GraduationSystemResponseDto } from '../src/graduation/dto/graduation-system-response.dto';
+import { RankResponseDto } from '../src/graduation/dto/rank-response.dto';
+import { RankTrack } from '../src/graduation/enums/rank-track.enum';
+import { FormalRankAssignmentResponseDto } from '../src/graduation/dto/formal-rank-assignment-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
 import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
@@ -494,6 +498,65 @@ describe('User Profile (e2e)', () => {
     );
   }
 
+  function oneSegment(colorHex = '#123456') {
+    return [{ position: 0, colorHex, proportion: 1 }];
+  }
+
+  // Mirrors formal-rank.e2e-spec.ts's own createGroupWithCatalog - a Group
+  // with an active graduation system and one catalog Rank, owned by
+  // `token`. A fresh, unique-named Group per call (avoids catalog
+  // collisions across tests in this file).
+  async function createGroupWithCatalog(token: string): Promise<{
+    group: GroupResponseDto;
+    section: SectionResponseDto;
+    rank: RankResponseDto;
+  }> {
+    const group = await createGroup(token, {
+      name: `Formal Rank Catalog Group ${Date.now()}-${Math.random()}`,
+    });
+    const section = await createSection(token, group.id);
+    await bodyOf<GraduationSystemResponseDto>(
+      request(app.getHttpServer())
+        .post(`/api/v1/groups/${group.id}/graduation-system`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'System' })
+        .expect(201),
+    );
+    const rank = await bodyOf<RankResponseDto>(
+      request(app.getHttpServer())
+        .post(`/api/v1/groups/${group.id}/ranks`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          track: RankTrack.ADULT,
+          name: 'Corda Crua',
+          description: null,
+          previousRankId: null,
+          cordSegments: oneSegment(),
+        })
+        .expect(201),
+    );
+    return { group, section, rank };
+  }
+
+  async function setFormalRank(
+    token: string,
+    rankId: string,
+  ): Promise<FormalRankAssignmentResponseDto> {
+    return bodyOf<FormalRankAssignmentResponseDto>(
+      request(app.getHttpServer())
+        .put('/api/v1/users/me/formal-rank')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rankId })
+        .expect(200),
+    );
+  }
+
+  async function endFormalRank(token: string): Promise<void> {
+    await request(app.getHttpServer())
+      .delete('/api/v1/users/me/formal-rank')
+      .set('Authorization', `Bearer ${token}`);
+  }
+
   // ─── GET/PATCH /users/me/profile ────────────────────────────────────────
 
   describe('GET/PATCH /users/me/profile', () => {
@@ -774,7 +837,16 @@ describe('User Profile (e2e)', () => {
   // ─── sections list ───────────────────────────────────────────────────────
 
   describe('GET /users/:userId/profile - sections list', () => {
-    it('shows only id/name for active-membership sections, never roles or membership status, gated by showSections', async () => {
+    // Sections are, deliberately, no longer role/status-blind here - a
+    // capoeirista's *capoeira-representative* role in the Sections they
+    // train in (Instrutor/Asystent) is meant to be part of their public
+    // identity, same as it already is on their own Community Home
+    // (myRoles). Still entirely behind the single showSections gate, same
+    // as every other field of this shape. OWNER/ADMIN - app-authorization
+    // facts, never capoeira identity - and the uninformative MEMBER are
+    // never exposed here regardless of what the target's real
+    // RoleAssignments say (see the dedicated OWNER/ADMIN test below).
+    it('shows id/name/logoUrl/roles for active-membership sections, gated by showSections', async () => {
       const group = await createGroup(ADMIN_TOKEN, {
         name: 'Sections List Group',
       });
@@ -790,7 +862,7 @@ describe('User Profile (e2e)', () => {
         ADMIN_TOKEN,
         sectionA.id,
         VIEWER_TOKEN,
-        GroupRole.ADMIN,
+        GroupRole.INSTRUCTOR,
       );
 
       const targetId = localUserIdByToken.get(VIEWER_TOKEN) as string;
@@ -801,15 +873,91 @@ describe('User Profile (e2e)', () => {
       await patchOwnProfile(VIEWER_TOKEN, { showSections: true });
       const visible = await getPublicProfile(OTHER_ADMIN_TOKEN, targetId);
       expect(visible.sections).toHaveLength(2);
-      const names = visible.sections?.map((s) => s.name).sort();
-      expect(names).toEqual(
-        ['Sections List Section A', 'Sections List Section B'].sort(),
-      );
       for (const ref of visible.sections ?? []) {
-        expect(Object.keys(ref).sort()).toEqual(['id', 'name']);
+        expect(Object.keys(ref).sort()).toEqual([
+          'id',
+          'logoUrl',
+          'name',
+          'roles',
+        ]);
       }
 
+      const sectionARef = visible.sections?.find((s) => s.id === sectionA.id);
+      const sectionBRef = visible.sections?.find((s) => s.id === sectionB.id);
+      // sectionA's granted INSTRUCTOR shows; plain membership (sectionB, and
+      // the baseline MEMBER role every membership also carries) shows
+      // nothing - MEMBER is never itself informative enough to list.
+      expect(sectionARef?.roles).toEqual([GroupRole.INSTRUCTOR]);
+      expect(sectionBRef?.roles).toEqual([]);
+
       await patchOwnProfile(VIEWER_TOKEN, { showSections: false });
+    });
+
+    it('never exposes OWNER/ADMIN as a section role, even when the target genuinely holds it', async () => {
+      const group = await createGroup(ADMIN_TOKEN, {
+        name: 'Sections List Admin Group',
+      });
+      const section = await createSection(ADMIN_TOKEN, group.id, {
+        name: 'Sections List Admin Section',
+      });
+      await joinSection(ADMIN_TOKEN, section.id, VIEWER_TOKEN);
+      await grantSectionRole(
+        ADMIN_TOKEN,
+        section.id,
+        VIEWER_TOKEN,
+        GroupRole.ADMIN,
+      );
+
+      const targetId = localUserIdByToken.get(VIEWER_TOKEN) as string;
+      await patchOwnProfile(VIEWER_TOKEN, { showSections: true });
+
+      const visible = await getPublicProfile(OTHER_ADMIN_TOKEN, targetId);
+      const ref = visible.sections?.find((s) => s.id === section.id);
+      expect(ref?.roles).toEqual([]);
+
+      await patchOwnProfile(VIEWER_TOKEN, { showSections: false });
+    });
+  });
+
+  // ─── formal rank ────────────────────────────────────────────────────────
+
+  describe('GET /users/:userId/profile - formal rank', () => {
+    it('is null when not visible, null when never set, and always visible to the owner regardless of showFormalRank', async () => {
+      const { group, section, rank } =
+        await createGroupWithCatalog(ADMIN_TOKEN);
+      await joinSection(ADMIN_TOKEN, section.id, TARGET_TOKEN);
+      await setFormalGroup(TARGET_TOKEN, group.id);
+      const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
+
+      // Not yet set at all - null, not an error, regardless of the flag.
+      await patchOwnProfile(TARGET_TOKEN, { showFormalRank: true });
+      const beforeSet = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(beforeSet.formalRank).toBeNull();
+
+      await setFormalRank(TARGET_TOKEN, rank.id);
+
+      // Hidden by the flag - other viewers get null...
+      await patchOwnProfile(TARGET_TOKEN, { showFormalRank: false });
+      const hidden = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(hidden.formalRank).toBeNull();
+      // ...but the owner still sees their own, unfiltered.
+      const own = await getPublicProfile(TARGET_TOKEN, targetId);
+      expect(own.formalRank).toEqual({
+        name: 'Corda Crua',
+        cordSegments: oneSegment(),
+        sourceGroup: { id: group.id, name: group.name },
+        startedOn: null,
+      });
+
+      await patchOwnProfile(TARGET_TOKEN, { showFormalRank: true });
+      const visible = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(visible.formalRank).toEqual(own.formalRank);
+
+      await endFormalRank(TARGET_TOKEN);
+      await request(app.getHttpServer())
+        .delete('/api/v1/users/me/formal-group')
+        .set('Authorization', `Bearer ${TARGET_TOKEN}`);
+      await patchOwnProfile(TARGET_TOKEN, { showFormalRank: false });
     });
   });
 

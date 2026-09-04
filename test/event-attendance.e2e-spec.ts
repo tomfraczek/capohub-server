@@ -48,6 +48,8 @@ import { EventRole } from '../src/events/enums/event-role.enum';
 import { EventVisibility } from '../src/events/enums/event-visibility.enum';
 import { EventWaitlistPolicy } from '../src/events/enums/event-waitlist-policy.enum';
 
+const CONFIGURED_WEB_BASE_URL = 'https://capohub.test';
+
 const OWNER_TOKEN = 'valid-event-attendance-owner-token';
 const ORGANIZER_TOKEN = 'valid-event-attendance-organizer-token';
 const MODERATOR_TOKEN = 'valid-event-attendance-moderator-token';
@@ -138,6 +140,13 @@ describe('Event Attendance (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     const appConfig = app.get(AppConfigService);
+    // The "checks in by User QR payload" test below needs a real,
+    // deterministic PUBLIC_WEB_BASE_URL to build a resolvable QR link
+    // against, regardless of whatever the ambient .env does or doesn't
+    // have configured - see qr-payload.util.ts.
+    jest
+      .spyOn(appConfig, 'publicWebBaseUrl', 'get')
+      .mockReturnValue(CONFIGURED_WEB_BASE_URL);
     app.setGlobalPrefix(appConfig.apiPrefix);
     app.enableVersioning({
       type: VersioningType.URI,
@@ -571,7 +580,7 @@ describe('Event Attendance (e2e)', () => {
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/check-in`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .send({ identity: `capohub:v1:u:${code}` })
+          .send({ identity: `${CONFIGURED_WEB_BASE_URL}/u/${code}` })
           .expect(201),
       );
       expect(result.attended).toBe(true);

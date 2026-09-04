@@ -334,6 +334,48 @@ describe('validateEnv', () => {
     });
   });
 
+  describe('PUBLIC_WEB_BASE_URL', () => {
+    it('is undefined when not provided - never a fabricated placeholder domain', () => {
+      const result = validateEnv({
+        CORS_ORIGINS: 'http://localhost:3000',
+        DATABASE_URL: VALID_DATABASE_URL,
+        CLERK_SECRET_KEY: VALID_CLERK_SECRET_KEY,
+      });
+      expect(result.PUBLIC_WEB_BASE_URL).toBeUndefined();
+    });
+
+    it('is undefined for an empty string', () => {
+      const result = validateEnv({
+        CORS_ORIGINS: 'http://localhost:3000',
+        DATABASE_URL: VALID_DATABASE_URL,
+        CLERK_SECRET_KEY: VALID_CLERK_SECRET_KEY,
+        PUBLIC_WEB_BASE_URL: '',
+      });
+      expect(result.PUBLIC_WEB_BASE_URL).toBeUndefined();
+    });
+
+    it('strips a trailing slash so callers can safely interpolate /u/<code>', () => {
+      const result = validateEnv({
+        CORS_ORIGINS: 'http://localhost:3000',
+        DATABASE_URL: VALID_DATABASE_URL,
+        CLERK_SECRET_KEY: VALID_CLERK_SECRET_KEY,
+        PUBLIC_WEB_BASE_URL: 'https://capohub.pl/',
+      });
+      expect(result.PUBLIC_WEB_BASE_URL).toBe('https://capohub.pl');
+    });
+
+    it('rejects a non-URL value', () => {
+      expect(() =>
+        validateEnv({
+          CORS_ORIGINS: 'http://localhost:3000',
+          DATABASE_URL: VALID_DATABASE_URL,
+          CLERK_SECRET_KEY: VALID_CLERK_SECRET_KEY,
+          PUBLIC_WEB_BASE_URL: 'not-a-url',
+        }),
+      ).toThrow(/Invalid environment configuration/);
+    });
+  });
+
   describe('CLERK_AUTHORIZED_PARTIES', () => {
     it('defaults to an empty array when not provided', () => {
       const result = validateEnv({

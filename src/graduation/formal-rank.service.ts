@@ -73,6 +73,23 @@ export class FormalRankService {
     return toFormalRankAssignmentResponseDto(current);
   }
 
+  /**
+   * Same lookup as getCurrent, but for callers where "not set" is an
+   * ordinary, expected outcome rather than a 404 - e.g.
+   * UserProfileService.getPublicProfile resolving another user's formal
+   * rank for the public profile surface, where most viewers simply
+   * haven't set one. Returns the raw entity (not the DTO) so callers that
+   * need the underlying Rank/sourceGroup for their own mapping (e.g. a
+   * public, narrower DTO) don't have to re-fetch it.
+   */
+  async getCurrentOrNull(userId: string): Promise<FormalRankAssignment | null> {
+    return this.em.findOne(
+      FormalRankAssignment,
+      { user: userId, endedOn: null },
+      { populate: RANK_POPULATE },
+    );
+  }
+
   async getHistory(userId: string): Promise<FormalRankAssignmentResponseDto[]> {
     const assignments = await this.em.find(
       FormalRankAssignment,

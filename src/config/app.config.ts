@@ -75,6 +75,13 @@ export class AppConfigService {
     return this.configService.get('R2_PUBLIC_URL', { infer: true });
   }
 
+  // undefined until a real production domain exists - see
+  // env.schema.ts's own comment. Callers (buildUserQrPayload) must fall
+  // back gracefully, never fabricate a placeholder domain.
+  get publicWebBaseUrl(): string | undefined {
+    return this.configService.get('PUBLIC_WEB_BASE_URL', { infer: true });
+  }
+
   get isDevelopment(): boolean {
     return this.nodeEnv === 'development';
   }

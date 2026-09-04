@@ -1,11 +1,45 @@
+import { CordSegmentResponseDto } from '../../graduation/dto/rank-response.dto';
+import { GroupRole } from '../../groups/enums/group-role.enum';
+import { AvatarType } from '../enums/avatar-type.enum';
+
+// The subset of GroupRole meaningful as *capoeira* identity, never
+// authorization/administrative facts about the app itself. OWNER/ADMIN
+// grant real permissions (GROUP_EDIT, MEMBERSHIP_REMOVE, ...) - who
+// manages a Section is an app-authorization detail, not something a
+// visitor's profile should ever reveal, so those two are never present
+// here regardless of what the target's real RoleAssignments say. MEMBER
+// carries no information on its own (already implied by appearing in the
+// list at all) and is filtered out too - only a *notable* capoeira role is
+// worth surfacing.
+export type PublicSectionRoleDto = GroupRole.INSTRUCTOR | GroupRole.ASSISTANT;
+
+// `roles`/`logoUrl` were deliberately absent here until now (see the git
+// history of this file) - the original design treated `sections` as
+// "membership only", never role/status data, to avoid leaking who holds
+// admin power over a Section through a field that reads as ordinary
+// membership. That decision is intentionally reversed for capoeira-
+// representative roles only (Instrutor/Assistente - see
+// PublicSectionRoleDto above): the original concern (leaking who holds
+// administrative power) still fully applies to OWNER/ADMIN, which this
+// field never carries. Still entirely behind the same single
+// `showSections` gate as the rest of this field, never a separate flag.
 export interface PublicSectionRefDto {
   id: string;
   name: string;
+  logoUrl: string | null;
+  roles: PublicSectionRoleDto[];
 }
 
 export interface PublicFormalGroupRefDto {
   id: string;
   name: string;
+}
+
+export interface PublicFormalRankRefDto {
+  name: string;
+  cordSegments: CordSegmentResponseDto[];
+  sourceGroup: { id: string; name: string } | null;
+  startedOn: string | null;
 }
 
 // GET /users/:userId/profile - filtered per-viewer according to the
@@ -17,12 +51,21 @@ export interface PublicFormalGroupRefDto {
 // No `groups` field - a Group has no membership, so the only thing such a
 // list could show is which Groups this user administers (OWNER/ADMIN
 // RoleAssignment), and surfacing that here would leak an administrative
-// fact through a field that reads as ordinary membership. `sections` is
-// membership only - no role or membership-status data.
+// fact through a field that reads as ordinary membership.
 export interface PublicUserProfileResponseDto {
   userId: string;
   // Safe, privacy-respecting label - see UserProfileMapper.resolveDisplayName.
   displayName: string;
+  // Unconditionally public, never privacy-gated - same precedent as
+  // EventOrganizerUserImageDto (an Event's organizer avatar, shown to any
+  // attendee with no toggle): "displayName and the avatar fields are
+  // already public-safe elsewhere in this codebase". A PRESET avatar has
+  // no URL at all (the app resolves presetAvatarId to an asset locally),
+  // mirroring User.avatarType/avatarUrl/presetAvatarId directly rather
+  // than collapsing to a single `imageUrl`.
+  avatarType: AvatarType;
+  avatarUrl: string | null;
+  presetAvatarId: string | null;
   firstName: string | null;
   lastName: string | null;
   apelido: string | null;
@@ -31,4 +74,10 @@ export interface PublicUserProfileResponseDto {
   capoeiraStartedAt: string | null;
   sections: PublicSectionRefDto[] | null;
   formalGroup: PublicFormalGroupRefDto | null;
+  // Gated by User.showFormalRank (see UserProfileService.getPublicProfile) -
+  // `null` both when hidden and when the target simply has no active
+  // FormalRankAssignment (FormalRankService.getCurrentOrNull). Custom
+  // cordão is deliberately never included here - the backend does not
+  // expose it publicly at all (see graduation module spec).
+  formalRank: PublicFormalRankRefDto | null;
 }

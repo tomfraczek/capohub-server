@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PermissionService } from '../auth/permissions/permission.service';
+import { UserCheckInIdentityService } from '../common/identity/user-check-in-identity.service';
 import { normalizeNumericCodeInput } from '../common/utils/numeric-code';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { uuidSchema } from '../common/validation/uuid.schema';
@@ -57,6 +58,7 @@ export class UsersController {
     private readonly learningStatusService: LearningStatusService,
     private readonly permissionService: PermissionService,
     private readonly r2StorageService: R2StorageService,
+    private readonly userCheckInIdentityService: UserCheckInIdentityService,
   ) {}
 
   // Shared by every route below that returns a UserResponseDto - keeps
@@ -234,6 +236,32 @@ export class UsersController {
       query.limit,
       query.offset,
     );
+  }
+
+  // No route-ordering hazard (same reasoning as "search" above) - a single
+  // static segment, no same-shape dynamic route to collide with. Reuses
+  // UserCheckInIdentityService verbatim (module: "not a secret, not a
+  // token" QR/numericCode contract) rather than a second identity parser -
+  // the very same numeric-code / "U123-456" / QR-payload input shapes
+  // check-in already accepts, just for a different purpose (profile
+  // lookup, open to any authenticated user - no check-in permission
+  // gating here at all). Returns only `userId` - never the profile itself,
+  // so a scanned/typed identity never bypasses the target's own privacy
+  // toggles; the caller still fetches the real (privacy-filtered) data via
+  // GET /:userId/profile below.
+  @Get('resolve-identity')
+  async resolveIdentity(
+    @Query('identity') identity: string | undefined,
+  ): Promise<{ userId: string }> {
+    if (!identity || identity.trim().length === 0) {
+      throw new BadRequestException({
+        code: 'INVALID_CHECK_IN_IDENTITY',
+        message:
+          'identity must be a 6-digit numeric code or a valid User QR payload',
+      });
+    }
+    const { user } = await this.userCheckInIdentityService.resolve(identity);
+    return { userId: user.id };
   }
 
   // Declared after every `me/*` route above - route-registration order

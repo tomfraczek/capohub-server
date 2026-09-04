@@ -72,6 +72,45 @@ const clerkAuthorizedPartiesSchema = z
 // silently at first upload request. See r2-client.provider.ts.
 const r2OptionalStringSchema = z.string().default('');
 
+// The public web domain the mobile app's "Mój kod" QR / share link points
+// at (e.g. "https://capohub.pl") - see qr-payload.util.ts's
+// buildUserQrPayload (generates it) and parseQrPayload (the host a scanned
+// User link must match to resolve - both here and in
+// UserCheckInIdentityService's check-in QR scanning).
+//
+// CROSS-REPO INVARIANT: this value and the mobile app's own
+// EXPO_PUBLIC_WEB_BASE_URL (capohub-mobile/src/config/env.ts, read by
+// classify-checkin-qr-payload.ts and, at build time only, app.config.ts's
+// Android App Links intentFilters) MUST resolve to the exact same host.
+// If they drift, a QR this backend generates (or App Links registers)
+// stops matching what the mobile scanner is willing to recognize as a
+// User identity - there is no runtime check across the two repos that
+// would ever catch that; keeping the two env values in sync is an
+// operational responsibility, not something either codebase can enforce
+// on its own. Host equality is compared via `new URL(...).host` on both
+// sides, which is inherently insensitive to a trailing slash on either
+// value (a trailing slash affects `.pathname`, never `.host`) - see
+// qr-payload.util.spec.ts's own trailing-slash test - independent of the
+// trailing-slash stripping this schema also does below.
+//
+// Deliberately optional, default-empty->undefined, same reasoning as
+// CLERK_JWT_KEY above: there is no real production domain yet, and this
+// must never be a fabricated placeholder. There is no fallback format when
+// it's unset - buildUserQrPayload returns `null` (the app has no public
+// users yet, so there is nothing to keep a legacy format working for - see
+// the task history) and parseQrPayload can never recognize a User https
+// link either, since there is no "correct" host to compare a scan
+// against. Trailing slashes are stripped so callers can always safely
+// interpolate `${publicWebBaseUrl}/u/<code>` without a doubled slash.
+const publicWebBaseUrlSchema = z
+  .string()
+  .default('')
+  .transform((value) => value.trim().replace(/\/+$/, ''))
+  .transform((value) => (value.length === 0 ? undefined : value))
+  .refine((value) => value === undefined || isValidUrl(value), {
+    message: 'PUBLIC_WEB_BASE_URL must be a valid URL when set',
+  });
+
 export const envSchema = z
   .object({
     NODE_ENV: z
@@ -92,6 +131,7 @@ export const envSchema = z
     R2_SECRET_ACCESS_KEY: r2OptionalStringSchema,
     R2_BUCKET: r2OptionalStringSchema,
     R2_PUBLIC_URL: r2OptionalStringSchema,
+    PUBLIC_WEB_BASE_URL: publicWebBaseUrlSchema,
   })
   .transform((env) => ({
     ...env,

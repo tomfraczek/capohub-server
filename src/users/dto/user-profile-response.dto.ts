@@ -41,9 +41,13 @@ export interface UserProfileResponseDto {
   // *own* profile only, not on PublicUserProfileResponseDto (see that
   // DTO's own comment for why). Not a secret.
   numericCode: string;
-  // "capohub:v1:u:<numericCode>" - the exact string the frontend
-  // encodes as this User's QR identity (see
-  // common/identity/qr-payload.util.ts). Never contains the user's UUID,
-  // email, or name.
-  qrPayload: string;
+  // "<PUBLIC_WEB_BASE_URL>/u/<numericCode>" - a real, public https:// link,
+  // the exact string the frontend encodes as this User's QR identity (see
+  // common/identity/qr-payload.util.ts) - scanning it with an ordinary
+  // camera app opens straight to this User's profile. Never contains the
+  // user's UUID, email, or name. `null` when PUBLIC_WEB_BASE_URL isn't
+  // configured yet - never a fabricated placeholder domain or a fallback
+  // deep-link format; the frontend ("Mój kod") must render a "not
+  // configured" state for this case, not attempt to show a broken QR.
+  qrPayload: string | null;
 }
