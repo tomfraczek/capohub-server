@@ -6,6 +6,7 @@ import {
   countryCodeSchema,
   currencyCodeSchema,
   geonameIdSchema,
+  optionalNullableSocialUrl,
   optionalNullableUrl,
   refineCityIdentification,
   regionSchema,
@@ -39,10 +40,13 @@ export const createSectionObjectSchema = z.object({
     .nullish()
     .transform((value) => (value ? value : null)),
   contactPhone: optionalNullableText(50),
-  websiteUrl: optionalNullableUrl(URL_MAX_LENGTH),
-  facebookUrl: optionalNullableUrl(URL_MAX_LENGTH),
-  instagramUrl: optionalNullableUrl(URL_MAX_LENGTH),
-  youtubeUrl: optionalNullableUrl(URL_MAX_LENGTH),
+  // Lenient - see create-group.schema.ts's identical comment on
+  // optionalNullableSocialUrl; logoUrl/coverImageUrl above stay strict
+  // (picker/upload-only, never hand-typed).
+  websiteUrl: optionalNullableSocialUrl(URL_MAX_LENGTH),
+  facebookUrl: optionalNullableSocialUrl(URL_MAX_LENGTH),
+  instagramUrl: optionalNullableSocialUrl(URL_MAX_LENGTH),
+  youtubeUrl: optionalNullableSocialUrl(URL_MAX_LENGTH),
   isPublic: z.boolean().default(true),
   isHidden: z.boolean().default(false),
   memberInvitesAllowed: z.boolean().default(false),

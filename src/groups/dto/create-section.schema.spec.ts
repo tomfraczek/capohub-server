@@ -131,4 +131,29 @@ describe('createSectionSchema', () => {
       expect(result.success).toBe(false);
     });
   });
+
+  // Same lenient websiteUrl/facebookUrl/instagramUrl/youtubeUrl behavior as
+  // Group - see create-group.schema.spec.ts's identical coverage.
+  it.each([
+    'https://example.com',
+    'https://www.example.com',
+    'http://example.com',
+    'www.example.com',
+    'example.com',
+  ])('accepts websiteUrl in any common format: %s', (websiteUrl) => {
+    const result = createSectionSchema.safeParse(
+      validSectionInput({ websiteUrl }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('normalizes a schemeless websiteUrl to https://', () => {
+    const result = createSectionSchema.safeParse(
+      validSectionInput({ websiteUrl: 'www.example.com' }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.websiteUrl).toBe('https://www.example.com');
+    }
+  });
 });
