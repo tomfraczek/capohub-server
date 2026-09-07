@@ -346,6 +346,47 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
       expect(rootSections.map((section) => section.id)).toEqual([poland.id]);
     });
 
+    // The Public-view fallback (RoleAssignmentsService.resolvePublicView)
+    // covers GROUP_VIEW and SECTION_VIEW (see PUBLIC_VIEW_SAFE_PERMISSIONS'
+    // own comment) - SectionsService.list() itself is what keeps a Private
+    // child Section from leaking through that list to a stranger, since
+    // the permission alone can't express it: an outsider sees the Public
+    // child but not the Private one, while the real OWNER still sees both.
+    it('narrows a Public Group\'s child Sections list to Public ones only for an outsider with zero Role Assignment', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Mixed Visibility Root',
+        isPublic: true,
+      });
+      const publicChild = await createSection(OWNER_TOKEN, root.id, {
+        name: 'Public Child',
+        isPublic: true,
+      });
+      const privateChild = await createSection(OWNER_TOKEN, root.id, {
+        name: 'Private Child',
+        isPublic: false,
+      });
+
+      const outsiderView = await bodyOf<SectionResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${root.id}/sections`)
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+          .expect(200),
+      );
+      expect(outsiderView.map((section) => section.id)).toEqual([
+        publicChild.id,
+      ]);
+
+      const ownerView = await bodyOf<SectionResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${root.id}/sections`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(ownerView.map((section) => section.id).sort()).toEqual(
+        [publicChild.id, privateChild.id].sort(),
+      );
+    });
+
     it('rejects creating a Section under another Section - a Section can never have children', async () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'No Nested Sections Root',

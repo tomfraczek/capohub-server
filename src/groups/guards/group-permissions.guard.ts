@@ -15,10 +15,12 @@ import {
   GroupKind,
 } from '../decorators/require-group-kind.decorator';
 import { assertGroupStatusAllowed } from '../group-write-policy';
+import { Community } from '../group-hierarchy.service';
 import { Group } from '../entities/group.entity';
 import { GroupStatus } from '../enums/group-status.enum';
 import { GroupPermission } from '../permissions/group-permission.enum';
 import { GroupPermissionService } from '../permissions/group-permission.service';
+import { PUBLIC_VIEW_SAFE_PERMISSIONS } from '../permissions/group-role-permissions.map';
 import { RoleAssignmentsService } from '../role-assignments.service';
 
 const DEFAULT_ALLOWED_STATUSES: readonly GroupStatus[] = [GroupStatus.ACTIVE];
@@ -52,6 +54,16 @@ const DEFAULT_ALLOWED_STATUSES: readonly GroupStatus[] = [GroupStatus.ACTIVE];
  * unconditionally authoritative); a Section target additionally requires an
  * active SectionMembership for the same (user, section) - see that
  * method's own comment.
+ *
+ * When that resolves to nothing (no RoleAssignment/Membership at all) AND
+ * every required permission is in PUBLIC_VIEW_SAFE_PERMISSIONS, falls back
+ * to RoleAssignmentsService.resolvePublicView() instead of 404ing - lets
+ * ANY authenticated user view a `isPublic` Group/Section's own profile and
+ * a Group's list of child Sections (see that set's own comment for exactly
+ * which permissions) without holding any Role/Membership, so a community
+ * found via Discover search is actually viewable before joining it (see
+ * resolvePublicView's own comment for the bug this closes). A private
+ * target, or one that doesn't exist, still 404s exactly as before.
  *
  * A user may hold several Role Assignments for the same target at once
  * (e.g. MEMBER + INSTRUCTOR + ADMIN together) - the permission check is the
@@ -93,26 +105,44 @@ export class GroupPermissionsGuard implements CanActivate {
         request.localUser.id,
       );
 
-    if (!authorization) {
-      throw this.groupNotFound();
-    }
+    let community: Community;
 
-    const { community, membership, roleAssignments } = authorization;
-    const roles = roleAssignments.map((roleAssignment) => roleAssignment.role);
-    const targetKind = community instanceof Group ? 'GROUP' : 'SECTION';
+    if (authorization) {
+      const { membership, roleAssignments } = authorization;
+      const roles = roleAssignments.map((roleAssignment) => roleAssignment.role);
+      const targetKind =
+        authorization.community instanceof Group ? 'GROUP' : 'SECTION';
 
-    if (
-      !this.groupPermissionService.hasAllPermissionsForRoles(
-        targetKind,
-        roles,
-        requiredPermissions,
-        membership?.status ?? null,
-      )
-    ) {
-      throw new ForbiddenException({
-        code: 'INSUFFICIENT_GROUP_PERMISSIONS',
-        message: 'Insufficient permissions in this group',
-      });
+      if (
+        !this.groupPermissionService.hasAllPermissionsForRoles(
+          targetKind,
+          roles,
+          requiredPermissions,
+          membership?.status ?? null,
+        )
+      ) {
+        throw new ForbiddenException({
+          code: 'INSUFFICIENT_GROUP_PERMISSIONS',
+          message: 'Insufficient permissions in this group',
+        });
+      }
+      community = authorization.community;
+    } else {
+      // No RoleAssignment/Membership at all - only reachable for a Public
+      // Group/Section, and only for the narrow GROUP_VIEW-only tier (see
+      // PUBLIC_VIEW_SAFE_PERMISSIONS and resolvePublicView's own comment).
+      // Anything wider (member list, audit log, ...) still 404s below,
+      // same as a genuinely private/nonexistent target.
+      const isPublicViewOnly = requiredPermissions.every((permission) =>
+        PUBLIC_VIEW_SAFE_PERMISSIONS.has(permission),
+      );
+      const publicCommunity = isPublicViewOnly
+        ? await this.roleAssignmentsService.resolvePublicView(groupId)
+        : null;
+      if (!publicCommunity) {
+        throw this.groupNotFound();
+      }
+      community = publicCommunity;
     }
 
     const requiredKind = this.reflector.getAllAndOverride<GroupKind>(

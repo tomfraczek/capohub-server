@@ -234,3 +234,22 @@ export const READ_ONLY_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> = new Set(
     GroupPermission.TRAINING_VIEW,
   ],
 );
+
+// The permissions a caller with NO RoleAssignment/SectionMembership at all
+// may still be granted for a Group or Section, and only when it is
+// `isPublic` - see RoleAssignmentsService.resolvePublicView, which this
+// set gates: GroupPermissionsGuard only takes the Public-view fallback
+// when every permission a route requires is in here. Deliberately narrow,
+// not the wider READ_ONLY_SAFE_PERMISSIONS above - a stranger who has
+// never joined must never see this community's member list, audit log,
+// announcements, etc., only enough to decide whether to join it (module:
+// Discover Community - "joining happens from the destination screen"):
+//  - GROUP_VIEW: this Group/Section's own profile fields.
+//  - SECTION_VIEW: a Group's list of child Sections (GET
+//    /groups/:id/sections) - SectionsService.list() itself additionally
+//    narrows that list to `isPublic` Sections for exactly this
+//    unauthenticated-membership case, so a private child Section never
+//    leaks through the list even though this permission lets the route
+//    itself respond.
+export const PUBLIC_VIEW_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> =
+  new Set([GroupPermission.GROUP_VIEW, GroupPermission.SECTION_VIEW]);

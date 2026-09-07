@@ -367,13 +367,30 @@ describe('Groups (e2e)', () => {
   });
 
   describe('getById', () => {
-    it('returns 404 for a user with no Role Assignment on this Group at all', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+    it('returns 404 for a user with no Role Assignment on this Private Group at all', async () => {
+      const created = await createGroup(OWNER_TOKEN, { isPublic: false });
 
       await request(app.getHttpServer())
         .get(`/api/v1/groups/${created.id}`)
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .expect(404);
+    });
+
+    // The Public-view fallback (RoleAssignmentsService.resolvePublicView) -
+    // a stranger with no Role Assignment at all may still read a `isPublic`
+    // Group's own details, same as any member would see, so Discover
+    // search results are actually viewable before deciding to join (see
+    // GroupPermissionsGuard's own comment for the bug this fixes).
+    it('returns 200 for a user with no Role Assignment at all on a Public Group', async () => {
+      const created = await createGroup(OWNER_TOKEN, { isPublic: true });
+
+      const details = await bodyOf<GroupResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${created.id}`)
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+          .expect(200),
+      );
+      expect(details.id).toBe(created.id);
     });
 
     it('returns 404 for a non-existent group id', async () => {

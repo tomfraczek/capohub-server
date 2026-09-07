@@ -133,6 +133,40 @@ export class RoleAssignmentsService {
   }
 
   /**
+   * Resolves the Public-view fallback: a Group or Section with
+   * `isPublic = true` may be viewed (GroupPermission.GROUP_VIEW only -
+   * see PUBLIC_VIEW_SAFE_PERMISSIONS) by ANY authenticated user, even one
+   * holding no RoleAssignment/SectionMembership at all - otherwise
+   * resolveAuthorization() above returns null for exactly that caller and
+   * GroupPermissionsGuard 404s, which broke the "Discover" flow: a Public
+   * Group/Section is findable via search, but tapping into it 404'd
+   * before the caller could see anything to decide whether to join (see
+   * DiscoverResultCard's own comment - "joining happens from the
+   * destination screen" - and the mobile bug report this fixes).
+   *
+   * Deliberately returns the community (not a boolean) so the guard can
+   * still run its Group-vs-Section kind check and lifecycle-status policy
+   * against it, exactly as it does for a real RoleAssignment/Membership
+   * hit. Returns `null` for a private target and for a target that
+   * doesn't exist at all - never distinguishing the two, same as
+   * resolveAuthorization, so a private id's mere existence is never
+   * leaked to a non-member.
+   */
+  async resolvePublicView(
+    groupOrSectionId: string,
+    em: EntityManager = this.em,
+  ): Promise<Community | null> {
+    const community = await this.groupHierarchyService.findCommunityById(
+      groupOrSectionId,
+      em,
+    );
+    if (!community || !community.isPublic) {
+      return null;
+    }
+    return community;
+  }
+
+  /**
    * Whether `userId` currently counts as "a member of" `communityId`:
    *  - Group: holds any active RoleAssignment there (OWNER/ADMIN - Group
    *    has no ordinary members, so this is really "administers this

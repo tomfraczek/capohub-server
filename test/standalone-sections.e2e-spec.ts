@@ -499,8 +499,14 @@ describe('Standalone Sections (e2e)', () => {
     });
 
     it('attaches via the hierarchy invitation flow (different owners) without inheriting membership/roles from the Group OWNER', async () => {
+      // Private - this test's 404 assertions below are about permission
+      // isolation (no Role Assignment inheritance from the Group), not
+      // about the Public-view fallback (RoleAssignmentsService.
+      // resolvePublicView), which would otherwise let SECOND_TOKEN read a
+      // Public Section's GET even with zero Role Assignments.
       const section = await createStandaloneSection(OWNER_TOKEN, {
         name: 'Attach-Later Section (invitation)',
+        isPublic: false,
       });
       // A different user owns the Group - proves attach never grants that
       // Group's OWNER any right over the Section (no permission

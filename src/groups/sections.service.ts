@@ -227,9 +227,29 @@ export class SectionsService {
     return parent;
   }
 
-  async list(parentId: string): Promise<SectionResponseDto[]> {
+  /**
+   * `userId` is required (not just the guard's own SECTION_VIEW check)
+   * because this list is reachable two ways since the Public-view fallback
+   * (GroupPermissionsGuard/RoleAssignmentsService.resolvePublicView): a
+   * real OWNER/ADMIN RoleAssignment on the parent Group (isCommunityMember
+   * true), or a stranger viewing a `isPublic` Group with no RoleAssignment
+   * at all. An OWNER/ADMIN still sees every child Section, public or
+   * private, exactly as before - only a non-member view is narrowed to
+   * `isPublic` Sections, so a Section marked private stays invisible to a
+   * stranger here the same way it already is via GET /sections/:id
+   * (resolvePublicView checks isPublic there too) - listing must never
+   * leak what direct access already hides.
+   */
+  async list(parentId: string, userId: string): Promise<SectionResponseDto[]> {
     const sections = await this.em.find(Section, { parentGroup: parentId });
-    return sections.map((section) =>
+    const isMember = await this.roleAssignmentsService.isCommunityMember(
+      parentId,
+      userId,
+    );
+    const visible = isMember
+      ? sections
+      : sections.filter((section) => section.isPublic);
+    return visible.map((section) =>
       toSectionResponseDto(section, this.r2StorageService),
     );
   }

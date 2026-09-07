@@ -52,6 +52,11 @@ describe('GroupPermissionsGuard', () => {
     allowedStatuses?: GroupStatus[];
     authorization?: ResolvedGroupAuthorization | null;
     hasAllPermissionsForRoles?: jest.Mock;
+    // Only ever reached when `authorization` resolves to null AND every
+    // required permission is GROUP_VIEW-only-safe - null (the default)
+    // means "not a Public target either", so the existing no-authorization
+    // tests still 404 exactly as before.
+    publicCommunity?: unknown | null;
   }): { guard: GroupPermissionsGuard; getAllAndOverride: jest.Mock } {
     const getAllAndOverride = jest
       .fn()
@@ -73,6 +78,9 @@ describe('GroupPermissionsGuard', () => {
         .mockResolvedValue(
           options.authorization === undefined ? null : options.authorization,
         ),
+      resolvePublicView: jest
+        .fn()
+        .mockResolvedValue(options.publicCommunity ?? null),
     } as unknown as RoleAssignmentsService;
 
     return {
@@ -194,6 +202,57 @@ describe('GroupPermissionsGuard', () => {
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NotFoundException);
+  });
+
+  describe('Public-view fallback (no RoleAssignment/Membership at all)', () => {
+    it('allows a GROUP_VIEW-only request through resolvePublicView when the target is Public', async () => {
+      const { guard } = buildGuard({
+        requiredPermissions: [GroupPermission.GROUP_VIEW],
+        authorization: null,
+        publicCommunity: { status: GroupStatus.ACTIVE },
+        allowedStatuses: [
+          GroupStatus.ACTIVE,
+          GroupStatus.READ_ONLY,
+          GroupStatus.ARCHIVED,
+          GroupStatus.DELETED,
+        ],
+      });
+
+      await expect(
+        guard.canActivate(buildContext({ id: VALID_GROUP_ID })),
+      ).resolves.toBe(true);
+    });
+
+    it('still 404s a GROUP_VIEW-only request when resolvePublicView finds nothing (a Private, or nonexistent, target)', async () => {
+      const { guard } = buildGuard({
+        requiredPermissions: [GroupPermission.GROUP_VIEW],
+        authorization: null,
+        publicCommunity: null,
+      });
+
+      const error: unknown = await guard
+        .canActivate(buildContext({ id: VALID_GROUP_ID }))
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(NotFoundException);
+    });
+
+    it('never takes the fallback for a permission wider than GROUP_VIEW, even for a Public target', async () => {
+      const { guard } = buildGuard({
+        requiredPermissions: [GroupPermission.MEMBERSHIP_VIEW],
+        authorization: null,
+        // Even though resolvePublicView WOULD resolve one, the guard must
+        // never call it for a non-GROUP_VIEW-only permission set - a
+        // stranger must never see this community's member list.
+        publicCommunity: { status: GroupStatus.ACTIVE },
+      });
+
+      const error: unknown = await guard
+        .canActivate(buildContext({ id: VALID_GROUP_ID }))
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(NotFoundException);
+    });
   });
 
   it('grants access based on the union of every Role Assignment held for the Group, not just one', async () => {

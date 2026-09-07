@@ -209,6 +209,49 @@ describe('RoleAssignmentsService', () => {
     });
   });
 
+  describe('resolvePublicView', () => {
+    it('returns the Group when isPublic is true, with no RoleAssignment lookup at all', async () => {
+      const group = buildGroup({ isPublic: true });
+      const { em, find, findOne } = buildMockEm();
+      const { service } = buildService(em, { communityResult: group });
+
+      const result = await service.resolvePublicView('group-1');
+
+      expect(result).toBe(group);
+      expect(find).not.toHaveBeenCalled();
+      expect(findOne).not.toHaveBeenCalled();
+    });
+
+    it('returns the Section when isPublic is true - no SectionMembership lookup either', async () => {
+      const section = buildSection({ isPublic: true });
+      const { em } = buildMockEm();
+      const { service } = buildService(em, { communityResult: section });
+
+      const result = await service.resolvePublicView('section-1');
+
+      expect(result).toBe(section);
+    });
+
+    it('returns null when the target is Private, even though it exists', async () => {
+      const group = buildGroup({ isPublic: false });
+      const { em } = buildMockEm();
+      const { service } = buildService(em, { communityResult: group });
+
+      const result = await service.resolvePublicView('group-1');
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null when the target does not exist at all - the same ambiguity as resolveAuthorization', async () => {
+      const { em } = buildMockEm();
+      const { service } = buildService(em, { communityResult: null });
+
+      const result = await service.resolvePublicView('missing');
+
+      expect(result).toBeNull();
+    });
+  });
+
   describe('isCommunityMember', () => {
     it('Group: true iff an active RoleAssignment exists', async () => {
       const group = buildGroup();

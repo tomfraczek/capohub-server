@@ -56,7 +56,10 @@ export class SectionsController {
   @Get()
   @RequireGroupPermission(GroupPermission.SECTION_VIEW)
   @AllowGroupStatuses(...ANY_STATUS)
-  list(@Param('groupId') groupId: string): Promise<SectionResponseDto[]> {
-    return this.sectionsService.list(groupId);
+  list(
+    @Param('groupId') groupId: string,
+    @CurrentUser() user: User,
+  ): Promise<SectionResponseDto[]> {
+    return this.sectionsService.list(groupId, user.id);
   }
 }

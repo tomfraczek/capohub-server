@@ -560,8 +560,14 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'No Inherit Down Root',
       });
+      // Private - this assertion is about permission isolation (ADMIN on
+      // the Group not inheriting down), not the Public-view fallback
+      // (RoleAssignmentsService.resolvePublicView), which would otherwise
+      // let MEMBER_TOKEN read a Public Section's GET with zero Role
+      // Assignments there.
       const section = await createSection(OWNER_TOKEN, root.id, {
         name: 'No Inherit Down Section',
+        isPublic: false,
       });
       await grantGroupRole(OWNER_TOKEN, root.id, MEMBER_TOKEN, GroupRole.ADMIN);
 
@@ -569,6 +575,30 @@ describe('Role Assignments (e2e)', () => {
         .get(`/api/v1/sections/${section.id}`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .expect(404);
+    });
+
+    // The Public-view fallback (RoleAssignmentsService.resolvePublicView) -
+    // the mirror image of the Private case right above: a Public Section
+    // is readable even by a caller with literally zero standing on it (no
+    // Role Assignment, no Membership, not even one on the parent Group),
+    // same as a Public Group (see groups.e2e-spec.ts's own "on a Public
+    // Group" test).
+    it('a Public Section is readable by a caller with zero Role Assignment/Membership at all', async () => {
+      const root = await createGroup(OWNER_TOKEN, {
+        name: 'Public Section View Root',
+      });
+      const section = await createSection(OWNER_TOKEN, root.id, {
+        name: 'Public Section View Section',
+        isPublic: true,
+      });
+
+      const details = await bodyOf<SectionResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/sections/${section.id}`)
+          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+          .expect(200),
+      );
+      expect(details.id).toBe(section.id);
     });
 
     it('a Role granted on a Section grants no access to its parent Group at all - not even a 403, since there is zero standing there', async () => {
@@ -689,8 +719,14 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Inactivity Root',
       });
+      // Private - the final 404 assertion below is about a removed
+      // membership granting no effective access, not the Public-view
+      // fallback (RoleAssignmentsService.resolvePublicView), which would
+      // otherwise let MEMBER_TOKEN keep reading a Public Section's GET
+      // even after their membership/roles are gone.
       const section = await createSection(OWNER_TOKEN, root.id, {
         name: 'Inactivity Section',
+        isPublic: false,
       });
       const membership = await addSectionMember(
         OWNER_TOKEN,
@@ -939,8 +975,12 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup(OWNER_TOKEN, {
         name: 'Base Role Leave Root',
       });
+      // Private - the final 404 assertion below is about a removed
+      // membership granting no effective access, not the Public-view
+      // fallback (RoleAssignmentsService.resolvePublicView).
       const section = await createSection(OWNER_TOKEN, root.id, {
         name: 'Base Role Leave Section',
+        isPublic: false,
       });
       const membership = await addSectionMember(
         OWNER_TOKEN,
