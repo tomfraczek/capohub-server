@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { getCitiesForCountry } from '../common/geo/city-directory';
+import { CityRecord, getAllCities, getCitiesForCountry } from '../common/geo/city-directory';
 import { CityResultDto } from './dto/city-result.dto';
 import { CitySearchQuery } from './dto/city-search-query.schema';
+import { PlaceSearchResultDto } from './dto/place-search-result.dto';
+import { PlaceSearchQuery } from './dto/place-search-query.schema';
 
 // Backs GET /discovery/cities - lets the frontend offer "pick a city"
 // constrained to a previously-chosen country, without shipping any part of
@@ -11,6 +13,30 @@ import { CitySearchQuery } from './dto/city-search-query.schema';
 // searches a static, in-memory geographic reference dataset, not the
 // Group/Section aggregate DiscoveryService searches - two unrelated data
 // sources that only happen to share a controller.
+// Shared by both search() (one pre-chosen country) and searchPlaces()
+// (every country at once) - name matches by partial substring, alternate
+// names by exact match. See search()'s own historical comment below for
+// why the two matching rules differ from each other.
+function matchesSearchText(city: CityRecord, searchText: string): boolean {
+  return (
+    city.name.toLowerCase().includes(searchText) ||
+    city.alternateNames.some((alt) => alt.toLowerCase() === searchText)
+  );
+}
+
+// Same tiebreaker chain both search() and searchPlaces() sort by - name
+// first, region as a tiebreaker so same-named cities sort deterministically
+// relative to each other, geonameId as a final tiebreaker for total
+// determinism (population is not part of this dataset's shape - see
+// city-directory.ts).
+function compareCities(a: CityRecord, b: CityRecord): number {
+  const byName = a.name.localeCompare(b.name);
+  if (byName !== 0) return byName;
+  const byRegion = (a.region ?? '').localeCompare(b.region ?? '');
+  if (byRegion !== 0) return byRegion;
+  return a.geonameId - b.geonameId;
+}
+
 @Injectable()
 export class CitySearchService {
   search(query: CitySearchQuery): CityResultDto[] {
@@ -46,26 +72,9 @@ export class CitySearchService {
     // and is exactly what a "resolve a known synonym" lookup needs:
     // "Warszawa" finds the one record also findable as "Warsaw" (same
     // geonameId, same displayed name) - see city-search.service.spec.ts.
-    const filtered = searchText
-      ? cities.filter(
-          (city) =>
-            city.name.toLowerCase().includes(searchText) ||
-            city.alternateNames.some((alt) => alt.toLowerCase() === searchText),
-        )
-      : cities;
+    const filtered = searchText ? cities.filter((city) => matchesSearchText(city, searchText)) : cities;
 
-    // Predictable sort - name first, region as a tiebreaker so same-named
-    // cities sort deterministically relative to each other, geonameId as a
-    // final tiebreaker for total determinism (population is not part of
-    // this dataset's shape - see city-directory.ts).
-    const sorted = [...filtered].sort((a, b) => {
-      const byName = a.name.localeCompare(b.name);
-      if (byName !== 0) return byName;
-      const byRegion = (a.region ?? '').localeCompare(b.region ?? '');
-      if (byRegion !== 0) return byRegion;
-      return a.geonameId - b.geonameId;
-    });
-
+    const sorted = [...filtered].sort(compareCities);
     const page = sorted.slice(0, query.limit);
 
     // `region` is always whatever the dataset itself resolves for this city
@@ -80,6 +89,31 @@ export class CitySearchService {
       name: city.name,
       country: city.country,
       region: city.region,
+    }));
+  }
+
+  // Backs GET /discovery/places - the manual discovery-location search
+  // (task: "Ręczne wyszukiwanie lokalizacji musi działać bez GPS
+  // permission"). Unlike search() above, this scans every country at once
+  // (a caller here has only a bare typed place name, never a pre-chosen
+  // country to scope by) and always returns real coordinates, never a
+  // geonameId-only reference - see PlaceSearchResultDto's own comment.
+  // `search` is required (see placeSearchQuerySchema) - there is no
+  // "browse everything" mode here at all.
+  searchPlaces(query: PlaceSearchQuery): PlaceSearchResultDto[] {
+    const searchText = query.search.toLowerCase();
+    const matched = getAllCities().filter((city) => matchesSearchText(city, searchText));
+
+    const sorted = [...matched].sort(compareCities);
+    const page = sorted.slice(0, query.limit);
+
+    return page.map((city) => ({
+      geonameId: city.geonameId,
+      city: city.name,
+      region: city.region,
+      countryCode: city.country,
+      latitude: city.latitude,
+      longitude: city.longitude,
     }));
   }
 }

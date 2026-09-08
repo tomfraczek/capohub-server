@@ -26,3 +26,7 @@ export function buildEventCoverImageKey(eventId: string): string {
 export function buildGroupCoverImageKey(groupId: string): string {
   return `groups/${groupId}/cover/${randomUUID()}.webp`;
 }
+
+export function buildSectionCoverImageKey(sectionId: string): string {
+  return `sections/${sectionId}/cover/${randomUUID()}.webp`;
+}

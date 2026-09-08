@@ -52,6 +52,15 @@ export interface CityRecord {
   // when the source has no admin1 code for this city, or no matching
   // admin1CodesASCII.txt entry.
   region: string | null;
+  // Raw GeoNames coordinates for this exact place - powers the manual
+  // "wyszukaj miejscowość" discovery-location flow (see
+  // discovery/city-search.service.ts#searchPlaces), which needs real
+  // lat/lng without any device location permission or third-party
+  // geocoding provider. Never used by Group/Section create/update
+  // validation (refineCityIdentification) - that stays name/region/country
+  // only, unaffected by this addition.
+  latitude: number;
+  longitude: number;
 }
 
 interface CityIndexes {
@@ -115,4 +124,16 @@ export function getCitiesForCountry(
  */
 export function getCityByGeonameId(geonameId: number): CityRecord | undefined {
   return getIndexes().byGeonameId.get(geonameId);
+}
+
+/**
+ * Every known city across every country, in no particular order - backs
+ * CitySearchService#searchPlaces (the manual discovery-location search,
+ * which - unlike getCitiesForCountry above - never scopes to one
+ * pre-chosen country: a caller types a bare place name like "Poznań" with
+ * no country selected yet). Returns the same live array `byGeonameId` was
+ * built from, never copied - callers must treat it as read-only.
+ */
+export function getAllCities(): readonly CityRecord[] {
+  return cityRows as CityRecord[];
 }

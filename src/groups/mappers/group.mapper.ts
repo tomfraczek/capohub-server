@@ -19,6 +19,7 @@ import {
 export function toGroupResponseDto(
   group: Group,
   counts: { childGroupsCount: number; directSectionsCount: number },
+  relation: { isMemberThroughSection: boolean; isFollowing: boolean },
   urlBuilder: PublicUrlBuilder,
 ): GroupResponseDto {
   return {
@@ -32,7 +33,11 @@ export function toGroupResponseDto(
     logoUrl: resolveImageUrl(group.profileImageKey, group.logoUrl, urlBuilder),
     // Same profileImageKey-vs-logoUrl precedence as above, just for the
     // cover image (see GroupsService.uploadCoverImage).
-    coverImageUrl: resolveImageUrl(group.coverImageKey, group.coverImageUrl, urlBuilder),
+    coverImageUrl: resolveImageUrl(
+      group.coverImageKey,
+      group.coverImageUrl,
+      urlBuilder,
+    ),
     contactEmail: group.contactEmail,
     contactPhone: group.contactPhone,
     websiteUrl: group.websiteUrl,
@@ -46,6 +51,8 @@ export function toGroupResponseDto(
     status: group.status,
     childGroupsCount: counts.childGroupsCount,
     directSectionsCount: counts.directSectionsCount,
+    isMemberThroughSection: relation.isMemberThroughSection,
+    isFollowing: relation.isFollowing,
     createdAt: group.createdAt.toISOString(),
     updatedAt: group.updatedAt.toISOString(),
   };

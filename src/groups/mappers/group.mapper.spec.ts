@@ -52,6 +52,7 @@ describe('group.mapper', () => {
       const dto = toGroupResponseDto(
         group,
         { childGroupsCount: 2, directSectionsCount: 3 },
+        { isMemberThroughSection: false, isFollowing: false },
         buildUrlBuilder(),
       );
 
@@ -71,6 +72,28 @@ describe('group.mapper', () => {
       expect(dto.updatedAt).toBe(group.updatedAt.toISOString());
     });
 
+    it('surfaces isMemberThroughSection/isFollowing exactly as passed, independently of one another', () => {
+      const group = buildGroup();
+
+      const both = toGroupResponseDto(
+        group,
+        { childGroupsCount: 0, directSectionsCount: 0 },
+        { isMemberThroughSection: true, isFollowing: true },
+        buildUrlBuilder(),
+      );
+      expect(both.isMemberThroughSection).toBe(true);
+      expect(both.isFollowing).toBe(true);
+
+      const followOnly = toGroupResponseDto(
+        group,
+        { childGroupsCount: 0, directSectionsCount: 0 },
+        { isMemberThroughSection: false, isFollowing: true },
+        buildUrlBuilder(),
+      );
+      expect(followOnly.isMemberThroughSection).toBe(false);
+      expect(followOnly.isFollowing).toBe(true);
+    });
+
     it('prefers the R2 public URL derived from profileImageKey over the legacy logoUrl', () => {
       const group = buildGroup({
         logoUrl: 'https://legacy.example.com/old-logo.png',
@@ -80,6 +103,7 @@ describe('group.mapper', () => {
       const dto = toGroupResponseDto(
         group,
         { childGroupsCount: 0, directSectionsCount: 0 },
+        { isMemberThroughSection: false, isFollowing: false },
         buildUrlBuilder(),
       );
 
@@ -96,6 +120,7 @@ describe('group.mapper', () => {
       const dto = toGroupResponseDto(
         group,
         { childGroupsCount: 0, directSectionsCount: 0 },
+        { isMemberThroughSection: false, isFollowing: false },
         buildUrlBuilder(),
       );
 
@@ -111,6 +136,7 @@ describe('group.mapper', () => {
       const dto = toGroupResponseDto(
         group,
         { childGroupsCount: 0, directSectionsCount: 0 },
+        { isMemberThroughSection: false, isFollowing: false },
         buildUrlBuilder(),
       );
 
@@ -127,10 +153,13 @@ describe('group.mapper', () => {
       const dto = toGroupResponseDto(
         group,
         { childGroupsCount: 0, directSectionsCount: 0 },
+        { isMemberThroughSection: false, isFollowing: false },
         buildUrlBuilder(),
       );
 
-      expect(dto.coverImageUrl).toBe('https://legacy.example.com/old-cover.png');
+      expect(dto.coverImageUrl).toBe(
+        'https://legacy.example.com/old-cover.png',
+      );
     });
   });
 

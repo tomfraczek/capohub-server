@@ -1,6 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
+import { CommunityOverviewService } from './community-overview.service';
+import {
+  DEFAULT_NEARBY_RADIUS_KM,
+  EXPANDED_NEARBY_RADIUS_KM,
+  HOME_DISCOVERY_GROUPS_LIMIT,
+  HOME_DISCOVERY_SECTIONS_LIMIT,
+  HOME_MY_GROUPS_LIMIT,
+  HOME_MY_SECTIONS_LIMIT,
+  HOME_NEARBY_GROUPS_LIMIT,
+  HOME_NEARBY_SECTIONS_LIMIT,
+} from './community-overview.constants';
+import {
+  CommunityDiscoveryContextDto,
+  DiscoveryFallbackType,
+} from './dto/community-overview-response.dto';
 import {
   CommunityHomeCapabilitiesDto,
   CommunityHomeCommunityDto,
@@ -54,6 +69,7 @@ export class CommunityHomeService {
     private readonly groupHierarchyService: GroupHierarchyService,
     private readonly membershipRequestsService: MembershipRequestsService,
     private readonly r2StorageService: R2StorageService,
+    private readonly communityOverviewService: CommunityOverviewService,
   ) {}
 
   async getHome(user: User): Promise<CommunityHomeResponseDto> {
@@ -132,10 +148,48 @@ export class CommunityHomeService {
       hasMore: allJoinRequests.length > joinRequestItems.length,
     };
 
+    // Sequential, not Promise.all - see this file's other queries' own
+    // comment on why concurrent queries against the same
+    // EntityManager/connection are never issued together here.
+    const location = await this.communityOverviewService.getLocationSummary(
+      user.id,
+    );
+    const mySections = await this.communityOverviewService.getMySections(
+      user.id,
+      { limit: HOME_MY_SECTIONS_LIMIT, offset: 0 },
+    );
+    const myGroups = await this.communityOverviewService.getMyGroups(user.id, {
+      limit: HOME_MY_GROUPS_LIMIT,
+      offset: 0,
+    });
+    const nearbySections =
+      await this.communityOverviewService.getNearbySections(user.id, {
+        limit: HOME_NEARBY_SECTIONS_LIMIT,
+        offset: 0,
+      });
+    const nearbyGroups = await this.communityOverviewService.getNearbyGroups(
+      user.id,
+      { limit: HOME_NEARBY_GROUPS_LIMIT, offset: 0 },
+    );
+    const { discoverySections, discoveryGroups, discoveryContext } =
+      await this.resolveDiscoveryFallback(
+        user.id,
+        location.configured,
+        nearbySections.total === 0 && nearbyGroups.total === 0,
+      );
+
     return {
       myCommunities: communities,
       pendingInvitations,
       pendingJoinRequests,
+      location,
+      mySections,
+      myGroups,
+      nearbySections,
+      nearbyGroups,
+      discoverySections,
+      discoveryGroups,
+      discoveryContext,
       summary: {
         communitiesCount: communities.length,
         pendingInvitationsCount: pendingInvitations.total,
@@ -155,6 +209,97 @@ export class CommunityHomeService {
           capabilityLists.canCreateSectionInGroupIds.length > 0 ||
           capabilityLists.canCreateSectionInSectionIds.length > 0,
       },
+    };
+  }
+
+  /**
+   * Community Home's discovery-fallback tier (see this feature's own
+   * report, "Community Home nie może być pusty", and
+   * CommunityDiscoveryContextDto's own comment on the three fallbackType
+   * states). Only ever does extra work when it might actually matter:
+   *  - `locationConfigured` is false -> 'NONE' immediately, no extra
+   *    queries at all (an unconfigured location already gets its own CTA on
+   *    the frontend - the fallback would never be shown next to it anyway).
+   *  - nearby (DEFAULT_NEARBY_RADIUS_KM) already found something -> 'NONE',
+   *    same reasoning: nothing to fall back from.
+   *  - otherwise, retries once at EXPANDED_NEARBY_RADIUS_KM; only if THAT
+   *    also comes back fully empty does it fall through to the country-wide
+   *    ranking (CommunityOverviewService.getCountryDiscoverySections/
+   *    getCountryDiscoveryGroups). Never both tiers surfaced at once - see
+   *    DiscoveryFallbackType's own comment on why that would risk showing
+   *    the same Section/Group twice under two different headings.
+   */
+  private async resolveDiscoveryFallback(
+    userId: string,
+    locationConfigured: boolean,
+    nearbyIsEmpty: boolean,
+  ): Promise<{
+    discoverySections: CommunityHomeResponseDto['discoverySections'];
+    discoveryGroups: CommunityHomeResponseDto['discoveryGroups'];
+    discoveryContext: CommunityDiscoveryContextDto;
+  }> {
+    const context = (fallbackType: DiscoveryFallbackType) => ({
+      nearbyRadiusKm: DEFAULT_NEARBY_RADIUS_KM,
+      expandedRadiusKm: EXPANDED_NEARBY_RADIUS_KM,
+      fallbackType,
+    });
+    const empty = { items: [], total: 0, hasMore: false };
+
+    if (!locationConfigured || !nearbyIsEmpty) {
+      return {
+        discoverySections: empty,
+        discoveryGroups: empty,
+        discoveryContext: context('NONE'),
+      };
+    }
+
+    // Sequential, not Promise.all - see this file's other queries' own
+    // comment on why concurrent queries against the same
+    // EntityManager/connection are never issued together here.
+    const expandedSections =
+      await this.communityOverviewService.getNearbySections(userId, {
+        limit: HOME_DISCOVERY_SECTIONS_LIMIT,
+        offset: 0,
+        radiusKm: EXPANDED_NEARBY_RADIUS_KM,
+      });
+    const expandedGroups = await this.communityOverviewService.getNearbyGroups(
+      userId,
+      {
+        limit: HOME_DISCOVERY_GROUPS_LIMIT,
+        offset: 0,
+        radiusKm: EXPANDED_NEARBY_RADIUS_KM,
+      },
+    );
+    if (expandedSections.total > 0 || expandedGroups.total > 0) {
+      return {
+        discoverySections: expandedSections,
+        discoveryGroups: expandedGroups,
+        discoveryContext: context('EXPANDED_RADIUS'),
+      };
+    }
+
+    const countrySections =
+      await this.communityOverviewService.getCountryDiscoverySections(userId, {
+        limit: HOME_DISCOVERY_SECTIONS_LIMIT,
+        offset: 0,
+      });
+    const countryGroups =
+      await this.communityOverviewService.getCountryDiscoveryGroups(userId, {
+        limit: HOME_DISCOVERY_GROUPS_LIMIT,
+        offset: 0,
+      });
+    if (countrySections.total > 0 || countryGroups.total > 0) {
+      return {
+        discoverySections: countrySections,
+        discoveryGroups: countryGroups,
+        discoveryContext: context('COUNTRY'),
+      };
+    }
+
+    return {
+      discoverySections: empty,
+      discoveryGroups: empty,
+      discoveryContext: context('NONE'),
     };
   }
 

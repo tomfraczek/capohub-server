@@ -101,8 +101,39 @@ export class GroupsController {
   @RequireGroupPermission(GroupPermission.GROUP_VIEW)
   @RequireGroupKind(GroupKind.ROOT)
   @AllowGroupStatuses(...ANY_STATUS)
-  getById(@Param('id', ParseUUIDPipe) id: string): Promise<GroupResponseDto> {
-    return this.groupsService.getById(id);
+  getById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<GroupResponseDto> {
+    return this.groupsService.getById(id, user);
+  }
+
+  // POST/DELETE :id/follow - "observing" a Group (see
+  // group-follow.entity.ts) - deliberately gated by the same GROUP_VIEW
+  // permission as getById above, not a new permission: following only ever
+  // makes sense for a Group the caller can already see (public, or one they
+  // administer), and reusing GROUP_VIEW means a private/nonexistent Group
+  // 404s here exactly as it already does for viewing it. No "join group"
+  // endpoint exists anywhere in this module (module: "Nie dodawaj join
+  // group") - this is strictly a lighter-weight, membership-free signal.
+  @Post(':id/follow')
+  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupKind(GroupKind.ROOT)
+  follow(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<GroupResponseDto> {
+    return this.groupsService.follow(id, user);
+  }
+
+  @Delete(':id/follow')
+  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupKind(GroupKind.ROOT)
+  unfollow(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<GroupResponseDto> {
+    return this.groupsService.unfollow(id, user);
   }
 
   @Patch(':id')

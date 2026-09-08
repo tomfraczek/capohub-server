@@ -47,6 +47,8 @@ describe('GroupsController', () => {
     [keyof GroupsController, GroupPermission[], GroupStatus[] | undefined]
   >([
     ['getById', [GroupPermission.GROUP_VIEW], ANY_STATUS],
+    ['follow', [GroupPermission.GROUP_VIEW], undefined],
+    ['unfollow', [GroupPermission.GROUP_VIEW], undefined],
     ['update', [GroupPermission.GROUP_EDIT], undefined],
     [
       'archive',
@@ -148,14 +150,43 @@ describe('GroupsController', () => {
   });
 
   describe('getById', () => {
-    it('delegates to GroupsService.getById', async () => {
+    it('delegates to GroupsService.getById with the current user', async () => {
       const dto = { id: 'group-1' } as never;
       const getById = jest.fn().mockResolvedValue(dto);
       const controller = buildController({ getById });
+      const user = { id: 'user-1' } as never;
 
-      const response = await controller.getById('group-1');
+      const response = await controller.getById('group-1', user);
 
-      expect(getById).toHaveBeenCalledWith('group-1');
+      expect(getById).toHaveBeenCalledWith('group-1', user);
+      expect(response).toBe(dto);
+    });
+  });
+
+  describe('follow', () => {
+    it('delegates to GroupsService.follow with the current user', async () => {
+      const dto = { id: 'group-1' } as never;
+      const follow = jest.fn().mockResolvedValue(dto);
+      const controller = buildController({ follow });
+      const user = { id: 'user-1' } as never;
+
+      const response = await controller.follow('group-1', user);
+
+      expect(follow).toHaveBeenCalledWith('group-1', user);
+      expect(response).toBe(dto);
+    });
+  });
+
+  describe('unfollow', () => {
+    it('delegates to GroupsService.unfollow with the current user', async () => {
+      const dto = { id: 'group-1' } as never;
+      const unfollow = jest.fn().mockResolvedValue(dto);
+      const controller = buildController({ unfollow });
+      const user = { id: 'user-1' } as never;
+
+      const response = await controller.unfollow('group-1', user);
+
+      expect(unfollow).toHaveBeenCalledWith('group-1', user);
       expect(response).toBe(dto);
     });
   });

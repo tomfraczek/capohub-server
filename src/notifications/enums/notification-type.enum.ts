@@ -21,8 +21,18 @@ export enum NotificationType {
   // Event (see EventNotificationsService / events.service.ts /
   // event-invitations.service.ts) - recipients are the Event's own
   // EventAttendee.subjectUser rows (registered participants only, never
-  // "everyone who can merely view the Event").
+  // "everyone who can merely view the Event"). EVENT_PUBLISHED is the one
+  // exception - it fires once, on DRAFT -> PUBLISHED, before any
+  // registration could exist, and reaches the Event's *Community* audience
+  // instead (see EventNotificationsService.notifyPublished): a Section
+  // Event's own active members, or - for a Group Event - every unique
+  // active member across the Group's *direct* Sections, plus the Group's
+  // followers (see group-follow.entity.ts) when and only when the Event's
+  // visibility is PUBLIC. A User-organized Event (organizerType USER, no
+  // Community at all - see event-community.util.ts) raises no
+  // EVENT_PUBLISHED at all - there is no Community audience to notify.
   EVENT_INVITATION = 'EVENT_INVITATION',
+  EVENT_PUBLISHED = 'EVENT_PUBLISHED',
   EVENT_CANCELLED = 'EVENT_CANCELLED',
   EVENT_TIME_CHANGED = 'EVENT_TIME_CHANGED',
   EVENT_LOCATION_CHANGED = 'EVENT_LOCATION_CHANGED',
@@ -68,6 +78,7 @@ export const NOTIFICATION_CATEGORY_BY_TYPE: Readonly<
   [NotificationType.TRAINING_REMINDER_2H]: NotificationCategory.TRAINING,
 
   [NotificationType.EVENT_INVITATION]: NotificationCategory.EVENT,
+  [NotificationType.EVENT_PUBLISHED]: NotificationCategory.EVENT,
   [NotificationType.EVENT_CANCELLED]: NotificationCategory.EVENT,
   [NotificationType.EVENT_TIME_CHANGED]: NotificationCategory.EVENT,
   [NotificationType.EVENT_LOCATION_CHANGED]: NotificationCategory.EVENT,

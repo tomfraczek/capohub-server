@@ -74,6 +74,13 @@ export function eventInvitationText(eventName: string): NotificationText {
   };
 }
 
+export function eventPublishedText(eventName: string): NotificationText {
+  return {
+    title: 'Nowe wydarzenie',
+    body: `Opublikowano nowe wydarzenie "${eventName}".`,
+  };
+}
+
 export function eventCancelledText(eventName: string): NotificationText {
   return {
     title: 'Wydarzenie odwołane',

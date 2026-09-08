@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import { createZodDto } from '../../common/dto/create-zod-dto';
 import { createSectionObjectSchema } from './create-section.schema';
-import { refineCityIdentification } from './group-validation.helpers';
+import {
+  refineCityIdentification,
+  refineCoordinatePair,
+} from './group-validation.helpers';
 
 // Full-replace on update, same convention as update-group.schema.ts.
 // `status` is intentionally not part of this schema - it only ever changes
@@ -14,7 +17,8 @@ import { refineCityIdentification } from './group-validation.helpers';
 // including the legacy-record (`geonameId`-less) re-selection policy.
 export const updateSectionSchema = createSectionObjectSchema
   .strict()
-  .superRefine(refineCityIdentification);
+  .superRefine(refineCityIdentification)
+  .superRefine(refineCoordinatePair);
 
 export class UpdateSectionDto extends createZodDto(updateSectionSchema) {}
 

@@ -6,9 +6,12 @@ import {
   countryCodeSchema,
   currencyCodeSchema,
   geonameIdSchema,
+  latitudeSchema,
+  longitudeSchema,
   optionalNullableSocialUrl,
   optionalNullableUrl,
   refineCityIdentification,
+  refineCoordinatePair,
   regionSchema,
   timezoneSchema,
 } from './group-validation.helpers';
@@ -58,11 +61,16 @@ export const createSectionObjectSchema = z.object({
   // The GeoNames identifier of the chosen city - see
   // create-group.schema.ts's identical field for the full reasoning.
   geonameId: geonameIdSchema,
+  // Precise venue coordinates for nearby discovery - optional (a Section
+  // simply never appears in nearby discovery until placed), but never
+  // partially set - see group-validation.helpers.ts's own comment.
+  latitude: latitudeSchema,
+  longitude: longitudeSchema,
 });
 
-export const createSectionSchema = createSectionObjectSchema.superRefine(
-  refineCityIdentification,
-);
+export const createSectionSchema = createSectionObjectSchema
+  .superRefine(refineCityIdentification)
+  .superRefine(refineCoordinatePair);
 
 export class CreateSectionDto extends createZodDto(createSectionSchema) {}
 

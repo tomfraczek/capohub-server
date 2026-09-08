@@ -13,6 +13,7 @@
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
 import { CommunityHomeService } from './community-home.service';
+import { CommunityOverviewService } from './community-overview.service';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
 import { SectionMembership } from './entities/section-membership.entity';
@@ -104,6 +105,27 @@ function buildService(setup: Setup) {
     buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
   } as unknown as R2StorageService;
 
+  // Community Home's five overview fields (location/mySections/myGroups/
+  // nearbySections/nearbyGroups) are CommunityOverviewService's own concern
+  // - covered by community-overview.service.spec.ts - so this file's mock
+  // just returns empty/unconfigured, keeping every existing myCommunities/
+  // capabilities test above unaffected.
+  const communityOverviewService = {
+    getLocationSummary: jest.fn().mockResolvedValue({ configured: false }),
+    getMySections: jest
+      .fn()
+      .mockResolvedValue({ items: [], total: 0, hasMore: false }),
+    getMyGroups: jest
+      .fn()
+      .mockResolvedValue({ items: [], total: 0, hasMore: false }),
+    getNearbySections: jest
+      .fn()
+      .mockResolvedValue({ items: [], total: 0, hasMore: false }),
+    getNearbyGroups: jest
+      .fn()
+      .mockResolvedValue({ items: [], total: 0, hasMore: false }),
+  } as unknown as CommunityOverviewService;
+
   const service = new CommunityHomeService(
     em,
     groupPermissionService,
@@ -111,6 +133,7 @@ function buildService(setup: Setup) {
     groupHierarchyService,
     membershipRequestsService,
     r2StorageService,
+    communityOverviewService,
   );
 
   return { service, em };

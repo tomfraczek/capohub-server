@@ -27,6 +27,19 @@ export interface GroupResponseDto {
   childGroupsCount: number;
   // Direct Sections only (one level down) - not recursive.
   directSectionsCount: number;
+  // Whether the viewer holds an active SectionMembership in one of this
+  // Group's *direct* Sections (see GroupsService.resolveViewerRelation) -
+  // never a membership on the Group itself (Group has none - see
+  // group.entity.ts). `false` for an unauthenticated/system read with no
+  // viewer.
+  isMemberThroughSection: boolean;
+  // Whether the viewer holds a GroupFollow row for this Group (see
+  // group-follow.entity.ts) - entirely independent of
+  // isMemberThroughSection above; a viewer can be true/false on either
+  // independently of the other, including both true at once (module: "NIE
+  // musisz usuwać istniejącego GroupFollow" when the follower later joins a
+  // Section).
+  isFollowing: boolean;
   createdAt: string;
   updatedAt: string;
 }

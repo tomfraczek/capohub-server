@@ -1,4 +1,4 @@
-import { getCityByGeonameId, getCitiesForCountry } from './city-directory';
+import { getAllCities, getCityByGeonameId, getCitiesForCountry } from './city-directory';
 
 describe('city-directory', () => {
   describe('getCitiesForCountry', () => {
@@ -65,6 +65,26 @@ describe('city-directory', () => {
 
     it('returns undefined for a geonameId that does not exist in the dataset', () => {
       expect(getCityByGeonameId(999999999999)).toBeUndefined();
+    });
+  });
+
+  describe('getAllCities', () => {
+    it('returns every city across every country, each carrying real coordinates', () => {
+      const cities = getAllCities();
+
+      expect(cities.length).toBeGreaterThan(100000);
+      expect(cities.every((city) => Number.isFinite(city.latitude))).toBe(true);
+      expect(cities.every((city) => Number.isFinite(city.longitude))).toBe(true);
+      // Not scoped to one country - unlike getCitiesForCountry above.
+      const countries = new Set(cities.map((city) => city.country));
+      expect(countries.size).toBeGreaterThan(50);
+    });
+
+    it("includes Poznań with its real-world coordinates", () => {
+      const poznan = getAllCities().find((city) => city.geonameId === 3088171);
+
+      expect(poznan?.latitude).toBeCloseTo(52.4, 0);
+      expect(poznan?.longitude).toBeCloseTo(16.9, 0);
     });
   });
 });

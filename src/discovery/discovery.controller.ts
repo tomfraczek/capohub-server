@@ -16,6 +16,11 @@ import {
   DiscoverySearchQueryDto,
   discoverySearchQuerySchema,
 } from './dto/discovery-search-query.schema';
+import { PlaceSearchResultDto } from './dto/place-search-result.dto';
+import {
+  PlaceSearchQueryDto,
+  placeSearchQuerySchema,
+} from './dto/place-search-query.schema';
 
 @Controller('discovery')
 export class DiscoveryController {
@@ -74,5 +79,25 @@ export class DiscoveryController {
     query: CitySearchQueryDto,
   ): CityResultDto[] {
     return this.citySearchService.search(query);
+  }
+
+  /**
+   * GET /discovery/places?search=&limit=
+   *
+   * Global (every-country) place search with real lat/lng - backs the
+   * manual "wyszukaj miejscowość" step of discovery-location
+   * (users/user-location.service.ts), which must work with no GPS/location
+   * permission at all. Not scoped to a pre-chosen country (unlike
+   * GET /discovery/cities above) - a caller here only ever has a bare typed
+   * place name. See CitySearchService#searchPlaces and
+   * common/geo/city-directory.ts for the static reference dataset this
+   * reads from (no third-party geocoding provider, no API key).
+   */
+  @Get('places')
+  searchPlaces(
+    @Query(new ZodValidationPipe(placeSearchQuerySchema))
+    query: PlaceSearchQueryDto,
+  ): PlaceSearchResultDto[] {
+    return this.citySearchService.searchPlaces(query);
   }
 }

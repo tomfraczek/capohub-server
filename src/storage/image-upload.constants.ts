@@ -33,9 +33,12 @@ export function isAllowedImageMimeType(
 // image-processing.service.ts. Never the original JPEG/PNG bytes.
 export const IMAGE_OUTPUT_CONTENT_TYPE = 'image/webp';
 
-// Square, cover-cropped - User avatar, Group profile image, Section
-// profile image (module spec §6). A "cover" image (Event, Group) uses its
-// own 16:9 shape, see COVER_IMAGE_DIMENSIONS below.
+// Max bounding box (never a forced/cropped shape - see
+// ImageProcessingService.processProfileImage) for User avatar, Group logo,
+// Section logo - the original aspect ratio and framing are always kept, an
+// oversized image is only ever scaled down to fit inside this box. A
+// "cover" image (Event, Group) still gets cropped to its own fixed 16:9
+// shape, see COVER_IMAGE_DIMENSIONS below.
 export const PROFILE_IMAGE_DIMENSIONS = { width: 512, height: 512 } as const;
 
 // Shared 16:9 shape for every *cover* image this module processes - Event

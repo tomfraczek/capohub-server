@@ -4,6 +4,7 @@ import { User } from '../users/entities/user.entity';
 import { CreateGroupInput } from './dto/create-group.schema';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
+import { SectionMembership } from './entities/section-membership.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
@@ -11,6 +12,7 @@ import { ImageAssetService } from '../storage/image-asset.service';
 import { ImageProcessingService } from '../storage/image-processing.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { AuditLogService } from './audit-log.service';
+import { GroupFollowService } from './group-follow.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupsService } from './groups.service';
 import { RoleAssignmentsService } from './role-assignments.service';
@@ -102,6 +104,12 @@ function buildMockEm(routing: MockRouting = {}) {
     if (entity === User) {
       return Promise.resolve(null);
     }
+    // resolveViewerRelation's isMemberThroughSection lookup - no test in
+    // this file exercises a real Section membership, so this always comes
+    // back "not a member" here.
+    if (entity === SectionMembership) {
+      return Promise.resolve(null);
+    }
     throw new Error(
       `Unexpected findOne entity in test mock: ${String(entity)}`,
     );
@@ -183,6 +191,12 @@ function buildService(em: EntityManager) {
       ),
   };
 
+  const groupFollowService = {
+    isFollowing: jest.fn().mockResolvedValue(false),
+    follow: jest.fn().mockResolvedValue(undefined),
+    unfollow: jest.fn().mockResolvedValue(undefined),
+  } as unknown as GroupFollowService;
+
   return {
     service: new GroupsService(
       em,
@@ -191,9 +205,11 @@ function buildService(em: EntityManager) {
       r2StorageService,
       imageProcessingService,
       imageAssetService as unknown as ImageAssetService,
+      groupFollowService,
     ),
     auditLogService,
     imageAssetService,
+    groupFollowService,
   };
 }
 
@@ -310,9 +326,9 @@ describe('GroupsService', () => {
       const { em } = buildMockEm({ groupResults: [null] });
       const { service } = buildService(em);
 
-      await expect(service.getById('missing-id')).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.getById('missing-id', buildUser()),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 

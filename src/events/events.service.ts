@@ -246,6 +246,8 @@ export class EventsService {
         null,
       );
 
+      await this.eventNotificationsService.notifyPublished(em, event);
+
       const roles = await this.eventRolesService.getRolesForUser(
         em,
         eventId,

@@ -22,30 +22,46 @@ import {
  */
 @Injectable()
 export class ImageProcessingService {
+  // User avatar, Group logo, Section logo (module: "przy wyborze loga nie
+  // może być przycinania, musi wchodzić takie jakie użytkownik przyśle") -
+  // deliberately never crops: `fit: 'inside'` scales the whole original
+  // image down until it fits within PROFILE_IMAGE_DIMENSIONS, keeping its
+  // real aspect ratio and every pixel the user actually sent, unlike the
+  // 'cover' fit this used before (which filled the square by cutting off
+  // whatever didn't fit). `withoutEnlargement` skips scaling a
+  // already-small image up, so a small square avatar is never blown up
+  // into a blurry 512x512 either - the output stays whatever size actually
+  // reflects the source, bounded only from above. Still always re-encoded
+  // to WebP at IMAGE_OUTPUT_QUALITY, same as every other image this module
+  // processes.
   async processProfileImage(buffer: Buffer): Promise<Buffer> {
-    return this.process(buffer, PROFILE_IMAGE_DIMENSIONS);
+    return this.process(buffer, PROFILE_IMAGE_DIMENSIONS, 'inside');
   }
 
   // Shared by Event cover and Group cover uploads (the name predates
   // Group's own cover upload, see events.service.ts/groups.service.ts) -
-  // both use the same 16:9 COVER_IMAGE_DIMENSIONS shape.
+  // both use the same 16:9 COVER_IMAGE_DIMENSIONS shape, still cover-
+  // cropped to that exact size (never asked to change - task only covers
+  // Group/Section logo and User avatar, see processProfileImage above).
   async processCoverImage(buffer: Buffer): Promise<Buffer> {
-    return this.process(buffer, COVER_IMAGE_DIMENSIONS);
+    return this.process(buffer, COVER_IMAGE_DIMENSIONS, 'cover');
   }
 
   private async process(
     buffer: Buffer,
     dimensions: { width: number; height: number },
+    fit: 'cover' | 'inside',
   ): Promise<Buffer> {
     try {
       return await sharp(buffer)
-        // Applies EXIF orientation before crop - otherwise a portrait
-        // photo taken on a phone can crop to the wrong region once its
-        // orientation tag is dropped by the resize below.
+        // Applies EXIF orientation before resize - otherwise a portrait
+        // photo taken on a phone can resize/crop against the wrong region
+        // once its orientation tag is dropped by the resize below.
         .rotate()
         .resize(dimensions.width, dimensions.height, {
-          fit: 'cover',
+          fit,
           position: 'centre',
+          withoutEnlargement: fit === 'inside',
         })
         .webp({ quality: IMAGE_OUTPUT_QUALITY })
         .toBuffer();

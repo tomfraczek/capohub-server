@@ -50,11 +50,20 @@ import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { Group } from '../src/groups/entities/group.entity';
+import { GroupFollow } from '../src/groups/entities/group-follow.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
 import { MembershipRequest } from '../src/groups/entities/membership-request.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
+import { PaginatedResponse } from '../src/common/pagination/pagination.types';
+import {
+  CommunityGroupCardDto,
+  CommunitySectionCardDto,
+  NearbyGroupCardDto,
+  NearbySectionCardDto,
+} from '../src/groups/dto/community-overview-response.dto';
+import { UserDiscoveryLocationResponseDto } from '../src/users/dto/user-discovery-location-response.dto';
 import { User } from '../src/users/entities/user.entity';
 
 const TOKENS = [
@@ -65,6 +74,10 @@ const TOKENS = [
   'ch-invitee',
   'ch-newuser',
   'ch-section-member',
+  'ch-follower',
+  'ch-nearby-user',
+  'ch-both-relation',
+  'ch-multi-section',
 ] as const;
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {};
@@ -167,6 +180,13 @@ describe('Community Home (e2e)', () => {
     await closeE2eApp(app, async () => {
       const cleanup = app.get(EntityManager).fork();
       const allTargetIds = [...createdGroupIds, ...createdSectionIds];
+      // GroupFollow.group has no delete cascade (see group-follow.entity.ts) -
+      // must be cleared before the Group rows themselves, same reasoning as
+      // Section-before-Group below. GroupFollow.user cascades on User
+      // deletion, so no separate cleanup is needed for that side.
+      await cleanup.nativeDelete(GroupFollow, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(MembershipRequest, {
         $or: [
           { targetGroup: { $in: allTargetIds } },
@@ -308,6 +328,28 @@ describe('Community Home (e2e)', () => {
       request(app.getHttpServer())
         .get('/api/v1/community/home')
         .set('Authorization', `Bearer ${token}`)
+        .expect(200),
+    );
+  }
+
+  async function setDiscoveryLocation(
+    token: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<UserDiscoveryLocationResponseDto> {
+    return bodyOf<UserDiscoveryLocationResponseDto>(
+      request(app.getHttpServer())
+        .put('/api/v1/users/me/discovery-location')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          city: 'Poznań',
+          region: null,
+          countryCode: 'PL',
+          latitude: 52.4064,
+          longitude: 16.9252,
+          displayName: null,
+          source: 'manual',
+          ...overrides,
+        })
         .expect(200),
     );
   }
@@ -612,6 +654,357 @@ describe('Community Home (e2e)', () => {
           (i) => i.community.id === hiddenSection.id,
         ),
       ).toBe(false);
+    });
+  });
+
+  describe('mySections / myGroups', () => {
+    it('a user belonging to several Sections of the same Group: myGroups lists that Group exactly once', async () => {
+      const org = await createRootGroup(tokenFor('ch-owner'), {
+        name: 'Overview Org',
+      });
+      const sectionA = await createSection(tokenFor('ch-owner'), org.id, {
+        name: 'Overview Section A',
+      });
+      const sectionB = await createSection(tokenFor('ch-owner'), org.id, {
+        name: 'Overview Section B',
+      });
+      await addSectionMember(
+        tokenFor('ch-owner'),
+        sectionA.id,
+        tokenFor('ch-multi-section'),
+      );
+      await addSectionMember(
+        tokenFor('ch-owner'),
+        sectionB.id,
+        tokenFor('ch-multi-section'),
+      );
+
+      const home = await getHome(tokenFor('ch-multi-section'));
+
+      expect(home.mySections.items.map((s) => s.id).sort()).toEqual(
+        [sectionA.id, sectionB.id].sort(),
+      );
+      expect(home.myGroups.items.filter((g) => g.id === org.id)).toHaveLength(
+        1,
+      );
+      const groupCard = home.myGroups.items.find((g) => g.id === org.id);
+      expect(groupCard).toMatchObject({
+        isMemberThroughSection: true,
+        isFollowing: false,
+      });
+    });
+
+    it('a Group related through both Section membership AND an explicit follow appears exactly once, with both flags true', async () => {
+      const org = await createRootGroup(tokenFor('ch-owner'), {
+        name: 'Both Relation Org',
+      });
+      const section = await createSection(tokenFor('ch-owner'), org.id, {
+        name: 'Both Relation Section',
+      });
+      await addSectionMember(
+        tokenFor('ch-owner'),
+        section.id,
+        tokenFor('ch-both-relation'),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${org.id}/follow`)
+        .set('Authorization', `Bearer ${tokenFor('ch-both-relation')}`)
+        .expect(201);
+
+      const home = await getHome(tokenFor('ch-both-relation'));
+
+      expect(home.myGroups.items.filter((g) => g.id === org.id)).toHaveLength(
+        1,
+      );
+      expect(home.myGroups.items.find((g) => g.id === org.id)).toMatchObject({
+        isMemberThroughSection: true,
+        isFollowing: true,
+      });
+    });
+  });
+
+  describe('Group follow/unfollow', () => {
+    it('follow/unfollow are idempotent and toggle isFollowing on GroupResponseDto without granting any membership', async () => {
+      const org = await createRootGroup(tokenFor('ch-owner'), {
+        name: 'Follow Test Org',
+      });
+
+      const follow1 = await bodyOf<GroupResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${org.id}/follow`)
+          .set('Authorization', `Bearer ${tokenFor('ch-follower')}`)
+          .expect(201),
+      );
+      expect(follow1.isFollowing).toBe(true);
+      expect(follow1.isMemberThroughSection).toBe(false);
+
+      // Idempotent - following again is still a success, still isFollowing.
+      const follow2 = await bodyOf<GroupResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${org.id}/follow`)
+          .set('Authorization', `Bearer ${tokenFor('ch-follower')}`)
+          .expect(201),
+      );
+      expect(follow2.isFollowing).toBe(true);
+
+      const homeWhileFollowing = await getHome(tokenFor('ch-follower'));
+      expect(
+        homeWhileFollowing.myGroups.items.some((g) => g.id === org.id),
+      ).toBe(true);
+
+      const unfollow1 = await bodyOf<GroupResponseDto>(
+        request(app.getHttpServer())
+          .delete(`/api/v1/groups/${org.id}/follow`)
+          .set('Authorization', `Bearer ${tokenFor('ch-follower')}`)
+          .expect(200),
+      );
+      expect(unfollow1.isFollowing).toBe(false);
+
+      // Idempotent - unfollowing an already-not-followed Group is still 200.
+      await request(app.getHttpServer())
+        .delete(`/api/v1/groups/${org.id}/follow`)
+        .set('Authorization', `Bearer ${tokenFor('ch-follower')}`)
+        .expect(200);
+
+      const homeAfterUnfollow = await getHome(tokenFor('ch-follower'));
+      expect(
+        homeAfterUnfollow.myGroups.items.some((g) => g.id === org.id),
+      ).toBe(false);
+    });
+  });
+
+  describe('Nearby discovery', () => {
+    it('no discovery location configured: location.configured is false and nearbySections/nearbyGroups are empty, mySections/myGroups still work', async () => {
+      const home = await getHome(tokenFor('ch-newuser'));
+
+      expect(home.location).toEqual({ configured: false });
+      expect(home.nearbySections).toEqual({
+        items: [],
+        total: 0,
+        hasMore: false,
+      });
+      expect(home.nearbyGroups).toEqual({
+        items: [],
+        total: 0,
+        hasMore: false,
+      });
+    });
+
+    it('nearbySections excludes the caller own Section, and nearbyGroups excludes myGroups, both ranked distance ASC', async () => {
+      await setDiscoveryLocation(tokenFor('ch-nearby-user'), {
+        latitude: 52.4064,
+        longitude: 16.9252,
+      });
+
+      // The caller's own Group/Section - close to their own location (the
+      // helper's own default city, Poznań), but must never appear in
+      // nearbySections/nearbyGroups (it's already "mine").
+      const myOrg = await createRootGroup(tokenFor('ch-owner'), {
+        name: 'Nearby Mine Org',
+      });
+      const mySection = await createSection(tokenFor('ch-owner'), myOrg.id, {
+        name: 'Nearby Mine Section',
+      });
+      await addSectionMember(
+        tokenFor('ch-owner'),
+        mySection.id,
+        tokenFor('ch-nearby-user'),
+      );
+
+      // A closer, unrelated Section (~7km away - Luboń, a real Poznań
+      // suburb) - SectionsService derives coordinates from geonameId (see
+      // sections.service.ts#applyFields), so a real, distinct city is what
+      // actually produces a real, distinct distance here, not a raw
+      // latitude/longitude override (no longer trusted from the request
+      // body at all).
+      const nearOrg = await createRootGroup(tokenFor('ch-owner'), {
+        name: 'Nearby Near Org',
+      });
+      const nearSection = await createSection(
+        tokenFor('ch-owner'),
+        nearOrg.id,
+        {
+          name: 'Nearby Near Section',
+          city: 'Luboń',
+          region: 'Greater Poland',
+          geonameId: 3092856,
+        },
+      );
+
+      // A farther, unrelated Section of a different Group (~20km away -
+      // Murowana Goślina) - still within the default 50km radius.
+      const farOrg = await createRootGroup(tokenFor('ch-owner'), {
+        name: 'Nearby Far Org',
+      });
+      const farSection = await createSection(tokenFor('ch-owner'), farOrg.id, {
+        name: 'Nearby Far Section',
+        city: 'Murowana Goślina',
+        region: 'Greater Poland',
+        geonameId: 3091293,
+      });
+
+      const home = await getHome(tokenFor('ch-nearby-user'));
+
+      expect(home.location).toMatchObject({
+        configured: true,
+        city: 'Poznań',
+        countryCode: 'PL',
+      });
+
+      const nearbySectionIds = home.nearbySections.items.map((s) => s.id);
+      expect(nearbySectionIds).not.toContain(mySection.id);
+      expect(nearbySectionIds).toContain(nearSection.id);
+      expect(nearbySectionIds).toContain(farSection.id);
+      // distance ASC.
+      expect(nearbySectionIds.indexOf(nearSection.id)).toBeLessThan(
+        nearbySectionIds.indexOf(farSection.id),
+      );
+
+      const nearbyGroupIds = home.nearbyGroups.items.map((g) => g.id);
+      expect(nearbyGroupIds).not.toContain(myOrg.id);
+      expect(nearbyGroupIds).toContain(nearOrg.id);
+      expect(nearbyGroupIds).toContain(farOrg.id);
+      expect(nearbyGroupIds.indexOf(nearOrg.id)).toBeLessThan(
+        nearbyGroupIds.indexOf(farOrg.id),
+      );
+      const nearGroupCard = home.nearbyGroups.items.find(
+        (g) => g.id === nearOrg.id,
+      );
+      expect(nearGroupCard?.nearestSection.id).toBe(nearSection.id);
+    });
+  });
+
+  describe('Paginated "See all" endpoints', () => {
+    it('GET /community/{sections,groups}/mine mirror the same mySections/myGroups data Home returns, fully paginated', async () => {
+      const org = await createRootGroup(tokenFor('ch-owner'), {
+        name: 'See All Org',
+      });
+      const section = await createSection(tokenFor('ch-owner'), org.id, {
+        name: 'See All Section',
+      });
+      await addSectionMember(
+        tokenFor('ch-owner'),
+        section.id,
+        tokenFor('ch-admin'),
+        GroupRole.ADMIN,
+      );
+
+      const sectionsPage = await bodyOf<
+        PaginatedResponse<CommunitySectionCardDto>
+      >(
+        request(app.getHttpServer())
+          .get('/api/v1/community/sections/mine')
+          .set('Authorization', `Bearer ${tokenFor('ch-admin')}`)
+          .expect(200),
+      );
+      expect(sectionsPage.data.some((s) => s.id === section.id)).toBe(true);
+      expect(sectionsPage.meta).toMatchObject({ page: 1 });
+
+      const groupsPage = await bodyOf<PaginatedResponse<CommunityGroupCardDto>>(
+        request(app.getHttpServer())
+          .get('/api/v1/community/groups/mine')
+          .set('Authorization', `Bearer ${tokenFor('ch-admin')}`)
+          .expect(200),
+      );
+      expect(groupsPage.data.some((g) => g.id === org.id)).toBe(true);
+    });
+
+    it('GET /community/{sections,groups}/nearby accept a radiusKm override and mirror nearbySections/nearbyGroups', async () => {
+      // SectionsService now always derives a Section's coordinates from its
+      // own geonameId (see sections.service.ts#applyFields) rather than
+      // trusting a client-supplied latitude/longitude - createSection's own
+      // default geonameId (3088171, Poznań) is what actually determines
+      // where this fixture Section ends up, so the caller's own discovery
+      // location must be set to that same real place (not an arbitrary
+      // (0,0) the Section could never actually be derived to).
+      await setDiscoveryLocation(tokenFor('ch-follower'), {
+        latitude: 52.4064,
+        longitude: 16.9252,
+      });
+      const org = await createRootGroup(tokenFor('ch-owner'), {
+        name: 'See All Nearby Org',
+      });
+      const section = await createSection(tokenFor('ch-owner'), org.id, {
+        name: 'See All Nearby Section',
+      });
+
+      const sectionsPage = await bodyOf<
+        PaginatedResponse<NearbySectionCardDto>
+      >(
+        request(app.getHttpServer())
+          .get('/api/v1/community/sections/nearby?radiusKm=10')
+          .set('Authorization', `Bearer ${tokenFor('ch-follower')}`)
+          .expect(200),
+      );
+      expect(sectionsPage.data.some((s) => s.id === section.id)).toBe(true);
+
+      const groupsPage = await bodyOf<PaginatedResponse<NearbyGroupCardDto>>(
+        request(app.getHttpServer())
+          .get('/api/v1/community/groups/nearby?radiusKm=10')
+          .set('Authorization', `Bearer ${tokenFor('ch-follower')}`)
+          .expect(200),
+      );
+      expect(groupsPage.data.some((g) => g.id === org.id)).toBe(true);
+    });
+  });
+
+  describe('Discovery location (GET/PUT/DELETE /users/me/discovery-location)', () => {
+    it('is null until set, reflects what was set, and is idempotently removable', async () => {
+      // Nest sends an empty body (not the JSON literal `null`) for a
+      // controller method that resolves to `null` - same behavior as this
+      // codebase's other nullable GETs (e.g. GET /groups/:id/parent).
+      // Asserted on the raw response text, not supertest's `.body` (which
+      // falls back to `{}` for an empty/unparseable body).
+      const beforeRes = await request(app.getHttpServer())
+        .get('/api/v1/users/me/discovery-location')
+        .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
+        .expect(200);
+      expect(beforeRes.text).toBe('');
+
+      const set = await setDiscoveryLocation(tokenFor('ch-newuser'));
+      expect(set).toMatchObject({
+        city: 'Poznań',
+        countryCode: 'PL',
+        latitude: 52.4064,
+        longitude: 16.9252,
+      });
+
+      const after = await bodyOf<UserDiscoveryLocationResponseDto>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/me/discovery-location')
+          .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
+          .expect(200),
+      );
+      expect(after).toMatchObject({ city: 'Poznań', countryCode: 'PL' });
+
+      await request(app.getHttpServer())
+        .delete('/api/v1/users/me/discovery-location')
+        .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
+        .expect(204);
+      // Idempotent - deleting an already-absent location is still 204.
+      await request(app.getHttpServer())
+        .delete('/api/v1/users/me/discovery-location')
+        .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
+        .expect(204);
+
+      const afterDeleteRes = await request(app.getHttpServer())
+        .get('/api/v1/users/me/discovery-location')
+        .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
+        .expect(200);
+      expect(afterDeleteRes.text).toBe('');
+    });
+
+    it('rejects an out-of-range latitude/longitude', async () => {
+      await request(app.getHttpServer())
+        .put('/api/v1/users/me/discovery-location')
+        .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
+        .send({
+          city: 'Nowhere',
+          countryCode: 'PL',
+          latitude: 200,
+          longitude: 16.9252,
+        })
+        .expect(400);
     });
   });
 });

@@ -188,7 +188,7 @@ export class HierarchyManagementService {
       return attached;
     });
 
-    return this.groupsService.getById(group.id);
+    return this.groupsService.getById(group.id, actor);
   }
 
   /** Section counterpart of setGroupParent - see its own comment. */
@@ -272,7 +272,7 @@ export class HierarchyManagementService {
       return detached;
     });
 
-    return this.groupsService.getById(group.id);
+    return this.groupsService.getById(group.id, actor);
   }
 
   /** Section counterpart of detachGroup - see its own comment. */

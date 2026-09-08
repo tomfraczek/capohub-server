@@ -120,6 +120,50 @@ export function refineCityIdentification(
   }
 }
 
+// Precise venue coordinates for nearby discovery (see section.entity.ts's
+// own comment) - both optional/nullable, but only ever valid together (see
+// refineCoordinatePair below). Standard WGS84 ranges. Normalizes an omitted
+// key to `null` (not `undefined`), same convention as regionSchema, so the
+// service layer always sees the entity's own `number | null` shape.
+export const latitudeSchema = z
+  .number()
+  .min(-90)
+  .max(90)
+  .nullish()
+  .transform((value) => value ?? null);
+export const longitudeSchema = z
+  .number()
+  .min(-180)
+  .max(180)
+  .nullish()
+  .transform((value) => value ?? null);
+
+/**
+ * Cross-field check for a Zod object shaped `{ latitude, longitude }`
+ * (already range-validated individually by latitudeSchema/longitudeSchema
+ * above) - a Section may leave both unset (not yet placed on the map - see
+ * this module's own comment on nearby discovery simply skipping it), but
+ * may never set just one: a lone latitude or longitude is not a usable
+ * coordinate and would silently corrupt distance calculations. Attach via
+ * `.superRefine(refineCoordinatePair)`, same convention as
+ * refineCityIdentification above.
+ */
+export function refineCoordinatePair(
+  data: { latitude?: number | null; longitude?: number | null },
+  ctx: z.RefinementCtx,
+): void {
+  const hasLatitude = data.latitude !== null && data.latitude !== undefined;
+  const hasLongitude = data.longitude !== null && data.longitude !== undefined;
+  if (hasLatitude === hasLongitude) {
+    return;
+  }
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: 'latitude and longitude must both be set or both be omitted',
+    path: [hasLatitude ? 'longitude' : 'latitude'],
+  });
+}
+
 export const timezoneSchema = z
   .string()
   .trim()

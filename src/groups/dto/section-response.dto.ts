@@ -28,6 +28,8 @@ export interface SectionResponseDto {
   city: string | null;
   region: string | null;
   geonameId: number | null;
+  latitude: number | null;
+  longitude: number | null;
   createdAt: string;
   updatedAt: string;
 }

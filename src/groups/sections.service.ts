@@ -4,10 +4,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
+import { getCityByGeonameId } from '../common/geo/city-directory';
 import { generateUniquePublicCode } from '../common/utils/public-code';
 import { ImageAssetService } from '../storage/image-asset.service';
 import { ImageProcessingService } from '../storage/image-processing.service';
-import { buildSectionProfileImageKey } from '../storage/object-keys.util';
+import {
+  buildSectionCoverImageKey,
+  buildSectionProfileImageKey,
+} from '../storage/object-keys.util';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
@@ -91,6 +95,56 @@ export class SectionsService {
       },
       logContext: {
         resourceType: 'section-profile-image',
+        resourceId: section.id,
+      },
+    });
+    return toSectionResponseDto(section, this.r2StorageService);
+  }
+
+  // PUT :sectionId/cover-image - mirrors GroupsService.uploadCoverImage,
+  // same shape/gating as uploadProfileImage above, just for the cover
+  // image (16:9, see ImageProcessingService.processCoverImage) instead of
+  // the profile image. Clears the legacy coverImageUrl column alongside
+  // setting coverImageKey, same "the two fields never disagree" reasoning
+  // as logoUrl/profileImageKey (see section.entity.ts).
+  async uploadCoverImage(
+    sectionId: string,
+    file: Express.Multer.File,
+  ): Promise<SectionResponseDto> {
+    const section = await this.loadOrFail(sectionId);
+    const processed = await this.imageProcessingService.processCoverImage(
+      file.buffer,
+    );
+    const newKey = buildSectionCoverImageKey(section.id);
+    await this.imageAssetService.replace({
+      processedBuffer: processed,
+      newKey,
+      oldKey: section.coverImageKey,
+      persist: async (key) => {
+        section.coverImageKey = key;
+        section.coverImageUrl = null;
+        await this.em.flush();
+      },
+      logContext: {
+        resourceType: 'section-cover-image',
+        resourceId: section.id,
+      },
+    });
+    return toSectionResponseDto(section, this.r2StorageService);
+  }
+
+  // DELETE :sectionId/cover-image - idempotent, mirrors
+  // deleteProfileImage/GroupsService.deleteCoverImage above.
+  async deleteCoverImage(sectionId: string): Promise<SectionResponseDto> {
+    const section = await this.loadOrFail(sectionId);
+    await this.imageAssetService.remove({
+      oldKey: section.coverImageKey,
+      persist: async () => {
+        section.coverImageKey = null;
+        await this.em.flush();
+      },
+      logContext: {
+        resourceType: 'section-cover-image',
         resourceId: section.id,
       },
     });
@@ -378,6 +432,22 @@ export class SectionsService {
     section.city = input.city;
     section.region = input.region;
     section.geonameId = input.geonameId;
+    // Coordinates are never taken from input.latitude/input.longitude
+    // directly - geonameId is already the cross-checked source of truth for
+    // country/city/region (see refineCityIdentification), and the same
+    // bundled GeoNames dataset it resolves against also carries that exact
+    // place's own latitude/longitude (see city-directory.ts) - so deriving
+    // them here, rather than trusting a client-supplied pair, is what
+    // guarantees every Section's coordinates genuinely match the place its
+    // geonameId names (root cause of "Community Home empty for a new user":
+    // the mobile city picker never sent latitude/longitude at all, so no
+    // create/update path ever populated these two columns - see this
+    // feature's own report). refineCityIdentification already ran in the
+    // schema layer and guarantees getCityByGeonameId(input.geonameId)
+    // resolves here.
+    const cityRecord = getCityByGeonameId(input.geonameId);
+    section.latitude = cityRecord?.latitude ?? null;
+    section.longitude = cityRecord?.longitude ?? null;
   }
 
   private async loadOrFail(

@@ -65,6 +65,13 @@ interface OutputCityRecord {
   alternateNames: string[];
   country: string;
   region: string | null;
+  // Added for the manual "wyszukaj miejscowość" discovery-location flow
+  // (see discovery/city-search.service.ts#searchPlaces) - lets the backend
+  // resolve real lat/lng for a typed place name without any device
+  // permission or third-party geocoding provider. Straight from the raw
+  // GeoNames columns (see parseCities below), never derived/approximated.
+  latitude: number;
+  longitude: number;
 }
 
 async function download(url: string, destination: string): Promise<void> {
@@ -131,6 +138,8 @@ function parseCities(
     const geonameId = Number(columns[0]);
     const name = columns[1];
     const alternateNamesRaw = columns[3];
+    const latitude = Number(columns[4]);
+    const longitude = Number(columns[5]);
     const country = columns[8];
     const admin1Code = columns[10];
 
@@ -148,7 +157,7 @@ function parseCities(
         )
       : [];
 
-    records.push({ geonameId, name, alternateNames, country, region });
+    records.push({ geonameId, name, alternateNames, country, region, latitude, longitude });
   }
 
   return records;

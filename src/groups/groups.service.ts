@@ -24,6 +24,9 @@ import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
+import { SectionMembership } from './entities/section-membership.entity';
+import { SectionMembershipStatus } from './enums/section-membership-status.enum';
+import { GroupFollowService } from './group-follow.service';
 import {
   toGroupResponseDto,
   toGroupSummaryResponseDto,
@@ -39,6 +42,7 @@ export class GroupsService {
     private readonly r2StorageService: R2StorageService,
     private readonly imageProcessingService: ImageProcessingService,
     private readonly imageAssetService: ImageAssetService,
+    private readonly groupFollowService: GroupFollowService,
   ) {}
 
   // PUT /groups/:id/profile-image (module: "R2: upload/replace/delete
@@ -177,7 +181,7 @@ export class GroupsService {
       return group;
     });
 
-    return this.toResponseDto(this.em, group);
+    return this.toResponseDto(this.em, group, user.id);
   }
 
   async listMine(userId: string): Promise<GroupSummaryResponseDto[]> {
@@ -206,9 +210,31 @@ export class GroupsService {
       });
   }
 
-  async getById(groupId: string): Promise<GroupResponseDto> {
+  async getById(groupId: string, viewer: User): Promise<GroupResponseDto> {
     const group = await this.loadGroupOrFail(groupId);
-    return this.toResponseDto(this.em, group);
+    return this.toResponseDto(this.em, group, viewer.id);
+  }
+
+  // POST /groups/:id/follow - see group-follow.entity.ts/GroupFollowService
+  // for what "following" means (never a membership, no role/permission
+  // granted). Idempotent - following an already-followed Group just returns
+  // its current state. Reachable only where GroupPermission.GROUP_VIEW
+  // already passed (see groups.controller.ts) - i.e. only for a Group the
+  // caller can already see (public, or one they administer) - a private
+  // Group the caller cannot view is not followable either, same 404 the
+  // guard already gives for viewing it.
+  async follow(groupId: string, user: User): Promise<GroupResponseDto> {
+    const group = await this.loadGroupOrFail(groupId);
+    await this.groupFollowService.follow(user, group);
+    return this.toResponseDto(this.em, group, user.id);
+  }
+
+  // DELETE /groups/:id/follow - idempotent (unfollowing an already-not-
+  // followed Group is a success, not a 404/409).
+  async unfollow(groupId: string, user: User): Promise<GroupResponseDto> {
+    const group = await this.loadGroupOrFail(groupId);
+    await this.groupFollowService.unfollow(user.id, groupId);
+    return this.toResponseDto(this.em, group, user.id);
   }
 
   async update(
@@ -221,7 +247,7 @@ export class GroupsService {
       this.applyFields(group, input);
       this.recordCommunityAudit(em, group, AuditAction.UPDATE_COMMUNITY, actor);
       await em.flush();
-      return this.toResponseDto(em, group);
+      return this.toResponseDto(em, group, actor.id);
     });
   }
 
@@ -299,7 +325,7 @@ export class GroupsService {
       group.status = GroupStatus.DELETED;
       this.recordCommunityAudit(em, group, AuditAction.DELETE, actor);
       await em.flush();
-      return this.toResponseDto(em, group);
+      return this.toResponseDto(em, group, actor.id);
     });
   }
 
@@ -316,7 +342,7 @@ export class GroupsService {
         this.recordCommunityAudit(em, group, auditAction, actor);
       }
       await em.flush();
-      return this.toResponseDto(em, group);
+      return this.toResponseDto(em, group, actor.id);
     });
   }
 
@@ -360,9 +386,19 @@ export class GroupsService {
   // (see GroupResponseDto) - queried fresh rather than relying on
   // Group.childGroups/sections' Collection state, which is not loaded by
   // default.
+  //
+  // `viewerId` is optional: every mutation call site (create/update/
+  // archive/.../delete) already has the acting User at hand and passes it
+  // through for free, so isMemberThroughSection/isFollowing are correct
+  // there too; the profile-image upload/delete handlers do not carry a
+  // viewer today and simply get `false`/`false` back for these two fields -
+  // a safe default, since those responses are not the "view a Group's
+  // profile" surface these flags exist for (see getById, the real target of
+  // this feature).
   private async toResponseDto(
     em: EntityManager,
     group: Group,
+    viewerId?: string,
   ): Promise<GroupResponseDto> {
     // Sequential, not Promise.all - two queries issued concurrently on the
     // same EntityManager/connection race each other at the driver level
@@ -371,11 +407,52 @@ export class GroupsService {
     const directSectionsCount = await em.count(Section, {
       parentGroup: group.id,
     });
+    const relation = viewerId
+      ? await this.resolveViewerRelation(em, group.id, viewerId)
+      : { isMemberThroughSection: false, isFollowing: false };
     return toGroupResponseDto(
       group,
       { childGroupsCount, directSectionsCount },
+      relation,
       this.r2StorageService,
     );
+  }
+
+  /**
+   * `isMemberThroughSection` - a User belongs to Group A "through a
+   * Section" only when they hold an active (ACTIVE/READ_ONLY)
+   * SectionMembership in one of Group A's *direct* Sections
+   * (`section.parentGroup === group.id`) - deliberately not the whole
+   * hierarchy subtree: this codebase's established rule is "no inheritance
+   * in either direction" (see CommunityHomeService's own comment - joining
+   * a Section never implicates any Group beyond its own immediate parent).
+   * `isFollowing` is the entirely independent GroupFollow signal (see
+   * group-follow.entity.ts) - the two are combined here only for the
+   * response DTO, never derived from one another.
+   */
+  private async resolveViewerRelation(
+    em: EntityManager,
+    groupId: string,
+    viewerId: string,
+  ): Promise<{ isMemberThroughSection: boolean; isFollowing: boolean }> {
+    // Sequential, not Promise.all - see this file's other queries' own
+    // comment on why concurrent queries against the same
+    // EntityManager/connection are never issued together here.
+    const membership = await em.findOne(SectionMembership, {
+      user: viewerId,
+      section: { parentGroup: groupId },
+      status: {
+        $in: [
+          SectionMembershipStatus.ACTIVE,
+          SectionMembershipStatus.READ_ONLY,
+        ],
+      },
+    });
+    const isFollowing = await this.groupFollowService.isFollowing(
+      viewerId,
+      groupId,
+    );
+    return { isMemberThroughSection: membership !== null, isFollowing };
   }
 
   private async loadGroupOrFail(

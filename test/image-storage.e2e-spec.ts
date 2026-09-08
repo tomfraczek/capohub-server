@@ -565,7 +565,10 @@ describe('Image storage (R2) (e2e)', () => {
           .attach('file', await buildJpeg(), 'cover1.jpg')
           .expect(200),
       );
-      const firstKey = first.coverImageUrl!.replace('https://fake-r2.test/', '');
+      const firstKey = first.coverImageUrl!.replace(
+        'https://fake-r2.test/',
+        '',
+      );
 
       const second = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
@@ -574,7 +577,10 @@ describe('Image storage (R2) (e2e)', () => {
           .attach('file', await buildPng(), 'cover2.png')
           .expect(200),
       );
-      const secondKey = second.coverImageUrl!.replace('https://fake-r2.test/', '');
+      const secondKey = second.coverImageUrl!.replace(
+        'https://fake-r2.test/',
+        '',
+      );
       expect(fakeR2Storage.objects.has(firstKey)).toBe(false);
       expect(fakeR2Storage.objects.has(secondKey)).toBe(true);
 
@@ -646,6 +652,81 @@ describe('Image storage (R2) (e2e)', () => {
         .put(`/api/v1/sections/${section.id}/profile-image`)
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .attach('file', await buildJpeg(), 'logo.jpg')
+        .expect(404);
+
+      expect((res.body as HttpErrorResponse).code).toBe('GROUP_NOT_FOUND');
+    });
+  });
+
+  // ─── Section cover image ────────────────────────────────────────────────
+  // Section's own cover-image feature (module: "zbuduj pełne tło sekcji od
+  // zera") - mirrors Group cover-image above exactly, same endpoint shape/
+  // gating, just mounted under /sections/:sectionId.
+
+  describe('Section cover-image (PUT/DELETE /sections/:id/cover-image)', () => {
+    it('uploads a 1600x900 cover, clearing the legacy coverImageUrl', async () => {
+      const section = await createSection();
+
+      const dto = await bodyOf<SectionResponseDto>(
+        request(app.getHttpServer())
+          .put(`/api/v1/sections/${section.id}/cover-image`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .attach('file', await buildJpeg(), 'cover.jpg')
+          .expect(200),
+      );
+
+      expect(dto.coverImageUrl).toMatch(
+        /^https:\/\/fake-r2\.test\/sections\/.+\/cover\/.+\.webp$/,
+      );
+    });
+
+    it('replace then delete: the old object is physically removed each time, and delete never restores the pre-upload legacy coverImageUrl', async () => {
+      const section = await createSection();
+
+      const first = await bodyOf<SectionResponseDto>(
+        request(app.getHttpServer())
+          .put(`/api/v1/sections/${section.id}/cover-image`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .attach('file', await buildJpeg(), 'cover1.jpg')
+          .expect(200),
+      );
+      const firstKey = first.coverImageUrl!.replace(
+        'https://fake-r2.test/',
+        '',
+      );
+
+      const second = await bodyOf<SectionResponseDto>(
+        request(app.getHttpServer())
+          .put(`/api/v1/sections/${section.id}/cover-image`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .attach('file', await buildPng(), 'cover2.png')
+          .expect(200),
+      );
+      const secondKey = second.coverImageUrl!.replace(
+        'https://fake-r2.test/',
+        '',
+      );
+      expect(fakeR2Storage.objects.has(firstKey)).toBe(false);
+      expect(fakeR2Storage.objects.has(secondKey)).toBe(true);
+
+      const deleted = await bodyOf<SectionResponseDto>(
+        request(app.getHttpServer())
+          .delete(`/api/v1/sections/${section.id}/cover-image`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+
+      expect(fakeR2Storage.objects.has(secondKey)).toBe(false);
+      expect(deleted.coverImageUrl).toBeNull();
+    });
+
+    it('denies a caller with no Role Assignment at all on the Section (404, never 403)', async () => {
+      const section = await createSection();
+
+      const res = await request(app.getHttpServer())
+        .put(`/api/v1/sections/${section.id}/cover-image`)
+        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+        .attach('file', await buildJpeg(), 'cover.jpg')
         .expect(404);
 
       expect((res.body as HttpErrorResponse).code).toBe('GROUP_NOT_FOUND');

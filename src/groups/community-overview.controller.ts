@@ -134,10 +134,10 @@ export class CommunityOverviewController {
     query: CommunityOverviewMineQueryDto,
   ): Promise<PaginatedResponse<NearbySectionCardDto>> {
     const result =
-      await this.communityOverviewService.getCountryDiscoverySections(
-        user.id,
-        { limit: query.limit, offset: (query.page - 1) * query.limit },
-      );
+      await this.communityOverviewService.getCountryDiscoverySections(user.id, {
+        limit: query.limit,
+        offset: (query.page - 1) * query.limit,
+      });
     return {
       data: result.items,
       meta: createPaginationMeta({
@@ -155,10 +155,10 @@ export class CommunityOverviewController {
     query: CommunityOverviewMineQueryDto,
   ): Promise<PaginatedResponse<NearbyGroupCardDto>> {
     const result =
-      await this.communityOverviewService.getCountryDiscoveryGroups(
-        user.id,
-        { limit: query.limit, offset: (query.page - 1) * query.limit },
-      );
+      await this.communityOverviewService.getCountryDiscoveryGroups(user.id, {
+        limit: query.limit,
+        offset: (query.page - 1) * query.limit,
+      });
     return {
       data: result.items,
       meta: createPaginationMeta({

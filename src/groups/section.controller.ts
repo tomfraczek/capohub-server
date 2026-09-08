@@ -128,6 +128,30 @@ export class SectionController {
     return this.sectionsService.deleteProfileImage(sectionId);
   }
 
+  // PUT/DELETE cover-image - same shape/gating as the profile-image pair
+  // above, just for the cover image (mirrors GroupsController's own
+  // cover-image pair).
+  @Put('cover-image')
+  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupKind(GroupKind.SECTION)
+  @UseInterceptors(imageUploadInterceptor())
+  uploadCoverImage(
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ): Promise<SectionResponseDto> {
+    assertImageFilePresent(file);
+    return this.sectionsService.uploadCoverImage(sectionId, file);
+  }
+
+  @Delete('cover-image')
+  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupKind(GroupKind.SECTION)
+  deleteCoverImage(
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+  ): Promise<SectionResponseDto> {
+    return this.sectionsService.deleteCoverImage(sectionId);
+  }
+
   // Valid from both ACTIVE and READ_ONLY, mirrors GroupsController.archive.
   @Post('archive')
   @RequireGroupPermission(GroupPermission.GROUP_ARCHIVE)

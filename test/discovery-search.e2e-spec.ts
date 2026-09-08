@@ -17,6 +17,7 @@ import { closeE2eApp } from './close-e2e-app.helper';
 import { PaginatedResponse } from '../src/common/pagination/pagination.types';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
+import { getCityByGeonameId } from '../src/common/geo/city-directory';
 import { CityResultDto } from '../src/discovery/dto/city-result.dto';
 import { CommunitySearchResultDto } from '../src/discovery/dto/community-search-result.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
@@ -531,6 +532,83 @@ describe('Discovery search (e2e)', () => {
       expect(createdFirst.geonameId).toBe(first.geonameId);
       expect(createdSecond.geonameId).toBe(second.geonameId);
       expect(createdFirst.geonameId).not.toBe(createdSecond.geonameId);
+    });
+
+    // Root-cause regression for "Community Home is empty for a new user"
+    // (see this feature's own report): the mobile city picker never sent
+    // latitude/longitude at all, so no create/update path ever populated
+    // those two columns and nearby discovery could never find any Section.
+    // SectionsService now always derives them from geonameId itself
+    // (common/geo/city-directory.ts) rather than trusting the request body
+    // - these three cases prove that end-to-end through the real HTTP
+    // create/update endpoints, not just the schema layer.
+    it('derives latitude/longitude from geonameId on create, even when the client sends none at all', async () => {
+      const record = getCityByGeonameId(3448439)!;
+      const root = await createGroup({ name: `${uniqueSuffix} CoordsCreate Root` });
+
+      const created = await createSection(root.id, {
+        name: `${uniqueSuffix} CoordsCreate`,
+        country: 'BR',
+        city: 'São Paulo',
+        region: 'São Paulo',
+        geonameId: 3448439,
+      });
+
+      expect(created.latitude).toBe(record.latitude);
+      expect(created.longitude).toBe(record.longitude);
+    });
+
+    it('ignores a client-supplied latitude/longitude and re-derives from geonameId instead', async () => {
+      const record = getCityByGeonameId(3448439)!;
+      const root = await createGroup({ name: `${uniqueSuffix} CoordsIgnore Root` });
+
+      const created = await createSection(root.id, {
+        name: `${uniqueSuffix} CoordsIgnore`,
+        country: 'BR',
+        city: 'São Paulo',
+        region: 'São Paulo',
+        geonameId: 3448439,
+        // Deliberately wrong - nowhere near São Paulo - proving the server
+        // never trusts these two fields as authoritative.
+        latitude: 0,
+        longitude: 0,
+      });
+
+      expect(created.latitude).toBe(record.latitude);
+      expect(created.longitude).toBe(record.longitude);
+    });
+
+    it('update Section re-derives coordinates for the newly chosen city', async () => {
+      const saoPauloRecord = getCityByGeonameId(3448439)!;
+      const warsawRecord = getCityByGeonameId(756135)!;
+      const root = await createGroup({ name: `${uniqueSuffix} CoordsUpdate Root` });
+      const created = await createSection(root.id, {
+        name: `${uniqueSuffix} CoordsUpdate`,
+        country: 'BR',
+        city: 'São Paulo',
+        region: 'São Paulo',
+        geonameId: 3448439,
+      });
+      expect(created.latitude).toBe(saoPauloRecord.latitude);
+
+      const updated = await bodyOf<SectionResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/sections/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(
+            sectionPayload({
+              name: `${uniqueSuffix} CoordsUpdate`,
+              country: 'PL',
+              city: 'Warsaw',
+              region: 'Mazovia',
+              geonameId: 756135,
+            }),
+          )
+          .expect(200),
+      );
+
+      expect(updated.latitude).toBe(warsawRecord.latitude);
+      expect(updated.longitude).toBe(warsawRecord.longitude);
     });
   });
 });

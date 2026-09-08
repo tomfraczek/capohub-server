@@ -9,8 +9,11 @@ import { CohortsController } from './cohorts.controller';
 import { CohortsService } from './cohorts.service';
 import { CommunityHomeController } from './community-home.controller';
 import { CommunityHomeService } from './community-home.service';
+import { CommunityOverviewController } from './community-overview.controller';
+import { CommunityOverviewService } from './community-overview.service';
 import { CommunityNotificationSettingsController } from './community-notification-settings.controller';
 import { CommunityNotificationSettingsService } from './community-notification-settings.service';
+import { GroupFollowService } from './group-follow.service';
 import { GroupsController } from './groups.controller';
 import { GroupsService } from './groups.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
@@ -55,6 +58,7 @@ import { StandaloneSectionsController } from './standalone-sections.controller';
     MembershipRequestsController,
     InvitationsController,
     CommunityHomeController,
+    CommunityOverviewController,
     AuditLogController,
     CommunityNotificationSettingsController,
     GroupNotificationSettingsController,
@@ -77,6 +81,8 @@ import { StandaloneSectionsController } from './standalone-sections.controller';
     AuditLogService,
     CommunityNotificationSettingsService,
     RecipientGroupsService,
+    GroupFollowService,
+    CommunityOverviewService,
   ],
   // RoleAssignmentsService is exported for UsersModule - DELETE /users/me
   // must not hard-delete a User who still owns a Group (see
@@ -103,6 +109,12 @@ import { StandaloneSectionsController } from './standalone-sections.controller';
     GroupPermissionsGuard,
     RecipientGroupsService,
     AuditLogService,
+    // GroupFollowService is additionally exported for EventsModule - a
+    // PUBLIC Group Event's notification audience includes the Group's
+    // followers (see EventNotificationsService's own comment) and reuses
+    // this exact service rather than EventsModule re-querying GroupFollow
+    // itself.
+    GroupFollowService,
   ],
 })
 export class GroupsModule {}

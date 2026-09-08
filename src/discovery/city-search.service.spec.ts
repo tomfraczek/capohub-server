@@ -138,3 +138,75 @@ describe('CitySearchService', () => {
     expect(service.search(buildQuery({ country: 'AQ' }))).toEqual([]);
   });
 });
+
+/**
+ * Unit tests for CitySearchService#searchPlaces - backs GET
+ * /discovery/places, the manual "wyszukaj miejscowość" discovery-location
+ * step (task: "Ręczne wyszukiwanie lokalizacji musi działać bez GPS
+ * permission"). Unlike search() above, this scans every country at once and
+ * always returns real coordinates.
+ */
+describe('CitySearchService#searchPlaces', () => {
+  let service: CitySearchService;
+
+  beforeEach(() => {
+    service = new CitySearchService();
+  });
+
+  it('finds a city across every country (no country scoping) and returns real coordinates', () => {
+    const results = service.searchPlaces({ search: 'Poznań', limit: 10 });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ geonameId: 3088171, city: 'Poznań', countryCode: 'PL', region: 'Greater Poland' });
+    // Real-world Poznań is roughly 52.4N, 16.9E - a loose range check
+    // (rather than an exact literal) since the exact decimal comes straight
+    // from whatever GeoNames itself publishes for this row.
+    expect(results[0].latitude).toBeGreaterThan(52);
+    expect(results[0].latitude).toBeLessThan(53);
+    expect(results[0].longitude).toBeGreaterThan(16);
+    expect(results[0].longitude).toBeLessThan(18);
+  });
+
+  // "Warsaw" is a real place name in several countries (Poland's capital
+  // plus several unrelated US towns) - a global search legitimately
+  // returns all of them; this only asserts Poland's own is among them,
+  // exactly matching search()'s already-proven exonym resolution.
+  it('matches a GeoNames alternate name (exonym) exactly, same as search()', () => {
+    const results = service.searchPlaces({ search: 'Warsaw', limit: 20 });
+    const warsawPoland = results.find((place) => place.countryCode === 'PL');
+
+    expect(warsawPoland).toMatchObject({ geonameId: 756135, city: 'Warsaw', region: 'Mazovia' });
+  });
+
+  it('returns cities from different countries when the name matches in more than one', () => {
+    // "San Jose"/"San José" appears as a real city name in several
+    // countries in the bundled dataset (e.g. Costa Rica, the Philippines,
+    // the US) - a global search must never silently scope to just one.
+    const results = service.searchPlaces({ search: 'San Jose', limit: 20 });
+    const countries = new Set(results.map((place) => place.countryCode));
+
+    expect(results.length).toBeGreaterThan(1);
+    expect(countries.size).toBeGreaterThan(1);
+  });
+
+  it('caps the number of results at the requested limit', () => {
+    const results = service.searchPlaces({ search: 'San', limit: 3 });
+    expect(results.length).toBeLessThanOrEqual(3);
+  });
+
+  it('distinguishes two same-named places via their own region, when the dataset has more than one', () => {
+    // Every matched Piaski (see the country-scoped test above for Poland's
+    // own two) each carry their own independently-correct region - proven
+    // generically here across every country rather than assuming a second
+    // country-specific duplicate exists.
+    const results = service.searchPlaces({ search: 'Piaski', limit: 20 });
+    const piaskiInPoland = results.filter((place) => place.countryCode === 'PL');
+
+    expect(piaskiInPoland.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(piaskiInPoland.map((place) => place.region)).size).toBe(piaskiInPoland.length);
+  });
+
+  it('returns an empty array when nothing matches', () => {
+    expect(service.searchPlaces({ search: 'Xyzzynotarealplace', limit: 10 })).toEqual([]);
+  });
+});

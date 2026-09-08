@@ -219,6 +219,7 @@ function buildService(
 
   const eventNotificationsService = {
     notify: jest.fn().mockResolvedValue(undefined),
+    notifyPublished: jest.fn().mockResolvedValue(undefined),
   } as unknown as EventNotificationsService;
 
   const r2StorageService = {

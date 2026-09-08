@@ -2,6 +2,15 @@ import { GroupRole } from '../enums/group-role.enum';
 import { GroupStatus } from '../enums/group-status.enum';
 import { MembershipRequestTarget } from '../enums/membership-request-target.enum';
 import { MembershipRequestStatus } from '../enums/membership-request-status.enum';
+import {
+  CommunityDiscoveryContextDto,
+  CommunityGroupCardDto,
+  CommunityLocationSummaryDto,
+  CommunityOverviewBoundedSectionDto,
+  CommunitySectionCardDto,
+  NearbyGroupCardDto,
+  NearbySectionCardDto,
+} from './community-overview-response.dto';
 import { GroupUserRefDto } from './group-user-ref.dto';
 
 // Minimal community reference used inside dashboard cards (invitations,
@@ -168,4 +177,34 @@ export interface CommunityHomeResponseDto {
   pendingJoinRequests: CommunityHomeBoundedSectionDto<CommunityHomeJoinRequestDto>;
   summary: CommunityHomeSummaryDto;
   capabilities: CommunityHomeCapabilitiesDto;
+
+  // ─── Section/Group membership overview + nearby discovery (see
+  // CommunityOverviewService) - a distinct concern from myCommunities above,
+  // which is purely Role-Assignment-based ("what do I administer"). These
+  // five answer "what am I part of, and what's around me" instead: mySections/
+  // myGroups are membership/follow-based (never a Role requirement), and
+  // nearbySections/nearbyGroups are derived from the caller's own discovery
+  // location (see users/entities/user-discovery-location.entity.ts). Every
+  // list here is capped for a carousel - see community-overview.constants.ts
+  // - the full, paginated equivalents are GET
+  // /community/{sections,groups}/{mine,nearby}. ────────────────────────────
+
+  location: CommunityLocationSummaryDto;
+  mySections: CommunityOverviewBoundedSectionDto<CommunitySectionCardDto>;
+  myGroups: CommunityOverviewBoundedSectionDto<CommunityGroupCardDto>;
+  // Always empty (never an error) when `location.configured` is false - see
+  // CommunityOverviewService.getNearbySections/getNearbyGroups.
+  nearbySections: CommunityOverviewBoundedSectionDto<NearbySectionCardDto>;
+  nearbyGroups: CommunityOverviewBoundedSectionDto<NearbyGroupCardDto>;
+
+  // ─── Discovery fallback ("Community Home nie może być pusty") - only ever
+  // populated when nearbySections AND nearbyGroups both came back empty
+  // while a discovery location IS configured (see
+  // CommunityDiscoveryContextDto's own comment for the three fallbackType
+  // states). Excludes everything already in mySections/myGroups, same as
+  // nearbySections/nearbyGroups - see CommunityOverviewService. ───────────
+
+  discoverySections: CommunityOverviewBoundedSectionDto<NearbySectionCardDto>;
+  discoveryGroups: CommunityOverviewBoundedSectionDto<NearbyGroupCardDto>;
+  discoveryContext: CommunityDiscoveryContextDto;
 }

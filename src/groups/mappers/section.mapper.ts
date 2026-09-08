@@ -19,7 +19,11 @@ export function toSectionResponseDto(
       section.logoUrl,
       urlBuilder,
     ),
-    coverImageUrl: section.coverImageUrl,
+    coverImageUrl: resolveImageUrl(
+      section.coverImageKey,
+      section.coverImageUrl,
+      urlBuilder,
+    ),
     contactEmail: section.contactEmail,
     contactPhone: section.contactPhone,
     websiteUrl: section.websiteUrl,
@@ -37,6 +41,8 @@ export function toSectionResponseDto(
     city: section.city,
     region: section.region,
     geonameId: section.geonameId,
+    latitude: section.latitude,
+    longitude: section.longitude,
     createdAt: section.createdAt.toISOString(),
     updatedAt: section.updatedAt.toISOString(),
   };
