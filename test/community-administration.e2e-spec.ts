@@ -643,8 +643,6 @@ describe('Community Administration (e2e)', () => {
             isPublic: true,
             isHidden: false,
             memberInvitesAllowed: false,
-            timezone: 'Europe/Warsaw',
-            currencyCode: 'PLN',
             country: 'PL',
             city: 'Poznań',
             region: 'Greater Poland',

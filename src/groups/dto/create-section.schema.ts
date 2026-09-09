@@ -4,7 +4,6 @@ import { optionalNullableText } from '../../songs/dto/song-validation.helpers';
 import {
   citySchema,
   countryCodeSchema,
-  currencyCodeSchema,
   geonameIdSchema,
   latitudeSchema,
   longitudeSchema,
@@ -13,7 +12,6 @@ import {
   refineCityIdentification,
   refineCoordinatePair,
   regionSchema,
-  timezoneSchema,
 } from './group-validation.helpers';
 
 const DESCRIPTION_MAX_LENGTH = 5000;
@@ -30,6 +28,19 @@ const URL_MAX_LENGTH = 2048;
 // create-group.schema.ts - country/city are required on both (a Section
 // always operates in one place, and a Group is no longer allowed to leave
 // them blank either).
+//
+// Deliberately no `timezone`/`currencyCode` input fields (module: "w
+// edycji/tworzeniu sekcji nie powinno być ani waluty ani strefy czasowej" -
+// same regional-settings-are-not-a-per-community-field rule Group already
+// followed, see MoveRegionalSettingsFromGroupToUser). Both are still real
+// columns on Section (needed for scheduling Trainings/Events in the
+// Section's own local time and displaying its own prices), just never
+// client-supplied: SectionsService.applyFields always derives `timezone`
+// from the chosen city's own GeoNames timezone (the same dataset
+// `geonameId` already resolves against for country/city/region/lat/lng -
+// see that method's own comment), and `currencyCode` is seeded once, at
+// create time only, from the creating User's own regional settings (see
+// update-user.schema.ts) - never touched again on update.
 export const createSectionObjectSchema = z.object({
   name: z.string().trim().min(1).max(150),
   description: optionalNullableText(DESCRIPTION_MAX_LENGTH),
@@ -53,8 +64,6 @@ export const createSectionObjectSchema = z.object({
   isPublic: z.boolean().default(true),
   isHidden: z.boolean().default(false),
   memberInvitesAllowed: z.boolean().default(false),
-  timezone: timezoneSchema,
-  currencyCode: currencyCodeSchema,
   country: countryCodeSchema,
   city: citySchema,
   region: regionSchema,

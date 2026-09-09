@@ -196,6 +196,14 @@ export class SectionsService {
       const section = new Section();
       section.publicCode = await generateUniquePublicCode(em);
       this.applyFields(section, input);
+      // currencyCode is seeded once, here, from the creating User's own
+      // regional settings (module: "przy tworzeniu bierz z konta twórcy") -
+      // never a client-supplied field (see create-section.schema.ts's own
+      // comment) and never touched again by applyFields on a later update,
+      // so an editor with a different account currency can never
+      // accidentally change a Section's currency just by saving other
+      // fields.
+      section.currencyCode = actor.currencyCode;
       section.parentGroup = parent;
       em.persist(section);
 
@@ -426,28 +434,30 @@ export class SectionsService {
     section.isPublic = input.isPublic;
     section.isHidden = input.isHidden;
     section.memberInvitesAllowed = input.memberInvitesAllowed;
-    section.timezone = input.timezone;
-    section.currencyCode = input.currencyCode;
     section.country = input.country;
     section.city = input.city;
     section.region = input.region;
     section.geonameId = input.geonameId;
-    // Coordinates are never taken from input.latitude/input.longitude
-    // directly - geonameId is already the cross-checked source of truth for
-    // country/city/region (see refineCityIdentification), and the same
-    // bundled GeoNames dataset it resolves against also carries that exact
-    // place's own latitude/longitude (see city-directory.ts) - so deriving
-    // them here, rather than trusting a client-supplied pair, is what
-    // guarantees every Section's coordinates genuinely match the place its
-    // geonameId names (root cause of "Community Home empty for a new user":
-    // the mobile city picker never sent latitude/longitude at all, so no
-    // create/update path ever populated these two columns - see this
-    // feature's own report). refineCityIdentification already ran in the
-    // schema layer and guarantees getCityByGeonameId(input.geonameId)
-    // resolves here.
+    // Coordinates and timezone are never taken directly from client input -
+    // there is no `input.latitude`/`input.longitude`/`input.timezone` at
+    // all (see create-section.schema.ts's own comment) - geonameId is
+    // already the cross-checked source of truth for country/city/region
+    // (see refineCityIdentification), and the same bundled GeoNames dataset
+    // it resolves against also carries that exact place's own
+    // latitude/longitude and IANA timezone (see city-directory.ts) - so
+    // deriving all three here is what guarantees a Section's location data
+    // genuinely matches the place its geonameId names (root cause of
+    // "Community Home empty for a new user": the mobile city picker never
+    // sent latitude/longitude at all, so no create/update path ever
+    // populated those two columns - see that feature's own report).
+    // refineCityIdentification already ran in the schema layer and
+    // guarantees getCityByGeonameId(input.geonameId) resolves here.
+    // currencyCode is deliberately NOT set here at all - see
+    // createInternal's own comment on why it is create-only.
     const cityRecord = getCityByGeonameId(input.geonameId);
     section.latitude = cityRecord?.latitude ?? null;
     section.longitude = cityRecord?.longitude ?? null;
+    section.timezone = cityRecord?.timezone ?? section.timezone;
   }
 
   private async loadOrFail(

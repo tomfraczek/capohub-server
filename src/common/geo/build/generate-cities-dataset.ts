@@ -72,6 +72,16 @@ interface OutputCityRecord {
   // GeoNames columns (see parseCities below), never derived/approximated.
   latitude: number;
   longitude: number;
+  // The IANA timezone identifier (e.g. "Europe/Warsaw") GeoNames itself
+  // assigns to this place - lets Section derive its own `timezone` straight
+  // from whichever city it operates in (module: "strefa czasowa może być
+  // wyciągnięta z lokalizacji") instead of a manually-typed form field, the
+  // same "geonameId is the source of truth, everything else is looked up
+  // against it" pattern latitude/longitude already established (see
+  // SectionsService.applyFields). Straight from the raw GeoNames column,
+  // never derived/approximated from latitude/longitude via a separate
+  // timezone-lookup library.
+  timezone: string;
 }
 
 async function download(url: string, destination: string): Promise<void> {
@@ -142,6 +152,7 @@ function parseCities(
     const longitude = Number(columns[5]);
     const country = columns[8];
     const admin1Code = columns[10];
+    const timezone = columns[17];
 
     const region = admin1Code
       ? (regionNameByCode.get(`${country}.${admin1Code}`) ?? null)
@@ -157,7 +168,7 @@ function parseCities(
         )
       : [];
 
-    records.push({ geonameId, name, alternateNames, country, region, latitude, longitude });
+    records.push({ geonameId, name, alternateNames, country, region, latitude, longitude, timezone });
   }
 
   return records;

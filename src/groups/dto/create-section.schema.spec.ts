@@ -16,8 +16,6 @@ function validSectionInput(overrides: Record<string, unknown> = {}) {
     isPublic: true,
     isHidden: false,
     memberInvitesAllowed: false,
-    timezone: 'Europe/Warsaw',
-    currencyCode: 'PLN',
     country: 'PL',
     city: 'Poznań',
     region: 'Greater Poland',

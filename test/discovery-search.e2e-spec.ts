@@ -154,8 +154,6 @@ describe('Discovery search (e2e)', () => {
   function sectionPayload(overrides: Record<string, unknown> = {}) {
     return {
       name: `${uniqueSuffix} Section`,
-      timezone: 'Europe/Warsaw',
-      currencyCode: 'PLN',
       isPublic: true,
       isHidden: false,
       country: 'BR',
@@ -544,7 +542,9 @@ describe('Discovery search (e2e)', () => {
     // create/update endpoints, not just the schema layer.
     it('derives latitude/longitude from geonameId on create, even when the client sends none at all', async () => {
       const record = getCityByGeonameId(3448439)!;
-      const root = await createGroup({ name: `${uniqueSuffix} CoordsCreate Root` });
+      const root = await createGroup({
+        name: `${uniqueSuffix} CoordsCreate Root`,
+      });
 
       const created = await createSection(root.id, {
         name: `${uniqueSuffix} CoordsCreate`,
@@ -556,11 +556,14 @@ describe('Discovery search (e2e)', () => {
 
       expect(created.latitude).toBe(record.latitude);
       expect(created.longitude).toBe(record.longitude);
+      expect(created.timezone).toBe(record.timezone);
     });
 
     it('ignores a client-supplied latitude/longitude and re-derives from geonameId instead', async () => {
       const record = getCityByGeonameId(3448439)!;
-      const root = await createGroup({ name: `${uniqueSuffix} CoordsIgnore Root` });
+      const root = await createGroup({
+        name: `${uniqueSuffix} CoordsIgnore Root`,
+      });
 
       const created = await createSection(root.id, {
         name: `${uniqueSuffix} CoordsIgnore`,
@@ -581,7 +584,9 @@ describe('Discovery search (e2e)', () => {
     it('update Section re-derives coordinates for the newly chosen city', async () => {
       const saoPauloRecord = getCityByGeonameId(3448439)!;
       const warsawRecord = getCityByGeonameId(756135)!;
-      const root = await createGroup({ name: `${uniqueSuffix} CoordsUpdate Root` });
+      const root = await createGroup({
+        name: `${uniqueSuffix} CoordsUpdate Root`,
+      });
       const created = await createSection(root.id, {
         name: `${uniqueSuffix} CoordsUpdate`,
         country: 'BR',
@@ -609,6 +614,53 @@ describe('Discovery search (e2e)', () => {
 
       expect(updated.latitude).toBe(warsawRecord.latitude);
       expect(updated.longitude).toBe(warsawRecord.longitude);
+      expect(updated.timezone).toBe(warsawRecord.timezone);
+    });
+
+    // Module: "strefa czasowa może być wyciągnięta z lokalizacji" -
+    // currencyCode has no such source: it is seeded once, at create time,
+    // from the creating User's own account regional settings (module:
+    // "przy tworzeniu bierz z konta twórcy, przy edycji nie dotykaj"), and
+    // never re-derived on a later update even when the city (and so the
+    // timezone) changes.
+    it('seeds currencyCode from the creating User account at create time, then never touches it again on update', async () => {
+      const warsawRecord = getCityByGeonameId(756135)!;
+      const root = await createGroup({
+        name: `${uniqueSuffix} CurrencySeed Root`,
+      });
+      const created = await createSection(root.id, {
+        name: `${uniqueSuffix} CurrencySeed`,
+        // Deliberately absent from CreateSectionRequest on the real
+        // frontend, and rejected outright by the schema if sent anyway
+        // (see create-section.schema.ts) - sectionPayload never includes
+        // it either, so this proves the value comes from the account, not
+        // a request field.
+      });
+      // The OWNER_TOKEN fixture user's own account currencyCode - see
+      // this file's own bootstrap (GET /api/v1/groups warm-up).
+      expect(created.currencyCode).toBeTruthy();
+      const seededCurrencyCode = created.currencyCode;
+
+      const updated = await bodyOf<SectionResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/sections/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(
+            sectionPayload({
+              name: `${uniqueSuffix} CurrencySeed Updated`,
+              country: 'PL',
+              city: 'Warsaw',
+              region: 'Mazovia',
+              geonameId: 756135,
+            }),
+          )
+          .expect(200),
+      );
+
+      // The city (and so the timezone) changed, but currencyCode did not -
+      // update never touches it.
+      expect(updated.timezone).toBe(warsawRecord.timezone);
+      expect(updated.currencyCode).toBe(seededCurrencyCode);
     });
   });
 });

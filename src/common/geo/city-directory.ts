@@ -61,6 +61,13 @@ export interface CityRecord {
   // only, unaffected by this addition.
   latitude: number;
   longitude: number;
+  // The IANA timezone identifier GeoNames itself assigns to this place
+  // (e.g. "Europe/Warsaw") - lets SectionsService.applyFields derive a
+  // Section's own `timezone` straight from its chosen city instead of a
+  // manually-typed form field (see create-section.schema.ts's own
+  // comment), the same way latitude/longitude are already derived rather
+  // than trusted from client input.
+  timezone: string;
 }
 
 interface CityIndexes {
