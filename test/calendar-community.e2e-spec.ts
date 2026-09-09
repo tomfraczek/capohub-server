@@ -367,8 +367,6 @@ describe('Calendar - Community (e2e)', () => {
       endsAt: '2031-06-10T18:00:00.000Z',
       locationName: 'Main hall',
       locationAddress: null,
-      latitude: null,
-      longitude: null,
       visibility: EventVisibility.PUBLIC,
       capacity: null,
       waitlistPolicy: EventWaitlistPolicy.NONE,

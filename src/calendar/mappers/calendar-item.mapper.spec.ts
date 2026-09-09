@@ -42,8 +42,6 @@ function buildEvent(
     isMultiDay: false,
     locationName: 'Community Hall',
     locationAddress: '123 Main St',
-    latitude: null,
-    longitude: null,
     visibility: EventVisibility.PUBLIC,
     status: EventStatus.PUBLISHED,
     capacity: null,

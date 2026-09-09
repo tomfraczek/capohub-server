@@ -60,8 +60,6 @@ export function toEventResponseDto(
     isMultiDay: computeIsMultiDay(event.startsAt, event.endsAt),
     locationName: event.locationName,
     locationAddress: event.locationAddress,
-    latitude: event.latitude,
-    longitude: event.longitude,
     visibility: event.visibility,
     status: event.status,
     capacity: event.capacity,

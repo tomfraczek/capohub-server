@@ -68,8 +68,6 @@ function buildEvent(
     isMultiDay: false,
     locationName: null,
     locationAddress: null,
-    latitude: null,
-    longitude: null,
     visibility: EventVisibility.PUBLIC,
     status: EventStatus.PUBLISHED,
     capacity: null,

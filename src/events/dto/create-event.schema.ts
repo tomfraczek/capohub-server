@@ -16,7 +16,6 @@ import {
   NAME_MAX_LENGTH,
   URL_MAX_LENGTH,
   isoDateTimeSchema,
-  nullableCoordinate,
 } from './event-validation.helpers';
 
 // Shared by create and update - see update-event.schema.ts, which reuses
@@ -36,8 +35,6 @@ export const eventBaseSchema = z.object({
   endsAt: isoDateTimeSchema,
   locationName: optionalNullableText(LOCATION_NAME_MAX_LENGTH),
   locationAddress: optionalNullableText(LOCATION_ADDRESS_MAX_LENGTH),
-  latitude: nullableCoordinate(-90, 90),
-  longitude: nullableCoordinate(-180, 180),
   visibility: enumValuesSchema(Object.values(EventVisibility)),
   // null = no limit (spec: "Limit jest opcjonalny").
   capacity: z

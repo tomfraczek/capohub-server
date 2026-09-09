@@ -71,8 +71,6 @@ function buildEvent(
     isMultiDay: false,
     locationName: null,
     locationAddress: null,
-    latitude: null,
-    longitude: null,
     visibility: 'PUBLIC' as never,
     status: 'PUBLISHED' as never,
     capacity: null,

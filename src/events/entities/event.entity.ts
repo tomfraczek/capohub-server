@@ -200,20 +200,18 @@ export class Event extends BaseEntity {
   // date range already supports it; storing a redundant boolean would risk
   // drifting from the dates that actually define it.
 
-  // Same address/lat/long shape as Academy (the existing "location" model
-  // in this codebase) rather than inventing a second one. All nullable: a
-  // Draft event may not have a location decided yet.
+  // Same address shape as Academy (the existing "location" model in this
+  // codebase) rather than inventing a second one. All nullable: a Draft
+  // event may not have a location decided yet. No latitude/longitude -
+  // module: "szerokość i długość geograficzna nie jest potrzebna, usuń to
+  // z frontendu i backendu" (nothing in this codebase ever queried Events
+  // by distance/coordinates - unlike Section, which genuinely needs them
+  // for nearby-discovery).
   @Property({ nullable: true, type: 'text' })
   locationName: string | null = null;
 
   @Property({ nullable: true, type: 'text' })
   locationAddress: string | null = null;
-
-  @Property({ nullable: true, type: 'float' })
-  latitude: number | null = null;
-
-  @Property({ nullable: true, type: 'float' })
-  longitude: number | null = null;
 
   @Index()
   @Enum({ items: () => Object.values(EventVisibility) })

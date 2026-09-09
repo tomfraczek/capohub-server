@@ -212,8 +212,6 @@ Body (JSON):
 | `endsAt` | ISO-8601 datetime | Yes | Must not be before `startsAt`. |
 | `locationName` | string or `null` | No | |
 | `locationAddress` | string or `null` | No | |
-| `latitude` | number (-90..90) or `null` | No | |
-| `longitude` | number (-180..180) or `null` | No | |
 | `visibility` | enum (`PUBLIC`\|`COMMUNITY_MEMBERS`\|`INVITE_ONLY`) | Yes | |
 | `capacity` | integer ≥1 or `null` | No (default `null`) | `null` = no limit. |
 | `waitlistPolicy` | enum (`NONE`\|`AUTOMATIC`\|`MANUAL`) | No (default `NONE`) | Must be `NONE` when `capacity` is `null`. |
@@ -1034,7 +1032,6 @@ not silently redirected to a child).
 | `startsAt` / `endsAt` | ISO-8601 string |
 | `isMultiDay` | boolean — derived from `startsAt`/`endsAt`, never stored |
 | `locationName` / `locationAddress` | string or `null` |
-| `latitude` / `longitude` | number or `null` |
 | `visibility` | `EventVisibility` |
 | `status` | `EventStatus` |
 | `capacity` | integer or `null` |

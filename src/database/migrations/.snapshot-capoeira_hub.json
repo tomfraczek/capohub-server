@@ -4108,38 +4108,6 @@
           "enumItems": [],
           "mappedType": "text"
         },
-        "latitude": {
-          "name": "latitude",
-          "type": "float4",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": 24,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "float"
-        },
-        "longitude": {
-          "name": "longitude",
-          "type": "float4",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": 24,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "float"
-        },
         "visibility": {
           "name": "visibility",
           "type": "text",

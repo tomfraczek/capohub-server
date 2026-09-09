@@ -1068,8 +1068,6 @@ export class EventsService {
     event.endsAt = new Date(input.endsAt);
     event.locationName = input.locationName;
     event.locationAddress = input.locationAddress;
-    event.latitude = input.latitude;
-    event.longitude = input.longitude;
     event.visibility = input.visibility;
     event.capacity = input.capacity;
     event.waitlistPolicy =

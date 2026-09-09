@@ -34,8 +34,6 @@ export interface EventResponseDto {
   isMultiDay: boolean;
   locationName: string | null;
   locationAddress: string | null;
-  latitude: number | null;
-  longitude: number | null;
   visibility: EventVisibility;
   status: EventStatus;
   capacity: number | null;

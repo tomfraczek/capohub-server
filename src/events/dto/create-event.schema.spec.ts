@@ -13,8 +13,6 @@ const VALID_INPUT = {
   endsAt: '2026-02-01T18:00:00.000Z',
   locationName: null,
   locationAddress: null,
-  latitude: null,
-  longitude: null,
   visibility: EventVisibility.PUBLIC,
   capacity: null,
   waitlistPolicy: EventWaitlistPolicy.NONE,

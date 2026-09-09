@@ -9,12 +9,4 @@ export const URL_MAX_LENGTH = 2048;
 export const REASON_MAX_LENGTH = 1000;
 export const DEPENDENT_DISPLAY_NAME_MAX_LENGTH = 150;
 
-export const nullableCoordinate = (min: number, max: number) =>
-  z
-    .number()
-    .min(min, `Must be at least ${min}`)
-    .max(max, `Must be at most ${max}`)
-    .nullish()
-    .transform((value) => (value === undefined ? null : value));
-
 export const isoDateTimeSchema = z.string().datetime({ offset: true });
