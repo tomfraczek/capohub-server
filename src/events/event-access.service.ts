@@ -42,7 +42,11 @@ export class EventAccessService {
     em: EntityManager,
     eventId: string,
     populate: (
-      'communityGroup' | 'communitySection' | 'organizerUser' | 'createdBy'
+      | 'communityGroup'
+      | 'communitySection'
+      | 'organizerUser'
+      | 'createdBy'
+      | 'scheduleDays'
     )[] = ['communityGroup', 'communitySection', 'organizerUser'],
   ): Promise<Event> {
     const event = await em.findOne(Event, { id: eventId }, { populate });
@@ -66,7 +70,11 @@ export class EventAccessService {
     type: EventType,
     numericCode: string,
     populate: (
-      'communityGroup' | 'communitySection' | 'organizerUser' | 'createdBy'
+      | 'communityGroup'
+      | 'communitySection'
+      | 'organizerUser'
+      | 'createdBy'
+      | 'scheduleDays'
     )[] = ['communityGroup', 'communitySection', 'organizerUser'],
   ): Promise<Event> {
     const event = await em.findOne(Event, { type, numericCode }, { populate });

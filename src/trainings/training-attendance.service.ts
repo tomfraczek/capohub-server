@@ -27,6 +27,7 @@ import {
 import { TrainingRsvp } from './entities/training-rsvp.entity';
 import { TrainingAccessService } from './training-access.service';
 import { TrainingRsvpStatus } from './enums/training-rsvp-status.enum';
+import { TrainingVisibility } from './enums/training-visibility.enum';
 import {
   assertTrainingNotCancelled,
   isTrainingStarted,
@@ -266,9 +267,9 @@ export class TrainingAttendanceService {
 
   /**
    * Every user allowed to have attendance recorded for `training` - active
-   * members of its Section, plus (only when allowExternalRsvp is true)
-   * anyone who RSVP'd YES/MAYBE regardless of membership (see the module
-   * spec §7).
+   * members of its Section, plus (only when the Training is PUBLIC - see
+   * TrainingAccessService.canRsvp) anyone who RSVP'd YES/MAYBE regardless
+   * of membership (see the module spec §7).
    */
   private async resolveEligibleUserIds(
     em: EntityManager,
@@ -290,7 +291,7 @@ export class TrainingAttendanceService {
     );
     const ids = new Set(memberships.map((m) => m.user.id));
 
-    if (training.allowExternalRsvp) {
+    if (training.visibility === TrainingVisibility.PUBLIC) {
       const rsvps =
         preloadedRsvps ??
         (await em.find(

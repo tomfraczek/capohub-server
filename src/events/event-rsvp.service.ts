@@ -45,6 +45,38 @@ export class EventRsvpService {
     private readonly childrenDirectoryPort: ChildrenDirectoryPort,
   ) {}
 
+  /**
+   * Auto-registers the Event's own creator as a GOING attendee at creation
+   * time (module: "jeśli organizuję jakiś event to automatycznie powinienem
+   * zostać dodany do listy uczestników") - called from
+   * EventsService.finalizeCreate, still inside the same transaction that
+   * creates the Event itself. Deliberately bypasses register()'s own
+   * PUBLISHED-status/eligibility gate above (a brand new Event is still
+   * DRAFT at this point, and canViewerRegister requires PUBLISHED - see
+   * EventAccessService.canViewerRegister) since the creator's own
+   * eligibility is never in question here: they are always its OWNER.
+   * Reuses upsertAttendee/assignSeatOrWaitlist so this row is
+   * indistinguishable from a self-service registration once the Event is
+   * published - always seated, never waitlisted (it is structurally the
+   * very first attendee, and every Event's capacity - when set - must be
+   * at least 1, see create-event.schema.ts).
+   */
+  async registerOrganizer(
+    em: EntityManager,
+    event: Event,
+    actor: User,
+  ): Promise<void> {
+    await this.upsertAttendee(
+      em,
+      event,
+      actor,
+      EventAttendeeSubjectType.SELF,
+      actor,
+      null,
+      EventRsvpStatus.GOING,
+    );
+  }
+
   async register(
     eventId: string,
     input: RegisterForEventInput,

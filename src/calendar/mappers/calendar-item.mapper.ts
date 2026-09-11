@@ -55,10 +55,9 @@ export function toCalendarTrainingItem(
       type: 'SECTION',
       name: training.section.name,
     },
-    trainer: {
-      id: training.trainer.id,
-      displayName: training.trainer.displayName,
-    },
+    trainer: training.trainer
+      ? { id: training.trainer.id, displayName: training.trainer.displayName }
+      : null,
     locationName: training.locationName,
     locationAddress: training.locationAddress,
     userRsvp: training.viewerRsvp,

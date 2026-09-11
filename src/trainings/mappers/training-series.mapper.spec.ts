@@ -27,15 +27,12 @@ function buildSeries(overrides: Partial<TrainingSeries> = {}): TrainingSeries {
   series.durationMinutes = 60;
   series.locationName = null;
   series.locationAddress = null;
-  series.latitude = null;
-  series.longitude = null;
   series.defaultTrainer = Object.assign(new User(), {
     id: 'trainer-1',
     displayName: 'Mestre Bimba',
   });
   series.defaultDescription = null;
   series.visibility = TrainingVisibility.MEMBERS_ONLY;
-  series.allowExternalRsvp = false;
   series.startDate = new Date('2026-01-01T00:00:00.000Z');
   series.endDate = new Date('2026-12-31T00:00:00.000Z');
   return Object.assign(series, overrides);

@@ -58,10 +58,14 @@ export class TrainingSeriesService {
       if (!section) {
         throw this.sectionNotFound();
       }
-      const trainer = await em.findOne(User, {
-        id: input.defaultTrainerUserId,
-      });
-      if (!trainer) {
+      // Optional (module: "prowadzący opcjonalny, jeśli nie zaznaczony to
+      // nie pokazuje w szczegółach treningu kto prowadzi") - a caller who
+      // doesn't pick anyone leaves this series (and every occurrence
+      // generated from it) with no trainer at all.
+      const trainer = input.defaultTrainerUserId
+        ? await em.findOne(User, { id: input.defaultTrainerUserId })
+        : null;
+      if (input.defaultTrainerUserId && !trainer) {
         throw this.trainerNotFound();
       }
 
@@ -75,12 +79,9 @@ export class TrainingSeriesService {
       series.durationMinutes = input.durationMinutes;
       series.locationName = input.locationName;
       series.locationAddress = input.locationAddress;
-      series.latitude = input.latitude;
-      series.longitude = input.longitude;
       series.defaultTrainer = trainer;
       series.defaultDescription = input.defaultDescription;
       series.visibility = input.visibility;
-      series.allowExternalRsvp = input.allowExternalRsvp;
       series.startDate = startDate;
       series.endDate = endDate;
       series.createdBy = actor;
@@ -188,7 +189,7 @@ export class TrainingSeriesService {
       const endDateChanged = newEndDate.getTime() !== previousEndDate.getTime();
 
       const trainerChanged =
-        trainer !== null && trainer.id !== series.defaultTrainer.id;
+        trainer !== null && trainer.id !== series.defaultTrainer?.id;
       const locationChanged =
         (input.locationName !== undefined &&
           input.locationName !== series.locationName) ||
@@ -211,14 +212,10 @@ export class TrainingSeriesService {
         series.locationName = input.locationName;
       if (input.locationAddress !== undefined)
         series.locationAddress = input.locationAddress;
-      if (input.latitude !== undefined) series.latitude = input.latitude;
-      if (input.longitude !== undefined) series.longitude = input.longitude;
       if (trainer) series.defaultTrainer = trainer;
       if (input.defaultDescription !== undefined)
         series.defaultDescription = input.defaultDescription;
       if (input.visibility !== undefined) series.visibility = input.visibility;
-      if (input.allowExternalRsvp !== undefined)
-        series.allowExternalRsvp = input.allowExternalRsvp;
       series.endDate = newEndDate;
 
       const future = await em.find(
@@ -245,7 +242,7 @@ export class TrainingSeriesService {
           if (locationChanged) notifyLocationChanged.push(occurrence);
           if (
             trainerChanged &&
-            occurrence.trainer.id !== series.defaultTrainer.id
+            occurrence.trainer?.id !== series.defaultTrainer?.id
           ) {
             notifyTrainerChanged.push(occurrence);
           }
@@ -407,12 +404,9 @@ export class TrainingSeriesService {
     training.endsAt = addMinutes(training.startsAt, series.durationMinutes);
     training.locationName = series.locationName;
     training.locationAddress = series.locationAddress;
-    training.latitude = series.latitude;
-    training.longitude = series.longitude;
     training.trainer = series.defaultTrainer;
     training.description = series.defaultDescription;
     training.visibility = series.visibility;
-    training.allowExternalRsvp = series.allowExternalRsvp;
     training.createdBy = series.createdBy;
     return training;
   }
@@ -423,12 +417,9 @@ export class TrainingSeriesService {
   ): void {
     training.locationName = series.locationName;
     training.locationAddress = series.locationAddress;
-    training.latitude = series.latitude;
-    training.longitude = series.longitude;
     training.trainer = series.defaultTrainer;
     training.description = series.defaultDescription;
     training.visibility = series.visibility;
-    training.allowExternalRsvp = series.allowExternalRsvp;
   }
 
   private async loadOwnedOrFail(

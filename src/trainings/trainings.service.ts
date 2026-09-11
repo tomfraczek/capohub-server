@@ -76,8 +76,14 @@ export class TrainingsService {
       if (!section) {
         throw this.sectionNotFound();
       }
-      const trainer = await em.findOne(User, { id: input.trainerUserId });
-      if (!trainer) {
+      // Optional (module: "prowadzący opcjonalny, jeśli nie zaznaczony to
+      // nie pokazuje w szczegółach treningu kto prowadzi") - a caller who
+      // doesn't pick anyone leaves this Training with no trainer at all,
+      // never silently defaulted to themselves or anyone else.
+      const trainer = input.trainerUserId
+        ? await em.findOne(User, { id: input.trainerUserId })
+        : null;
+      if (input.trainerUserId && !trainer) {
         throw this.trainerNotFound();
       }
 
@@ -88,12 +94,9 @@ export class TrainingsService {
       training.endsAt = new Date(input.endsAt);
       training.locationName = input.locationName;
       training.locationAddress = input.locationAddress;
-      training.latitude = input.latitude;
-      training.longitude = input.longitude;
       training.trainer = trainer;
       training.description = input.description;
       training.visibility = input.visibility;
-      training.allowExternalRsvp = input.allowExternalRsvp;
       training.createdBy = actor;
       await em.persist(training).flush();
 
@@ -309,8 +312,6 @@ export class TrainingsService {
           training.locationName = input.locationName;
         if (input.locationAddress !== undefined)
           training.locationAddress = input.locationAddress;
-        if (input.latitude !== undefined) training.latitude = input.latitude;
-        if (input.longitude !== undefined) training.longitude = input.longitude;
         if (input.trainerUserId !== undefined) {
           const trainer = await em.findOne(User, { id: input.trainerUserId });
           if (!trainer) throw this.trainerNotFound();
@@ -320,8 +321,6 @@ export class TrainingsService {
           training.description = input.description;
         if (input.visibility !== undefined)
           training.visibility = input.visibility;
-        if (input.allowExternalRsvp !== undefined)
-          training.allowExternalRsvp = input.allowExternalRsvp;
 
         this.recordAudit(em, training, AuditAction.UPDATE_TRAINING, actor, {
           scope: TrainingEditScope.THIS,
@@ -381,16 +380,11 @@ export class TrainingsService {
           occurrence.locationName = input.locationName;
         if (input.locationAddress !== undefined)
           occurrence.locationAddress = input.locationAddress;
-        if (input.latitude !== undefined) occurrence.latitude = input.latitude;
-        if (input.longitude !== undefined)
-          occurrence.longitude = input.longitude;
         if (trainer) occurrence.trainer = trainer;
         if (input.description !== undefined)
           occurrence.description = input.description;
         if (input.visibility !== undefined)
           occurrence.visibility = input.visibility;
-        if (input.allowExternalRsvp !== undefined)
-          occurrence.allowExternalRsvp = input.allowExternalRsvp;
       }
 
       this.recordAudit(em, training, AuditAction.UPDATE_TRAINING, actor, {
@@ -611,7 +605,7 @@ export class TrainingsService {
     return {
       trainerChanged:
         input.trainerUserId !== undefined &&
-        input.trainerUserId !== training.trainer.id,
+        input.trainerUserId !== training.trainer?.id,
       locationChanged:
         (input.locationName !== undefined &&
           input.locationName !== training.locationName) ||

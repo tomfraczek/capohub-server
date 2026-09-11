@@ -594,6 +594,142 @@ describe('Events (e2e)', () => {
     });
   });
 
+  // Module: "w piątek wydarzenie trwa do 18, w sobotę zaczyna się o 9...
+  // jak to ugryźć?"
+  describe('scheduleDays', () => {
+    it('creates an Event with a per-day schedule, returned sorted ascending', async () => {
+      const community = await createCommunityWithMembers();
+
+      const created = await createEvent(OWNER_TOKEN, community.id, {
+        startsAt: '2026-09-18T10:00:00.000Z',
+        endsAt: '2026-09-20T20:00:00.000Z',
+        scheduleDays: [
+          {
+            startsAt: '2026-09-19T09:00:00.000Z',
+            endsAt: '2026-09-19T18:00:00.000Z',
+          },
+          {
+            startsAt: '2026-09-18T13:00:00.000Z',
+            endsAt: '2026-09-18T18:00:00.000Z',
+          },
+          {
+            startsAt: '2026-09-20T10:00:00.000Z',
+            endsAt: '2026-09-20T16:00:00.000Z',
+          },
+        ],
+      });
+
+      expect(created.scheduleDays).toEqual([
+        {
+          startsAt: '2026-09-18T13:00:00.000Z',
+          endsAt: '2026-09-18T18:00:00.000Z',
+        },
+        {
+          startsAt: '2026-09-19T09:00:00.000Z',
+          endsAt: '2026-09-19T18:00:00.000Z',
+        },
+        {
+          startsAt: '2026-09-20T10:00:00.000Z',
+          endsAt: '2026-09-20T16:00:00.000Z',
+        },
+      ]);
+
+      const fetched = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/events/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      expect(fetched.scheduleDays).toHaveLength(3);
+    });
+
+    it('defaults to an empty array for the common single-day Event', async () => {
+      const community = await createCommunityWithMembers();
+
+      const created = await createEvent(OWNER_TOKEN, community.id);
+
+      expect(created.scheduleDays).toEqual([]);
+    });
+
+    it("rejects a schedule day outside the event's own startsAt/endsAt - 400 VALIDATION_ERROR", async () => {
+      const community = await createCommunityWithMembers();
+
+      const response = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${community.id}/events`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send(
+            eventPayload({
+              startsAt: '2026-09-18T10:00:00.000Z',
+              endsAt: '2026-09-20T20:00:00.000Z',
+              scheduleDays: [
+                {
+                  startsAt: '2026-09-17T13:00:00.000Z',
+                  endsAt: '2026-09-18T18:00:00.000Z',
+                },
+              ],
+            }),
+          )
+          .expect(400),
+      );
+      expect(response.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('fully replaces the schedule on update', async () => {
+      const community = await createCommunityWithMembers();
+      const created = await createEvent(OWNER_TOKEN, community.id, {
+        startsAt: '2026-09-18T10:00:00.000Z',
+        endsAt: '2026-09-20T20:00:00.000Z',
+        scheduleDays: [
+          {
+            startsAt: '2026-09-18T13:00:00.000Z',
+            endsAt: '2026-09-18T18:00:00.000Z',
+          },
+        ],
+      });
+
+      const updated = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/events/${created.id}`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .send({
+            name: created.name,
+            description: null,
+            coverImageUrl: null,
+            startsAt: '2026-09-18T10:00:00.000Z',
+            endsAt: '2026-09-19T20:00:00.000Z',
+            locationName: null,
+            locationAddress: null,
+            scheduleDays: [
+              {
+                startsAt: '2026-09-18T09:00:00.000Z',
+                endsAt: '2026-09-18T12:00:00.000Z',
+              },
+              {
+                startsAt: '2026-09-19T09:00:00.000Z',
+                endsAt: '2026-09-19T12:00:00.000Z',
+              },
+            ],
+            visibility: created.visibility,
+            capacity: null,
+            waitlistPolicy: 'NONE',
+          })
+          .expect(200),
+      );
+
+      expect(updated.scheduleDays).toEqual([
+        {
+          startsAt: '2026-09-18T09:00:00.000Z',
+          endsAt: '2026-09-18T12:00:00.000Z',
+        },
+        {
+          startsAt: '2026-09-19T09:00:00.000Z',
+          endsAt: '2026-09-19T12:00:00.000Z',
+        },
+      ]);
+    });
+  });
+
   describe('EventType', () => {
     it.each(['FESTIVAL', 'WORKSHOP', 'OPEN_RODA'] as const)(
       'creates an Event of type %s',

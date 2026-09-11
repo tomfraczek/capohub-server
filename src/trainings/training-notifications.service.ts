@@ -23,8 +23,8 @@ import { TrainingRsvpStatus } from './enums/training-rsvp-status.enum';
 /**
  * Raises a central Notification (see NotificationsService) for every user
  * "related to" one specific Training - its Section's active members plus
- * anyone who has RSVP'd YES/MAYBE (covers an external RSVP holder under
- * allowExternalRsvp - module spec §12/§25: "Nie spamuj całej hierarchii
+ * anyone who has RSVP'd YES/MAYBE (covers a non-member who RSVP'd to a
+ * PUBLIC Training - module spec §12/§25: "Nie spamuj całej hierarchii
  * Group", recipient semantics unchanged from before this module).
  *
  * This is the sole surviving descendant of the removed TrainingNotification

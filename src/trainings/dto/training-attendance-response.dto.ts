@@ -11,7 +11,7 @@ export interface TrainingAttendanceResponseDto {
 }
 
 // One row per person eligible to have attendance recorded for a Training -
-// Section members plus, when allowExternalRsvp is true, external users who
+// Section members plus, when the Training is PUBLIC, external users who
 // RSVP'd YES/MAYBE (see the module spec §7). `attendance` is null for
 // anyone not yet recorded.
 export interface TrainingAttendanceRosterEntryDto {

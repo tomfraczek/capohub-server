@@ -22,14 +22,6 @@ export const timeOfDaySchema = z
   .string()
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be a time in HH:mm format');
 
-export const nullableCoordinate = (min: number, max: number) =>
-  z
-    .number()
-    .min(min, `Must be at least ${min}`)
-    .max(max, `Must be at most ${max}`)
-    .nullish()
-    .transform((value) => (value === undefined ? null : value));
-
 export const durationMinutesSchema = z
   .number()
   .int()

@@ -60,15 +60,15 @@ export class TrainingAccessService {
   }
 
   /**
-   * Whether `userId` may RSVP to a Training with this visibility/
-   * allowExternalRsvp combination, given whether they are an active member
-   * of the owning Section - see the module spec §5's truth table.
-   * MEMBERS_ONLY always requires membership, regardless of
-   * allowExternalRsvp.
+   * Whether `userId` may RSVP to `training`, given whether they are an
+   * active member of the owning Section - a non-member may RSVP exactly
+   * when the Training is PUBLIC (module: "skoro publiczna to mogą się
+   * zapisywać osoby spoza sekcji" - there is no separate opt-in beyond
+   * visibility itself). MEMBERS_ONLY always requires membership.
    */
   async canRsvp(
     em: EntityManager,
-    training: Pick<Training, 'visibility' | 'allowExternalRsvp'> & {
+    training: Pick<Training, 'visibility'> & {
       section: { id: string };
     },
     userId: string,
@@ -81,10 +81,7 @@ export class TrainingAccessService {
     if (isMember) {
       return true;
     }
-    return (
-      training.visibility === TrainingVisibility.PUBLIC &&
-      training.allowExternalRsvp
-    );
+    return training.visibility === TrainingVisibility.PUBLIC;
   }
 
   /**
@@ -94,10 +91,10 @@ export class TrainingAccessService {
    */
   async canManagePrivateFields(
     em: EntityManager,
-    training: { trainer: { id: string }; section: { id: string } },
+    training: { trainer: { id: string } | null; section: { id: string } },
     actorId: string,
   ): Promise<boolean> {
-    if (training.trainer.id === actorId) {
+    if (training.trainer?.id === actorId) {
       return true;
     }
     return this.hasSectionPermission(
@@ -115,10 +112,10 @@ export class TrainingAccessService {
    */
   async canManageAttendance(
     em: EntityManager,
-    training: { trainer: { id: string }; section: { id: string } },
+    training: { trainer: { id: string } | null; section: { id: string } },
     actorId: string,
   ): Promise<boolean> {
-    if (training.trainer.id === actorId) {
+    if (training.trainer?.id === actorId) {
       return true;
     }
     return this.hasSectionPermission(

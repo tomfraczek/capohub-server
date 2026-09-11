@@ -307,7 +307,6 @@ describe('Calendar - User (e2e)', () => {
       trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
       description: 'Regular training',
       visibility: TrainingVisibility.MEMBERS_ONLY,
-      allowExternalRsvp: false,
       ...overrides,
     };
   }

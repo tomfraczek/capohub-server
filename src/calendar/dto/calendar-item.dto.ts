@@ -56,7 +56,8 @@ export interface CalendarTrainingItemDto {
   status: TrainingStatus;
   isCancelled: boolean;
   community: CalendarCommunityRefDto;
-  trainer: { id: string; displayName: string };
+  // null = no trainer assigned (module: "prowadzący opcjonalny").
+  trainer: { id: string; displayName: string } | null;
   locationName: string | null;
   locationAddress: string | null;
   userRsvp: TrainingRsvpStatus | null;

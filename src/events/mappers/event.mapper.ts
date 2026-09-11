@@ -4,9 +4,13 @@ import {
   resolveImageUrl,
 } from '../../storage/image-url.util';
 import { Event } from '../entities/event.entity';
+import { EventScheduleDay } from '../entities/event-schedule-day.entity';
 import { eventCommunity } from '../event-community.util';
 import { EventCapabilitiesDto } from '../dto/event-capabilities.dto';
-import { EventResponseDto } from '../dto/event-response.dto';
+import {
+  EventResponseDto,
+  EventScheduleDayResponseDto,
+} from '../dto/event-response.dto';
 import { EventRole } from '../enums/event-role.enum';
 import { toEventCommunityRefDto } from './event-community-ref.mapper';
 import { toEventOrganizerRefDto } from './event-organizer-ref.mapper';
@@ -17,6 +21,27 @@ export interface EventAggregateContext {
   seatsTaken: number;
   seatsAvailable: number | null;
   waitlistCount: number;
+  // Always passed explicitly, same "in-memory on create/update, populated
+  // Collection on every read path" reasoning as RankCordSegment/
+  // toRankResponseDto - see EventsService.buildResponse's own comment.
+  scheduleDays: EventScheduleDay[];
+}
+
+export function toEventScheduleDayResponseDto(
+  day: EventScheduleDay,
+): EventScheduleDayResponseDto {
+  return {
+    startsAt: day.startsAt.toISOString(),
+    endsAt: day.endsAt.toISOString(),
+  };
+}
+
+function toSortedEventScheduleDayDtos(
+  days: EventScheduleDay[],
+): EventScheduleDayResponseDto[] {
+  return [...days]
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+    .map(toEventScheduleDayResponseDto);
 }
 
 // Whether startsAt/endsAt fall on different calendar days, in UTC. Never
@@ -60,6 +85,7 @@ export function toEventResponseDto(
     isMultiDay: computeIsMultiDay(event.startsAt, event.endsAt),
     locationName: event.locationName,
     locationAddress: event.locationAddress,
+    scheduleDays: toSortedEventScheduleDayDtos(context.scheduleDays),
     visibility: event.visibility,
     status: event.status,
     capacity: event.capacity,

@@ -37,6 +37,7 @@ import {
 import { EventAttendee } from './entities/event-attendee.entity';
 import { EventInvitation } from './entities/event-invitation.entity';
 import { EventRoleAssignment } from './entities/event-role-assignment.entity';
+import { EventScheduleDay } from './entities/event-schedule-day.entity';
 import { EventStatusHistory } from './entities/event-status-history.entity';
 import {
   Event,
@@ -51,6 +52,7 @@ import { EventWaitlistPolicy } from './enums/event-waitlist-policy.enum';
 import { EventVisibility } from './enums/event-visibility.enum';
 import { EventNotificationsService } from './event-notifications.service';
 import { EventRolesService } from './event-roles.service';
+import { EventRsvpService } from './event-rsvp.service';
 import {
   ADMIN_OPERATION_STATUSES,
   ARCHIVABLE_STATUSES,
@@ -81,6 +83,7 @@ export class EventsService {
     private readonly groupPermissionService: GroupPermissionService,
     private readonly groupHierarchyService: GroupHierarchyService,
     private readonly eventNotificationsService: EventNotificationsService,
+    private readonly eventRsvpService: EventRsvpService,
     private readonly r2StorageService: R2StorageService,
     private readonly imageProcessingService: ImageProcessingService,
     private readonly imageAssetService: ImageAssetService,
@@ -161,6 +164,11 @@ export class EventsService {
       EVENTS_TYPE_NUMERIC_CODE_UNIQUE_INDEX,
     );
 
+    const scheduleDays = this.buildScheduleDays(event, input.scheduleDays);
+    if (scheduleDays.length > 0) {
+      await em.persist(scheduleDays).flush();
+    }
+
     await this.eventRolesService.insertRoleAssignment(
       em,
       event,
@@ -168,9 +176,38 @@ export class EventsService {
       EventRole.OWNER,
       actor,
     );
+    await this.eventRsvpService.registerOrganizer(em, event, actor);
     await this.recordHistory(em, event, null, EventStatus.DRAFT, actor, null);
 
-    return this.buildResponse(em, event, actor, [EventRole.OWNER]);
+    return this.buildResponse(
+      em,
+      event,
+      actor,
+      [EventRole.OWNER],
+      undefined,
+      scheduleDays,
+    );
+  }
+
+  /**
+   * Builds fresh EventScheduleDay entities from a create/update input's own
+   * `scheduleDays` - never reads/mutates an existing Collection itself
+   * (finalizeCreate has nothing to read yet, update always fully replaces -
+   * see its own comment). Cross-field validity (ascending order, within the
+   * Event's own startsAt/endsAt) is already guaranteed by
+   * refineEventScheduleDays at the schema layer before this ever runs.
+   */
+  private buildScheduleDays(
+    event: Event,
+    days: { startsAt: string; endsAt: string }[],
+  ): EventScheduleDay[] {
+    return days.map((day) => {
+      const scheduleDay = new EventScheduleDay();
+      scheduleDay.event = event;
+      scheduleDay.startsAt = new Date(day.startsAt);
+      scheduleDay.endsAt = new Date(day.endsAt);
+      return scheduleDay;
+    });
   }
 
   async update(
@@ -183,6 +220,7 @@ export class EventsService {
         'communityGroup',
         'communitySection',
         'organizerUser',
+        'scheduleDays',
       ]);
       assertEventStatusAllowed(event, ADMIN_OPERATION_STATUSES);
       if (event.organizerUser) {
@@ -202,6 +240,21 @@ export class EventsService {
       // accident.
       this.applyCommonFields(event, input);
       await em.flush();
+
+      // Delete-then-insert, in two flushes within this one transaction -
+      // same ordering hazard/fix as RanksService.update's own identical
+      // cordSegments replacement (a resubmitted day's own timestamps could
+      // otherwise transiently collide with whatever this Event's current
+      // rows already hold, though no unique index actually enforces that
+      // here - kept as the same safe convention regardless).
+      for (const day of event.scheduleDays.getItems()) {
+        em.remove(day);
+      }
+      await em.flush();
+      const scheduleDays = this.buildScheduleDays(event, input.scheduleDays);
+      if (scheduleDays.length > 0) {
+        await em.persist(scheduleDays).flush();
+      }
 
       // Recipients are this Event's registered attendees only (module spec
       // §24) - never a description-only edit, never check-in/RSVP/
@@ -226,7 +279,14 @@ export class EventsService {
         eventId,
         actor.id,
       );
-      return this.buildResponse(em, event, actor, roles);
+      return this.buildResponse(
+        em,
+        event,
+        actor,
+        roles,
+        undefined,
+        scheduleDays,
+      );
     });
   }
 
@@ -1144,10 +1204,22 @@ export class EventsService {
     viewer: User,
     viewerRoles: EventRole[],
     precomputedOversight?: { viewAll: boolean; moderate: boolean },
+    // Only finalizeCreate/update pass this - they build a fresh in-memory
+    // scheduleDays list that has no DB-backed Collection to lazily load
+    // from yet (same reasoning as RanksService/toRankResponseDto's own
+    // segments param). Every other caller (get/list/publish/cancel/finish/
+    // transfer-ownership/…) omits it, so `event.scheduleDays.loadItems`
+    // below lazily populates from the DB on demand - it resolves instantly
+    // if already populated, so this is never a redundant query for a
+    // caller whose `loadOrFail` already included 'scheduleDays'.
+    precomputedScheduleDays?: EventScheduleDay[],
   ): Promise<EventResponseDto> {
     // Sequential, not Promise.all - concurrent queries on the same
     // EntityManager/connection race each other at the driver level.
     const attendeeCounts = await this.countAttendees(em, event);
+    const scheduleDays =
+      precomputedScheduleDays ??
+      (await event.scheduleDays.loadItems({ orderBy: { startsAt: 'asc' } }));
     const community = eventCommunity(event);
     // A User-organized Event has no Community to hold oversight over (see
     // event-community.util.ts) - EVENT_VIEW_ALL/EVENT_MODERATE simply never
@@ -1182,6 +1254,7 @@ export class EventsService {
             ? null
             : Math.max(event.capacity - attendeeCounts.seatsTaken, 0),
         waitlistCount: attendeeCounts.waitlistCount,
+        scheduleDays,
       },
       this.r2StorageService,
     );

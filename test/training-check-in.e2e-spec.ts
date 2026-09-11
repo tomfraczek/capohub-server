@@ -338,12 +338,9 @@ describe('Training Check-In (e2e)', () => {
           endsAt: new Date(Date.now() + 60 * 60_000).toISOString(),
           locationName: null,
           locationAddress: null,
-          latitude: null,
-          longitude: null,
           trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
           description: null,
           visibility: TrainingVisibility.MEMBERS_ONLY,
-          allowExternalRsvp: false,
           ...overrides,
         })
         .expect(201),
@@ -415,7 +412,7 @@ describe('Training Check-In (e2e)', () => {
     await checkIn(OUTSIDER_TOKEN, training.id, code).expect(403);
   });
 
-  it('accepts an external RSVP YES person when allowExternalRsvp is true', async () => {
+  it('accepts an external RSVP YES person for a PUBLIC training', async () => {
     const section = await createSectionWithRoles();
     // RSVP is blocked once a training has started (assertTrainingNotStarted
     // - see training-rsvp.service.ts), so this training is created with a
@@ -432,12 +429,9 @@ describe('Training Check-In (e2e)', () => {
           endsAt: new Date(Date.now() + 120 * 60_000).toISOString(),
           locationName: null,
           locationAddress: null,
-          latitude: null,
-          longitude: null,
           trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
           description: null,
           visibility: TrainingVisibility.PUBLIC,
-          allowExternalRsvp: true,
         })
         .expect(201),
     );
@@ -465,7 +459,6 @@ describe('Training Check-In (e2e)', () => {
     const section = await createSectionWithRoles();
     const training = await createStartedTraining(OWNER_TOKEN, section.id, {
       visibility: TrainingVisibility.PUBLIC,
-      allowExternalRsvp: true,
     });
     const code = await getNumericCode(EXTERNAL_TRAINER_TOKEN);
 
@@ -486,12 +479,9 @@ describe('Training Check-In (e2e)', () => {
           endsAt: new Date(Date.now() + 120 * 60_000).toISOString(),
           locationName: null,
           locationAddress: null,
-          latitude: null,
-          longitude: null,
           trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
           description: null,
           visibility: TrainingVisibility.MEMBERS_ONLY,
-          allowExternalRsvp: false,
         })
         .expect(201),
     );

@@ -12,7 +12,6 @@ import {
   LOCATION_NAME_MAX_LENGTH,
   durationMinutesSchema,
   isoDateTimeSchema,
-  nullableCoordinate,
   timeOfDaySchema,
 } from './training-validation.helpers';
 
@@ -29,12 +28,9 @@ const updateTrainingThisSchema = z
     locationAddress: optionalNullableText(
       LOCATION_ADDRESS_MAX_LENGTH,
     ).optional(),
-    latitude: nullableCoordinate(-90, 90).optional(),
-    longitude: nullableCoordinate(-180, 180).optional(),
     trainerUserId: uuidSchema.optional(),
     description: optionalNullableText(DESCRIPTION_MAX_LENGTH).optional(),
     visibility: enumValuesSchema(Object.values(TrainingVisibility)).optional(),
-    allowExternalRsvp: z.boolean().optional(),
   })
   .superRefine((value, ctx) => {
     if (value.startsAt === undefined && value.endsAt === undefined) {
@@ -71,12 +67,9 @@ const updateTrainingThisAndFollowingSchema = z.object({
   durationMinutes: durationMinutesSchema.optional(),
   locationName: optionalNullableText(LOCATION_NAME_MAX_LENGTH).optional(),
   locationAddress: optionalNullableText(LOCATION_ADDRESS_MAX_LENGTH).optional(),
-  latitude: nullableCoordinate(-90, 90).optional(),
-  longitude: nullableCoordinate(-180, 180).optional(),
   trainerUserId: uuidSchema.optional(),
   description: optionalNullableText(DESCRIPTION_MAX_LENGTH).optional(),
   visibility: enumValuesSchema(Object.values(TrainingVisibility)).optional(),
-  allowExternalRsvp: z.boolean().optional(),
 });
 
 export const updateTrainingSchema = z.discriminatedUnion('scope', [

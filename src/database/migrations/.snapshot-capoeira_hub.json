@@ -3702,6 +3702,155 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "starts_at": {
+          "name": "starts_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "ends_at": {
+          "name": "ends_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "event_schedule_days",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "event_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "event_schedule_days_event_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "event_schedule_days_pkey",
+          "unique": true,
+          "primary": true
+        }
+      ],
+      "checks": [
+        {
+          "name": "event_schedule_days_ends_at_after_starts_at_check",
+          "columnName": "ends_at",
+          "definition": "CHECK ((ends_at >= starts_at))",
+          "expression": "ends_at >= starts_at"
+        }
+      ],
+      "foreignKeys": {
+        "event_schedule_days_event_id_foreign": {
+          "columnNames": [
+            "event_id"
+          ],
+          "constraintName": "event_schedule_days_event_id_foreign",
+          "localTableName": "public.event_schedule_days",
+          "referencedTableName": "public.events",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
         "event_id": {
           "name": "event_id",
           "type": "uuid",
@@ -5104,7 +5253,7 @@
       "checks": [
         {
           "name": "formal_rank_assignments_ended_on_after_started_on_check",
-          "columnName": "started_on",
+          "columnName": "ended_on",
           "definition": "CHECK (((started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)))",
           "expression": "(started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)"
         }
@@ -6540,13 +6689,13 @@
       "checks": [
         {
           "name": "hierarchy_invitations_no_self_parent_check",
-          "columnName": "target_group_id",
+          "columnName": "parent_group_id",
           "definition": "CHECK ((parent_group_id <> target_group_id))",
           "expression": "parent_group_id <> target_group_id"
         },
         {
           "name": "hierarchy_invitations_target_group_or_section_check",
-          "columnName": "target_group_id",
+          "columnName": "target_section_id",
           "definition": "CHECK ((((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))))",
           "expression": "((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))"
         }
@@ -9440,7 +9589,7 @@
       "checks": [
         {
           "name": "ranks_previous_rank_not_self_check",
-          "columnName": "previous_rank_id",
+          "columnName": "id",
           "definition": "CHECK (((previous_rank_id IS NULL) OR (previous_rank_id <> id)))",
           "expression": "(previous_rank_id IS NULL) OR (previous_rank_id <> id)"
         }
@@ -14988,45 +15137,13 @@
           "enumItems": [],
           "mappedType": "text"
         },
-        "latitude": {
-          "name": "latitude",
-          "type": "float4",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": 24,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "float"
-        },
-        "longitude": {
-          "name": "longitude",
-          "type": "float4",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": 24,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "float"
-        },
         "default_trainer_id": {
           "name": "default_trainer_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "unique": false,
           "length": null,
           "precision": null,
@@ -15070,22 +15187,6 @@
             "PUBLIC"
           ],
           "mappedType": "enum"
-        },
-        "allow_external_rsvp": {
-          "name": "allow_external_rsvp",
-          "type": "bool",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": "false",
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "boolean"
         },
         "start_date": {
           "name": "start_date",
@@ -15368,45 +15469,13 @@
           "enumItems": [],
           "mappedType": "text"
         },
-        "latitude": {
-          "name": "latitude",
-          "type": "float4",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": 24,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "float"
-        },
-        "longitude": {
-          "name": "longitude",
-          "type": "float4",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": 24,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "float"
-        },
         "trainer_id": {
           "name": "trainer_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "unique": false,
           "length": null,
           "precision": null,
@@ -15482,22 +15551,6 @@
             "PUBLIC"
           ],
           "mappedType": "enum"
-        },
-        "allow_external_rsvp": {
-          "name": "allow_external_rsvp",
-          "type": "bool",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": "false",
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "boolean"
         },
         "status": {
           "name": "status",

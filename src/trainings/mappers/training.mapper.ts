@@ -40,15 +40,11 @@ export function toTrainingResponseDto(
     endsAt: training.endsAt.toISOString(),
     locationName: training.locationName,
     locationAddress: training.locationAddress,
-    latitude: training.latitude,
-    longitude: training.longitude,
-    trainer: {
-      id: training.trainer.id,
-      displayName: training.trainer.displayName,
-    },
+    trainer: training.trainer
+      ? { id: training.trainer.id, displayName: training.trainer.displayName }
+      : null,
     description: training.description,
     visibility: training.visibility,
-    allowExternalRsvp: training.allowExternalRsvp,
     status: training.status,
     rsvpCounts: context.rsvpCounts,
     viewerRsvp: context.viewerRsvp,

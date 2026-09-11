@@ -385,12 +385,9 @@ describe('Trainings (e2e)', () => {
       endsAt: '2031-06-02T20:00:00.000Z',
       locationName: 'Dojo',
       locationAddress: null,
-      latitude: null,
-      longitude: null,
       trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
       description: 'Regular training',
       visibility: TrainingVisibility.MEMBERS_ONLY,
-      allowExternalRsvp: false,
       ...overrides,
     };
   }
@@ -418,12 +415,9 @@ describe('Trainings (e2e)', () => {
       durationMinutes: 90,
       locationName: 'Dojo',
       locationAddress: null,
-      latitude: null,
-      longitude: null,
       defaultTrainerUserId: localUserIdByToken.get(OWNER_TOKEN),
       defaultDescription: 'Weekly training',
       visibility: TrainingVisibility.MEMBERS_ONLY,
-      allowExternalRsvp: false,
       startDate: '2031-07-01', // a Tuesday
       endDate: '2031-07-31',
       ...overrides,
@@ -512,9 +506,23 @@ describe('Trainings (e2e)', () => {
         trainerUserId: localUserIdByToken.get(EXTERNAL_TRAINER_TOKEN),
       });
 
-      expect(training.trainer.id).toBe(
+      expect(training.trainer?.id).toBe(
         localUserIdByToken.get(EXTERNAL_TRAINER_TOKEN),
       );
+    });
+
+    // Module: "prowadzący opcjonalny, jeśli nie zaznaczony to nie pokazuje
+    // w szczegółach treningu kto prowadzi, a nie że ja prowadzę" - omitting
+    // trainerUserId entirely leaves the Training with no trainer, never
+    // silently defaulted to the creator.
+    it('creates a training with no trainer when trainerUserId is omitted', async () => {
+      const section = await createSectionWithRoles();
+
+      const training = await createTraining(OWNER_TOKEN, section.id, {
+        trainerUserId: undefined,
+      });
+
+      expect(training.trainer).toBeNull();
     });
   });
 
@@ -544,6 +552,34 @@ describe('Trainings (e2e)', () => {
       expect(seriesTrainings).toHaveLength(5);
       for (const training of seriesTrainings) {
         expect(new Date(training.startsAt).getUTCDay()).toBe(3);
+      }
+    });
+
+    // Module: "prowadzący opcjonalny, jeśli nie zaznaczony to nie pokazuje
+    // w szczegółach treningu kto prowadzi" - same as the one-off Training's
+    // own test, but also verifies every generated occurrence inherits the
+    // series' own trainer-less default.
+    it('creates a series with no default trainer when defaultTrainerUserId is omitted, and every generated Training has none either', async () => {
+      const section = await createSectionWithRoles();
+
+      const series = await createSeries(OWNER_TOKEN, section.id, {
+        defaultTrainerUserId: undefined,
+      });
+
+      expect(series.defaultTrainer).toBeNull();
+
+      const list = await bodyOf<{ items: TrainingResponseDto[] }>(
+        request(app.getHttpServer())
+          .get(`/api/v1/sections/${section.id}/trainings?limit=100`)
+          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .expect(200),
+      );
+      const seriesTrainings = list.items.filter(
+        (t) => t.seriesId === series.id,
+      );
+      expect(seriesTrainings.length).toBeGreaterThan(0);
+      for (const training of seriesTrainings) {
+        expect(training.trainer).toBeNull();
       }
     });
 
@@ -890,11 +926,10 @@ describe('Trainings (e2e)', () => {
       expect(error.code).toBe('TRAINING_ALREADY_STARTED');
     });
 
-    it('MEMBERS_ONLY rejects an outsider RSVP regardless of allowExternalRsvp', async () => {
+    it('MEMBERS_ONLY rejects an outsider RSVP', async () => {
       const section = await createSectionWithRoles();
       const training = await createTraining(OWNER_TOKEN, section.id, {
         visibility: TrainingVisibility.MEMBERS_ONLY,
-        allowExternalRsvp: true,
       });
 
       await request(app.getHttpServer())
@@ -904,25 +939,12 @@ describe('Trainings (e2e)', () => {
         .expect(403);
     });
 
-    it('PUBLIC + allowExternalRsvp=false rejects an outsider RSVP', async () => {
+    // Module: "skoro publiczna to mogą się zapisywać osoby spoza sekcji" -
+    // PUBLIC alone is sufficient, there is no separate opt-in to also set.
+    it('PUBLIC allows an outsider RSVP', async () => {
       const section = await createSectionWithRoles();
       const training = await createTraining(OWNER_TOKEN, section.id, {
         visibility: TrainingVisibility.PUBLIC,
-        allowExternalRsvp: false,
-      });
-
-      await request(app.getHttpServer())
-        .put(`/api/v1/trainings/${training.id}/rsvp`)
-        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
-        .send({ status: 'YES' })
-        .expect(403);
-    });
-
-    it('PUBLIC + allowExternalRsvp=true allows an outsider RSVP', async () => {
-      const section = await createSectionWithRoles();
-      const training = await createTraining(OWNER_TOKEN, section.id, {
-        visibility: TrainingVisibility.PUBLIC,
-        allowExternalRsvp: true,
       });
 
       await request(app.getHttpServer())

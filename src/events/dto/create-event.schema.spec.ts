@@ -46,4 +46,73 @@ describe('createEventSchema', () => {
     expect(parsed.name).toBe('Roda de Sábado');
     expect(parsed.visibility).toBe(EventVisibility.PUBLIC);
   });
+
+  // Module: "w piątek wydarzenie trwa do 18, w sobotę... jak to ugryźć?"
+  describe('scheduleDays', () => {
+    it('defaults to an empty array when omitted', () => {
+      const parsed = createEventSchema.parse(VALID_INPUT);
+
+      expect(parsed.scheduleDays).toEqual([]);
+    });
+
+    it("accepts days that fall within the event's own startsAt/endsAt, in ascending order", () => {
+      const parsed = createEventSchema.parse({
+        ...VALID_INPUT,
+        startsAt: '2026-09-18T10:00:00.000Z',
+        endsAt: '2026-09-20T20:00:00.000Z',
+        scheduleDays: [
+          {
+            startsAt: '2026-09-18T13:00:00.000Z',
+            endsAt: '2026-09-18T18:00:00.000Z',
+          },
+          {
+            startsAt: '2026-09-19T09:00:00.000Z',
+            endsAt: '2026-09-19T18:00:00.000Z',
+          },
+          {
+            startsAt: '2026-09-20T10:00:00.000Z',
+            endsAt: '2026-09-20T16:00:00.000Z',
+          },
+        ],
+      });
+
+      expect(parsed.scheduleDays).toHaveLength(3);
+    });
+
+    it("rejects a day that falls outside the event's own startsAt/endsAt", () => {
+      const result = createEventSchema.safeParse({
+        ...VALID_INPUT,
+        startsAt: '2026-09-18T10:00:00.000Z',
+        endsAt: '2026-09-20T20:00:00.000Z',
+        scheduleDays: [
+          {
+            startsAt: '2026-09-17T13:00:00.000Z',
+            endsAt: '2026-09-18T18:00:00.000Z',
+          },
+        ],
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects out-of-order/overlapping days', () => {
+      const result = createEventSchema.safeParse({
+        ...VALID_INPUT,
+        startsAt: '2026-09-18T10:00:00.000Z',
+        endsAt: '2026-09-20T20:00:00.000Z',
+        scheduleDays: [
+          {
+            startsAt: '2026-09-19T09:00:00.000Z',
+            endsAt: '2026-09-19T18:00:00.000Z',
+          },
+          {
+            startsAt: '2026-09-18T13:00:00.000Z',
+            endsAt: '2026-09-18T18:00:00.000Z',
+          },
+        ],
+      });
+
+      expect(result.success).toBe(false);
+    });
+  });
 });

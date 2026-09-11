@@ -355,12 +355,9 @@ describe('Training Attendance (e2e)', () => {
           endsAt: new Date(Date.now() + 60 * 60_000).toISOString(),
           locationName: null,
           locationAddress: null,
-          latitude: null,
-          longitude: null,
           trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
           description: null,
           visibility: TrainingVisibility.MEMBERS_ONLY,
-          allowExternalRsvp: false,
           ...overrides,
         })
         .expect(201),
@@ -436,12 +433,9 @@ describe('Training Attendance (e2e)', () => {
             endsAt: '2031-08-01T20:00:00.000Z',
             locationName: null,
             locationAddress: null,
-            latitude: null,
-            longitude: null,
             trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
             description: null,
             visibility: TrainingVisibility.MEMBERS_ONLY,
-            allowExternalRsvp: false,
           })
           .expect(201),
       );
@@ -486,12 +480,11 @@ describe('Training Attendance (e2e)', () => {
       expect(rows[0].attendance?.attended).toBe(false);
     });
 
-    it('an external RSVP holder (allowExternalRsvp=true) may be recorded present', async () => {
+    it('an external RSVP holder (PUBLIC training) may be recorded present', async () => {
       const section = await createSectionWithRoles();
       const training = await createStartedTraining(OWNER_TOKEN, section.id, {
         trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
         visibility: TrainingVisibility.PUBLIC,
-        allowExternalRsvp: true,
       });
 
       // The outsider RSVP'd before the training started - simulate by

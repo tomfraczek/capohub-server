@@ -57,28 +57,24 @@ export class TrainingSeries extends BaseEntity {
   @Property({ nullable: true, type: 'text' })
   locationAddress: string | null = null;
 
-  @Property({ nullable: true, type: 'float' })
-  latitude: number | null = null;
-
-  @Property({ nullable: true, type: 'float' })
-  longitude: number | null = null;
-
-  // The trainer every generated/regenerated occurrence is created with. A
+  // Optional (module: "prowadzący opcjonalny... jeśli nie zaznaczony to nie
+  // pokazuje w szczegółach treningu kto prowadzi") - `null` means no default
+  // trainer, and every generated/regenerated occurrence is created with no
+  // trainer either (see buildTrainingFromSeries/applyTemplateFields). A
   // specific Training may still override its own trainer without touching
   // this default (see the module spec §3) - never required to hold a
   // SectionMembership, same as Training.trainer.
   @Index()
-  @ManyToOne(() => User, { deleteRule: 'no action' })
-  defaultTrainer!: User;
+  @ManyToOne(() => User, { nullable: true, deleteRule: 'no action' })
+  defaultTrainer: User | null = null;
 
   @Property({ nullable: true, type: 'text' })
   defaultDescription: string | null = null;
 
+  // See training.entity.ts's identical comment - also governs whether a
+  // non-member may RSVP, no separate opt-in.
   @Enum({ items: () => Object.values(TrainingVisibility) })
   visibility: TrainingVisibility = TrainingVisibility.MEMBERS_ONLY;
-
-  @Property()
-  allowExternalRsvp: boolean = false;
 
   // Date-only (stored at UTC midnight) - the first calendar date on/after
   // which occurrences are generated; the actual first occurrence is the

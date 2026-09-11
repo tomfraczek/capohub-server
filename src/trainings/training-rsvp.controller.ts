@@ -22,8 +22,8 @@ import { TrainingRsvpService } from './training-rsvp.service';
 // RSVP is addressed independently of which Section it belongs to, same
 // convention as EventRsvpController. Self-service only - no
 // GroupPermissionsGuard anywhere here; eligibility is resolved from the
-// Training's own visibility/allowExternalRsvp rule inside
-// TrainingRsvpService (see the module spec §5/§6).
+// Training's own visibility rule inside TrainingRsvpService (see the
+// module spec §5/§6).
 @Controller('trainings/:trainingId')
 export class TrainingRsvpController {
   constructor(private readonly trainingRsvpService: TrainingRsvpService) {}

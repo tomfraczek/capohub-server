@@ -60,21 +60,18 @@ export class Training extends BaseEntity {
   @Property({ nullable: true, type: 'text' })
   locationAddress: string | null = null;
 
-  @Property({ nullable: true, type: 'float' })
-  latitude: number | null = null;
-
-  @Property({ nullable: true, type: 'float' })
-  longitude: number | null = null;
-
-  // Exactly one trainer, always - may or may not hold a SectionMembership
-  // for `section` (see the module spec §3). Overriding just this Training's
-  // trainer never touches the owning TrainingSeries.defaultTrainer.
+  // Optional (module: "prowadzący opcjonalny... jeśli nie zaznaczony to nie
+  // pokazuje w szczegółach treningu kto prowadzi") - `null` means no one is
+  // assigned, shown as such, never silently defaulted to the creator. When
+  // present, may or may not hold a SectionMembership for `section` (see the
+  // module spec §3). Overriding just this Training's trainer never touches
+  // the owning TrainingSeries.defaultTrainer.
   @Index()
-  @ManyToOne(() => User, { deleteRule: 'no action' })
-  trainer!: User;
+  @ManyToOne(() => User, { nullable: true, deleteRule: 'no action' })
+  trainer: User | null = null;
 
   // Public - visible to anyone who may see this Training at all (see
-  // TrainingVisibility/allowExternalRsvp).
+  // TrainingVisibility).
   @Property({ nullable: true, type: 'text' })
   description: string | null = null;
 
@@ -91,15 +88,14 @@ export class Training extends BaseEntity {
   @Property({ nullable: true, type: 'text' })
   trainerNotes: string | null = null;
 
+  // Also governs whether a non-member may RSVP: PUBLIC means anyone may,
+  // MEMBERS_ONLY means only active Section members may (module: "skoro
+  // publiczna to mogą się zapisywać osoby spoza sekcji" - there is no
+  // separate opt-in, PUBLIC alone is sufficient - enforced in
+  // TrainingAccessService.canRsvp, not the DB).
   @Index()
   @Enum({ items: () => Object.values(TrainingVisibility) })
   visibility: TrainingVisibility = TrainingVisibility.MEMBERS_ONLY;
-
-  // MEMBERS_ONLY always overrides this to "no external RSVP", regardless of
-  // its stored value here - enforced in TrainingRsvpService, not the DB
-  // (see the module spec §5).
-  @Property()
-  allowExternalRsvp: boolean = false;
 
   @Index()
   @Enum({ items: () => Object.values(TrainingStatus) })

@@ -17,6 +17,10 @@ import {
   URL_MAX_LENGTH,
   isoDateTimeSchema,
 } from './event-validation.helpers';
+import {
+  eventScheduleDaysSchema,
+  refineEventScheduleDays,
+} from './event-schedule-day.schema';
 
 // Shared by create and update - see update-event.schema.ts, which reuses
 // this exact shape minus `type`/`customTypeLabel` (immutable after
@@ -35,6 +39,11 @@ export const eventBaseSchema = z.object({
   endsAt: isoDateTimeSchema,
   locationName: optionalNullableText(LOCATION_NAME_MAX_LENGTH),
   locationAddress: optionalNullableText(LOCATION_ADDRESS_MAX_LENGTH),
+  // Optional per-day breakdown of startsAt/endsAt (module: "w piątek
+  // wydarzenie trwa do 18, w sobotę... jak to ugryźć?") - see
+  // EventScheduleDay's own comment. `[]` (the default) for the common
+  // single-day Event.
+  scheduleDays: eventScheduleDaysSchema,
   visibility: enumValuesSchema(Object.values(EventVisibility)),
   // null = no limit (spec: "Limit jest opcjonalny").
   capacity: z
@@ -57,6 +66,7 @@ export function refineEventDateAndWaitlist(
     endsAt: string;
     capacity: number | null | undefined;
     waitlistPolicy: EventWaitlistPolicy;
+    scheduleDays: z.infer<typeof eventScheduleDaysSchema>;
   },
   ctx: z.RefinementCtx,
 ): void {
@@ -77,6 +87,7 @@ export function refineEventDateAndWaitlist(
       path: ['waitlistPolicy'],
     });
   }
+  refineEventScheduleDays(value, ctx);
 }
 
 export const createEventSchema = eventBaseSchema.superRefine((value, ctx) => {

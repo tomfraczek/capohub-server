@@ -13,7 +13,6 @@ import {
   dateOnlySchema,
   dayOfWeekSchema,
   durationMinutesSchema,
-  nullableCoordinate,
   timeOfDaySchema,
 } from './training-validation.helpers';
 
@@ -30,12 +29,9 @@ export const updateTrainingSeriesSchema = z.object({
   durationMinutes: durationMinutesSchema.optional(),
   locationName: optionalNullableText(LOCATION_NAME_MAX_LENGTH).optional(),
   locationAddress: optionalNullableText(LOCATION_ADDRESS_MAX_LENGTH).optional(),
-  latitude: nullableCoordinate(-90, 90).optional(),
-  longitude: nullableCoordinate(-180, 180).optional(),
   defaultTrainerUserId: uuidSchema.optional(),
   defaultDescription: optionalNullableText(DESCRIPTION_MAX_LENGTH).optional(),
   visibility: enumValuesSchema(Object.values(TrainingVisibility)).optional(),
-  allowExternalRsvp: z.boolean().optional(),
   endDate: dateOnlySchema.optional(),
 });
 

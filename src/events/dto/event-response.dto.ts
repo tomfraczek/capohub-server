@@ -7,6 +7,12 @@ import { EventCapabilitiesDto } from './event-capabilities.dto';
 import { EventCommunityRefDto } from './event-community-ref.dto';
 import { EventOrganizerRefDto } from './event-organizer-ref.dto';
 
+// See EventScheduleDay's own comment.
+export interface EventScheduleDayResponseDto {
+  startsAt: string;
+  endsAt: string;
+}
+
 // Used for both the list endpoint and the detail endpoint - Events, like
 // Academy/Cohort, has no separate "summary" shape (see academy-response.dto.ts).
 export interface EventResponseDto {
@@ -34,6 +40,12 @@ export interface EventResponseDto {
   isMultiDay: boolean;
   locationName: string | null;
   locationAddress: string | null;
+  // Optional per-day breakdown of startsAt/endsAt (module: "w piątek
+  // wydarzenie trwa do 18, w sobotę... jak to ugryźć?") - `[]` for the
+  // common single-day Event, always sorted ascending by startsAt. Purely
+  // descriptive: RSVP/capacity/waitlist/notifications still only ever look
+  // at startsAt/endsAt above, never at this.
+  scheduleDays: EventScheduleDayResponseDto[];
   visibility: EventVisibility;
   status: EventStatus;
   capacity: number | null;

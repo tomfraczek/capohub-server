@@ -472,7 +472,6 @@ describe('Home (e2e)', () => {
           trainerUserId: trainerUser.id,
           description: null,
           visibility: TrainingVisibility.MEMBERS_ONLY,
-          allowExternalRsvp: false,
           ...overrides,
         })
         .expect(201),

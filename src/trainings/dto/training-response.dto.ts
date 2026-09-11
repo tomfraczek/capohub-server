@@ -39,12 +39,11 @@ export interface TrainingResponseDto {
   endsAt: string;
   locationName: string | null;
   locationAddress: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  trainer: TrainingUserRefDto;
+  // null = no one assigned (module: "prowadzący opcjonalny") - never
+  // defaulted to the creator or anyone else.
+  trainer: TrainingUserRefDto | null;
   description: string | null;
   visibility: TrainingVisibility;
-  allowExternalRsvp: boolean;
   status: TrainingStatus;
   rsvpCounts: TrainingRsvpCountsDto;
   viewerRsvp: TrainingRsvpStatus | null;

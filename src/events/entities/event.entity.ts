@@ -1,9 +1,11 @@
 import {
   Check,
+  Collection,
   Entity,
   Enum,
   Index,
   ManyToOne,
+  OneToMany,
   Property,
   Unique,
 } from '@mikro-orm/core';
@@ -16,6 +18,7 @@ import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
 import { EventVisibility } from '../enums/event-visibility.enum';
 import { EventWaitlistPolicy } from '../enums/event-waitlist-policy.enum';
+import { EventScheduleDay } from './event-schedule-day.entity';
 
 export const EVENTS_TYPE_NUMERIC_CODE_UNIQUE_INDEX =
   'events_type_numeric_code_unique';
@@ -192,6 +195,16 @@ export class Event extends BaseEntity {
   @Index()
   @Property({ type: 'timestamptz' })
   endsAt!: Date;
+
+  // Optional per-day breakdown of startsAt/endsAt (module: "w piątek
+  // wydarzenie trwa do 18, w sobotę zaczyna się o 9... jak to ugryźć?") -
+  // purely descriptive, always replaced as a whole list (see
+  // EventScheduleDay's own comment). Empty for the common single-day case;
+  // startsAt/endsAt above stay the one frame everything else (RSVP,
+  // capacity, waitlist, notifications, calendar range filtering) actually
+  // operates on.
+  @OneToMany(() => EventScheduleDay, (day) => day.event)
+  scheduleDays = new Collection<EventScheduleDay>(this);
 
   // Whether the event spans multiple calendar days is deliberately NOT a
   // stored field - it is always derivable from startsAt/endsAt (see

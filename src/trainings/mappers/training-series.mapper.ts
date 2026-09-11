@@ -29,15 +29,14 @@ export function toTrainingSeriesResponseDto(
     durationMinutes: series.durationMinutes,
     locationName: series.locationName,
     locationAddress: series.locationAddress,
-    latitude: series.latitude,
-    longitude: series.longitude,
-    defaultTrainer: {
-      id: series.defaultTrainer.id,
-      displayName: series.defaultTrainer.displayName,
-    },
+    defaultTrainer: series.defaultTrainer
+      ? {
+          id: series.defaultTrainer.id,
+          displayName: series.defaultTrainer.displayName,
+        }
+      : null,
     defaultDescription: series.defaultDescription,
     visibility: series.visibility,
-    allowExternalRsvp: series.allowExternalRsvp,
     startDate: series.startDate.toISOString().slice(0, 10),
     endDate: series.endDate.toISOString().slice(0, 10),
     generatedTrainingsCount,

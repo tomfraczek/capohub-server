@@ -29,15 +29,12 @@ function buildTraining(overrides: Partial<Training> = {}): Training {
   training.endsAt = new Date('2026-03-01T19:00:00.000Z');
   training.locationName = null;
   training.locationAddress = null;
-  training.latitude = null;
-  training.longitude = null;
   training.trainer = Object.assign(new User(), {
     id: 'trainer-1',
     displayName: 'Mestre Bimba',
   });
   training.description = null;
   training.visibility = TrainingVisibility.MEMBERS_ONLY;
-  training.allowExternalRsvp = false;
   training.status = TrainingStatus.SCHEDULED;
   return Object.assign(training, overrides);
 }

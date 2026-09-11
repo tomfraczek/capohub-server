@@ -16,6 +16,7 @@ import { EventWaitlistPolicy } from './enums/event-waitlist-policy.enum';
 import { EventRolesService } from './event-roles.service';
 import { eventCommunity } from './event-community.util';
 import { EventNotificationsService } from './event-notifications.service';
+import { EventRsvpService } from './event-rsvp.service';
 import { EventsService } from './events.service';
 import { EventPermissionService } from './permissions/event-permission.service';
 import { CreateEventInput } from './dto/create-event.schema';
@@ -80,6 +81,7 @@ function buildCreateInput(
     endsAt: '2026-02-01T18:00:00.000Z',
     locationName: null,
     locationAddress: null,
+    scheduleDays: [],
     visibility: EventVisibility.COMMUNITY_MEMBERS,
     capacity: null,
     waitlistPolicy: EventWaitlistPolicy.NONE,
@@ -101,6 +103,7 @@ function buildUpdateInput(
     endsAt: '2026-02-01T18:00:00.000Z',
     locationName: null,
     locationAddress: null,
+    scheduleDays: [],
     visibility: EventVisibility.COMMUNITY_MEMBERS,
     capacity: null,
     waitlistPolicy: EventWaitlistPolicy.NONE,
@@ -165,6 +168,7 @@ function buildService(
     communityRoles?: EventRole[] | 'none';
     communityForCreate?: Group | null;
     imageAssetService?: Partial<ImageAssetService>;
+    eventRsvpService?: Partial<EventRsvpService>;
   } = {},
 ) {
   const event = options.event ?? buildEvent();
@@ -218,6 +222,11 @@ function buildService(
     notifyPublished: jest.fn().mockResolvedValue(undefined),
   } as unknown as EventNotificationsService;
 
+  const eventRsvpService = {
+    registerOrganizer: jest.fn().mockResolvedValue(undefined),
+    ...options.eventRsvpService,
+  } as unknown as EventRsvpService;
+
   const r2StorageService = {
     buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
   } as unknown as R2StorageService;
@@ -253,6 +262,7 @@ function buildService(
     groupPermissionService,
     groupHierarchyService,
     eventNotificationsService,
+    eventRsvpService,
     r2StorageService,
     imageProcessingService,
     imageAssetService,
@@ -274,6 +284,29 @@ describe('EventsService', () => {
       expect(result.status).toBe(EventStatus.DRAFT);
       expect(result.viewerRoles).toEqual([EventRole.OWNER]);
       expect(persist).toHaveBeenCalled();
+    });
+
+    // Module: "jeśli organizuję jakiś event to automatycznie powinienem
+    // zostać dodany do listy uczestników" - registerOrganizer is a
+    // collaborator call (EventRsvpService owns the actual attendee/seat
+    // bookkeeping, see its own spec), so this only asserts the contract:
+    // finalizeCreate calls it, with this exact Event and the actor who
+    // created it, for both create() and createPersonal().
+    it('registers the creator as an attendee on create()', async () => {
+      const { em } = buildMockEm();
+      const registerOrganizer = jest.fn().mockResolvedValue(undefined);
+      const service = buildService(em, {
+        viewerRoles: [EventRole.OWNER],
+        eventRsvpService: { registerOrganizer },
+      });
+
+      await service.create('community-1', buildCreateInput(), ACTOR);
+
+      expect(registerOrganizer).toHaveBeenCalledTimes(1);
+      const [, registeredEvent, registeredActor] = registerOrganizer.mock
+        .calls[0] as [unknown, Event, typeof ACTOR];
+      expect(registeredEvent).toBeInstanceOf(Event);
+      expect(registeredActor).toBe(ACTOR);
     });
 
     it('throws GROUP_NOT_FOUND when the community does not exist', async () => {
@@ -352,6 +385,27 @@ describe('EventsService', () => {
       });
       expect(result.community).toBeNull();
       expect(persist).toHaveBeenCalled();
+    });
+
+    it('registers the creator as an attendee on createPersonal() too', async () => {
+      const { em } = buildMockEm();
+      const registerOrganizer = jest.fn().mockResolvedValue(undefined);
+      const service = buildService(em, {
+        eventRsvpService: { registerOrganizer },
+      });
+
+      await service.createPersonal(
+        buildCreateInput({ visibility: EventVisibility.PUBLIC }),
+        ACTOR,
+      );
+
+      expect(registerOrganizer).toHaveBeenCalledTimes(1);
+      const [, , registeredActor] = registerOrganizer.mock.calls[0] as [
+        unknown,
+        unknown,
+        typeof ACTOR,
+      ];
+      expect(registeredActor).toBe(ACTOR);
     });
 
     it('grants the actor EventRole.OWNER, with matching capabilities', async () => {
@@ -775,6 +829,7 @@ describe('EventsService', () => {
         new GroupPermissionService(),
         {} as unknown as GroupHierarchyService,
         eventNotificationsService,
+        {} as unknown as EventRsvpService,
         {} as unknown as R2StorageService,
         {} as unknown as ImageProcessingService,
         {} as unknown as ImageAssetService,

@@ -12,12 +12,11 @@ export interface TrainingSeriesResponseDto {
   durationMinutes: number;
   locationName: string | null;
   locationAddress: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  defaultTrainer: TrainingUserRefDto;
+  // null = no default trainer (module: "prowadzący opcjonalny") - every
+  // generated/regenerated occurrence is created with no trainer either.
+  defaultTrainer: TrainingUserRefDto | null;
   defaultDescription: string | null;
   visibility: TrainingVisibility;
-  allowExternalRsvp: boolean;
   startDate: string;
   endDate: string;
   // Every currently-existing Training generated from this series (past,

@@ -14,7 +14,6 @@ import {
   dateOnlySchema,
   dayOfWeekSchema,
   durationMinutesSchema,
-  nullableCoordinate,
   timeOfDaySchema,
 } from './training-validation.helpers';
 
@@ -31,12 +30,15 @@ export const createTrainingSeriesSchema = z
     durationMinutes: durationMinutesSchema,
     locationName: optionalNullableText(LOCATION_NAME_MAX_LENGTH),
     locationAddress: optionalNullableText(LOCATION_ADDRESS_MAX_LENGTH),
-    latitude: nullableCoordinate(-90, 90),
-    longitude: nullableCoordinate(-180, 180),
-    defaultTrainerUserId: uuidSchema,
+    // Optional - a caller who doesn't pick anyone leaves the series (and
+    // every generated occurrence) with no trainer at all (see
+    // TrainingSeriesService.create), same reasoning as
+    // create-training.schema.ts's own trainerUserId.
+    defaultTrainerUserId: uuidSchema.nullish(),
     defaultDescription: optionalNullableText(DESCRIPTION_MAX_LENGTH),
+    // Also governs whether a non-member may RSVP - see
+    // create-training.schema.ts's identical comment.
     visibility: enumValuesSchema(Object.values(TrainingVisibility)),
-    allowExternalRsvp: z.boolean().default(false),
     startDate: dateOnlySchema,
     endDate: dateOnlySchema,
   })
