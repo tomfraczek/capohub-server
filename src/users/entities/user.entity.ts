@@ -60,6 +60,23 @@ export class User extends BaseEntity {
   @Property({ nullable: true, type: 'string' })
   avatarUrl: string | null = null;
 
+  // Only meaningful while avatarType is CLERK - mirrors Clerk's own
+  // hasImage signal (see UserService.fetchClerkProfile/ClerkProfile): true
+  // when avatarUrl is a real uploaded/OAuth-provided photo, false when
+  // Clerk is instead returning its own generated initials placeholder for a
+  // user who never set one. Ignored for UPLOAD/PRESET. null means "not
+  // synced yet" (every pre-existing row at migration time) - deliberately
+  // NOT defaulted to true, since that would be a guess with no basis and
+  // would let a real placeholder-only account read as "has a photo" until
+  // its next authenticated request resyncs this column (see
+  // ClerkAuthGuard, which calls findOrCreateFromClerk - and therefore
+  // UserService.applyProfileChanges - on every authenticated request, so
+  // this null state is only ever observed pre-first-sync). Consumers must
+  // treat null the same as false (see mobile's hasProfileAvatar) - never
+  // as true.
+  @Property({ nullable: true })
+  clerkHasImage: boolean | null = null;
+
   // Holds the preset identifier (an app-side static asset key) for PRESET;
   // always null for CLERK and UPLOAD. No presets table - the mobile app owns
   // the list of valid ids.

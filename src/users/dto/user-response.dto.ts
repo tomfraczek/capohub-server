@@ -9,6 +9,16 @@ export interface UserResponseDto {
   displayName: string;
   avatarType: AvatarType;
   avatarUrl: string | null;
+  // Only meaningful when avatarType is 'CLERK' - true if avatarUrl is a
+  // real uploaded/OAuth-provided photo, false if it is Clerk's own
+  // generated initials placeholder (Clerk's imageUrl is never null/empty
+  // either way, so the frontend cannot tell the two apart from avatarUrl
+  // alone - see user.entity.ts's own comment on this field). null means
+  // "not synced from Clerk yet" (only possible for an account that
+  // predates this field and hasn't made an authenticated request since -
+  // see user.entity.ts) - the frontend must treat null the same as false,
+  // never as true.
+  clerkHasImage: boolean | null;
   presetAvatarId: string | null;
   theme: Theme;
   notificationsEnabled: boolean;

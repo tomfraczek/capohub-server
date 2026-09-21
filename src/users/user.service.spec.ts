@@ -223,6 +223,44 @@ describe('UserService', () => {
       expect(user.presetAvatarId).toBeNull();
     });
 
+    it('sets clerkHasImage from Clerk hasImage on create - true for a real photo, false for a generated placeholder', async () => {
+      const { service: serviceWithPhoto } = buildService({
+        findOne: jest.fn().mockResolvedValue(null),
+        getUser: jest
+          .fn()
+          .mockResolvedValue(buildClerkUser({ hasImage: true })),
+      });
+      const userWithPhoto =
+        await serviceWithPhoto.findOrCreateFromClerk(buildAuth());
+      expect(userWithPhoto.clerkHasImage).toBe(true);
+
+      const { service: serviceWithPlaceholder } = buildService({
+        findOne: jest.fn().mockResolvedValue(null),
+        getUser: jest
+          .fn()
+          .mockResolvedValue(buildClerkUser({ hasImage: false })),
+      });
+      const userWithPlaceholder =
+        await serviceWithPlaceholder.findOrCreateFromClerk(buildAuth());
+      expect(userWithPlaceholder.clerkHasImage).toBe(false);
+    });
+
+    // The `?? null` in fetchClerkProfile is defensive, not a guessed
+    // positive: a Clerk response missing hasImage (only possible from a
+    // stale test double, since the real SDK's User type has it as
+    // non-optional) must land as null ("unknown"), never true - see
+    // ClerkProfile's own comment.
+    it('sets clerkHasImage to null (unknown) rather than true when Clerk omits hasImage', async () => {
+      const { service } = buildService({
+        findOne: jest.fn().mockResolvedValue(null),
+        getUser: jest.fn().mockResolvedValue(buildClerkUser()),
+      });
+
+      const user = await service.findOrCreateFromClerk(buildAuth());
+
+      expect(user.clerkHasImage).toBeNull();
+    });
+
     it('generates displayName from the email local part on create', async () => {
       const { service } = buildService({
         findOne: jest.fn().mockResolvedValue(null),
@@ -342,23 +380,48 @@ describe('UserService', () => {
       expect(user.avatarUrl).toBe('https://img.clerk.com/ada.png');
     });
 
-    it('does not overwrite avatarUrl for an existing user with avatarType UPLOAD', async () => {
+    it('syncs clerkHasImage from Clerk for an existing user with avatarType CLERK', async () => {
+      const existing = new User();
+      existing.clerkUserId = 'user_clerk_1';
+      existing.email = 'ada.lovelace@example.com';
+      existing.displayName = 'Ada Lovelace';
+      existing.avatarType = AvatarType.CLERK;
+      existing.avatarUrl = 'https://img.clerk.com/old.png';
+      existing.clerkHasImage = false;
+
+      const { service } = buildService({
+        findOne: jest.fn().mockResolvedValue(existing),
+        getUser: jest
+          .fn()
+          .mockResolvedValue(buildClerkUser({ hasImage: true })),
+      });
+
+      const user = await service.findOrCreateFromClerk(buildAuth());
+
+      expect(user.clerkHasImage).toBe(true);
+    });
+
+    it('does not overwrite avatarUrl or clerkHasImage for an existing user with avatarType UPLOAD', async () => {
       const existing = new User();
       existing.clerkUserId = 'user_clerk_1';
       existing.email = 'ada.lovelace@example.com';
       existing.displayName = 'Ada Lovelace';
       existing.avatarType = AvatarType.UPLOAD;
       existing.avatarUrl = 'https://uploads.capohub.app/ada.png';
+      existing.clerkHasImage = true;
 
       const { service } = buildService({
         findOne: jest.fn().mockResolvedValue(existing),
-        getUser: jest.fn().mockResolvedValue(buildClerkUser()),
+        getUser: jest
+          .fn()
+          .mockResolvedValue(buildClerkUser({ hasImage: false })),
       });
 
       const user = await service.findOrCreateFromClerk(buildAuth());
 
       expect(user.avatarType).toBe(AvatarType.UPLOAD);
       expect(user.avatarUrl).toBe('https://uploads.capohub.app/ada.png');
+      expect(user.clerkHasImage).toBe(true);
     });
 
     it('does not overwrite presetAvatarId/avatarUrl for an existing user with avatarType PRESET', async () => {
@@ -799,6 +862,22 @@ describe('UserService', () => {
       expect(em.flush).toHaveBeenCalled();
     });
 
+    it('also sets clerkHasImage from the freshly fetched Clerk profile, not the stale value on the User', async () => {
+      const user = new User();
+      user.clerkUserId = 'user_clerk_1';
+      user.avatarType = AvatarType.PRESET;
+      user.clerkHasImage = true;
+      const { service } = buildService({
+        getUser: jest
+          .fn()
+          .mockResolvedValue(buildClerkUser({ hasImage: false })),
+      });
+
+      const updated = await service.resetAvatarToClerk(user);
+
+      expect(updated.clerkHasImage).toBe(false);
+    });
+
     it('sets avatarUrl to null when Clerk has no imageUrl', async () => {
       const user = new User();
       user.clerkUserId = 'user_clerk_1';
@@ -925,19 +1004,22 @@ describe('UserService', () => {
       expect(imageAssetService.remove).not.toHaveBeenCalled();
     });
 
-    it('falls back to CLERK when the account has a usable Clerk avatar URL', async () => {
+    it('falls back to CLERK when the account has a usable Clerk avatar URL, syncing clerkHasImage too', async () => {
       const user = new User();
       user.id = 'user-1';
       user.clerkUserId = 'user_clerk_1';
       user.avatarType = AvatarType.UPLOAD;
       user.avatarImageKey = 'users/user-1/profile/old.webp';
-      const getUser = jest.fn().mockResolvedValue(buildClerkUser());
+      const getUser = jest
+        .fn()
+        .mockResolvedValue(buildClerkUser({ hasImage: false }));
       const { service } = buildService({ getUser });
 
       const updated = await service.deleteAvatar(user);
 
       expect(updated.avatarType).toBe(AvatarType.CLERK);
       expect(updated.avatarUrl).toBe('https://img.clerk.com/ada.png');
+      expect(updated.clerkHasImage).toBe(false);
       expect(updated.avatarImageKey).toBeNull();
       expect(updated.presetAvatarId).toBeNull();
     });

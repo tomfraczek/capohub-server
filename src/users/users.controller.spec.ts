@@ -53,6 +53,7 @@ function buildUser(): User {
   user.displayName = 'Ada Lovelace';
   user.avatarType = AvatarType.CLERK;
   user.avatarUrl = 'https://img.clerk.com/ada.png';
+  user.clerkHasImage = true;
   user.presetAvatarId = null;
   user.publicCode = 'ADA00001';
   user.theme = 'system';
@@ -90,6 +91,7 @@ describe('UsersController', () => {
         displayName: 'Ada Lovelace',
         avatarType: AvatarType.CLERK,
         avatarUrl: 'https://img.clerk.com/ada.png',
+        clerkHasImage: true,
         presetAvatarId: null,
         theme: 'system',
         notificationsEnabled: true,

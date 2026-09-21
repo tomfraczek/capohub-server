@@ -115,6 +115,11 @@ async function bodyOf<T>(req: request.Test): Promise<T> {
 describe('Calendar - User (e2e)', () => {
   let app: INestApplication<App>;
   const createdGroupIds: string[] = [];
+  // Separate from createdGroupIds - a User-organized Event has no
+  // Group/Section at all (see event-community.util.ts), so it is never
+  // reachable through the community-scoped cleanup filters below (same
+  // convention as events.e2e-spec.ts).
+  const createdPersonalEventIds: string[] = [];
   const localUserIdByToken = new Map<string, string>();
 
   beforeAll(async () => {
@@ -173,6 +178,22 @@ describe('Calendar - User (e2e)', () => {
           { communitySection: { $in: createdGroupIds } },
         ],
       });
+
+      // User-organized Events - cleaned up by their own ids, not by
+      // community (they have none). Must run before the User rows below
+      // are deleted - same ordering hazard as events.e2e-spec.ts's
+      // identical cleanup.
+      if (createdPersonalEventIds.length > 0) {
+        const eventIsPersonal = { event: { $in: createdPersonalEventIds } };
+        await cleanup.nativeDelete(EventAttendee, eventIsPersonal);
+        await cleanup.nativeDelete(EventInvitation, eventIsPersonal);
+        await cleanup.nativeDelete(EventRoleAssignment, eventIsPersonal);
+        await cleanup.nativeDelete(EventStatusHistory, eventIsPersonal);
+        await cleanup.nativeDelete(Event, {
+          id: { $in: createdPersonalEventIds },
+        });
+      }
+
       await cleanup.nativeDelete(TrainingRsvp, {
         training: { section: { $in: createdGroupIds } },
       });
@@ -375,6 +396,27 @@ describe('Calendar - User (e2e)', () => {
     );
   }
 
+  // POST /events - creates an Event organized by `token`'s own User,
+  // never a Group/Section (see EventsService.createPersonal). The
+  // organizer is auto-registered as an attendee and granted OWNER (see
+  // finalizeCreate), which is exactly what makes it reachable through
+  // EventsService.findForViewerInRange - the same source this calendar
+  // already uses, so no separate "personal event" aggregation exists.
+  async function createPersonalEvent(
+    token: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<EventResponseDto> {
+    const created = await bodyOf<EventResponseDto>(
+      request(app.getHttpServer())
+        .post('/api/v1/events')
+        .set('Authorization', `Bearer ${token}`)
+        .send(eventPayload(overrides))
+        .expect(201),
+    );
+    createdPersonalEventIds.push(created.id);
+    return created;
+  }
+
   async function registerSelf(token: string, eventId: string): Promise<void> {
     await request(app.getHttpServer())
       .post(`/api/v1/events/${eventId}/register`)
@@ -451,6 +493,35 @@ describe('Calendar - User (e2e)', () => {
     if (item?.type === 'EVENT') {
       expect(item.viewerRsvp).toBe('GOING');
     }
+  });
+
+  it('includes a personal Event I organize myself, with no Community at all', async () => {
+    const event = await createPersonalEvent(MEMBER_TOKEN, {
+      startsAt: '2031-06-17T10:00:00.000Z',
+      endsAt: '2031-06-17T12:00:00.000Z',
+    });
+
+    const calendar = await getCalendar(MEMBER_TOKEN, FULL_RANGE);
+
+    const item = calendar.items.find((item) => item.sourceId === event.id);
+    expect(item).toBeDefined();
+    expect(item?.type).toBe('EVENT');
+    if (item?.type === 'EVENT') {
+      expect(item.community).toBeNull();
+    }
+  });
+
+  it("never includes another user's personal Event", async () => {
+    const event = await createPersonalEvent(OWNER_TOKEN, {
+      startsAt: '2031-06-18T10:00:00.000Z',
+      endsAt: '2031-06-18T12:00:00.000Z',
+    });
+
+    const calendar = await getCalendar(MEMBER_TOKEN, FULL_RANGE);
+
+    expect(calendar.items.map((item) => item.sourceId)).not.toContain(
+      event.id,
+    );
   });
 
   it('never includes a PUBLIC Event I never registered for, even though I could see it', async () => {

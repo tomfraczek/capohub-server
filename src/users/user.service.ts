@@ -298,6 +298,7 @@ export class UserService {
     const previousUploadKey = user.avatarImageKey;
     user.avatarType = AvatarType.CLERK;
     user.avatarUrl = profile.avatarUrl;
+    user.clerkHasImage = profile.clerkHasImage;
     user.presetAvatarId = null;
     user.avatarImageKey = null;
     await this.em.flush();
@@ -365,6 +366,7 @@ export class UserService {
         if (profile.avatarUrl) {
           user.avatarType = AvatarType.CLERK;
           user.avatarUrl = profile.avatarUrl;
+          user.clerkHasImage = profile.clerkHasImage;
           user.presetAvatarId = null;
         } else {
           user.avatarType = AvatarType.PRESET;
@@ -385,6 +387,7 @@ export class UserService {
     user.email = profile.email;
     user.avatarType = AvatarType.CLERK;
     user.avatarUrl = profile.avatarUrl;
+    user.clerkHasImage = profile.clerkHasImage;
     user.presetAvatarId = null;
     user.displayName = generateDisplayNameFromEmail(profile.email);
     return user;
@@ -392,19 +395,21 @@ export class UserService {
 
   // displayName is deliberately excluded here: it's local/user-owned (see
   // PATCH /users/me), and re-syncing it from Clerk would silently overwrite
-  // a user's edit on the very next request. avatarUrl is only synced while
-  // avatarType is CLERK - once the user picks UPLOAD or PRESET, this method
-  // must not touch avatarUrl/presetAvatarId again (see avatar/preset and
+  // a user's edit on the very next request. avatarUrl/clerkHasImage are only
+  // synced while avatarType is CLERK - once the user picks UPLOAD or PRESET,
+  // this method must not touch them again (see avatar/preset and
   // avatar/clerk endpoints for the only ways to change avatarType).
   private applyProfileChanges(user: User, profile: ClerkProfile): void {
     if (user.email !== profile.email) {
       user.email = profile.email;
     }
-    if (
-      user.avatarType === AvatarType.CLERK &&
-      user.avatarUrl !== profile.avatarUrl
-    ) {
-      user.avatarUrl = profile.avatarUrl;
+    if (user.avatarType === AvatarType.CLERK) {
+      if (user.avatarUrl !== profile.avatarUrl) {
+        user.avatarUrl = profile.avatarUrl;
+      }
+      if (user.clerkHasImage !== profile.clerkHasImage) {
+        user.clerkHasImage = profile.clerkHasImage;
+      }
     }
   }
 
@@ -419,6 +424,15 @@ export class UserService {
     return {
       email: email.trim().toLowerCase(),
       avatarUrl: clerkUser.imageUrl,
+      // The real Clerk SDK always provides hasImage (non-optional on its
+      // User type), so this `?? null` never actually triggers in
+      // production - it exists purely so the dozens of e2e test doubles
+      // across this repo that stub getUser() with a bare { imageUrl,
+      // primaryEmailAddress } and predate this field degrade to "unknown"
+      // (conservative - never counted as a real photo) instead of crashing
+      // or silently becoming `undefined`. Never coerced to true here - see
+      // ClerkProfile's own comment on why a guessed positive is wrong.
+      clerkHasImage: clerkUser.hasImage ?? null,
     };
   }
 }

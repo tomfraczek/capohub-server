@@ -31,6 +31,15 @@ const TOKEN_TO_AUTH: Record<string, AuthContext> = {
     tokenType: 'session_token',
     claims: { sub: 'user_test_flow', sid: 'sess_test_flow' },
   },
+  'valid-placeholder-avatar-token': {
+    userId: 'user_test_placeholder_avatar',
+    sessionId: 'sess_test_placeholder_avatar',
+    tokenType: 'session_token',
+    claims: {
+      sub: 'user_test_placeholder_avatar',
+      sid: 'sess_test_placeholder_avatar',
+    },
+  },
 };
 
 const FIXTURE_CLERK_PROFILES: Record<
@@ -38,15 +47,33 @@ const FIXTURE_CLERK_PROFILES: Record<
   {
     imageUrl: string;
     primaryEmailAddress: { emailAddress: string } | null;
+    // Left unset on user_test_123 on purpose (untouched by any avatar
+    // assertion) - fetchClerkProfile's `?? null` fallback turns that into
+    // clerkHasImage: null ("unknown"), never a guessed true. Every fixture
+    // an avatar test actually asserts on sets this explicitly instead of
+    // relying on that fallback.
+    hasImage?: boolean;
   }
 > = {
   user_test_123: {
     imageUrl: 'https://img.clerk.com/test-user.png',
     primaryEmailAddress: { emailAddress: 'test.user@example.com' },
   },
+  // hasImage: true - flow-tester represents an ordinary user with a real
+  // Clerk/OAuth photo throughout this file's other (non-avatar-focused)
+  // tests.
   user_test_flow: {
     imageUrl: 'https://img.clerk.com/flow-tester.png',
     primaryEmailAddress: { emailAddress: 'flow.tester@example.com' },
+    hasImage: true,
+  },
+  // hasImage: false - a brand-new Google sign-in with no real photo, same
+  // shape Clerk itself returns (a non-null imageUrl pointing at its own
+  // generated initials placeholder, plus hasImage: false).
+  user_test_placeholder_avatar: {
+    imageUrl: 'https://img.clerk.com/generated-initials-placeholder.png',
+    primaryEmailAddress: { emailAddress: 'placeholder.avatar@example.com' },
+    hasImage: false,
   },
 };
 
@@ -349,7 +376,42 @@ describe('App (e2e)', () => {
       expect(response.body).toMatchObject({
         avatarType: 'CLERK',
         avatarUrl: 'https://img.clerk.com/flow-tester.png',
+        clerkHasImage: true,
         presetAvatarId: null,
+      });
+    });
+
+    // user_test_123's fixture never sets hasImage - exercises
+    // fetchClerkProfile's `?? null` fallback for real (a stale/legacy
+    // Clerk response, or an un-migrated row before its next sync). Must
+    // land as null ("unknown"), never a guessed true.
+    it('GET /api/v1/users/me returns clerkHasImage: null when Clerk has not reported hasImage', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/users/me')
+        .set('Authorization', 'Bearer valid-test-token')
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        avatarType: 'CLERK',
+        clerkHasImage: null,
+      });
+    });
+
+    // Clerk always returns a non-null imageUrl even when it is displaying
+    // its own generated initials placeholder for a user with no real
+    // photo - clerkHasImage is the only signal that tells the two apart
+    // (see ClerkProfile's own comment), so a brand-new Google sign-in with
+    // no photo must come back with clerkHasImage: false, not true.
+    it('GET /api/v1/users/me returns clerkHasImage: false for a brand-new user whose Clerk avatar is a generated placeholder', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/users/me')
+        .set('Authorization', 'Bearer valid-placeholder-avatar-token')
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        avatarType: 'CLERK',
+        avatarUrl: 'https://img.clerk.com/generated-initials-placeholder.png',
+        clerkHasImage: false,
       });
     });
 
@@ -416,6 +478,7 @@ describe('App (e2e)', () => {
       expect(response.body).toMatchObject({
         avatarType: 'CLERK',
         avatarUrl: 'https://img.clerk.com/flow-tester.png',
+        clerkHasImage: true,
         presetAvatarId: null,
       });
 

@@ -24,6 +24,7 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.displayName = 'Ada Lovelace';
   user.avatarType = AvatarType.CLERK;
   user.avatarUrl = 'https://img.clerk.com/ada.png';
+  user.clerkHasImage = true;
   user.presetAvatarId = null;
   user.theme = 'dark';
   user.notificationsEnabled = false;
@@ -50,6 +51,7 @@ describe('toUserResponseDto', () => {
       displayName: 'Ada Lovelace',
       avatarType: AvatarType.CLERK,
       avatarUrl: 'https://img.clerk.com/ada.png',
+      clerkHasImage: true,
       presetAvatarId: null,
       theme: 'dark',
       notificationsEnabled: false,
@@ -96,6 +98,17 @@ describe('toUserResponseDto', () => {
       toUserResponseDto(user, NO_SONG_CAPABILITIES, buildUrlBuilder()),
     ).toMatchObject({
       avatarUrl: null,
+    });
+  });
+
+  it('maps clerkHasImage: false straight through for a CLERK avatar that is only a generated placeholder', () => {
+    const user = buildUser({ clerkHasImage: false });
+
+    expect(
+      toUserResponseDto(user, NO_SONG_CAPABILITIES, buildUrlBuilder()),
+    ).toMatchObject({
+      avatarType: AvatarType.CLERK,
+      clerkHasImage: false,
     });
   });
 

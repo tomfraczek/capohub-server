@@ -21,6 +21,7 @@ export function toUserResponseDto(
     // avatarUrl column once an UPLOAD avatar exists - see
     // storage/image-url.util.ts's resolveUserAvatarUrl.
     avatarUrl: resolveUserAvatarUrl(user, urlBuilder),
+    clerkHasImage: user.clerkHasImage,
     presetAvatarId: user.presetAvatarId,
     theme: user.theme,
     notificationsEnabled: user.notificationsEnabled,
