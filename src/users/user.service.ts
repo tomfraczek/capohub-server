@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@mikro-orm/nestjs';
 import {
   EntityManager,
@@ -20,8 +20,9 @@ import { GroupStatus } from '../groups/enums/group-status.enum';
 import { ImageAssetService } from '../storage/image-asset.service';
 import { ImageProcessingService } from '../storage/image-processing.service';
 import { buildUserProfileImageKey } from '../storage/object-keys.util';
-import { ClerkProfile } from './clerk-profile.type';
+import { ClerkProfile, ExternalAccountProvider } from './clerk-profile.type';
 import { AvatarType } from './enums/avatar-type.enum';
+import { GooglePeopleApiService } from './google-people-api.service';
 import {
   User,
   Theme,
@@ -39,6 +40,8 @@ export interface UpdateUserProfileInput {
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(
     private readonly em: EntityManager,
     @InjectRepository(User)
@@ -49,6 +52,7 @@ export class UserService {
     private readonly eventsService: EventsService,
     private readonly imageProcessingService: ImageProcessingService,
     private readonly imageAssetService: ImageAssetService,
+    private readonly googlePeopleApiService: GooglePeopleApiService,
   ) {}
 
   /**
@@ -76,6 +80,14 @@ export class UserService {
     const created = this.buildUser(auth.userId, profile);
     created.lastLoginAt = new Date();
     created.publicCode = await generateUniquePublicCode(this.em);
+    // Account creation is one of the few moments this app calls out to the
+    // Google People API - see syncGoogleHasCustomPhoto's own comment for
+    // why this never runs on the (existing-user) branch above.
+    await this.syncGoogleHasCustomPhoto(
+      created,
+      auth.userId,
+      profile.externalAccountProvider,
+    );
     await assignUniqueNumericCode(
       this.em,
       async (trx, code) => {
@@ -301,6 +313,14 @@ export class UserService {
     user.clerkHasImage = profile.clerkHasImage;
     user.presetAvatarId = null;
     user.avatarImageKey = null;
+    // Explicitly re-establishing the Clerk avatar is exactly the kind of
+    // rare, meaningful moment syncGoogleHasCustomPhoto is meant for - see
+    // its own comment.
+    await this.syncGoogleHasCustomPhoto(
+      user,
+      user.clerkUserId,
+      profile.externalAccountProvider,
+    );
     await this.em.flush();
     await this.imageAssetService.cleanupOrphan(
       previousUploadKey,
@@ -368,6 +388,13 @@ export class UserService {
           user.avatarUrl = profile.avatarUrl;
           user.clerkHasImage = profile.clerkHasImage;
           user.presetAvatarId = null;
+          // Falling back to the Clerk avatar is another explicit,
+          // avatar-touching moment - same reasoning as resetAvatarToClerk.
+          await this.syncGoogleHasCustomPhoto(
+            user,
+            user.clerkUserId,
+            profile.externalAccountProvider,
+          );
         } else {
           user.avatarType = AvatarType.PRESET;
           user.avatarUrl = null;
@@ -433,6 +460,77 @@ export class UserService {
       // or silently becoming `undefined`. Never coerced to true here - see
       // ClerkProfile's own comment on why a guessed positive is wrong.
       clerkHasImage: clerkUser.hasImage ?? null,
+      externalAccountProvider: resolveExternalAccountProvider(
+        clerkUser.externalAccounts,
+      ),
     };
   }
+
+  // Only ever called from the few explicit avatar-touching moments listed
+  // on User.googleHasCustomPhoto's own comment (account creation, PUT
+  // /users/me/avatar/clerk, DELETE /users/me/profile-image's Clerk-fallback
+  // branch) - never from applyProfileChanges, which runs on every
+  // authenticated request (via ClerkAuthGuard -> findOrCreateFromClerk).
+  // That split is the whole point: it keeps the one external call this
+  // method makes (getUserOauthAccessToken, then GooglePeopleApiService's
+  // own HTTP call) off the hot GET /users/me path entirely, while still
+  // keeping the signal fresh at the moments it can actually change from the
+  // user's perspective (a new account, or the user explicitly re-pointing
+  // their avatar at Clerk/Google).
+  //
+  // Non-Google accounts (and accounts with no external account at all,
+  // e.g. email/password) never reach the Clerk/Google calls below - the
+  // People API is provider-specific and has nothing to say about them, so
+  // they get the same safe `null` ("not applicable") as a Google account
+  // that hasn't been checked yet.
+  private async syncGoogleHasCustomPhoto(
+    user: User,
+    clerkUserId: string,
+    provider: ExternalAccountProvider | null,
+  ): Promise<void> {
+    if (provider !== 'google') {
+      user.googleHasCustomPhoto = null;
+      return;
+    }
+
+    try {
+      const tokenResponse = await this.clerkClient.users.getUserOauthAccessToken(
+        clerkUserId,
+        'google',
+      );
+      const accessToken = tokenResponse.data[0]?.token;
+
+      user.googleHasCustomPhoto = accessToken
+        ? await this.googlePeopleApiService.resolveHasCustomPhoto(accessToken)
+        : null;
+    } catch (err) {
+      // Clerk's own OAuth-token endpoint failing (revoked grant, Clerk
+      // outage, ...) must never crash the avatar action that triggered
+      // this - same conservative "unknown" fallback as a failed People API
+      // call itself (see GooglePeopleApiService).
+      this.logger.warn(
+        `Failed to fetch a Google OAuth access token for ${clerkUserId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      user.googleHasCustomPhoto = null;
+    }
+  }
+}
+
+// Clerk's ExternalAccount.provider is documented as e.g. "google" but is
+// actually returned with an "oauth_" prefix in practice (verified against
+// the real API) - normalized here once so every caller compares against
+// the same plain provider ids. The first external account is treated as
+// authoritative; this app never links more than one to a User today.
+function resolveExternalAccountProvider(
+  externalAccounts: { provider: string }[] | undefined,
+): ExternalAccountProvider | null {
+  const primary = externalAccounts?.[0];
+
+  if (!primary) {
+    return null;
+  }
+
+  return primary.provider.replace(/^oauth_/, '') === 'google'
+    ? 'google'
+    : 'other';
 }

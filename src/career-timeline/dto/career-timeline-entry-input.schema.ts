@@ -31,8 +31,9 @@ export type CreateCareerTimelineEntryInput = z.infer<
   typeof createCareerTimelineEntrySchema
 >;
 
-// Full replace, like UpdateCustomUserRankDto - every field is required in
-// the body (no partial PATCH semantics), simpler than tracking which
+// Full replace, like CreateCustomUserRankDto (reused for both create and
+// update on that singleton's PUT route) - every field is required in the
+// body (no partial PATCH semantics), simpler than tracking which
 // individual fields changed on a 3-field entity.
 export const updateCareerTimelineEntrySchema = z.object(
   careerTimelineEntryFields,

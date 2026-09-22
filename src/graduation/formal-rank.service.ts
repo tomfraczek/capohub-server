@@ -12,7 +12,6 @@ import type { Event } from '../events/entities/event.entity';
 import { PARTICIPATING_RSVP_STATUSES } from '../events/event-participation.util';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
 import { User } from '../users/entities/user.entity';
-import { CustomUserRank } from './entities/custom-user-rank.entity';
 import { Rank } from './entities/rank.entity';
 import {
   FORMAL_RANK_ASSIGNMENTS_ACTIVE_UNIQUE_INDEX,
@@ -166,17 +165,12 @@ export class FormalRankService {
         await em.flush();
       }
 
-      // Selecting a formal Rank removes the active custom cordão from the
-      // profile (see the module spec, rule 8) - deactivated, never
-      // deleted, and never restored automatically later (rule 9).
-      const activeCordao = await em.findOne(CustomUserRank, {
-        user: user.id,
-        isActive: true,
-      });
-      if (activeCordao) {
-        activeCordao.isActive = false;
-      }
-
+      // Selecting a formal Rank no longer touches CustomUserRank at all -
+      // now that `isActive` is gone (see custom-user-rank.entity.ts), an
+      // independent rank simply stays in the database untouched; which of
+      // the two "counts" for display is a purely display-time computation
+      // done by callers (e.g. UserProfileService.getPublicProfile), not
+      // something this service enforces by mutating rows.
       const assignment = new FormalRankAssignment();
       assignment.user = user;
       assignment.rank = rank;

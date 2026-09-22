@@ -1,7 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { UniqueConstraintViolationException } from '@mikro-orm/core';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { Collection } from '@mikro-orm/core';
-import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
 import { User } from '../users/entities/user.entity';
 import { CustomUserRankService } from './custom-user-rank.service';
 import { CustomUserRank } from './entities/custom-user-rank.entity';
@@ -13,12 +13,13 @@ function buildUser(id = 'user-1'): User {
   return user;
 }
 
-function buildCreateInput() {
+function buildInput(overrides: Record<string, unknown> = {}) {
   return {
     name: 'My own cordão',
     description: null,
     track: RankTrack.ADULT,
     cordSegments: [{ position: 1, colorHex: '#FF0000', proportion: 100 }],
+    ...overrides,
   };
 }
 
@@ -30,46 +31,33 @@ function buildCustomRank(
   customRank.name = 'Mine';
   customRank.description = null;
   customRank.track = RankTrack.ADULT;
-  customRank.isActive = false;
   customRank.cordSegments = new Collection<never>(customRank);
   return Object.assign(customRank, overrides);
 }
 
 interface MockRouting {
-  activeFormalGroup?: FormalGroupAffiliation | null;
   customRank?: CustomUserRank | null;
-  currentlyActive?: CustomUserRank | null;
+  flushError?: unknown;
 }
 
 function buildMockEm(routing: MockRouting = {}) {
-  const flush = jest.fn().mockResolvedValue(undefined);
+  const flush = jest.fn().mockImplementation(() => {
+    if (routing.flushError) {
+      return Promise.reject(routing.flushError);
+    }
+    return Promise.resolve(undefined);
+  });
   const persist = jest.fn().mockReturnValue({ flush });
   const remove = jest.fn().mockReturnValue({ flush });
 
-  const findOne = jest.fn(
-    (entityClass: unknown, where: Record<string, unknown>) => {
-      if (entityClass === FormalGroupAffiliation) {
-        return Promise.resolve(
-          routing.activeFormalGroup === undefined
-            ? null
-            : routing.activeFormalGroup,
-        );
-      }
-      if (entityClass === CustomUserRank) {
-        if (where && 'isActive' in where) {
-          return Promise.resolve(
-            routing.currentlyActive === undefined
-              ? null
-              : routing.currentlyActive,
-          );
-        }
-        return Promise.resolve(
-          routing.customRank === undefined ? null : routing.customRank,
-        );
-      }
-      return Promise.resolve(null);
-    },
-  );
+  const findOne = jest.fn((entityClass: unknown) => {
+    if (entityClass === CustomUserRank) {
+      return Promise.resolve(
+        routing.customRank === undefined ? null : routing.customRank,
+      );
+    }
+    return Promise.resolve(null);
+  });
 
   const raw: Record<string, unknown> = { findOne, persist, flush, remove };
   raw.transactional = jest.fn((cb: (em: unknown) => unknown) => cb(raw));
@@ -78,130 +66,127 @@ function buildMockEm(routing: MockRouting = {}) {
 }
 
 describe('CustomUserRankService', () => {
-  describe('create', () => {
-    it('creates a custom cordão even while an active formal group is set - creation is always allowed', async () => {
-      const { em, persist } = buildMockEm({
-        activeFormalGroup: new FormalGroupAffiliation(),
-      });
-      const service = new CustomUserRankService(em);
-
-      const result = await service.create(buildUser(), buildCreateInput());
-
-      expect(persist).toHaveBeenCalled();
-      expect(result.name).toBe('My own cordão');
-      expect(result.isActive).toBe(false);
-    });
-  });
-
-  describe('getById (IDOR)', () => {
-    it('returns 404 for a custom cordão owned by another user, never leaking existence', async () => {
+  describe('getCurrent', () => {
+    it('throws CUSTOM_RANK_NOT_SET when the caller has none', async () => {
       const { em } = buildMockEm({ customRank: null });
       const service = new CustomUserRankService(em);
 
-      const promise = service.getById(buildUser(), 'someone-elses-rank');
+      const promise = service.getCurrent('user-1');
 
       await expect(promise).rejects.toBeInstanceOf(NotFoundException);
       await expect(promise).rejects.toMatchObject({
-        response: { code: 'CUSTOM_RANK_NOT_FOUND' },
+        response: { code: 'CUSTOM_RANK_NOT_SET' },
       });
     });
 
-    it('returns the cordão when it exists and is owned by the caller', async () => {
+    it('returns the caller row when it exists', async () => {
       const { em } = buildMockEm({ customRank: buildCustomRank() });
       const service = new CustomUserRankService(em);
 
-      const result = await service.getById(buildUser(), 'rank-1');
+      const result = await service.getCurrent('user-1');
       expect(result.id).toBe('rank-1');
     });
   });
 
-  describe('activate', () => {
-    it('rejects activating while an active formal group is set', async () => {
+  describe('getCurrentOrNull', () => {
+    it('returns null instead of throwing when unset', async () => {
+      const { em } = buildMockEm({ customRank: null });
+      const service = new CustomUserRankService(em);
+
+      const result = await service.getCurrentOrNull('user-1');
+      expect(result).toBeNull();
+    });
+
+    it('returns the raw entity when set', async () => {
+      const customRank = buildCustomRank();
+      const { em } = buildMockEm({ customRank });
+      const service = new CustomUserRankService(em);
+
+      const result = await service.getCurrentOrNull('user-1');
+      expect(result).toBe(customRank);
+    });
+  });
+
+  describe('setCurrent', () => {
+    it('creates a fresh row when the caller has none yet', async () => {
+      const { em, persist } = buildMockEm({ customRank: null });
+      const service = new CustomUserRankService(em);
+
+      const result = await service.setCurrent(buildUser(), buildInput());
+
+      expect(persist).toHaveBeenCalled();
+      expect(result.name).toBe('My own cordão');
+      expect(result.cordSegments).toEqual([
+        { position: 1, colorHex: '#FF0000', proportion: 100 },
+      ]);
+    });
+
+    it('converts a concurrent-create race into CUSTOM_RANK_ALREADY_SET', async () => {
       const { em } = buildMockEm({
-        activeFormalGroup: new FormalGroupAffiliation(),
-        customRank: buildCustomRank(),
+        customRank: null,
+        flushError: new UniqueConstraintViolationException(
+          new Error(
+            'duplicate key value violates unique constraint "custom_user_ranks_user_id_unique"',
+          ),
+        ),
       });
       const service = new CustomUserRankService(em);
 
-      const promise = service.activate(buildUser(), 'rank-1');
+      const promise = service.setCurrent(buildUser(), buildInput());
 
       await expect(promise).rejects.toBeInstanceOf(ConflictException);
       await expect(promise).rejects.toMatchObject({
-        response: { code: 'CUSTOM_RANK_REQUIRES_NO_FORMAL_GROUP' },
+        response: { code: 'CUSTOM_RANK_ALREADY_SET' },
       });
     });
 
-    it("returns 404 (IDOR-safe) for someone else's cordão, never confirming it exists", async () => {
-      const { em } = buildMockEm({ activeFormalGroup: null, customRank: null });
+    it('updates the existing row in place and fully replaces cordSegments, rather than creating a second row', async () => {
+      const existing = buildCustomRank({
+        name: 'Old name',
+        track: RankTrack.CHILD,
+      });
+      const { em, remove } = buildMockEm({ customRank: existing });
       const service = new CustomUserRankService(em);
 
-      const promise = service.activate(buildUser(), 'not-mine');
+      const result = await service.setCurrent(
+        buildUser(),
+        buildInput({
+          name: 'New name',
+          track: RankTrack.ADULT,
+          cordSegments: [{ position: 1, colorHex: '#00FF00', proportion: 100 }],
+        }),
+      );
 
-      await expect(promise).rejects.toBeInstanceOf(NotFoundException);
-    });
-
-    it('activates the target and deactivates whichever cordão was active before', async () => {
-      const target = buildCustomRank({ id: 'rank-1', isActive: false });
-      const previouslyActive = buildCustomRank({
-        id: 'rank-2',
-        isActive: true,
-      });
-      const { em } = buildMockEm({
-        activeFormalGroup: null,
-        customRank: target,
-        currentlyActive: previouslyActive,
-      });
-      const service = new CustomUserRankService(em);
-
-      const result = await service.activate(buildUser(), 'rank-1');
-
-      expect(result.isActive).toBe(true);
-      expect(previouslyActive.isActive).toBe(false);
-    });
-
-    it('is a no-op success when the target is already active', async () => {
-      const target = buildCustomRank({ id: 'rank-1', isActive: true });
-      const { em, flush } = buildMockEm({
-        activeFormalGroup: null,
-        customRank: target,
-      });
-      const service = new CustomUserRankService(em);
-
-      const result = await service.activate(buildUser(), 'rank-1');
-
-      expect(result.isActive).toBe(true);
-      expect(flush).not.toHaveBeenCalled();
+      expect(result.id).toBe('rank-1');
+      expect(result.name).toBe('New name');
+      expect(result.track).toBe(RankTrack.ADULT);
+      expect(result.cordSegments).toEqual([
+        { position: 1, colorHex: '#00FF00', proportion: 100 },
+      ]);
+      expect(remove).not.toHaveBeenCalledWith(existing);
     });
   });
 
-  describe('deactivate', () => {
-    it('clears isActive for the owner', async () => {
-      const target = buildCustomRank({ id: 'rank-1', isActive: true });
-      const { em } = buildMockEm({ customRank: target });
-      const service = new CustomUserRankService(em);
-
-      const result = await service.deactivate(buildUser(), 'rank-1');
-      expect(result.isActive).toBe(false);
-    });
-  });
-
-  describe('delete', () => {
-    it('always deletes for the owner - a custom cordão is never referenced by rank history', async () => {
+  describe('deleteCurrent', () => {
+    it('deletes the caller row', async () => {
       const customRank = buildCustomRank();
       const { em, remove } = buildMockEm({ customRank });
       const service = new CustomUserRankService(em);
 
-      await service.delete(buildUser(), 'rank-1');
+      await service.deleteCurrent(buildUser());
       expect(remove).toHaveBeenCalledWith(customRank);
     });
 
-    it('returns 404 (IDOR-safe) when deleting a cordão owned by someone else', async () => {
+    it('throws CUSTOM_RANK_NOT_SET when the caller has none', async () => {
       const { em } = buildMockEm({ customRank: null });
       const service = new CustomUserRankService(em);
 
-      const promise = service.delete(buildUser(), 'not-mine');
+      const promise = service.deleteCurrent(buildUser());
 
       await expect(promise).rejects.toBeInstanceOf(NotFoundException);
+      await expect(promise).rejects.toMatchObject({
+        response: { code: 'CUSTOM_RANK_NOT_SET' },
+      });
     });
   });
 });

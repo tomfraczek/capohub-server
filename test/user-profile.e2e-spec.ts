@@ -26,6 +26,7 @@ import { GraduationSystemResponseDto } from '../src/graduation/dto/graduation-sy
 import { RankResponseDto } from '../src/graduation/dto/rank-response.dto';
 import { RankTrack } from '../src/graduation/enums/rank-track.enum';
 import { FormalRankAssignmentResponseDto } from '../src/graduation/dto/formal-rank-assignment-response.dto';
+import { CustomUserRankResponseDto } from '../src/graduation/dto/custom-user-rank-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
 import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
@@ -553,6 +554,31 @@ describe('User Profile (e2e)', () => {
       .set('Authorization', `Bearer ${token}`);
   }
 
+  async function setCustomRank(
+    token: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<CustomUserRankResponseDto> {
+    return bodyOf<CustomUserRankResponseDto>(
+      request(app.getHttpServer())
+        .put('/api/v1/users/me/custom-rank')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          name: 'Corda Independente',
+          description: null,
+          track: RankTrack.ADULT,
+          cordSegments: oneSegment(),
+          ...overrides,
+        })
+        .expect(200),
+    );
+  }
+
+  async function endCustomRank(token: string): Promise<void> {
+    await request(app.getHttpServer())
+      .delete('/api/v1/users/me/custom-rank')
+      .set('Authorization', `Bearer ${token}`);
+  }
+
   // ─── GET/PATCH /users/me/profile ────────────────────────────────────────
 
   describe('GET/PATCH /users/me/profile', () => {
@@ -953,6 +979,103 @@ describe('User Profile (e2e)', () => {
       await request(app.getHttpServer())
         .delete('/api/v1/users/me/formal-group')
         .set('Authorization', `Bearer ${TARGET_TOKEN}`);
+      await patchOwnProfile(TARGET_TOKEN, { showFormalRank: false });
+    });
+  });
+
+  // ─── independent (custom) rank ──────────────────────────────────────────
+
+  describe('GET /users/:userId/profile - independent rank', () => {
+    it('appears when set and visible, reusing the showFormalRank toggle, and is null when hidden, unset, or the owner clears it', async () => {
+      const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
+      await endCustomRank(TARGET_TOKEN);
+
+      // Not yet set at all - null, not an error, regardless of the flag.
+      await patchOwnProfile(TARGET_TOKEN, { showFormalRank: true });
+      const beforeSet = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(beforeSet.independentRank).toBeNull();
+
+      await setCustomRank(TARGET_TOKEN, {
+        name: 'Corda Independente',
+        track: RankTrack.ADULT,
+        cordSegments: oneSegment('#654321'),
+      });
+
+      // Hidden by the same flag that gates formalRank...
+      await patchOwnProfile(TARGET_TOKEN, { showFormalRank: false });
+      const hidden = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(hidden.independentRank).toBeNull();
+      // ...but the owner still sees their own, unfiltered.
+      const own = await getPublicProfile(TARGET_TOKEN, targetId);
+      expect(own.independentRank).toEqual({
+        name: 'Corda Independente',
+        track: RankTrack.ADULT,
+        cordSegments: oneSegment('#654321'),
+      });
+
+      await patchOwnProfile(TARGET_TOKEN, { showFormalRank: true });
+      const visible = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(visible.independentRank).toEqual(own.independentRank);
+
+      await endCustomRank(TARGET_TOKEN);
+      const afterDelete = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(afterDelete.independentRank).toBeNull();
+
+      await patchOwnProfile(TARGET_TOKEN, { showFormalRank: false });
+    });
+
+    it('shows the independent rank instead of a stale formal rank once the owner has left their formal group, or neither when there is no independent rank either', async () => {
+      const { group, section, rank } =
+        await createGroupWithCatalog(ADMIN_TOKEN);
+      await joinSection(ADMIN_TOKEN, section.id, TARGET_TOKEN);
+      await setFormalGroup(TARGET_TOKEN, group.id);
+      await setFormalRank(TARGET_TOKEN, rank.id);
+      await patchOwnProfile(TARGET_TOKEN, { showFormalRank: true });
+      const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
+
+      // Still in the group - the formal rank shows normally, no
+      // independent rank set yet.
+      const whileInGroup = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(whileInGroup.formalRank?.name).toBe('Corda Crua');
+      expect(whileInGroup.independentRank).toBeNull();
+
+      // Leave the section and end the formal group affiliation.
+      // endFormalGroup only ends the FormalGroupAffiliation row, not the
+      // FormalRankAssignment itself (see UserProfileService.endFormalGroup
+      // and getPublicProfile's own comment) - so without the public-
+      // profile-local gate, formalRank would incorrectly keep showing the
+      // stale rank forever.
+      await leaveSection(section.id, TARGET_TOKEN);
+      await request(app.getHttpServer())
+        .delete('/api/v1/users/me/formal-group')
+        .set('Authorization', `Bearer ${TARGET_TOKEN}`)
+        .expect(204);
+
+      const afterLeavingNoIndependent = await getPublicProfile(
+        VIEWER_TOKEN,
+        targetId,
+      );
+      expect(afterLeavingNoIndependent.formalRank).toBeNull();
+      expect(afterLeavingNoIndependent.independentRank).toBeNull();
+
+      // Setting an independent rank afterwards shows that instead of the
+      // (now-hidden) stale formal rank.
+      await setCustomRank(TARGET_TOKEN, {
+        name: 'Corda Depois do Grupo',
+        track: RankTrack.ADULT,
+        cordSegments: oneSegment('#111111'),
+      });
+      const afterLeavingWithIndependent = await getPublicProfile(
+        VIEWER_TOKEN,
+        targetId,
+      );
+      expect(afterLeavingWithIndependent.formalRank).toBeNull();
+      expect(afterLeavingWithIndependent.independentRank?.name).toBe(
+        'Corda Depois do Grupo',
+      );
+
+      await endCustomRank(TARGET_TOKEN);
+      await endFormalRank(TARGET_TOKEN);
       await patchOwnProfile(TARGET_TOKEN, { showFormalRank: false });
     });
   });

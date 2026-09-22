@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { EventsModule } from '../events/events.module';
 import { GroupsModule } from '../groups/groups.module';
 import { NotificationsModule } from '../notifications/notifications.module';
-import { CustomUserRanksController } from './custom-user-ranks.controller';
+import { CustomRankController } from './custom-rank.controller';
 import { CustomUserRankService } from './custom-user-rank.service';
 import { FormalRankOptionsController } from './formal-rank-options.controller';
 import { MyFormalRankCorrectionController } from './formal-rank-correction-own.controller';
@@ -35,19 +35,21 @@ import { SectionMemberFormalRankController } from './section-member-formal-rank.
 // loadAndValidateEventLink). One-directional: neither GroupsModule nor
 // EventsModule imports this module back.
 //
-// Exports FormalRankService for UsersModule - UserProfileService reads the
-// target's current formal Rank (via getCurrentOrNull) to include it on the
-// public profile surface, gated by User.showFormalRank (see
-// UserProfileService.getPublicProfile). UsersModule already imports
-// GroupsModule/EventsModule directly rather than through this module, so
-// importing GraduationModule here adds no cycle (GraduationModule itself
-// never imports UsersModule).
+// Exports FormalRankService and CustomUserRankService for UsersModule -
+// UserProfileService reads the target's current formal Rank (via
+// getCurrentOrNull) and current independent rank (via the same
+// getCurrentOrNull pattern on CustomUserRankService) to include them on
+// the public profile surface, gated by User.showFormalRank (see
+// UserProfileService.getPublicProfile - both fields deliberately reuse
+// that one toggle). UsersModule already imports GroupsModule/EventsModule
+// directly rather than through this module, so importing GraduationModule
+// here adds no cycle (GraduationModule itself never imports UsersModule).
 //
 // Also exports FormalRankCorrectionService for CareerTimelineModule, which reuses
 // isPubliclyVisible to gate FORMAL_RANK timeline entries during an active
 // correction rather than re-deriving that rule (see
 // career-timeline-aggregation.service.ts). UsersModule still does NOT need
-// to import this module - /users/me/formal-rank*, /users/me/custom-ranks*
+// to import this module - /users/me/formal-rank*, /users/me/custom-rank
 // and /users/me/formal-rank-correction* all live here directly rather than
 // on UsersController.
 @Module({
@@ -57,7 +59,7 @@ import { SectionMemberFormalRankController } from './section-member-formal-rank.
     RanksController,
     FormalRankController,
     FormalRankHistoryController,
-    CustomUserRanksController,
+    CustomRankController,
     FormalRankCorrectionsController,
     MyFormalRankCorrectionController,
     FormalRankOptionsController,
@@ -70,6 +72,6 @@ import { SectionMemberFormalRankController } from './section-member-formal-rank.
     CustomUserRankService,
     FormalRankCorrectionService,
   ],
-  exports: [FormalRankService, FormalRankCorrectionService],
+  exports: [FormalRankService, CustomUserRankService, FormalRankCorrectionService],
 })
 export class GraduationModule {}

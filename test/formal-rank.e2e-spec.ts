@@ -1,23 +1,27 @@
 /**
  * E2E tests for the user's formal rank (FormalRankAssignment - always a
- * catalog Rank) and CustomUserRank (a cosmetic, non-historical "custom
- * cordão").
+ * catalog Rank) and CustomUserRank (a cosmetic, non-historical,
+ * *singleton* "independent"/"custom" cordão - at most one row per user,
+ * see custom-user-rank.entity.ts).
  *
  * Scenarios:
  *  1. A formal rank can only be set with an active formal group, from
  *     that exact group's catalog - a rank from a different group is
  *     rejected; one active assignment at a time, atomic swap preserves
  *     history
- *  2. A custom cordão can be created/edited/deleted freely by its owner
- *     regardless of formal-group status, but can only be *activated*
- *     without an active formal group
- *  3. Selecting a formal rank deactivates the active custom cordão;
- *     leaving the formal group afterwards does not restore it
- *  4. awardedByName/startedOn/endedOn belong only to the formal rank - a
- *     custom cordão never has them
+ *  2. An independent cordão can be set (PUT, upsert) freely by its owner
+ *     regardless of formal-group status - there is no "activate" concept
+ *     any more, and a second PUT updates the existing row in place rather
+ *     than creating a second one
+ *  3. Selecting a formal rank no longer touches the independent cordão at
+ *     all - the two are fully decoupled now that `isActive` is gone
+ *  4. awardedByName/startedOn/endedOn belong only to the formal rank - an
+ *     independent cordão never has them
  *  5. An archived catalog Rank cannot be newly selected, but stays valid
  *     as the current/historical formal rank if it was already selected
- *  6. IDOR: a CustomUserRank is invisible/unusable to anyone but its owner
+ *  6. Every /users/me/custom-rank route is scoped to the caller alone
+ *     (there is no `:id` any more, so IDOR is structurally moot) - GET/
+ *     DELETE 404 (CUSTOM_RANK_NOT_SET) when the caller hasn't set one
  */
 import {
   INestApplication,
@@ -415,14 +419,14 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
     );
   }
 
-  async function createCustomCordao(
+  async function setCustomRank(
     token: string,
     overrides: Record<string, unknown> = {},
-    expectStatus = 201,
+    expectStatus = 200,
   ): Promise<CustomUserRankResponseDto | HttpErrorResponse> {
     return bodyOf(
       request(app.getHttpServer())
-        .post('/api/v1/users/me/custom-ranks')
+        .put('/api/v1/users/me/custom-rank')
         .set('Authorization', `Bearer ${token}`)
         .send({
           name: 'My cordão',
@@ -433,6 +437,29 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
         })
         .expect(expectStatus),
     );
+  }
+
+  async function getCustomRank(
+    token: string,
+  ): Promise<CustomUserRankResponseDto | null> {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/users/me/custom-rank')
+      .set('Authorization', `Bearer ${token}`);
+    if (res.status === 404) {
+      return null;
+    }
+    expect(res.status).toBe(200);
+    return res.body as CustomUserRankResponseDto;
+  }
+
+  // Best-effort reset used before tests that require "no independent rank
+  // set" for a token that may have been left with one by an earlier test
+  // in this file (tokens are shared/reused across tests) - 404 (already
+  // none) is a success case here too.
+  async function ensureNoCustomRank(token: string): Promise<void> {
+    await request(app.getHttpServer())
+      .delete('/api/v1/users/me/custom-rank')
+      .set('Authorization', `Bearer ${token}`);
   }
 
   // ─── Formal rank selection ─────────────────────────────────────────────
@@ -576,240 +603,159 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
     });
   });
 
-  // ─── Custom cordão ───────────────────────────────────────────────────────
+  // ─── Independent ("custom") cordão - singleton ─────────────────────────
 
-  describe('Custom cordão', () => {
-    it('can be created even while an active formal group is set - creation is always allowed', async () => {
-      const { section, group } = await createGroupWithCatalog();
-      await joinSection(OWNER_TOKEN, section.id, MEMBER_TOKEN);
-      await setFormalGroup(MEMBER_TOKEN, group.id);
-
-      const created = (await createCustomCordao(
-        MEMBER_TOKEN,
-        { name: 'Cordão pessoal' },
-        201,
-      )) as CustomUserRankResponseDto;
-      expect(created.name).toBe('Cordão pessoal');
-      expect(created.isActive).toBe(false);
-    });
-
-    it('rejects activating a custom cordão while an active formal group is set', async () => {
-      const { section, group } = await createGroupWithCatalog();
-      await joinSection(OWNER_TOKEN, section.id, MEMBER_TOKEN);
-      await setFormalGroup(MEMBER_TOKEN, group.id);
-
-      const created = (await createCustomCordao(
-        MEMBER_TOKEN,
-      )) as CustomUserRankResponseDto;
-
+  describe('Independent cordão (GET/PUT/DELETE /users/me/custom-rank)', () => {
+    it('GET 404s with CUSTOM_RANK_NOT_SET when the caller has never set one', async () => {
+      await ensureNoCustomRank(OUTSIDER_TOKEN);
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
-          .post(`/api/v1/users/me/custom-ranks/${created.id}/activate`)
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .expect(409),
-      );
-      expect(error.statusCode).toBe(409);
-    });
-
-    it('creates and activates an own custom cordão when there is no formal group', async () => {
-      await ensureNoFormalGroup(OUTSIDER_TOKEN);
-      const custom = (await createCustomCordao(OUTSIDER_TOKEN, {
-        name: 'Corda Independente',
-      })) as CustomUserRankResponseDto;
-      expect(custom.isActive).toBe(false);
-
-      const activated = await bodyOf<CustomUserRankResponseDto>(
-        request(app.getHttpServer())
-          .post(`/api/v1/users/me/custom-ranks/${custom.id}/activate`)
+          .get('/api/v1/users/me/custom-rank')
           .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
-          .expect(201),
+          .expect(404),
       );
-      expect(activated.isActive).toBe(true);
-      expect(activated).not.toHaveProperty('awardedByName');
-      expect(activated).not.toHaveProperty('startedOn');
-      expect(activated).not.toHaveProperty('endedOn');
+      expect(error.code).toBe('CUSTOM_RANK_NOT_SET');
     });
 
-    it('activating one cordão deactivates whichever was active before', async () => {
-      await ensureNoFormalGroup(OTHER_MEMBER_TOKEN);
-      const first = (await createCustomCordao(OTHER_MEMBER_TOKEN, {
+    it('DELETE 404s with CUSTOM_RANK_NOT_SET when the caller has never set one', async () => {
+      await ensureNoCustomRank(OUTSIDER_TOKEN);
+      const error = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .delete('/api/v1/users/me/custom-rank')
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+          .expect(404),
+      );
+      expect(error.code).toBe('CUSTOM_RANK_NOT_SET');
+    });
+
+    it('can be set (PUT) even while an active formal group is set - setting is always allowed, and never carries formal-only fields', async () => {
+      const { section, group } = await createGroupWithCatalog();
+      await joinSection(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await setFormalGroup(MEMBER_TOKEN, group.id);
+
+      const created = (await setCustomRank(MEMBER_TOKEN, {
+        name: 'Cordão pessoal',
+      })) as CustomUserRankResponseDto;
+      expect(created.name).toBe('Cordão pessoal');
+      expect(created).not.toHaveProperty('isActive');
+      expect(created).not.toHaveProperty('awardedByName');
+      expect(created).not.toHaveProperty('startedOn');
+      expect(created).not.toHaveProperty('endedOn');
+
+      const current = await getCustomRank(MEMBER_TOKEN);
+      expect(current?.id).toBe(created.id);
+    });
+
+    it('a second PUT updates the existing row in place rather than creating a second one - GET only ever returns the latest', async () => {
+      await ensureNoCustomRank(OUTSIDER_TOKEN);
+      const first = (await setCustomRank(OUTSIDER_TOKEN, {
         name: 'First cordão',
       })) as CustomUserRankResponseDto;
-      const second = (await createCustomCordao(OTHER_MEMBER_TOKEN, {
+
+      const second = (await setCustomRank(OUTSIDER_TOKEN, {
         name: 'Second cordão',
+        track: RankTrack.CHILD,
+        cordSegments: oneSegment('#00FF00'),
       })) as CustomUserRankResponseDto;
 
-      await request(app.getHttpServer())
-        .post(`/api/v1/users/me/custom-ranks/${first.id}/activate`)
-        .set('Authorization', `Bearer ${OTHER_MEMBER_TOKEN}`)
-        .expect(201);
-      await request(app.getHttpServer())
-        .post(`/api/v1/users/me/custom-ranks/${second.id}/activate`)
-        .set('Authorization', `Bearer ${OTHER_MEMBER_TOKEN}`)
-        .expect(201);
+      // Same underlying row (same id), updated in place - never a second
+      // row, so there is no "old" one left to find.
+      expect(second.id).toBe(first.id);
+      expect(second.name).toBe('Second cordão');
+      expect(second.track).toBe(RankTrack.CHILD);
 
-      const firstAfter = await bodyOf<CustomUserRankResponseDto>(
-        request(app.getHttpServer())
-          .get(`/api/v1/users/me/custom-ranks/${first.id}`)
-          .set('Authorization', `Bearer ${OTHER_MEMBER_TOKEN}`)
-          .expect(200),
-      );
-      expect(firstAfter.isActive).toBe(false);
-      const secondAfter = await bodyOf<CustomUserRankResponseDto>(
-        request(app.getHttpServer())
-          .get(`/api/v1/users/me/custom-ranks/${second.id}`)
-          .set('Authorization', `Bearer ${OTHER_MEMBER_TOKEN}`)
-          .expect(200),
-      );
-      expect(secondAfter.isActive).toBe(true);
+      const current = await getCustomRank(OUTSIDER_TOKEN);
+      expect(current).toEqual(second);
     });
 
-    it('selecting a formal rank deactivates the active custom cordão, and leaving the group does not restore it', async () => {
+    it('can be freely edited (PUT) by the owner regardless of formal group status', async () => {
+      const { section, group } = await createGroupWithCatalog();
+      await joinSection(OWNER_TOKEN, section.id, OTHER_MEMBER_TOKEN);
+      await setFormalGroup(OTHER_MEMBER_TOKEN, group.id);
+
+      const created = (await setCustomRank(OTHER_MEMBER_TOKEN, {
+        name: 'Editable cordão',
+      })) as CustomUserRankResponseDto;
+
+      const updated = (await setCustomRank(OTHER_MEMBER_TOKEN, {
+        name: 'Edited cordão',
+        description: 'updated',
+        track: RankTrack.CHILD,
+        cordSegments: oneSegment('#ABCDEF'),
+      })) as CustomUserRankResponseDto;
+      expect(updated.id).toBe(created.id);
+      expect(updated.name).toBe('Edited cordão');
+      expect(updated.track).toBe(RankTrack.CHILD);
+    });
+
+    it('can always be deleted by the owner - never blocked as "in use" - and a repeat GET/DELETE 404s', async () => {
+      await ensureNoCustomRank(OUTSIDER_TOKEN);
+      await setCustomRank(OUTSIDER_TOKEN, { name: 'Deletable cordão' });
+
+      await request(app.getHttpServer())
+        .delete('/api/v1/users/me/custom-rank')
+        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+        .expect(204);
+
+      const afterDelete = await getCustomRank(OUTSIDER_TOKEN);
+      expect(afterDelete).toBeNull();
+
+      const repeatDelete = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .delete('/api/v1/users/me/custom-rank')
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+          .expect(404),
+      );
+      expect(repeatDelete.code).toBe('CUSTOM_RANK_NOT_SET');
+    });
+
+    it('is fully scoped to the caller - one user setting/deleting theirs never affects another user', async () => {
+      await ensureNoCustomRank(MEMBER_TOKEN);
+      await ensureNoCustomRank(OTHER_MEMBER_TOKEN);
+
+      await setCustomRank(MEMBER_TOKEN, { name: "Member's cordão" });
+      const otherError = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/me/custom-rank')
+          .set('Authorization', `Bearer ${OTHER_MEMBER_TOKEN}`)
+          .expect(404),
+      );
+      expect(otherError.code).toBe('CUSTOM_RANK_NOT_SET');
+
+      await setCustomRank(OTHER_MEMBER_TOKEN, {
+        name: "Other member's cordão",
+      });
+      const memberStill = await getCustomRank(MEMBER_TOKEN);
+      expect(memberStill?.name).toBe("Member's cordão");
+
+      await request(app.getHttpServer())
+        .delete('/api/v1/users/me/custom-rank')
+        .set('Authorization', `Bearer ${OTHER_MEMBER_TOKEN}`)
+        .expect(204);
+      const memberUnaffected = await getCustomRank(MEMBER_TOKEN);
+      expect(memberUnaffected?.name).toBe("Member's cordão");
+    });
+
+    it('selecting a formal rank no longer touches the independent cordão at all - the two are fully decoupled', async () => {
       await ensureNoFormalGroup(MEMBER_TOKEN);
-      const cordao = (await createCustomCordao(MEMBER_TOKEN, {
+      await ensureNoCustomRank(MEMBER_TOKEN);
+      const cordao = (await setCustomRank(MEMBER_TOKEN, {
         name: 'Cordão before formal',
       })) as CustomUserRankResponseDto;
-      await request(app.getHttpServer())
-        .post(`/api/v1/users/me/custom-ranks/${cordao.id}/activate`)
-        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-        .expect(201);
 
       const { section, group, rank } = await createGroupWithCatalog();
       await joinSection(OWNER_TOKEN, section.id, MEMBER_TOKEN);
       await setFormalGroup(MEMBER_TOKEN, group.id);
       await setFormalRank(MEMBER_TOKEN, rank.id);
 
-      const afterFormal = await bodyOf<CustomUserRankResponseDto>(
-        request(app.getHttpServer())
-          .get(`/api/v1/users/me/custom-ranks/${cordao.id}`)
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .expect(200),
-      );
-      expect(afterFormal.isActive).toBe(false);
+      const afterFormal = await getCustomRank(MEMBER_TOKEN);
+      expect(afterFormal).toEqual(cordao);
 
       await leaveSection(section.id, MEMBER_TOKEN);
       await endFormalGroup(MEMBER_TOKEN);
 
-      const afterLeaving = await bodyOf<CustomUserRankResponseDto>(
-        request(app.getHttpServer())
-          .get(`/api/v1/users/me/custom-ranks/${cordao.id}`)
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .expect(200),
-      );
-      expect(afterLeaving.isActive).toBe(false);
-
-      // Now that there is no formal group again, the user can manually
-      // reactivate it - it was never deleted, only deactivated.
-      const reactivated = await bodyOf<CustomUserRankResponseDto>(
-        request(app.getHttpServer())
-          .post(`/api/v1/users/me/custom-ranks/${cordao.id}/activate`)
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .expect(201),
-      );
-      expect(reactivated.isActive).toBe(true);
-    });
-
-    it('can be freely edited by the owner regardless of formal group status', async () => {
-      const { section, group } = await createGroupWithCatalog();
-      await joinSection(OWNER_TOKEN, section.id, OTHER_MEMBER_TOKEN);
-      await setFormalGroup(OTHER_MEMBER_TOKEN, group.id);
-
-      const created = (await createCustomCordao(OTHER_MEMBER_TOKEN, {
-        name: 'Editable cordão',
-      })) as CustomUserRankResponseDto;
-
-      const updated = await bodyOf<CustomUserRankResponseDto>(
-        request(app.getHttpServer())
-          .patch(`/api/v1/users/me/custom-ranks/${created.id}`)
-          .set('Authorization', `Bearer ${OTHER_MEMBER_TOKEN}`)
-          .send({
-            name: 'Edited cordão',
-            description: 'updated',
-            track: RankTrack.CHILD,
-            cordSegments: oneSegment('#ABCDEF'),
-          })
-          .expect(200),
-      );
-      expect(updated.name).toBe('Edited cordão');
-      expect(updated.track).toBe(RankTrack.CHILD);
-    });
-
-    it('can always be deleted by the owner, active or not - never blocked as "in use"', async () => {
-      await ensureNoFormalGroup(OUTSIDER_TOKEN);
-      const created = (await createCustomCordao(OUTSIDER_TOKEN, {
-        name: 'Deletable cordão',
-      })) as CustomUserRankResponseDto;
-      await request(app.getHttpServer())
-        .post(`/api/v1/users/me/custom-ranks/${created.id}/activate`)
-        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
-        .expect(201);
-
-      await request(app.getHttpServer())
-        .delete(`/api/v1/users/me/custom-ranks/${created.id}`)
-        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
-        .expect(204);
-
-      await request(app.getHttpServer())
-        .get(`/api/v1/users/me/custom-ranks/${created.id}`)
-        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
-        .expect(404);
-    });
-
-    it('IDOR: a custom cordão is invisible and unusable to anyone but its owner', async () => {
-      const custom = (await createCustomCordao(OUTSIDER_TOKEN, {
-        name: 'Private cordão',
-      })) as CustomUserRankResponseDto;
-      // MEMBER_TOKEN (the attacker below) may still have an active formal
-      // group left over from an earlier test in this file - clear it so
-      // every attempt below fails for the IDOR reason (404), never a
-      // formal-group precondition.
-      await ensureNoFormalGroup(MEMBER_TOKEN);
-
-      const getError = await bodyOf<HttpErrorResponse>(
-        request(app.getHttpServer())
-          .get(`/api/v1/users/me/custom-ranks/${custom.id}`)
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .expect(404),
-      );
-      expect(getError.statusCode).toBe(404);
-
-      const patchError = await bodyOf<HttpErrorResponse>(
-        request(app.getHttpServer())
-          .patch(`/api/v1/users/me/custom-ranks/${custom.id}`)
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .send({
-            name: 'Hijacked',
-            description: null,
-            track: RankTrack.ADULT,
-            cordSegments: oneSegment(),
-          })
-          .expect(404),
-      );
-      expect(patchError.statusCode).toBe(404);
-
-      const activateError = await bodyOf<HttpErrorResponse>(
-        request(app.getHttpServer())
-          .post(`/api/v1/users/me/custom-ranks/${custom.id}/activate`)
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .expect(404),
-      );
-      expect(activateError.statusCode).toBe(404);
-
-      const deactivateError = await bodyOf<HttpErrorResponse>(
-        request(app.getHttpServer())
-          .post(`/api/v1/users/me/custom-ranks/${custom.id}/deactivate`)
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .expect(404),
-      );
-      expect(deactivateError.statusCode).toBe(404);
-
-      const deleteError = await bodyOf<HttpErrorResponse>(
-        request(app.getHttpServer())
-          .delete(`/api/v1/users/me/custom-ranks/${custom.id}`)
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .expect(404),
-      );
-      expect(deleteError.statusCode).toBe(404);
+      const afterLeaving = await getCustomRank(MEMBER_TOKEN);
+      expect(afterLeaving).toEqual(cordao);
     });
   });
 });

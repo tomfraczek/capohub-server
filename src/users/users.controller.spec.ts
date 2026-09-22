@@ -54,6 +54,7 @@ function buildUser(): User {
   user.avatarType = AvatarType.CLERK;
   user.avatarUrl = 'https://img.clerk.com/ada.png';
   user.clerkHasImage = true;
+  user.googleHasCustomPhoto = true;
   user.presetAvatarId = null;
   user.publicCode = 'ADA00001';
   user.theme = 'system';
@@ -92,6 +93,7 @@ describe('UsersController', () => {
         avatarType: AvatarType.CLERK,
         avatarUrl: 'https://img.clerk.com/ada.png',
         clerkHasImage: true,
+        googleHasCustomPhoto: true,
         presetAvatarId: null,
         theme: 'system',
         notificationsEnabled: true,

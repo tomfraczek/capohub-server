@@ -22,6 +22,7 @@ export function toUserResponseDto(
     // storage/image-url.util.ts's resolveUserAvatarUrl.
     avatarUrl: resolveUserAvatarUrl(user, urlBuilder),
     clerkHasImage: user.clerkHasImage,
+    googleHasCustomPhoto: user.googleHasCustomPhoto,
     presetAvatarId: user.presetAvatarId,
     theme: user.theme,
     notificationsEnabled: user.notificationsEnabled,

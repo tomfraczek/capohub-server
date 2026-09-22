@@ -16,9 +16,21 @@ export interface UserResponseDto {
   // alone - see user.entity.ts's own comment on this field). null means
   // "not synced from Clerk yet" (only possible for an account that
   // predates this field and hasn't made an authenticated request since -
-  // see user.entity.ts) - the frontend must treat null the same as false,
-  // never as true.
+  // see user.entity.ts). Still means only "Clerk has *some* image for this
+  // account" - for a Google account, that includes Google's own
+  // auto-generated placeholder, so this alone is no longer sufficient proof
+  // of a real photo. See googleHasCustomPhoto below, the field that
+  // actually disambiguates that for Google accounts - the frontend's
+  // profile-completion avatar step must key off that one, not this one.
   clerkHasImage: boolean | null;
+  // Only meaningful when avatarType is 'CLERK' and the account's external
+  // account is Google - see user.entity.ts's own comment for the full
+  // semantics. true = a real photo (Google People API `photos[0].default:
+  // false`), false = Google's own auto-generated placeholder (`default:
+  // true`), null = not checked yet / People API failed / not a Google
+  // account. The frontend must treat null the same as false, and must
+  // never use avatarUrl or clerkHasImage as a substitute for this field.
+  googleHasCustomPhoto: boolean | null;
   presetAvatarId: string | null;
   theme: Theme;
   notificationsEnabled: boolean;

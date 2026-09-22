@@ -15,6 +15,7 @@ import { ImageAssetService } from '../storage/image-asset.service';
 import { ImageProcessingService } from '../storage/image-processing.service';
 import { AvatarType } from './enums/avatar-type.enum';
 import { User } from './entities/user.entity';
+import { GooglePeopleApiService } from './google-people-api.service';
 import { UserService } from './user.service';
 
 function buildOwnedAssignment(overrides: Partial<RoleAssignment> = {}) {
@@ -52,6 +53,8 @@ describe('UserService', () => {
     findOne?: jest.Mock;
     getUser?: jest.Mock;
     deleteUser?: jest.Mock;
+    getUserOauthAccessToken?: jest.Mock;
+    resolveHasCustomPhoto?: jest.Mock;
     findOwnedAssignments?: jest.Mock;
     findOwnedActiveEvents?: jest.Mock;
     closeOrganizedEventsForAccountDeletion?: jest.Mock;
@@ -74,7 +77,13 @@ describe('UserService', () => {
       transactional: jest.Mock;
     };
     userRepository: { findOne: jest.Mock };
-    clerkClient: { users: { getUser: jest.Mock; deleteUser: jest.Mock } };
+    clerkClient: {
+      users: {
+        getUser: jest.Mock;
+        deleteUser: jest.Mock;
+        getUserOauthAccessToken: jest.Mock;
+      };
+    };
     eventRolesService: {
       findOwnedActiveEvents: jest.Mock;
     };
@@ -85,6 +94,9 @@ describe('UserService', () => {
       replace: jest.Mock;
       remove: jest.Mock;
       cleanupOrphan: jest.Mock;
+    };
+    googlePeopleApiService: {
+      resolveHasCustomPhoto: jest.Mock;
     };
   } {
     const em: Record<string, jest.Mock> = {
@@ -108,7 +120,14 @@ describe('UserService', () => {
           options.getUser ?? jest.fn().mockResolvedValue(buildClerkUser()),
         deleteUser:
           options.deleteUser ?? jest.fn().mockResolvedValue(undefined),
+        getUserOauthAccessToken:
+          options.getUserOauthAccessToken ??
+          jest.fn().mockResolvedValue({ data: [{ token: 'oauth-token-1' }] }),
       },
+    };
+    const googlePeopleApiService = {
+      resolveHasCustomPhoto:
+        options.resolveHasCustomPhoto ?? jest.fn().mockResolvedValue(null),
     };
     const eventRolesService = {
       findOwnedActiveEvents:
@@ -168,6 +187,7 @@ describe('UserService', () => {
       eventsService as unknown as EventsService,
       imageProcessingService as unknown as ImageProcessingService,
       imageAssetService as unknown as ImageAssetService,
+      googlePeopleApiService as unknown as GooglePeopleApiService,
     );
 
     return {
@@ -177,6 +197,7 @@ describe('UserService', () => {
       clerkClient,
       eventRolesService,
       eventsService,
+      googlePeopleApiService,
       imageAssetService,
     };
   }
@@ -259,6 +280,142 @@ describe('UserService', () => {
       const user = await service.findOrCreateFromClerk(buildAuth());
 
       expect(user.clerkHasImage).toBeNull();
+    });
+
+    // Bug report this field exists to fix: clerkHasImage alone cannot tell
+    // a real Google photo apart from Google's own auto-generated "colored
+    // circle with an initial" placeholder - both come back from Clerk as
+    // hasImage: true. googleHasCustomPhoto, sourced from the Google People
+    // API's photos[0].default, is the signal that actually can.
+    describe('googleHasCustomPhoto sync on create', () => {
+      function buildGoogleClerkUser(overrides: Record<string, unknown> = {}) {
+        return buildClerkUser({
+          externalAccounts: [{ provider: 'oauth_google' }],
+          ...overrides,
+        });
+      }
+
+      it('sets googleHasCustomPhoto to true when the Google People API reports a real photo (default: false)', async () => {
+        const { service, clerkClient, googlePeopleApiService } = buildService({
+          findOne: jest.fn().mockResolvedValue(null),
+          getUser: jest.fn().mockResolvedValue(buildGoogleClerkUser()),
+          resolveHasCustomPhoto: jest.fn().mockResolvedValue(true),
+        });
+
+        const user = await service.findOrCreateFromClerk(buildAuth());
+
+        expect(user.googleHasCustomPhoto).toBe(true);
+        expect(clerkClient.users.getUserOauthAccessToken).toHaveBeenCalledWith(
+          'user_clerk_1',
+          'google',
+        );
+        expect(googlePeopleApiService.resolveHasCustomPhoto).toHaveBeenCalledWith(
+          'oauth-token-1',
+        );
+      });
+
+      it('sets googleHasCustomPhoto to false when the Google People API reports the auto-generated placeholder (default: true)', async () => {
+        const { service } = buildService({
+          findOne: jest.fn().mockResolvedValue(null),
+          getUser: jest.fn().mockResolvedValue(buildGoogleClerkUser()),
+          resolveHasCustomPhoto: jest.fn().mockResolvedValue(false),
+        });
+
+        const user = await service.findOrCreateFromClerk(buildAuth());
+
+        expect(user.googleHasCustomPhoto).toBe(false);
+      });
+
+      it('sets googleHasCustomPhoto to null when the Google People API cannot resolve a signal', async () => {
+        const { service } = buildService({
+          findOne: jest.fn().mockResolvedValue(null),
+          getUser: jest.fn().mockResolvedValue(buildGoogleClerkUser()),
+          resolveHasCustomPhoto: jest.fn().mockResolvedValue(null),
+        });
+
+        const user = await service.findOrCreateFromClerk(buildAuth());
+
+        expect(user.googleHasCustomPhoto).toBeNull();
+      });
+
+      it('sets googleHasCustomPhoto to null and never calls the People API for a user with no Google external account', async () => {
+        const { service, googlePeopleApiService } = buildService({
+          findOne: jest.fn().mockResolvedValue(null),
+          getUser: jest.fn().mockResolvedValue(
+            buildClerkUser({ externalAccounts: [] }),
+          ),
+        });
+
+        const user = await service.findOrCreateFromClerk(buildAuth());
+
+        expect(user.googleHasCustomPhoto).toBeNull();
+        expect(googlePeopleApiService.resolveHasCustomPhoto).not.toHaveBeenCalled();
+      });
+
+      it('sets googleHasCustomPhoto to null and never calls the People API for a non-Google external account', async () => {
+        const { service, googlePeopleApiService } = buildService({
+          findOne: jest.fn().mockResolvedValue(null),
+          getUser: jest.fn().mockResolvedValue(
+            buildClerkUser({ externalAccounts: [{ provider: 'oauth_github' }] }),
+          ),
+        });
+
+        const user = await service.findOrCreateFromClerk(buildAuth());
+
+        expect(user.googleHasCustomPhoto).toBeNull();
+        expect(googlePeopleApiService.resolveHasCustomPhoto).not.toHaveBeenCalled();
+      });
+
+      it('sets googleHasCustomPhoto to null (never crashes) when fetching the Google OAuth access token itself fails', async () => {
+        const { service } = buildService({
+          findOne: jest.fn().mockResolvedValue(null),
+          getUser: jest.fn().mockResolvedValue(buildGoogleClerkUser()),
+          getUserOauthAccessToken: jest
+            .fn()
+            .mockRejectedValue(new Error('Clerk outage')),
+        });
+
+        const user = await service.findOrCreateFromClerk(buildAuth());
+
+        expect(user.googleHasCustomPhoto).toBeNull();
+      });
+
+      it('sets googleHasCustomPhoto to null when Clerk has no OAuth access token on file', async () => {
+        const { service, googlePeopleApiService } = buildService({
+          findOne: jest.fn().mockResolvedValue(null),
+          getUser: jest.fn().mockResolvedValue(buildGoogleClerkUser()),
+          getUserOauthAccessToken: jest.fn().mockResolvedValue({ data: [] }),
+        });
+
+        const user = await service.findOrCreateFromClerk(buildAuth());
+
+        expect(user.googleHasCustomPhoto).toBeNull();
+        expect(googlePeopleApiService.resolveHasCustomPhoto).not.toHaveBeenCalled();
+      });
+
+      // The whole reason this signal is synced only at a few explicit
+      // moments (never per-request) - see syncGoogleHasCustomPhoto's own
+      // comment on user.service.ts.
+      it('never calls the Google People API for an EXISTING user - GET /users/me must never trigger a Google call', async () => {
+        const existing = new User();
+        existing.clerkUserId = 'user_clerk_1';
+        existing.email = 'ada.lovelace@example.com';
+        existing.displayName = 'Ada Lovelace';
+        existing.avatarType = AvatarType.CLERK;
+        existing.googleHasCustomPhoto = true;
+
+        const { service, clerkClient, googlePeopleApiService } = buildService({
+          findOne: jest.fn().mockResolvedValue(existing),
+          getUser: jest.fn().mockResolvedValue(buildGoogleClerkUser()),
+        });
+
+        const user = await service.findOrCreateFromClerk(buildAuth());
+
+        expect(clerkClient.users.getUserOauthAccessToken).not.toHaveBeenCalled();
+        expect(googlePeopleApiService.resolveHasCustomPhoto).not.toHaveBeenCalled();
+        // Untouched - stays whatever it was last explicitly synced to.
+        expect(user.googleHasCustomPhoto).toBe(true);
+      });
     });
 
     it('generates displayName from the email local part on create', async () => {
@@ -928,6 +1085,37 @@ describe('UserService', () => {
         expect.any(String),
       );
     });
+
+    it('re-syncs googleHasCustomPhoto from the Google People API for a Google account', async () => {
+      const user = new User();
+      user.clerkUserId = 'user_clerk_1';
+      user.avatarType = AvatarType.PRESET;
+      user.googleHasCustomPhoto = null;
+      const { service } = buildService({
+        getUser: jest.fn().mockResolvedValue(
+          buildClerkUser({ externalAccounts: [{ provider: 'oauth_google' }] }),
+        ),
+        resolveHasCustomPhoto: jest.fn().mockResolvedValue(true),
+      });
+
+      const updated = await service.resetAvatarToClerk(user);
+
+      expect(updated.googleHasCustomPhoto).toBe(true);
+    });
+
+    it('sets googleHasCustomPhoto to null for a non-Google account, without calling the People API', async () => {
+      const user = new User();
+      user.clerkUserId = 'user_clerk_1';
+      user.avatarType = AvatarType.PRESET;
+      const { service, googlePeopleApiService } = buildService({
+        getUser: jest.fn().mockResolvedValue(buildClerkUser({ externalAccounts: [] })),
+      });
+
+      const updated = await service.resetAvatarToClerk(user);
+
+      expect(updated.googleHasCustomPhoto).toBeNull();
+      expect(googlePeopleApiService.resolveHasCustomPhoto).not.toHaveBeenCalled();
+    });
   });
 
   describe('uploadAvatar', () => {
@@ -1022,6 +1210,24 @@ describe('UserService', () => {
       expect(updated.clerkHasImage).toBe(false);
       expect(updated.avatarImageKey).toBeNull();
       expect(updated.presetAvatarId).toBeNull();
+    });
+
+    it('also syncs googleHasCustomPhoto when falling back to CLERK for a Google account', async () => {
+      const user = new User();
+      user.id = 'user-1';
+      user.clerkUserId = 'user_clerk_1';
+      user.avatarType = AvatarType.UPLOAD;
+      user.avatarImageKey = 'users/user-1/profile/old.webp';
+      const { service } = buildService({
+        getUser: jest.fn().mockResolvedValue(
+          buildClerkUser({ externalAccounts: [{ provider: 'oauth_google' }] }),
+        ),
+        resolveHasCustomPhoto: jest.fn().mockResolvedValue(false),
+      });
+
+      const updated = await service.deleteAvatar(user);
+
+      expect(updated.googleHasCustomPhoto).toBe(false);
     });
 
     it('falls back to PRESET with no presetAvatarId when Clerk has no avatar', async () => {

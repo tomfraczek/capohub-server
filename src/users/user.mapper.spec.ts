@@ -25,6 +25,7 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.avatarType = AvatarType.CLERK;
   user.avatarUrl = 'https://img.clerk.com/ada.png';
   user.clerkHasImage = true;
+  user.googleHasCustomPhoto = true;
   user.presetAvatarId = null;
   user.theme = 'dark';
   user.notificationsEnabled = false;
@@ -52,6 +53,7 @@ describe('toUserResponseDto', () => {
       avatarType: AvatarType.CLERK,
       avatarUrl: 'https://img.clerk.com/ada.png',
       clerkHasImage: true,
+      googleHasCustomPhoto: true,
       presetAvatarId: null,
       theme: 'dark',
       notificationsEnabled: false,
@@ -109,6 +111,30 @@ describe('toUserResponseDto', () => {
     ).toMatchObject({
       avatarType: AvatarType.CLERK,
       clerkHasImage: false,
+    });
+  });
+
+  // googleHasCustomPhoto is the field that actually disambiguates a real
+  // Google photo from Google's own auto-generated placeholder - clerkHasImage
+  // above can be true for either (see its own comment on user.entity.ts).
+  it('maps googleHasCustomPhoto straight through, independently of clerkHasImage', () => {
+    const user = buildUser({ clerkHasImage: true, googleHasCustomPhoto: false });
+
+    expect(
+      toUserResponseDto(user, NO_SONG_CAPABILITIES, buildUrlBuilder()),
+    ).toMatchObject({
+      clerkHasImage: true,
+      googleHasCustomPhoto: false,
+    });
+  });
+
+  it('passes through null for googleHasCustomPhoto', () => {
+    const user = buildUser({ googleHasCustomPhoto: null });
+
+    expect(
+      toUserResponseDto(user, NO_SONG_CAPABILITIES, buildUrlBuilder()),
+    ).toMatchObject({
+      googleHasCustomPhoto: null,
     });
   });
 

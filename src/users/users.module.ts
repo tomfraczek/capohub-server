@@ -9,6 +9,7 @@ import { GroupsModule } from '../groups/groups.module';
 import { SongLibraryModule } from '../song-library/song-library.module';
 import { StorageModule } from '../storage/storage.module';
 import { User } from './entities/user.entity';
+import { GooglePeopleApiService } from './google-people-api.service';
 import { UserIdentityService } from './user-identity.service';
 import { UserLocationService } from './user-location.service';
 import { UserProfileService } from './user-profile.service';
@@ -52,6 +53,9 @@ import { UsersController } from './users.controller';
     UserService,
     UserProfileService,
     UserIdentityService,
+    // Stateless HTTP adapter around the Google People API (see its own
+    // comment) - only UserService.syncGoogleHasCustomPhoto calls it.
+    GooglePeopleApiService,
     // Not imported via a module - a stateless class (only depends on
     // EntityManager), provided directly here the same way EventsModule/
     // TrainingsModule already do (see the service's own comment) - backs

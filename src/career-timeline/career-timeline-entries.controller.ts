@@ -24,7 +24,7 @@ import { CustomTimelineItemDto } from './dto/career-timeline-item.dto';
 // CRUD for the caller's own manual timeline entries (see the module spec,
 // "Ręczne wpisy timeline"). Every route here is owner-only by construction
 // (every query in CareerTimelineEntriesService is scoped by `user: user.id`),
-// same as CustomUserRanksController - no permission guard beyond the global
+// same as CustomRankController - no permission guard beyond the global
 // auth guard is needed. Responses reuse CustomTimelineItemDto (the same
 // shape a CUSTOM entry takes inside the aggregated timeline) rather than a
 // second, parallel "raw entry" DTO.

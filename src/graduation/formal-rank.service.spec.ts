@@ -6,7 +6,6 @@ import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliat
 import { Group } from '../groups/entities/group.entity';
 import { User } from '../users/entities/user.entity';
 import { GraduationSystem } from './entities/graduation-system.entity';
-import { CustomUserRank } from './entities/custom-user-rank.entity';
 import { Rank } from './entities/rank.entity';
 import { FormalRankAssignment } from './entities/formal-rank-assignment.entity';
 import { RankTrack } from './enums/rank-track.enum';
@@ -57,7 +56,6 @@ interface MockRouting {
   activeFormalGroup?: FormalGroupAffiliation | null;
   rank?: Rank | null;
   currentAssignment?: FormalRankAssignment | null;
-  activeCordao?: CustomUserRank | null;
 }
 
 function buildMockEm(routing: MockRouting = {}) {
@@ -80,11 +78,6 @@ function buildMockEm(routing: MockRouting = {}) {
         routing.currentAssignment === undefined
           ? null
           : routing.currentAssignment,
-      );
-    }
-    if (entityClass === CustomUserRank) {
-      return Promise.resolve(
-        routing.activeCordao === undefined ? null : routing.activeCordao,
       );
     }
     return Promise.resolve(null);
@@ -150,12 +143,11 @@ describe('FormalRankService', () => {
       });
     });
 
-    it('sets the formal rank as current when everything is valid, with no active cordão to deactivate', async () => {
+    it('sets the formal rank as current when everything is valid - never touches CustomUserRank any more', async () => {
       const { em, persist } = buildMockEm({
         activeFormalGroup: buildFormalGroup('group-1'),
         rank: buildRank({}),
         currentAssignment: null,
-        activeCordao: null,
       });
       const service = new FormalRankService(em, buildMockEventAccessService());
 
@@ -169,28 +161,6 @@ describe('FormalRankService', () => {
       expect(result.awardedByName).toBe('Mestre Marcão');
       expect(result.isCurrent).toBe(true);
       expect(result.sourceGroup.id).toBe('group-1');
-    });
-
-    it('deactivates the active custom cordão when a formal rank is selected', async () => {
-      const activeCordao = new CustomUserRank();
-      activeCordao.id = 'cordao-1';
-      activeCordao.isActive = true;
-
-      const { em } = buildMockEm({
-        activeFormalGroup: buildFormalGroup('group-1'),
-        rank: buildRank({}),
-        currentAssignment: null,
-        activeCordao,
-      });
-      const service = new FormalRankService(em, buildMockEventAccessService());
-
-      await service.setCurrent(buildUser(), {
-        rankId: 'rank-1',
-        awardedByName: null,
-        eventId: null,
-      });
-
-      expect(activeCordao.isActive).toBe(false);
     });
   });
 

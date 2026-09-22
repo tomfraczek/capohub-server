@@ -1,4 +1,5 @@
 import { CordSegmentResponseDto } from '../../graduation/dto/rank-response.dto';
+import { RankTrack } from '../../graduation/enums/rank-track.enum';
 import { GroupRole } from '../../groups/enums/group-role.enum';
 import { AvatarType } from '../enums/avatar-type.enum';
 
@@ -42,6 +43,16 @@ export interface PublicFormalRankRefDto {
   startedOn: string | null;
 }
 
+// A user's independent ("custom") cordão - see CustomUserRank. Narrower
+// than CustomUserRankResponseDto by design, same "only what's needed"
+// scope as PublicFormalRankRefDto above: no id, no description,
+// createdAt/updatedAt.
+export interface PublicIndependentRankRefDto {
+  name: string;
+  track: RankTrack;
+  cordSegments: CordSegmentResponseDto[];
+}
+
 // GET /users/:userId/profile - filtered per-viewer according to the
 // target's privacy toggles and, for firstName/lastName only, the extra
 // exact-Section-admin/Event-organizer rule (see UserProfileService). Every
@@ -75,9 +86,18 @@ export interface PublicUserProfileResponseDto {
   sections: PublicSectionRefDto[] | null;
   formalGroup: PublicFormalGroupRefDto | null;
   // Gated by User.showFormalRank (see UserProfileService.getPublicProfile) -
-  // `null` both when hidden and when the target simply has no active
-  // FormalRankAssignment (FormalRankService.getCurrentOrNull). Custom
-  // cordão is deliberately never included here - the backend does not
-  // expose it publicly at all (see graduation module spec).
+  // `null` when hidden, when the target simply has no active
+  // FormalRankAssignment (FormalRankService.getCurrentOrNull), or when the
+  // target's current FormalRankAssignment is a stale carry-over from a
+  // formal Group they have since left (endFormalGroup only ends the
+  // FormalGroupAffiliation row, not the FormalRankAssignment itself - see
+  // UserProfileService.getPublicProfile's own comment on this gate, local
+  // to this endpoint only).
   formalRank: PublicFormalRankRefDto | null;
+  // The target's independent/"custom" cordão (CustomUserRank), reusing the
+  // exact same `showFormalRank` toggle as `formalRank` above rather than a
+  // dedicated flag - see UserProfileService.getPublicProfile for why. Null
+  // when hidden or when the target has not set one
+  // (CustomUserRankService.getCurrentOrNull).
+  independentRank: PublicIndependentRankRefDto | null;
 }

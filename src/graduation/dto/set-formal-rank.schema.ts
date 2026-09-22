@@ -5,9 +5,9 @@ import { uuidSchema } from '../../common/validation/uuid.schema';
 // startedOn optional (the real-world start date is often unknown) and
 // "not in the future" is validated in the service, not here - same
 // reasoning as SetFormalGroupDto. Only ever a catalog Rank (see
-// formal-rank-assignment.entity.ts) - setting a custom cordão active is a
-// separate action, POST /users/me/custom-ranks/:id/activate (see
-// custom-user-ranks.controller.ts), never this endpoint.
+// formal-rank-assignment.entity.ts) - setting an independent/custom
+// cordão is a wholly separate resource, PUT /users/me/custom-rank (see
+// custom-rank.controller.ts), never this endpoint.
 //
 // eventId is optional evidence linking this rank to the Event where it was
 // received - eligibility (attended, past/ongoing, viewer had access) is

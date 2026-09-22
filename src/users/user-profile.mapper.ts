@@ -1,6 +1,7 @@
 import { buildUserQrPayload } from '../common/identity/qr-payload.util';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
 import { GroupRole } from '../groups/enums/group-role.enum';
+import { CustomUserRank } from '../graduation/entities/custom-user-rank.entity';
 import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignment.entity';
 import {
   PublicUrlBuilder,
@@ -15,6 +16,7 @@ import {
 import {
   PublicFormalGroupRefDto,
   PublicFormalRankRefDto,
+  PublicIndependentRankRefDto,
   PublicSectionRefDto,
   PublicSectionRoleDto,
   PublicUserProfileResponseDto,
@@ -123,6 +125,7 @@ export interface PublicProfileViewerContext {
   sectionRoles: Map<string, GroupRole[]>;
   formalGroup: FormalGroupAffiliation | null;
   formalRank: FormalRankAssignment | null;
+  independentRank: CustomUserRank | null;
   urlBuilder: PublicUrlBuilder;
 }
 
@@ -162,6 +165,9 @@ export function toPublicUserProfileResponseDto(
       : null,
     formalRank: ctx.formalRank
       ? toPublicFormalRankRefDto(ctx.formalRank)
+      : null,
+    independentRank: ctx.independentRank
+      ? toPublicIndependentRankRefDto(ctx.independentRank)
       : null,
   };
 }
@@ -234,6 +240,27 @@ function toPublicFormalRankRefDto(
       ? { id: assignment.sourceGroup.id, name: assignment.sourceGroup.name }
       : null,
     startedOn: toDateOnly(assignment.startedOn),
+  };
+}
+
+// Requires `cordSegments` to have been populated - same assumption as
+// toPublicFormalRankRefDto above (see
+// CustomUserRankService.getCurrentOrNull). Deliberately narrower than
+// CustomUserRankResponseDto - no id, description, createdAt/updatedAt, per
+// the same "only what's needed" scope.
+function toPublicIndependentRankRefDto(
+  customRank: CustomUserRank,
+): PublicIndependentRankRefDto {
+  return {
+    name: customRank.name,
+    track: customRank.track,
+    cordSegments: [...customRank.cordSegments.getItems()]
+      .sort((a, b) => a.position - b.position)
+      .map((segment) => ({
+        position: segment.position,
+        colorHex: segment.colorHex,
+        proportion: segment.proportion,
+      })),
   };
 }
 

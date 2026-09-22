@@ -24,6 +24,8 @@ import { RoleAssignmentsService } from '../groups/role-assignments.service';
 import { EventRoleAssignment } from '../events/entities/event-role-assignment.entity';
 import { EventRole } from '../events/enums/event-role.enum';
 import { EventRsvpStatus } from '../events/enums/event-rsvp-status.enum';
+import { CustomUserRankService } from '../graduation/custom-user-rank.service';
+import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignment.entity';
 import { FormalRankService } from '../graduation/formal-rank.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { FormalGroupResponseDto } from './dto/formal-group-response.dto';
@@ -75,6 +77,7 @@ export class UserProfileService {
     private readonly groupHierarchyService: GroupHierarchyService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly formalRankService: FormalRankService,
+    private readonly customUserRankService: CustomUserRankService,
     private readonly r2StorageService: R2StorageService,
     private readonly appConfigService: AppConfigService,
   ) {}
@@ -171,6 +174,11 @@ export class UserProfileService {
     const canSeeCapoeiraStartedAt = isOwner || target.showCapoeiraStartedAt;
     const canSeeSections = isOwner || target.showSections;
     const canSeeFormalGroup = isOwner || target.showFormalGroup;
+    // Reused for `independentRank` too, not just `formalRank` - see this
+    // method's assembly below and the field's own doc comment in
+    // public-user-profile-response.dto.ts. There is deliberately no
+    // separate "show independent rank" column: both fields represent "the
+    // rank shown on my profile", so a single toggle covers both.
     const canSeeFormalRank = isOwner || target.showFormalRank;
 
     const sections = canSeeSections
@@ -186,7 +194,10 @@ export class UserProfileService {
       ? await this.loadActiveFormalGroup(target.id)
       : null;
     const formalRank = canSeeFormalRank
-      ? await this.formalRankService.getCurrentOrNull(target.id)
+      ? await this.resolvePublicFormalRank(target.id)
+      : null;
+    const independentRank = canSeeFormalRank
+      ? await this.customUserRankService.getCurrentOrNull(target.id)
       : null;
 
     return toPublicUserProfileResponseDto(target, {
@@ -198,8 +209,39 @@ export class UserProfileService {
       sectionRoles,
       formalGroup,
       formalRank,
+      independentRank,
       urlBuilder: this.r2StorageService,
     });
+  }
+
+  /**
+   * FormalRankService.getCurrentOrNull resolves "the row with endedOn =
+   * null", but UserProfileService.endFormalGroup only ends the
+   * FormalGroupAffiliation row - it does NOT end the corresponding
+   * FormalRankAssignment (see that method's own comment). That means a
+   * user who has left their formal Group would otherwise keep showing
+   * their old formal-group rank here forever. This gate gives the public-
+   * profile surface its own, narrower notion of "current": the assignment
+   * only counts if the target still has a *matching* active
+   * FormalGroupAffiliation for the exact same sourceGroup. Deliberately
+   * local to this method only - it does not touch FormalRankAssignment
+   * itself or FormalRankService, so GET /users/me/formal-rank and every
+   * other caller of getCurrentOrNull/getCurrent are unaffected.
+   */
+  private async resolvePublicFormalRank(
+    targetId: string,
+  ): Promise<FormalRankAssignment | null> {
+    const assignment = await this.formalRankService.getCurrentOrNull(targetId);
+    if (!assignment) {
+      return null;
+    }
+    const hasMatchingActiveAffiliation =
+      (await this.em.count(FormalGroupAffiliation, {
+        user: targetId,
+        group: assignment.sourceGroup.id,
+        endedOn: null,
+      })) > 0;
+    return hasMatchingActiveAffiliation ? assignment : null;
   }
 
   /**

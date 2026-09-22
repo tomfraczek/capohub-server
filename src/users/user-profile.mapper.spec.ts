@@ -2,6 +2,8 @@ import { Collection } from '@mikro-orm/core';
 import { Group } from '../groups/entities/group.entity';
 import { Section } from '../groups/entities/section.entity';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
+import { CustomUserRank } from '../graduation/entities/custom-user-rank.entity';
+import { CustomUserRankCordSegment } from '../graduation/entities/custom-user-rank-cord-segment.entity';
 import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignment.entity';
 import { Rank } from '../graduation/entities/rank.entity';
 import { RankCordSegment } from '../graduation/entities/rank-cord-segment.entity';
@@ -98,6 +100,24 @@ function buildFormalRankAssignment(
   return assignment;
 }
 
+function buildCustomUserRank(
+  overrides: Partial<CustomUserRank> = {},
+): CustomUserRank {
+  const customRank = new CustomUserRank();
+  customRank.name = 'Corda Independente';
+  customRank.track = RankTrack.ADULT;
+  const segment = new CustomUserRankCordSegment();
+  segment.position = 0;
+  segment.colorHex = '#654321';
+  segment.proportion = 1;
+  customRank.cordSegments = new Collection<CustomUserRankCordSegment>(
+    customRank,
+    [segment],
+  );
+  Object.assign(customRank, overrides);
+  return customRank;
+}
+
 describe('toUserProfileResponseDto', () => {
   it('computes profileComplete=false when either name is missing', () => {
     expect(
@@ -180,6 +200,7 @@ describe('toPublicUserProfileResponseDto', () => {
     sectionRoles: new Map<string, GroupRole[]>(),
     formalGroup: null,
     formalRank: null,
+    independentRank: null,
     urlBuilder,
   };
 
@@ -311,11 +332,12 @@ describe('toPublicUserProfileResponseDto', () => {
     ]);
   });
 
-  it('leaves sections/formalGroup/formalRank null when not visible, distinct from an empty list', () => {
+  it('leaves sections/formalGroup/formalRank/independentRank null when not visible, distinct from an empty list', () => {
     const dto = toPublicUserProfileResponseDto(buildUser(), baseCtx);
     expect(dto.sections).toBeNull();
     expect(dto.formalGroup).toBeNull();
     expect(dto.formalRank).toBeNull();
+    expect(dto.independentRank).toBeNull();
   });
 
   it('maps a visible formal rank to name/cordSegments/sourceGroup/startedOn only', () => {
@@ -339,6 +361,18 @@ describe('toPublicUserProfileResponseDto', () => {
       }),
     });
     expect(dto.formalRank?.sourceGroup).toBeNull();
+  });
+
+  it('maps a visible independentRank to name/track/cordSegments only - no id/description/timestamps', () => {
+    const dto = toPublicUserProfileResponseDto(buildUser(), {
+      ...baseCtx,
+      independentRank: buildCustomUserRank(),
+    });
+    expect(dto.independentRank).toEqual({
+      name: 'Corda Independente',
+      track: RankTrack.ADULT,
+      cordSegments: [{ position: 0, colorHex: '#654321', proportion: 1 }],
+    });
   });
 });
 

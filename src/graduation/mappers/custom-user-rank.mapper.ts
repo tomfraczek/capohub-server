@@ -26,7 +26,6 @@ export function toCustomUserRankResponseDto(
     name: customRank.name,
     description: customRank.description,
     track: customRank.track,
-    isActive: customRank.isActive,
     cordSegments: [...segments]
       .sort((a, b) => a.position - b.position)
       .map(toCordSegmentResponseDto),

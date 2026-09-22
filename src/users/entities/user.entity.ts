@@ -74,8 +74,33 @@ export class User extends BaseEntity {
   // this null state is only ever observed pre-first-sync). Consumers must
   // treat null the same as false (see mobile's hasProfileAvatar) - never
   // as true.
-  @Property({ nullable: true })
+  @Property({ nullable: true, type: 'boolean' })
   clerkHasImage: boolean | null = null;
+
+  // Only meaningful while avatarType is CLERK *and* the account's Clerk
+  // external account is Google (see UserService.syncGoogleHasCustomPhoto /
+  // ExternalAccountProvider) - a strictly narrower, more reliable signal
+  // than clerkHasImage above. Sourced from the Google People API's
+  // `Person.photos[0].default` (verified against the real API: Google's
+  // own auto-generated "colored circle with an initial" placeholder comes
+  // back as `default: true`, a real uploaded/OAuth-provided photo as
+  // `default: false` - clerkHasImage cannot tell these apart, since Google
+  // reports `hasImage: true` via Clerk either way). true means a real
+  // photo (`default: false`), false means Google's own placeholder
+  // (`default: true`), null means "not checked yet, People API failed, or
+  // not a Google account" - never defaulted to true, and every one of
+  // those null cases must be treated as "not a real photo" by consumers
+  // (see mobile's hasProfileAvatar). Deliberately NOT refreshed on every
+  // authenticated request (unlike clerkHasImage/avatarUrl above) - the
+  // Google People API is only called at the few moments an account's
+  // Google avatar is actually being established or explicitly
+  // re-synced (account creation, PUT /users/me/avatar/clerk, and the
+  // Clerk-fallback branch of DELETE /users/me/profile-image - see
+  // UserService), never from the ambient per-request Clerk sync
+  // (applyProfileChanges), so GET /users/me never triggers a call to
+  // Google.
+  @Property({ nullable: true, type: 'boolean' })
+  googleHasCustomPhoto: boolean | null = null;
 
   // Holds the preset identifier (an app-side static asset key) for PRESET;
   // always null for CLERK and UPLOAD. No presets table - the mobile app owns
