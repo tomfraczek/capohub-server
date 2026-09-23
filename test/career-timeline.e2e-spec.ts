@@ -1,21 +1,29 @@
 /**
  * E2E tests for the career-timeline module: read-time aggregation of
- * CAPOEIRA_START/FORMAL_GROUP_JOINED/FORMAL_GROUP_LEFT/FORMAL_RANK/EVENT
- * from existing sources, plus manual CUSTOM entries (CareerTimelineEntry).
+ * START_TRAINING/JOINED_GROUP/LEFT_GROUP/RECEIVED_RANK/STARTED_TEACHING/
+ * STARTED_SECTION/FOUNDED_GROUP (all SYSTEM, built fresh from existing
+ * sources - User, FormalGroupAffiliation, FormalRankAssignment,
+ * RoleAssignment) plus MANUAL entries (CareerTimelineEntry, any of the 12
+ * types).
  *
  * Scenarios:
- *  1. A full timeline for one user aggregates every automatic category
- *     correctly, sorted descending by occurredOn, and an Event linked to a
- *     FormalRankAssignment produces exactly one FORMAL_RANK item (never a
- *     duplicate EVENT item for that same Event)
- *  2. The `categories` query filter restricts the result to only the
- *     requested categories
- *  3. `limit`/`offset` paginate correctly, with accurate total/hasMore
+ *  1. A full timeline for one user aggregates every SYSTEM type correctly,
+ *     sorted descending by occurredOn, mixed with a MANUAL entry - and
+ *     there is no automatic per-Event entry any more (redesign spec
+ *     §1/§23: Career History is not an activity feed).
+ *  2. The `types` query filter restricts the result to only the requested
+ *     types.
+ *  3. `limit`/`offset` paginate correctly, with accurate total/hasMore.
  *  4. A non-owner viewer sees nothing until showCareerTimeline=true, and
- *     even then each category stays gated by its own underlying privacy
- *     toggle (showFormalGroup/showFormalRank/showEventParticipation)
- *  5. Manual timeline entries: full CRUD, occurredOn-in-the-future
- *     rejection, and IDOR (invisible/unusable to anyone but the owner)
+ *     even then each type stays gated by its own underlying privacy toggle
+ *     (showFormalGroup/showFormalRank).
+ *  5. FOUNDED_GROUP/STARTED_TEACHING are derived correctly from
+ *     RoleAssignment (OWNER at group creation / INSTRUCTOR grant).
+ *  6. Manual entries: full CRUD across representative types (OTHER,
+ *     BATIZADO linked to a real Event, RECEIVED_APELIDO), occurredOn-in-
+ *     the-future rejection, and IDOR (invisible/unusable to anyone but the
+ *     owner). A SYSTEM item's id can never be edited/deleted through this
+ *     endpoint - it simply isn't a row this endpoint owns.
  */
 import {
   INestApplication,
@@ -52,7 +60,6 @@ import { Rank } from '../src/graduation/entities/rank.entity';
 import { FormalRankAssignment } from '../src/graduation/entities/formal-rank-assignment.entity';
 import { RankTrack } from '../src/graduation/enums/rank-track.enum';
 import { EventResponseDto } from '../src/events/dto/event-response.dto';
-import { EventAttendeeResponseDto } from '../src/events/dto/event-attendee-response.dto';
 import { EventGuardianAssignment } from '../src/events/entities/event-guardian-assignment.entity';
 import { EventAttendee } from '../src/events/entities/event-attendee.entity';
 import { EventInvitation } from '../src/events/entities/event-invitation.entity';
@@ -62,9 +69,12 @@ import { Event } from '../src/events/entities/event.entity';
 import { EventVisibility } from '../src/events/enums/event-visibility.enum';
 import { EventWaitlistPolicy } from '../src/events/enums/event-waitlist-policy.enum';
 import { CareerTimelineEntry } from '../src/career-timeline/entities/career-timeline-entry.entity';
-import { CareerTimelineCategory } from '../src/career-timeline/enums/career-timeline-category.enum';
+import {
+  CareerTimelineEntryType,
+  CareerTimelineOrigin,
+} from '../src/career-timeline/enums/career-timeline-entry-type.enum';
 import { CareerTimelineResponseDto } from '../src/career-timeline/dto/career-timeline-response.dto';
-import { CustomTimelineItemDto } from '../src/career-timeline/dto/career-timeline-item.dto';
+import { CareerTimelineItemDto } from '../src/career-timeline/dto/career-timeline-item.dto';
 
 const OWNER_TOKEN = 'valid-ctl-owner-token';
 const MEMBER_TOKEN = 'valid-ctl-member-token';
@@ -357,6 +367,44 @@ describe('Career Timeline (e2e)', () => {
       .expect(201);
   }
 
+  async function grantSectionRole(
+    granterToken: string,
+    sectionId: string,
+    userToken: string,
+    role: string,
+  ): Promise<void> {
+    await request(app.getHttpServer())
+      .post(`/api/v1/sections/${sectionId}/role-assignments`)
+      .set('Authorization', `Bearer ${granterToken}`)
+      .send({ userId: localUserIdByToken.get(userToken), role })
+      .expect(201);
+  }
+
+  async function grantGroupRole(
+    granterToken: string,
+    groupId: string,
+    userToken: string,
+    role: string,
+  ): Promise<void> {
+    await request(app.getHttpServer())
+      .post(`/api/v1/groups/${groupId}/role-assignments`)
+      .set('Authorization', `Bearer ${granterToken}`)
+      .send({ userId: localUserIdByToken.get(userToken), role })
+      .expect(201);
+  }
+
+  async function transferGroupOwnership(
+    currentOwnerToken: string,
+    groupId: string,
+    newOwnerToken: string,
+  ): Promise<void> {
+    await request(app.getHttpServer())
+      .post(`/api/v1/groups/${groupId}/transfer-ownership`)
+      .set('Authorization', `Bearer ${currentOwnerToken}`)
+      .send({ newOwnerUserId: localUserIdByToken.get(newOwnerToken) })
+      .expect(201);
+  }
+
   async function setFormalGroup(
     token: string,
     groupId: string,
@@ -441,20 +489,13 @@ describe('Career Timeline (e2e)', () => {
       endsAt: '2099-01-10T18:00:00.000Z',
       locationName: 'Main hall',
       locationAddress: null,
-      visibility: EventVisibility.COMMUNITY_MEMBERS,
+      visibility: EventVisibility.PUBLIC,
       capacity: null,
       waitlistPolicy: EventWaitlistPolicy.NONE,
       ...overrides,
     };
   }
 
-  // Events are created under the Section, not the parent Group: Event
-  // COMMUNITY_MEMBERS visibility/registration requires membership on the
-  // *exact* community the Event belongs to (RoleAssignmentsService.
-  // isCommunityMember - a Group's membership means a RoleAssignment on that
-  // exact Group, never inherited from a child Section membership), and
-  // MEMBER_TOKEN in this file only ever holds a SectionMembership, not a
-  // Group-level RoleAssignment.
   async function createEvent(
     token: string,
     sectionId: string,
@@ -478,25 +519,6 @@ describe('Career Timeline (e2e)', () => {
       .expect(201);
   }
 
-  async function registerForEvent(
-    token: string,
-    eventId: string,
-  ): Promise<EventAttendeeResponseDto[]> {
-    return bodyOf<EventAttendeeResponseDto[]>(
-      request(app.getHttpServer())
-        .post(`/api/v1/events/${eventId}/register`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({ attendSelf: true, children: [] })
-        .expect(201),
-    );
-  }
-
-  /**
-   * Pushes an already-published, already-attended Event's dates directly
-   * into the past via the DB, bypassing the create/register-time "must not
-   * be in the future" ordering constraint (see createEvent/eventPayload) so
-   * the career timeline sees it as "has started or finished".
-   */
   async function pushEventIntoThePast(
     eventId: string,
     startsAt: string,
@@ -548,7 +570,7 @@ describe('Career Timeline (e2e)', () => {
     );
   }
 
-  // ─── Full aggregation + dedup + sorting ────────────────────────────────
+  // ─── Full aggregation + sorting ─────────────────────────────────────────
 
   describe('GET /users/me/career-timeline - full aggregation', () => {
     let memberId: string;
@@ -556,7 +578,6 @@ describe('Career Timeline (e2e)', () => {
     let group2: GroupResponseDto;
     let rank2: RankResponseDto;
     let linkedEvent: EventResponseDto;
-    let plainEvent: EventResponseDto;
 
     beforeAll(async () => {
       memberId = localUserIdByToken.get(MEMBER_TOKEN)!;
@@ -582,7 +603,6 @@ describe('Career Timeline (e2e)', () => {
         name: 'Batizado (linked to rank)',
       });
       await publishEvent(OWNER_TOKEN, linkedEvent.id);
-      await registerForEvent(MEMBER_TOKEN, linkedEvent.id);
       await pushEventIntoThePast(
         linkedEvent.id,
         '2019-06-01T10:00:00.000Z',
@@ -594,99 +614,68 @@ describe('Career Timeline (e2e)', () => {
         eventId: linkedEvent.id,
       });
 
-      // PUBLIC (not COMMUNITY_MEMBERS): isolates the showEventParticipation
-      // privacy-toggle assertion below from EventAccessService's own
-      // membership-based visibility rule - VIEWER_TOKEN never joins this
-      // Section, so a COMMUNITY_MEMBERS Event would stay invisible to it
-      // regardless of the toggle, which would test the wrong thing.
-      plainEvent = await createEvent(OWNER_TOKEN, catalog2.section.id, {
-        name: 'Roda (not linked to any rank)',
-        visibility: EventVisibility.PUBLIC,
-      });
-      await publishEvent(OWNER_TOKEN, plainEvent.id);
-      await registerForEvent(MEMBER_TOKEN, plainEvent.id);
-      await pushEventIntoThePast(
-        plainEvent.id,
-        '2020-06-01T10:00:00.000Z',
-        '2020-06-01T18:00:00.000Z',
-      );
-
-      await bodyOf<CustomTimelineItemDto>(
-        request(app.getHttpServer())
-          .post('/api/v1/users/me/career-timeline-entries')
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-          .send({
-            occurredOn: '2021-06-01',
-            title: 'My personal note',
-            description: 'A private milestone',
-          })
-          .expect(201),
-      );
+      await request(app.getHttpServer())
+        .post('/api/v1/users/me/career-timeline-entries')
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .send({
+          type: CareerTimelineEntryType.OTHER,
+          occurredOn: '2021-06-01',
+          title: 'My personal note',
+          description: 'A private milestone',
+        })
+        .expect(201);
     });
 
-    it('aggregates every category, deduplicates the rank-linked Event, and sorts descending', async () => {
+    it('aggregates every SYSTEM type, sorts descending, and never builds a bare per-Event item', async () => {
       const result = await getOwnTimeline(MEMBER_TOKEN);
 
-      expect(result.total).toBe(7);
-      expect(result.items).toHaveLength(7);
+      expect(result.total).toBe(6);
+      expect(result.items).toHaveLength(6);
 
-      // Descending by occurredOn.
       const dates = result.items.map((item) => item.occurredOn);
-      const sorted = [...dates].sort().reverse();
-      expect(dates).toEqual(sorted);
+      expect(dates).toEqual([...dates].sort().reverse());
 
-      const categories = result.items.map((item) => item.category);
+      const types = result.items.map((item) => item.type);
       expect(
-        categories.filter((c) => c === CareerTimelineCategory.EVENT),
+        types.filter((t) => t === CareerTimelineEntryType.START_TRAINING),
       ).toHaveLength(1);
       expect(
-        categories.filter((c) => c === CareerTimelineCategory.FORMAL_RANK),
-      ).toHaveLength(1);
-      expect(
-        categories.filter(
-          (c) => c === CareerTimelineCategory.FORMAL_GROUP_JOINED,
-        ),
+        types.filter((t) => t === CareerTimelineEntryType.JOINED_GROUP),
       ).toHaveLength(2);
       expect(
-        categories.filter(
-          (c) => c === CareerTimelineCategory.FORMAL_GROUP_LEFT,
-        ),
+        types.filter((t) => t === CareerTimelineEntryType.LEFT_GROUP),
       ).toHaveLength(1);
       expect(
-        categories.filter((c) => c === CareerTimelineCategory.CAPOEIRA_START),
+        types.filter((t) => t === CareerTimelineEntryType.RECEIVED_RANK),
       ).toHaveLength(1);
       expect(
-        categories.filter((c) => c === CareerTimelineCategory.CUSTOM),
+        types.filter((t) => t === CareerTimelineEntryType.OTHER),
       ).toHaveLength(1);
-
-      const eventItem = result.items.find(
-        (item) => item.category === CareerTimelineCategory.EVENT,
+      // No standalone EVENT-shaped item at all - see the module's own
+      // comment on why that category was removed.
+      expect(result.items.some((item) => item.id.startsWith('event:'))).toBe(
+        false,
       );
-      expect(eventItem?.id).toBe(`event:${plainEvent.id}`);
 
       const rankItem = result.items.find(
-        (item) => item.category === CareerTimelineCategory.FORMAL_RANK,
-      );
-      expect(rankItem?.id).toBe(
-        `formal-rank:${(rankItem as { rank: { assignmentId: string } }).rank.assignmentId}`,
-      );
-      expect(
-        (rankItem as unknown as { event: { eventId: string } | null }).event
-          ?.eventId,
-      ).toBe(linkedEvent.id);
+        (item) => item.type === CareerTimelineEntryType.RECEIVED_RANK,
+      )!;
+      expect(rankItem.origin).toBe('SYSTEM');
+      expect(rankItem.rankDetails).not.toBeNull();
+      expect(rankItem.event?.eventId).toBe(linkedEvent.id);
     });
 
-    it('filters by multiple categories via the comma-separated `categories` query param', async () => {
+    it('filters via the comma-separated `types` query param', async () => {
       const result = await getOwnTimeline(
         MEMBER_TOKEN,
-        `?categories=${CareerTimelineCategory.FORMAL_RANK},${CareerTimelineCategory.EVENT}`,
+        `?types=${CareerTimelineEntryType.RECEIVED_RANK},${CareerTimelineEntryType.OTHER}`,
       );
 
-      const categories = result.items.map((item) => item.category).sort();
-      expect(categories).toEqual(
+      const types = result.items.map((item) => item.type).sort();
+      expect(types).toEqual(
         [
-          CareerTimelineCategory.EVENT,
-          CareerTimelineCategory.FORMAL_RANK,
+          CareerTimelineEntryType.RECEIVED_RANK,
+          CareerTimelineEntryType.OTHER,
         ].sort(),
       );
     });
@@ -694,29 +683,29 @@ describe('Career Timeline (e2e)', () => {
     it('paginates with limit/offset and reports total/hasMore accurately', async () => {
       const page1 = await getOwnTimeline(MEMBER_TOKEN, '?limit=3&offset=0');
       expect(page1.items).toHaveLength(3);
-      expect(page1.total).toBe(7);
+      expect(page1.total).toBe(6);
       expect(page1.hasMore).toBe(true);
 
-      const page3 = await getOwnTimeline(MEMBER_TOKEN, '?limit=3&offset=6');
-      expect(page3.items).toHaveLength(1);
+      const page3 = await getOwnTimeline(MEMBER_TOKEN, '?limit=3&offset=3');
+      expect(page3.items).toHaveLength(3);
       expect(page3.hasMore).toBe(false);
     });
 
     // ─── Privacy for a non-owner viewer ───────────────────────────────────
 
-    it('progressively reveals categories to a non-owner viewer as the target opts each one in', async () => {
+    it('progressively reveals types to a non-owner viewer as the target opts each one in', async () => {
       const empty = await getTimeline(VIEWER_TOKEN, memberId);
       expect(empty).toEqual({ items: [], total: 0, hasMore: false });
 
       await patchOwnProfile(MEMBER_TOKEN, { showCareerTimeline: true });
       const afterCareerTimeline = await getTimeline(VIEWER_TOKEN, memberId);
-      const categoriesAfterCareerTimeline = afterCareerTimeline.items.map(
-        (item) => item.category,
+      const typesAfterCareerTimeline = afterCareerTimeline.items.map(
+        (item) => item.type,
       );
-      expect(categoriesAfterCareerTimeline.sort()).toEqual(
+      expect(typesAfterCareerTimeline.sort()).toEqual(
         [
-          CareerTimelineCategory.CAPOEIRA_START,
-          CareerTimelineCategory.CUSTOM,
+          CareerTimelineEntryType.START_TRAINING,
+          CareerTimelineEntryType.OTHER,
         ].sort(),
       );
 
@@ -724,37 +713,243 @@ describe('Career Timeline (e2e)', () => {
       const afterFormalGroup = await getTimeline(VIEWER_TOKEN, memberId);
       expect(
         afterFormalGroup.items.some(
-          (item) =>
-            item.category === CareerTimelineCategory.FORMAL_GROUP_JOINED,
+          (item) => item.type === CareerTimelineEntryType.JOINED_GROUP,
         ),
       ).toBe(true);
       expect(
         afterFormalGroup.items.some(
-          (item) => item.category === CareerTimelineCategory.FORMAL_RANK,
+          (item) => item.type === CareerTimelineEntryType.RECEIVED_RANK,
         ),
       ).toBe(false);
 
       await patchOwnProfile(MEMBER_TOKEN, { showFormalRank: true });
-      const afterFormalRank = await getTimeline(VIEWER_TOKEN, memberId);
-      expect(
-        afterFormalRank.items.some(
-          (item) => item.category === CareerTimelineCategory.FORMAL_RANK,
-        ),
-      ).toBe(true);
-      expect(
-        afterFormalRank.items.some(
-          (item) => item.category === CareerTimelineCategory.EVENT,
-        ),
-      ).toBe(false);
-
-      await patchOwnProfile(MEMBER_TOKEN, { showEventParticipation: true });
       const full = await getTimeline(VIEWER_TOKEN, memberId);
-      expect(full.total).toBe(7);
-      expect(full.items.map((item) => item.category).sort()).toEqual(
+      expect(full.total).toBe(6);
+      expect(full.items.map((item) => item.type).sort()).toEqual(
         (await getOwnTimeline(MEMBER_TOKEN)).items
-          .map((item) => item.category)
+          .map((item) => item.type)
           .sort(),
       );
+    });
+  });
+
+  // ─── FOUNDED_GROUP (Group.founderUser) / STARTED_TEACHING (RoleAssignment) ─
+
+  describe('FOUNDED_GROUP / STARTED_TEACHING', () => {
+    it('credits the creator with FOUNDED_GROUP, dated at group creation', async () => {
+      const before = await getOwnTimeline(OWNER_TOKEN);
+      const foundedBefore = before.items.filter(
+        (item) => item.type === CareerTimelineEntryType.FOUNDED_GROUP,
+      ).length;
+
+      const group = await createGroup(OWNER_TOKEN, {
+        name: `Founder Test Group ${Date.now()}`,
+      });
+
+      const after = await getOwnTimeline(OWNER_TOKEN);
+      const founded = after.items.filter(
+        (item) => item.type === CareerTimelineEntryType.FOUNDED_GROUP,
+      );
+      expect(founded.length).toBe(foundedBefore + 1);
+      expect(founded.some((item) => item.group?.groupId === group.id)).toBe(
+        true,
+      );
+    });
+
+    // Regression test for the founder-persistence fix: FOUNDED_GROUP used to
+    // be re-derived from the earliest-ever OWNER RoleAssignment, which
+    // silently moved to whoever ownership was transferred to. It now reads
+    // Group.founderUser - a permanent record set once at creation - so the
+    // original creator keeps their FOUNDED_GROUP credit even after they stop
+    // being OWNER. (The other half of the original bug - the founder's
+    // RoleAssignment row being physically deleted on account deletion - is
+    // covered at the unit level, in career-timeline-aggregation.service.spec.ts,
+    // since deleting a fixture account here would break every other test in
+    // this file that shares it.)
+    it('keeps crediting the original creator with FOUNDED_GROUP after ownership is transferred away, and never credits the new owner', async () => {
+      const group = await createGroup(OWNER_TOKEN, {
+        name: `Transferred Group ${Date.now()}`,
+      });
+      await grantGroupRole(OWNER_TOKEN, group.id, OTHER_MEMBER_TOKEN, 'ADMIN');
+      await transferGroupOwnership(OWNER_TOKEN, group.id, OTHER_MEMBER_TOKEN);
+
+      const originalCreatorTimeline = await getOwnTimeline(OWNER_TOKEN);
+      expect(
+        originalCreatorTimeline.items.some(
+          (item) =>
+            item.type === CareerTimelineEntryType.FOUNDED_GROUP &&
+            item.group?.groupId === group.id,
+        ),
+      ).toBe(true);
+
+      const newOwnerTimeline = await getOwnTimeline(OTHER_MEMBER_TOKEN);
+      expect(
+        newOwnerTimeline.items.some(
+          (item) =>
+            item.type === CareerTimelineEntryType.FOUNDED_GROUP &&
+            item.group?.groupId === group.id,
+        ),
+      ).toBe(false);
+    });
+
+    it('credits a granted INSTRUCTOR with STARTED_TEACHING on that Section', async () => {
+      const group = await createGroup(OWNER_TOKEN, {
+        name: `Teaching Test Group ${Date.now()}`,
+      });
+      const section = await createSection(OWNER_TOKEN, group.id);
+      await joinSection(OWNER_TOKEN, section.id, OTHER_MEMBER_TOKEN);
+      await grantSectionRole(
+        OWNER_TOKEN,
+        section.id,
+        OTHER_MEMBER_TOKEN,
+        'INSTRUCTOR',
+      );
+
+      const timeline = await getOwnTimeline(OTHER_MEMBER_TOKEN);
+      const teaching = timeline.items.find(
+        (item) =>
+          item.type === CareerTimelineEntryType.STARTED_TEACHING &&
+          item.section?.sectionId === section.id,
+      );
+      expect(teaching).toBeDefined();
+      expect(teaching!.origin).toBe('SYSTEM');
+    });
+  });
+
+  // ─── Linked-Event snapshot & visibility (audit §3) ─────────────────────
+
+  describe('linked Event snapshot and visibility', () => {
+    it("keeps showing the Event's original name/location after it is edited, but not its current values", async () => {
+      const catalog = await createGroupWithCatalog(OWNER_TOKEN);
+      const event = await createEvent(OWNER_TOKEN, catalog.section.id, {
+        name: 'Festival Capoeira 2022',
+        locationName: 'Poznań',
+        visibility: EventVisibility.PUBLIC,
+      });
+      await publishEvent(OWNER_TOKEN, event.id);
+
+      const created = await bodyOf<CareerTimelineItemDto>(
+        request(app.getHttpServer())
+          .post('/api/v1/users/me/career-timeline-entries')
+          .set('Authorization', `Bearer ${OTHER_MEMBER_TOKEN}`)
+          .send({
+            type: CareerTimelineEntryType.IMPORTANT_EVENT,
+            occurredOn: '2022-06-15',
+            title: 'Festival Capoeira 2022',
+            eventId: event.id,
+          })
+          .expect(201),
+      );
+      expect(created.event).toMatchObject({
+        title: 'Festival Capoeira 2022',
+        locationName: 'Poznań',
+      });
+
+      // The organizer renames and relocates the Event years later.
+      const em = app.get(EntityManager).fork();
+      await em.nativeUpdate(
+        Event,
+        { id: event.id },
+        {
+          name: 'Festival Capoeira 2022 (rebranded)',
+          locationName: 'Warszawa',
+        },
+      );
+
+      const timeline = await getOwnTimeline(OTHER_MEMBER_TOKEN);
+      const item = timeline.items.find((i) => i.id === created.id)!;
+      expect(item.event).toMatchObject({
+        eventId: event.id,
+        title: 'Festival Capoeira 2022',
+        locationName: 'Poznań',
+      });
+    });
+
+    it("hides a linked private Event's own details from a viewer who has no access to it, without hiding the career-timeline fact", async () => {
+      const catalog = await createGroupWithCatalog(OWNER_TOKEN);
+      const privateEvent = await createEvent(OWNER_TOKEN, catalog.section.id, {
+        name: 'Members-only Batizado',
+        visibility: EventVisibility.COMMUNITY_MEMBERS,
+      });
+      await publishEvent(OWNER_TOKEN, privateEvent.id);
+      // OTHER_MEMBER_TOKEN links it themselves - linking never required the
+      // caller to have access to the Event (see resolveEvent), only that it
+      // exists.
+      await joinSection(OWNER_TOKEN, catalog.section.id, OTHER_MEMBER_TOKEN);
+
+      const created = await bodyOf<CareerTimelineItemDto>(
+        request(app.getHttpServer())
+          .post('/api/v1/users/me/career-timeline-entries')
+          .set('Authorization', `Bearer ${OTHER_MEMBER_TOKEN}`)
+          .send({
+            type: CareerTimelineEntryType.BATIZADO,
+            occurredOn: '2023-01-01',
+            eventId: privateEvent.id,
+          })
+          .expect(201),
+      );
+      expect(created.event).not.toBeNull();
+
+      await patchOwnProfile(OTHER_MEMBER_TOKEN, { showCareerTimeline: true });
+
+      // OUTSIDER_TOKEN is not a member of catalog.section - COMMUNITY_MEMBERS
+      // visibility must hide the Event's own details from them.
+      const otherMemberId = localUserIdByToken.get(OTHER_MEMBER_TOKEN)!;
+      const timelineForOutsider = await getTimeline(
+        OUTSIDER_TOKEN,
+        otherMemberId,
+      );
+      const itemForOutsider = timelineForOutsider.items.find(
+        (i) => i.id === created.id,
+      )!;
+      expect(itemForOutsider).toBeDefined();
+      expect(itemForOutsider.title).toBe('Batizado');
+      expect(itemForOutsider.event).toBeNull();
+
+      // The owner always sees their own linked Event regardless.
+      const ownTimeline = await getOwnTimeline(OTHER_MEMBER_TOKEN);
+      expect(
+        ownTimeline.items.find((i) => i.id === created.id)!.event,
+      ).not.toBeNull();
+    });
+  });
+
+  // ─── Possible MANUAL/SYSTEM duplicates (audit §2) ───────────────────────
+
+  describe('possibleDuplicateOfId', () => {
+    it('flags a MANUAL RECEIVED_RANK entry as a possible duplicate once a matching SYSTEM RECEIVED_RANK is recorded for the same date', async () => {
+      const catalog = await createGroupWithCatalog(OWNER_TOKEN);
+
+      const created = await bodyOf<CareerTimelineItemDto>(
+        request(app.getHttpServer())
+          .post('/api/v1/users/me/career-timeline-entries')
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+          .send({
+            type: CareerTimelineEntryType.RECEIVED_RANK,
+            occurredOn: '2023-06-01',
+            rankName: 'Corda Crua',
+          })
+          .expect(201),
+      );
+      expect(created.possibleDuplicateOfId).toBeNull();
+
+      await joinSection(OWNER_TOKEN, catalog.section.id, OUTSIDER_TOKEN);
+      await setFormalRank(OUTSIDER_TOKEN, catalog.rank.id, {
+        startedOn: '2023-06-01',
+      });
+
+      const timeline = await getOwnTimeline(OUTSIDER_TOKEN);
+      const manualItem = timeline.items.find((i) => i.id === created.id)!;
+      const systemItem = timeline.items.find(
+        (i) =>
+          i.type === CareerTimelineEntryType.RECEIVED_RANK &&
+          i.origin === CareerTimelineOrigin.SYSTEM,
+      )!;
+      expect(manualItem.possibleDuplicateOfId).toBe(systemItem.id);
+      // Nothing about the MANUAL entry itself is touched - still there, own
+      // title intact, still editable.
+      expect(manualItem.editable).toBe(true);
+      expect(manualItem.title).toBe('Otrzymanie stopnia Corda Crua');
     });
   });
 
@@ -765,12 +960,13 @@ describe('Career Timeline (e2e)', () => {
       token: string,
       overrides: Record<string, unknown> = {},
       expectStatus = 201,
-    ): Promise<CustomTimelineItemDto | HttpErrorResponse> {
+    ): Promise<CareerTimelineItemDto | HttpErrorResponse> {
       return bodyOf(
         request(app.getHttpServer())
           .post('/api/v1/users/me/career-timeline-entries')
           .set('Authorization', `Bearer ${token}`)
           .send({
+            type: CareerTimelineEntryType.OTHER,
             occurredOn: '2022-03-15',
             title: 'First roda',
             description: 'My very first roda',
@@ -780,14 +976,16 @@ describe('Career Timeline (e2e)', () => {
       );
     }
 
-    it('creates, reads, updates and deletes a manual entry, appearing/disappearing from the aggregated timeline', async () => {
+    it('creates, reads, updates and deletes a manual OTHER entry, appearing/disappearing from the aggregated timeline', async () => {
       const created = (await createEntry(
         OTHER_MEMBER_TOKEN,
-      )) as CustomTimelineItemDto;
-      expect(created.category).toBe(CareerTimelineCategory.CUSTOM);
+      )) as CareerTimelineItemDto;
+      expect(created.type).toBe(CareerTimelineEntryType.OTHER);
+      expect(created.origin).toBe('MANUAL');
+      expect(created.editable).toBe(true);
       expect(created.title).toBe('First roda');
 
-      const fetched = await bodyOf<CustomTimelineItemDto>(
+      const fetched = await bodyOf<CareerTimelineItemDto>(
         request(app.getHttpServer())
           .get(`/api/v1/users/me/career-timeline-entries/${created.id}`)
           .set('Authorization', `Bearer ${OTHER_MEMBER_TOKEN}`)
@@ -798,11 +996,12 @@ describe('Career Timeline (e2e)', () => {
       const timeline = await getOwnTimeline(OTHER_MEMBER_TOKEN);
       expect(timeline.items.some((item) => item.id === created.id)).toBe(true);
 
-      const updated = await bodyOf<CustomTimelineItemDto>(
+      const updated = await bodyOf<CareerTimelineItemDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/users/me/career-timeline-entries/${created.id}`)
           .set('Authorization', `Bearer ${OTHER_MEMBER_TOKEN}`)
           .send({
+            type: CareerTimelineEntryType.OTHER,
             occurredOn: '2022-04-01',
             title: 'Updated title',
             description: null,
@@ -823,6 +1022,45 @@ describe('Career Timeline (e2e)', () => {
         .expect(404);
     });
 
+    it('creates a BATIZADO entry linked to a real CapoHub Event, with the event ref resolved on read', async () => {
+      const catalog = await createGroupWithCatalog(OWNER_TOKEN);
+      const event = await createEvent(OWNER_TOKEN, catalog.section.id, {
+        name: 'Batizado Anual',
+      });
+      await publishEvent(OWNER_TOKEN, event.id);
+
+      const created = (await createEntry(OTHER_MEMBER_TOKEN, {
+        type: CareerTimelineEntryType.BATIZADO,
+        occurredOn: '2023-08-20',
+        eventId: event.id,
+        title: undefined,
+      })) as CareerTimelineItemDto;
+
+      expect(created.title).toBe('Batizado');
+      expect(created.event?.eventId).toBe(event.id);
+    });
+
+    it('creates a RECEIVED_APELIDO entry with the apelido baked into the generated title', async () => {
+      const created = (await createEntry(OTHER_MEMBER_TOKEN, {
+        type: CareerTimelineEntryType.RECEIVED_APELIDO,
+        occurredOn: '2018-01-01',
+        apelido: 'Trovão',
+        title: undefined,
+      })) as CareerTimelineItemDto;
+
+      expect(created.title).toBe('Otrzymanie apelido „Trovão”');
+      expect(created.apelido).toBe('Trovão');
+    });
+
+    it('accepts a YEAR-only partial date and reports its precision back', async () => {
+      const created = (await createEntry(OTHER_MEMBER_TOKEN, {
+        occurredOn: '2013',
+      })) as CareerTimelineItemDto;
+
+      expect(created.occurredOn).toBe('2013-01-01');
+      expect(created.occurredOnPrecision).toBe('YEAR');
+    });
+
     it('rejects an occurredOn in the future', async () => {
       const error = (await createEntry(
         OTHER_MEMBER_TOKEN,
@@ -835,7 +1073,7 @@ describe('Career Timeline (e2e)', () => {
     it('IDOR: a manual entry is invisible and unusable to anyone but its owner', async () => {
       const entry = (await createEntry(OUTSIDER_TOKEN, {
         title: 'Private entry',
-      })) as CustomTimelineItemDto;
+      })) as CareerTimelineItemDto;
 
       const getError = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
@@ -850,6 +1088,7 @@ describe('Career Timeline (e2e)', () => {
           .patch(`/api/v1/users/me/career-timeline-entries/${entry.id}`)
           .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
           .send({
+            type: CareerTimelineEntryType.OTHER,
             occurredOn: '2022-01-01',
             title: 'Hijacked',
             description: null,
@@ -866,11 +1105,33 @@ describe('Career Timeline (e2e)', () => {
       );
       expect(deleteError.statusCode).toBe(404);
 
-      // Never leaked into another user's own timeline either.
       const memberTimeline = await getOwnTimeline(MEMBER_TOKEN);
       expect(memberTimeline.items.some((item) => item.id === entry.id)).toBe(
         false,
       );
+    });
+
+    it('cannot edit or delete a SYSTEM item through the manual-entries endpoint - it is not a row this endpoint owns', async () => {
+      const timeline = await getOwnTimeline(MEMBER_TOKEN);
+      const systemItem = timeline.items.find(
+        (item) => item.origin === CareerTimelineOrigin.SYSTEM,
+      );
+      expect(systemItem).toBeDefined();
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/users/me/career-timeline-entries/${systemItem!.id}`)
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .send({
+          type: CareerTimelineEntryType.OTHER,
+          occurredOn: '2022-01-01',
+          title: 'Attempted tamper',
+        })
+        .expect(400); // not a valid UUID (SYSTEM ids are composite strings) - rejected before it could ever be found
+
+      await request(app.getHttpServer())
+        .delete(`/api/v1/users/me/career-timeline-entries/${systemItem!.id}`)
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .expect(400);
     });
   });
 });

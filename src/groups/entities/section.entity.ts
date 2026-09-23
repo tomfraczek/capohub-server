@@ -8,6 +8,7 @@ import {
   Unique,
 } from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
+import { User } from '../../users/entities/user.entity';
 import { GroupStatus } from '../enums/group-status.enum';
 import { Group } from './group.entity';
 
@@ -164,4 +165,19 @@ export class Section extends BaseEntity {
 
   @Property({ length: 3 })
   currencyCode!: string;
+
+  // Same permanent-founder-record reasoning as Group.founderUser/
+  // founderNameSnapshot (see that field's own comment) - set once,
+  // atomically with the Section row, in SectionsService.createInternal
+  // (shared by both the under-a-Group and standalone creation paths), and
+  // never touched again by transferOwnership or update(). `createdAt`
+  // (BaseEntity) doubles as the founding date for the same reason: Section
+  // and its founder's OWNER RoleAssignment are created in the same
+  // transaction.
+  @Index()
+  @ManyToOne(() => User, { nullable: true, deleteRule: 'set null' })
+  founderUser: User | null = null;
+
+  @Property({ length: 100, nullable: true })
+  founderNameSnapshot: string | null = null;
 }

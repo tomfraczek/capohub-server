@@ -205,6 +205,12 @@ export class SectionsService {
       // fields.
       section.currencyCode = actor.currencyCode;
       section.parentGroup = parent;
+      // Permanent founder record (see Section.founderUser's own comment) -
+      // set once, here, alongside the OWNER RoleAssignment below, for both
+      // the under-a-Group and standalone creation paths, and never touched
+      // again by anything (not transferOwnership, not update()).
+      section.founderUser = actor;
+      section.founderNameSnapshot = actor.displayName;
       em.persist(section);
 
       const membership = new SectionMembership();

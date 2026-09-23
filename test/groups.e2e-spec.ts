@@ -304,6 +304,28 @@ describe('Groups (e2e)', () => {
         .expect(401);
     });
 
+    // Career History audit follow-up: founderUser/founderNameSnapshot are a
+    // permanent record of who founded this Group, set once here and never
+    // re-derived from RoleAssignment - see career-timeline-aggregation.
+    // service.ts's own comment on why (a founder's RoleAssignment row can
+    // be physically deleted on account deletion). Not exposed on
+    // GroupResponseDto (no product need for it there yet), so asserted
+    // directly against the persisted row.
+    it('records the creator as founderUser, with a displayName snapshot', async () => {
+      const created = await createGroup(OWNER_TOKEN, {
+        name: 'Founder Snapshot Test',
+      });
+
+      const em = app.get(EntityManager).fork();
+      const group = await em.findOneOrFail(Group, { id: created.id });
+      const creator = await em.findOneOrFail(User, {
+        id: localUserIdByToken.get(OWNER_TOKEN),
+      });
+
+      expect(group.founderUser?.id).toBe(creator.id);
+      expect(group.founderNameSnapshot).toBe(creator.displayName);
+    });
+
     // Group has no location fields (country/city/region/geonameId) as of
     // the organizational-domain rebuild, stage 1 - those live on Section
     // only (see group.entity.ts / section.entity.ts). The full geonameId/

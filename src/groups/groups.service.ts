@@ -159,6 +159,12 @@ export class GroupsService {
       group.publicCode = await generateUniquePublicCode(em);
       this.applyFields(group, input);
       group.parentGroup = null;
+      // Permanent founder record (see Group.founderUser's own comment) -
+      // set once, here, alongside the OWNER RoleAssignment below, and
+      // never touched again by anything (not transferOwnership, not
+      // update()).
+      group.founderUser = user;
+      group.founderNameSnapshot = user.displayName;
       em.persist(group);
 
       await this.roleAssignmentsService.insertRoleAssignment(

@@ -2,91 +2,87 @@ import { EventType } from '../../events/enums/event-type.enum';
 import { EventCommunityRefDto } from '../../events/dto/event-community-ref.dto';
 import { CordSegmentResponseDto } from '../../graduation/dto/rank-response.dto';
 import { RankTrack } from '../../graduation/enums/rank-track.enum';
-import { CareerTimelineCategory } from '../enums/career-timeline-category.enum';
+import {
+  CareerTimelineEntryType,
+  CareerTimelineOrigin,
+  CareerTimelinePrecision,
+} from '../enums/career-timeline-entry-type.enum';
 
-interface BaseCareerTimelineItemDto {
-  // Stable across reads - either a deterministic composite of source type +
-  // source id (e.g. "formal-rank:<assignmentId>") for automatic entries, or
-  // the CareerTimelineEntry's own UUID for CUSTOM. Never a value randomly
-  // generated per request (see the module spec).
-  id: string;
-  occurredOn: string;
-  title: string;
-  description: string | null;
-}
-
-export interface CapoeiraStartTimelineItemDto extends BaseCareerTimelineItemDto {
-  category: CareerTimelineCategory.CAPOEIRA_START;
-}
-
-export interface FormalGroupRefDto {
-  groupId: string;
+// `groupId`/`sectionId` are null when the entry only ever had a free-text
+// name (no matching CapoHub Group/Section was picked, or picked - see
+// CareerTimelineEntriesService.resolveGroupRef) - `name` (the snapshot) is
+// always present whenever the ref itself is present, regardless.
+export interface CareerTimelineGroupRefDto {
+  groupId: string | null;
   name: string;
 }
 
-export interface FormalGroupJoinedTimelineItemDto extends BaseCareerTimelineItemDto {
-  category: CareerTimelineCategory.FORMAL_GROUP_JOINED;
-  group: FormalGroupRefDto;
-}
-
-export interface FormalGroupLeftTimelineItemDto extends BaseCareerTimelineItemDto {
-  category: CareerTimelineCategory.FORMAL_GROUP_LEFT;
-  group: FormalGroupRefDto;
-}
-
-// Minimal evidence reference to a linked Event (see the module spec, rule
-// 6) - deliberately smaller than CareerTimelineEventRefDto below, since
-// this is a secondary reference on a FORMAL_RANK item, not the item itself.
-export interface FormalRankLinkedEventRefDto {
-  eventId: string;
-  title: string;
-  startsAt: string;
-  endsAt: string;
-}
-
-export interface CareerTimelineFormalRankDto {
-  assignmentId: string;
-  rankId: string;
+export interface CareerTimelineSectionRefDto {
+  sectionId: string | null;
   name: string;
-  track: RankTrack;
-  cordSegments: CordSegmentResponseDto[];
-  sourceGroup: { id: string; name: string };
-  awardedByName: string | null;
-  startedOn: string;
 }
 
-export interface FormalRankTimelineItemDto extends BaseCareerTimelineItemDto {
-  category: CareerTimelineCategory.FORMAL_RANK;
-  rank: CareerTimelineFormalRankDto;
-  event: FormalRankLinkedEventRefDto | null;
-}
-
+// Deliberately smaller than a full EventResponseDto - this is a secondary
+// evidence reference on a timeline item, not the item itself (EVENT is no
+// longer a standalone category - see the aggregation service's own
+// comment on why "every attended Event" was removed).
 export interface CareerTimelineEventRefDto {
   eventId: string;
   title: string;
   type: EventType;
   startsAt: string;
   endsAt: string;
-  // Null for a User-organized Event (see EventResponseDto.community and
-  // events/event-community.util.ts) - it belongs to no Group/Section.
   community: EventCommunityRefDto | null;
   locationName: string | null;
-  locationAddress: string | null;
 }
 
-export interface EventTimelineItemDto extends BaseCareerTimelineItemDto {
-  category: CareerTimelineCategory.EVENT;
-  event: CareerTimelineEventRefDto;
+// Only ever populated on a SYSTEM RECEIVED_RANK item (built from a
+// FormalRankAssignment) - a MANUAL RECEIVED_RANK entry has only the free-
+// text `rankName` field below, no cord/track/segments to render.
+export interface CareerTimelineFormalRankDetailsDto {
+  assignmentId: string;
+  rankId: string;
+  track: RankTrack;
+  cordSegments: CordSegmentResponseDto[];
 }
 
-export interface CustomTimelineItemDto extends BaseCareerTimelineItemDto {
-  category: CareerTimelineCategory.CUSTOM;
+// One flat, mostly-optional shape for every type/origin combination,
+// rather than a 12-branch discriminated union - every extension field
+// below is optional by construction (no type populates more than a handful
+// of them), and the frontend already has to switch on `type` to decide
+// what to render, same as it switches on a discriminant today. The write
+// side (career-timeline-entry-input.schema.ts) stays a proper
+// discriminated union - this DTO is read-only output.
+export interface CareerTimelineItemDto {
+  // Stable across reads - either a deterministic composite of source type +
+  // source id (e.g. "formal-rank:<assignmentId>") for SYSTEM items, or the
+  // CareerTimelineEntry's own UUID for MANUAL.
+  id: string;
+  type: CareerTimelineEntryType;
+  origin: CareerTimelineOrigin;
+  occurredOn: string;
+  occurredOnPrecision: CareerTimelinePrecision;
+  title: string;
+  description: string | null;
+  group: CareerTimelineGroupRefDto | null;
+  section: CareerTimelineSectionRefDto | null;
+  event: CareerTimelineEventRefDto | null;
+  apelido: string | null;
+  rankName: string | null;
+  awardedByName: string | null;
+  location: string | null;
+  rankDetails: CareerTimelineFormalRankDetailsDto | null;
+  // MANUAL only - whether the caller (always the owner, since only owners
+  // ever see raw entries) may edit/delete this item. Always false for
+  // SYSTEM - redundant with `origin === 'SYSTEM'` but saves every caller
+  // from re-deriving the same check.
+  editable: boolean;
+  // MANUAL only - the id of a SYSTEM item this one might describe the same
+  // real-world fact as (same type, same calendar period at this item's own
+  // precision, no conflicting Group) - see
+  // career-timeline-duplicate-detection.ts. Never auto-resolved: the
+  // frontend surfaces this as a dismissible hint, nothing is merged or
+  // deleted automatically (redesign audit §2). Always null for SYSTEM
+  // items and for a MANUAL item with no match.
+  possibleDuplicateOfId: string | null;
 }
-
-export type CareerTimelineItemDto =
-  | CapoeiraStartTimelineItemDto
-  | FormalGroupJoinedTimelineItemDto
-  | FormalGroupLeftTimelineItemDto
-  | FormalRankTimelineItemDto
-  | EventTimelineItemDto
-  | CustomTimelineItemDto;

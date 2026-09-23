@@ -9,6 +9,7 @@ import {
   Unique,
 } from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
+import { User } from '../../users/entities/user.entity';
 import { GroupStatus } from '../enums/group-status.enum';
 import { Section } from './section.entity';
 
@@ -131,4 +132,41 @@ export class Group extends BaseEntity {
   @Index()
   @Enum({ items: () => Object.values(GroupStatus) })
   status: GroupStatus = GroupStatus.ACTIVE;
+
+  // Trustworthy, permanent record of who founded this Group and when -
+  // set exactly once, atomically with the Group row itself, in
+  // GroupsService.create, and never touched again by anything (not
+  // RoleAssignmentsService.transferOwnership, not GroupsService.update -
+  // `applyFields` never assigns it). Deliberately NOT re-derived from
+  // RoleAssignment at read time any more: a real founder's RoleAssignment
+  // row can be *physically deleted* if they later transfer ownership away
+  // and then delete their CapoHub account (UserService.deleteLocalAccountData
+  // hard-deletes every RoleAssignment for the deleted user) - re-deriving
+  // "founder" from the earliest-surviving OWNER RoleAssignment would then
+  // silently misattribute founding to whoever the ownership was
+  // transferred to. `founderUser` survives that entirely, because nothing
+  // ever deletes it - the FK's own `set null` on the founder's account
+  // deletion clears only the *relation* (see below), never this row's
+  // memory that a founding happened.
+  //
+  // `createdAt` (BaseEntity) doubles as the founding date: Group and its
+  // founder's OWNER RoleAssignment are created in the same transaction
+  // (see GroupsService.create), so there is no separate `foundedAt` field -
+  // introducing one would just duplicate an already-reliable timestamp.
+  @Index()
+  @ManyToOne(() => User, { nullable: true, deleteRule: 'set null' })
+  founderUser: User | null = null;
+
+  // Snapshot of the founder's User.displayName *at founding time* (kept in
+  // sync with any later profile rename per this same reasoning: this
+  // column is never touched again after creation, so a later rename does
+  // not retroactively rewrite the timeline card - same "snapshot, not
+  // live join" precedent as CareerTimelineEntry's own group/section
+  // snapshots). Deliberately the one field that survives the founder's own
+  // account deletion intact: `founderUser` goes null (FK `set null`), but
+  // this string stays, so "founded by <name>" never regresses to
+  // "founded by nobody" just because the founder is no longer a CapoHub
+  // user.
+  @Property({ length: 100, nullable: true })
+  founderNameSnapshot: string | null = null;
 }

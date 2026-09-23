@@ -10,14 +10,18 @@ import {
   MyCareerTimelineController,
 } from './career-timeline.controller';
 
-// Entities are driven through the plain EntityManager (auto-discovered
-// globally, see mikro-orm-options.factory.ts), so no forFeature() is
-// needed - same convention as every other module. Imports EventsModule for
-// EventAccessService (EVENT entry visibility) and GraduationModule for
-// FormalRankCorrectionService (FORMAL_RANK entry visibility during an
-// active correction) - both reused rather than re-derived, see
-// career-timeline-aggregation.service.ts. Neither imported module needs
-// anything back from here, so there is nothing to export.
+// Entities (including Group/Section/Event, looked up directly for optional
+// evidence links on MANUAL entries) are driven through the plain
+// EntityManager (auto-discovered globally, see
+// mikro-orm-options.factory.ts), so no forFeature() is needed - same
+// convention as every other module. Imports GraduationModule for
+// FormalRankCorrectionService (RECEIVED_RANK's visibility during an active
+// correction), StorageModule for R2StorageService (event/community image
+// URLs on linked-Event refs), and EventsModule for EventAccessService
+// (whether a non-owner viewer may see a linked Event's own details - see
+// career-timeline-aggregation.service.ts's isEventVisibleToViewer) - all
+// reused rather than re-derived. Neither imported module needs anything
+// back from here, so there is nothing to export.
 //
 // MyCareerTimelineController ('users/me/career-timeline') is registered
 // before CareerTimelineController ('users/:userId/career-timeline') so the
@@ -25,7 +29,7 @@ import {
 // static-before-wildcard ordering as UsersController's `me/profile` vs
 // `:userId/profile`.
 @Module({
-  imports: [EventsModule, GraduationModule, StorageModule],
+  imports: [GraduationModule, StorageModule, EventsModule],
   controllers: [
     MyCareerTimelineController,
     CareerTimelineController,

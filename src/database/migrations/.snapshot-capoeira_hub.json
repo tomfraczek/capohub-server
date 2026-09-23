@@ -297,7 +297,7 @@
       "checks": [
         {
           "name": "academies_group_or_section_check",
-          "columnName": "group_id",
+          "columnName": "section_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))))",
           "expression": "((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))"
         }
@@ -1486,11 +1486,272 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "text"
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "START_TRAINING",
+            "BATIZADO",
+            "RECEIVED_APELIDO",
+            "RECEIVED_RANK",
+            "JOINED_GROUP",
+            "LEFT_GROUP",
+            "STARTED_TEACHING",
+            "STARTED_SECTION",
+            "FOUNDED_GROUP",
+            "IMPORTANT_EVENT",
+            "ACHIEVEMENT",
+            "OTHER"
+          ],
+          "mappedType": "enum"
+        },
+        "occurred_on_precision": {
+          "name": "occurred_on_precision",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'DAY'",
+          "comment": null,
+          "enumItems": [
+            "YEAR",
+            "MONTH",
+            "DAY"
+          ],
+          "mappedType": "enum"
+        },
+        "group_id": {
+          "name": "group_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "group_name_snapshot": {
+          "name": "group_name_snapshot",
+          "type": "varchar(200)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 200,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "section_name_snapshot": {
+          "name": "section_name_snapshot",
+          "type": "varchar(200)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 200,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "apelido": {
+          "name": "apelido",
+          "type": "varchar(100)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 100,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "rank_name": {
+          "name": "rank_name",
+          "type": "varchar(100)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 100,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "awarded_by_name": {
+          "name": "awarded_by_name",
+          "type": "varchar(200)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 200,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "location": {
+          "name": "location",
+          "type": "varchar(200)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 200,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "event_name_snapshot": {
+          "name": "event_name_snapshot",
+          "type": "varchar(200)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 200,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "event_starts_at_snapshot": {
+          "name": "event_starts_at_snapshot",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "event_location_name_snapshot": {
+          "name": "event_location_name_snapshot",
+          "type": "varchar(200)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 200,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "career_timeline_entries",
       "schema": "public",
       "indexes": [
+        {
+          "columnNames": [
+            "event_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "career_timeline_entries_event_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "group_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "career_timeline_entries_group_id_index",
+          "unique": false,
+          "primary": false
+        },
         {
           "columnNames": [
             "id"
@@ -1500,6 +1761,26 @@
           "keyName": "career_timeline_entries_pkey",
           "unique": true,
           "primary": true
+        },
+        {
+          "columnNames": [
+            "section_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "career_timeline_entries_section_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "type"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "career_timeline_entries_type_index",
+          "unique": false,
+          "primary": false
         },
         {
           "columnNames": [
@@ -1514,6 +1795,45 @@
       ],
       "checks": [],
       "foreignKeys": {
+        "career_timeline_entries_event_id_foreign": {
+          "columnNames": [
+            "event_id"
+          ],
+          "constraintName": "career_timeline_entries_event_id_foreign",
+          "localTableName": "public.career_timeline_entries",
+          "referencedTableName": "public.events",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "career_timeline_entries_group_id_foreign": {
+          "columnNames": [
+            "group_id"
+          ],
+          "constraintName": "career_timeline_entries_group_id_foreign",
+          "localTableName": "public.career_timeline_entries",
+          "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "career_timeline_entries_section_id_foreign": {
+          "columnNames": [
+            "section_id"
+          ],
+          "constraintName": "career_timeline_entries_section_id_foreign",
+          "localTableName": "public.career_timeline_entries",
+          "referencedTableName": "public.sections",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
         "career_timeline_entries_user_id_foreign": {
           "columnNames": [
             "user_id"
@@ -3932,7 +4252,7 @@
       "checks": [
         {
           "name": "event_schedule_days_ends_at_after_starts_at_check",
-          "columnName": "ends_at",
+          "columnName": "starts_at",
           "definition": "CHECK ((ends_at >= starts_at))",
           "expression": "ends_at >= starts_at"
         }
@@ -4730,7 +5050,7 @@
         },
         {
           "name": "events_organizer_identity_check",
-          "columnName": "organizer_type",
+          "columnName": "organizer_user_display_name",
           "definition": "CHECK ((((organizer_type = 'GROUP'::text) AND (community_group_id IS NOT NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'SECTION'::text) AND (community_section_id IS NOT NULL) AND (community_group_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'USER'::text) AND (community_group_id IS NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NOT NULL))))",
           "expression": "((organizer_type = 'GROUP'::text) AND (community_group_id IS NOT NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'SECTION'::text) AND (community_section_id IS NOT NULL) AND (community_group_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'USER'::text) AND (community_group_id IS NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NOT NULL))"
         }
@@ -6509,11 +6829,53 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "string"
+        },
+        "founder_user_id": {
+          "name": "founder_user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "founder_name_snapshot": {
+          "name": "founder_name_snapshot",
+          "type": "varchar(100)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 100,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "groups",
       "schema": "public",
       "indexes": [
+        {
+          "columnNames": [
+            "founder_user_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "groups_founder_user_id_index",
+          "unique": false,
+          "primary": false
+        },
         {
           "columnNames": [
             "parent_group_id"
@@ -6557,6 +6919,19 @@
       ],
       "checks": [],
       "foreignKeys": {
+        "groups_founder_user_id_foreign": {
+          "columnNames": [
+            "founder_user_id"
+          ],
+          "constraintName": "groups_founder_user_id_foreign",
+          "localTableName": "public.groups",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
         "groups_parent_group_id_foreign": {
           "columnNames": [
             "parent_group_id"
@@ -8051,7 +8426,7 @@
       "checks": [
         {
           "name": "membership_requests_target_group_or_section_check",
-          "columnName": "target_section_id",
+          "columnName": "target_group_id",
           "definition": "CHECK ((((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))))",
           "expression": "((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))"
         }
@@ -10952,13 +11327,13 @@
       "checks": [
         {
           "name": "role_assignments_group_or_section_check",
-          "columnName": "group_id",
+          "columnName": "section_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))))",
           "expression": "((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))"
         },
         {
           "name": "role_assignments_role_matches_target_check",
-          "columnName": "section_id",
+          "columnName": "role",
           "definition": "CHECK ((((group_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text))) OR ((section_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text) OR (role = 'INSTRUCTOR'::text) OR (role = 'ASSISTANT'::text) OR (role = 'MEMBER'::text)))))",
           "expression": "((group_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text))) OR ((section_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text) OR (role = 'INSTRUCTOR'::text) OR (role = 'ASSISTANT'::text) OR (role = 'MEMBER'::text)))"
         }
@@ -12045,11 +12420,53 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "string"
+        },
+        "founder_user_id": {
+          "name": "founder_user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "founder_name_snapshot": {
+          "name": "founder_name_snapshot",
+          "type": "varchar(100)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 100,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "sections",
       "schema": "public",
       "indexes": [
+        {
+          "columnNames": [
+            "founder_user_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "sections_founder_user_id_index",
+          "unique": false,
+          "primary": false
+        },
         {
           "columnNames": [
             "latitude",
@@ -12111,6 +12528,19 @@
         }
       ],
       "foreignKeys": {
+        "sections_founder_user_id_foreign": {
+          "columnNames": [
+            "founder_user_id"
+          ],
+          "constraintName": "sections_founder_user_id_foreign",
+          "localTableName": "public.sections",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
         "sections_parent_group_id_foreign": {
           "columnNames": [
             "parent_group_id"

@@ -311,6 +311,27 @@ describe('Standalone Sections (e2e)', () => {
         .expect(401);
     });
 
+    // Career History audit follow-up: same permanent founder record as
+    // Group (see groups.e2e-spec.ts's identical test and
+    // section.entity.ts's founderUser comment) - set once here, for both
+    // the standalone and under-a-Group creation paths (same
+    // SectionsService.createInternal), and never re-derived from
+    // RoleAssignment afterwards.
+    it('records the creator as founderUser, with a displayName snapshot', async () => {
+      const created = await createStandaloneSection(OWNER_TOKEN, {
+        name: 'Founder Snapshot Test',
+      });
+
+      const em = app.get(EntityManager).fork();
+      const section = await em.findOneOrFail(Section, { id: created.id });
+      const creator = await em.findOneOrFail(User, {
+        id: localUserIdByToken.get(OWNER_TOKEN),
+      });
+
+      expect(section.founderUser?.id).toBe(creator.id);
+      expect(section.founderNameSnapshot).toBe(creator.displayName);
+    });
+
     // Same schema as Section-under-Group (create-section.schema.ts) -
     // country/city/geonameId stay required, exactly as they are there (see
     // create-section.schema.spec.ts for the full validation battery; this
