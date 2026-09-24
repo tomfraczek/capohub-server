@@ -24,20 +24,6 @@ const nullableTextSchema = (maxLength: number) =>
     .nullable()
     .optional();
 
-// ISO 3166-1 alpha-2 - normalized to uppercase before the format check, so
-// a lowercase/mixed-case input (e.g. "pl") is accepted and stored
-// consistently with Section.country's convention.
-const countrySchema = z
-  .string()
-  .trim()
-  .transform((value) => value.toUpperCase())
-  .refine(
-    (value) => /^[A-Z]{2}$/.test(value),
-    'Must be a 2-letter ISO country code',
-  )
-  .nullable()
-  .optional();
-
 const capoeiraStartedAtSchema = z
   .string()
   .date('Must be a valid date (YYYY-MM-DD)')
@@ -50,12 +36,9 @@ export const updateUserProfileSchema = z.object({
   firstName: requiredNameSchema,
   lastName: requiredNameSchema,
   apelido: nullableTextSchema(MAX_NAME_LENGTH),
-  city: nullableTextSchema(MAX_NAME_LENGTH),
-  country: countrySchema,
   capoeiraStartedAt: capoeiraStartedAtSchema,
   showFullName: privacyToggleSchema,
   showApelido: privacyToggleSchema,
-  showLocation: privacyToggleSchema,
   showCapoeiraStartedAt: privacyToggleSchema,
   showSections: privacyToggleSchema,
   showFormalGroup: privacyToggleSchema,

@@ -35,12 +35,9 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.firstName = null;
   user.lastName = null;
   user.apelido = null;
-  user.city = null;
-  user.country = null;
   user.capoeiraStartedAt = null;
   user.showFullName = false;
   user.showApelido = false;
-  user.showLocation = false;
   user.showCapoeiraStartedAt = false;
   user.showSections = false;
   user.showFormalGroup = false;
@@ -164,7 +161,6 @@ describe('toUserProfileResponseDto', () => {
     expect(dto.privacy).toEqual({
       showFullName: true,
       showApelido: false,
-      showLocation: false,
       showCapoeiraStartedAt: false,
       showSections: true,
       showFormalGroup: false,
@@ -194,7 +190,6 @@ describe('toPublicUserProfileResponseDto', () => {
   const baseCtx = {
     canSeeFullName: false,
     canSeeApelido: false,
-    canSeeLocation: false,
     canSeeCapoeiraStartedAt: false,
     sections: null,
     sectionRoles: new Map<string, GroupRole[]>(),
@@ -268,21 +263,6 @@ describe('toPublicUserProfileResponseDto', () => {
     const dto = toPublicUserProfileResponseDto(user, baseCtx);
     expect(dto.displayName).toBe('ADA00001');
     expect(dto.apelido).toBeNull();
-  });
-
-  it('gates city and country together behind showLocation', () => {
-    const user = buildUser({ city: 'Recife', country: 'BR' });
-
-    const hidden = toPublicUserProfileResponseDto(user, baseCtx);
-    expect(hidden.city).toBeNull();
-    expect(hidden.country).toBeNull();
-
-    const visible = toPublicUserProfileResponseDto(user, {
-      ...baseCtx,
-      canSeeLocation: true,
-    });
-    expect(visible.city).toBe('Recife');
-    expect(visible.country).toBe('BR');
   });
 
   it('maps sections to id/name/logoUrl/roles, and formalGroup to id+name', () => {

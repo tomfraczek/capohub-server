@@ -597,16 +597,11 @@ describe('User Profile (e2e)', () => {
       const complete = (await patchOwnProfile(SECTION_ADMIN_TOKEN, {
         lastName: 'Lovelace',
         apelido: 'Formiga',
-        city: 'Recife',
-        country: 'br',
         capoeiraStartedAt: '2015-05-20',
       })) as UserProfileResponseDto;
       expect(complete.profileComplete).toBe(true);
       expect(complete.lastName).toBe('Lovelace');
       expect(complete.apelido).toBe('Formiga');
-      expect(complete.city).toBe('Recife');
-      // Normalized to uppercase, per UpdateUserProfileDto.
-      expect(complete.country).toBe('BR');
       expect(complete.capoeiraStartedAt).toBe('2015-05-20');
 
       const reread = await getOwnProfile(SECTION_ADMIN_TOKEN);
@@ -639,7 +634,7 @@ describe('User Profile (e2e)', () => {
 
   // ─── Public profile visibility ──────────────────────────────────────────
 
-  describe('GET /users/:userId/profile - name/apelido/location visibility', () => {
+  describe('GET /users/:userId/profile - name/apelido visibility', () => {
     it('shows apelido instead of the hidden full name, then falls back to publicCode when apelido is also hidden', async () => {
       await patchOwnProfile(TARGET_TOKEN, {
         firstName: 'Camila',
@@ -685,28 +680,27 @@ describe('User Profile (e2e)', () => {
       await patchOwnProfile(TARGET_TOKEN, { showFullName: false });
     });
 
-    it('gates city/country together behind showLocation, independent of showFullName', async () => {
-      const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
-      await patchOwnProfile(TARGET_TOKEN, { city: 'Recife', country: 'BR' });
-
-      const hidden = await getPublicProfile(VIEWER_TOKEN, targetId);
-      expect(hidden.city).toBeNull();
-      expect(hidden.country).toBeNull();
-
-      await patchOwnProfile(TARGET_TOKEN, { showLocation: true });
-      const visible = await getPublicProfile(VIEWER_TOKEN, targetId);
-      expect(visible.city).toBe('Recife');
-      expect(visible.country).toBe('BR');
-
-      await patchOwnProfile(TARGET_TOKEN, { showLocation: false });
-    });
-
     it('never leaks email, phone, or account fields on the public DTO', async () => {
       const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
       const profile = await getPublicProfile(VIEWER_TOKEN, targetId);
       expect(profile).not.toHaveProperty('email');
       expect(profile).not.toHaveProperty('phone');
       expect(profile).not.toHaveProperty('clerkUserId');
+    });
+
+    // SavedLocation (see saved-locations.controller.ts) is private,
+    // discovery-only data - it must never reach any profile endpoint, own
+    // or public alike, regardless of how many locations the target has
+    // saved or how they're named.
+    it('never leaks city/country/location/savedLocations on the public DTO', async () => {
+      const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
+      const profile = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(profile).not.toHaveProperty('city');
+      expect(profile).not.toHaveProperty('country');
+      expect(profile).not.toHaveProperty('location');
+      expect(profile).not.toHaveProperty('latitude');
+      expect(profile).not.toHaveProperty('longitude');
+      expect(profile).not.toHaveProperty('savedLocations');
     });
   });
 

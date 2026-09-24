@@ -1,7 +1,7 @@
 // GET /users/search - a minimal, privacy-safe result shape for picking a
 // user from outside any Section (e.g. Trainings' external-trainer picker).
 // Deliberately does NOT reuse PublicUserProfileResponseDto: that DTO exposes
-// city/country/sections/formalGroup, which this generic picker has no
+// sections/formalGroup/capoeiraStartedAt, which this generic picker has no
 // business returning. `displayName` here is computed the same way as
 // PublicUserProfileResponseDto's (see resolveDisplayName in
 // user-profile.mapper.ts) but WITHOUT the Section-admin/Event-organizer

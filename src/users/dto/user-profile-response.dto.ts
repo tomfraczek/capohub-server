@@ -1,7 +1,6 @@
 export interface UserProfilePrivacyDto {
   showFullName: boolean;
   showApelido: boolean;
-  showLocation: boolean;
   showCapoeiraStartedAt: boolean;
   showSections: boolean;
   showFormalGroup: boolean;
@@ -26,8 +25,6 @@ export interface UserProfileResponseDto {
   firstName: string | null;
   lastName: string | null;
   apelido: string | null;
-  city: string | null;
-  country: string | null;
   capoeiraStartedAt: string | null;
   // true only once both firstName and lastName have been set - never
   // reverts to false afterwards, since UpdateUserProfileDto never allows

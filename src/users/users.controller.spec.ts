@@ -5,7 +5,6 @@ import { LearningStatusService } from '../song-library/learning-status.service';
 import { AvatarType } from './enums/avatar-type.enum';
 import { UserCheckInIdentityService } from '../common/identity/user-check-in-identity.service';
 import { UserIdentityService } from './user-identity.service';
-import { UserLocationService } from './user-location.service';
 import { UserProfileService } from './user-profile.service';
 import { UserService } from './user.service';
 import { User } from './entities/user.entity';
@@ -20,7 +19,6 @@ const learningStatusService = {} as unknown as LearningStatusService;
 const userProfileService = {} as unknown as UserProfileService;
 const userIdentityService = {} as unknown as UserIdentityService;
 const userCheckInIdentityService = {} as unknown as UserCheckInIdentityService;
-const userLocationService = {} as unknown as UserLocationService;
 // Real, never mocked - PermissionService is a pure lookup over the actual
 // ROLE_PERMISSIONS map (see permission.service.ts), so mocking it here
 // would defeat the point of asserting songCapabilities reflects the real
@@ -82,7 +80,6 @@ describe('UsersController', () => {
         permissionService,
         r2StorageService,
         userCheckInIdentityService,
-        userLocationService,
       );
       const user = buildUser();
 
@@ -118,7 +115,6 @@ describe('UsersController', () => {
         permissionService,
         r2StorageService,
         userCheckInIdentityService,
-        userLocationService,
       );
 
       const response = controller.getMe(buildUser());
@@ -139,7 +135,6 @@ describe('UsersController', () => {
         permissionService,
         r2StorageService,
         userCheckInIdentityService,
-        userLocationService,
       );
       const user = buildUser();
       user.globalRole = GlobalRole.ADMIN;
@@ -170,7 +165,6 @@ describe('UsersController', () => {
         permissionService,
         r2StorageService,
         userCheckInIdentityService,
-        userLocationService,
       );
 
       const response = await controller.updateMe(user, {
@@ -204,7 +198,6 @@ describe('UsersController', () => {
         permissionService,
         r2StorageService,
         userCheckInIdentityService,
-        userLocationService,
       );
 
       const response = await controller.setAvatarPreset(user, {
@@ -237,7 +230,6 @@ describe('UsersController', () => {
         permissionService,
         r2StorageService,
         userCheckInIdentityService,
-        userLocationService,
       );
 
       const response = await controller.resetAvatarToClerk(user);
@@ -263,7 +255,6 @@ describe('UsersController', () => {
         permissionService,
         r2StorageService,
         userCheckInIdentityService,
-        userLocationService,
       );
 
       await controller.deleteMe(user);
@@ -290,7 +281,6 @@ describe('UsersController', () => {
         permissionService,
         r2StorageService,
         userCheckInIdentityService,
-        userLocationService,
       );
 
       const response = await controller.getFavoriteSongs(user);
@@ -318,7 +308,6 @@ describe('UsersController', () => {
         permissionService,
         r2StorageService,
         userCheckInIdentityService,
-        userLocationService,
       );
 
       const response = await controller.getLearningSongs(user);

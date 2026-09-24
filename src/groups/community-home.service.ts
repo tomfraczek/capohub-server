@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
 import { CommunityOverviewService } from './community-overview.service';
+import { CommunityLocationContext } from './dto/community-location-context.schema';
 import {
   DEFAULT_NEARBY_RADIUS_KM,
   EXPANDED_NEARBY_RADIUS_KM,
@@ -72,7 +73,10 @@ export class CommunityHomeService {
     private readonly communityOverviewService: CommunityOverviewService,
   ) {}
 
-  async getHome(user: User): Promise<CommunityHomeResponseDto> {
+  async getHome(
+    user: User,
+    location: CommunityLocationContext | null,
+  ): Promise<CommunityHomeResponseDto> {
     // Sequential, not Promise.all - concurrent queries on the same
     // EntityManager/connection race each other at the driver level.
     const participation = await this.buildParticipation(user.id);
@@ -151,9 +155,8 @@ export class CommunityHomeService {
     // Sequential, not Promise.all - see this file's other queries' own
     // comment on why concurrent queries against the same
     // EntityManager/connection are never issued together here.
-    const location = await this.communityOverviewService.getLocationSummary(
-      user.id,
-    );
+    const locationSummary =
+      this.communityOverviewService.getLocationSummary(location);
     const mySections = await this.communityOverviewService.getMySections(
       user.id,
       { limit: HOME_MY_SECTIONS_LIMIT, offset: 0 },
@@ -163,18 +166,20 @@ export class CommunityHomeService {
       offset: 0,
     });
     const nearbySections =
-      await this.communityOverviewService.getNearbySections(user.id, {
+      await this.communityOverviewService.getNearbySections(user.id, location, {
         limit: HOME_NEARBY_SECTIONS_LIMIT,
         offset: 0,
       });
     const nearbyGroups = await this.communityOverviewService.getNearbyGroups(
       user.id,
+      location,
       { limit: HOME_NEARBY_GROUPS_LIMIT, offset: 0 },
     );
     const { discoverySections, discoveryGroups, discoveryContext } =
       await this.resolveDiscoveryFallback(
         user.id,
-        location.configured,
+        location,
+        locationSummary.configured,
         nearbySections.total === 0 && nearbyGroups.total === 0,
       );
 
@@ -182,7 +187,7 @@ export class CommunityHomeService {
       myCommunities: communities,
       pendingInvitations,
       pendingJoinRequests,
-      location,
+      location: locationSummary,
       mySections,
       myGroups,
       nearbySections,
@@ -231,6 +236,7 @@ export class CommunityHomeService {
    */
   private async resolveDiscoveryFallback(
     userId: string,
+    location: CommunityLocationContext | null,
     locationConfigured: boolean,
     nearbyIsEmpty: boolean,
   ): Promise<{
@@ -257,13 +263,14 @@ export class CommunityHomeService {
     // comment on why concurrent queries against the same
     // EntityManager/connection are never issued together here.
     const expandedSections =
-      await this.communityOverviewService.getNearbySections(userId, {
+      await this.communityOverviewService.getNearbySections(userId, location, {
         limit: HOME_DISCOVERY_SECTIONS_LIMIT,
         offset: 0,
         radiusKm: EXPANDED_NEARBY_RADIUS_KM,
       });
     const expandedGroups = await this.communityOverviewService.getNearbyGroups(
       userId,
+      location,
       {
         limit: HOME_DISCOVERY_GROUPS_LIMIT,
         offset: 0,
@@ -279,15 +286,23 @@ export class CommunityHomeService {
     }
 
     const countrySections =
-      await this.communityOverviewService.getCountryDiscoverySections(userId, {
-        limit: HOME_DISCOVERY_SECTIONS_LIMIT,
-        offset: 0,
-      });
+      await this.communityOverviewService.getCountryDiscoverySections(
+        userId,
+        location,
+        {
+          limit: HOME_DISCOVERY_SECTIONS_LIMIT,
+          offset: 0,
+        },
+      );
     const countryGroups =
-      await this.communityOverviewService.getCountryDiscoveryGroups(userId, {
-        limit: HOME_DISCOVERY_GROUPS_LIMIT,
-        offset: 0,
-      });
+      await this.communityOverviewService.getCountryDiscoveryGroups(
+        userId,
+        location,
+        {
+          limit: HOME_DISCOVERY_GROUPS_LIMIT,
+          offset: 0,
+        },
+      );
     if (countrySections.total > 0 || countryGroups.total > 0) {
       return {
         discoverySections: countrySections,

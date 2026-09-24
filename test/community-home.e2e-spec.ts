@@ -63,7 +63,7 @@ import {
   NearbyGroupCardDto,
   NearbySectionCardDto,
 } from '../src/groups/dto/community-overview-response.dto';
-import { UserDiscoveryLocationResponseDto } from '../src/users/dto/user-discovery-location-response.dto';
+import { SavedLocationResponseDto } from '../src/users/dto/saved-location-response.dto';
 import { User } from '../src/users/entities/user.entity';
 
 const TOKENS = [
@@ -323,34 +323,53 @@ describe('Community Home (e2e)', () => {
       .expect(201);
   }
 
-  async function getHome(token: string): Promise<CommunityHomeResponseDto> {
+  // `location` mirrors the caller's currently-active location (device GPS or
+  // a SavedLocation) as GET /community/home's own query params now expect -
+  // the server no longer holds a stored location to fall back on (see
+  // CommunityOverviewService's own class comment). Omitted entirely (rather
+  // than defaulted) when the caller has none active.
+  async function getHome(
+    token: string,
+    location?: {
+      latitude: number;
+      longitude: number;
+      countryCode?: string;
+      city?: string;
+      region?: string;
+    },
+  ): Promise<CommunityHomeResponseDto> {
+    const query = location
+      ? '?' +
+        new URLSearchParams(
+          Object.entries(location).map(([key, value]) => [key, String(value)]),
+        ).toString()
+      : '';
     return bodyOf<CommunityHomeResponseDto>(
       request(app.getHttpServer())
-        .get('/api/v1/community/home')
+        .get(`/api/v1/community/home${query}`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200),
     );
   }
 
-  async function setDiscoveryLocation(
+  async function createSavedLocation(
     token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<UserDiscoveryLocationResponseDto> {
-    return bodyOf<UserDiscoveryLocationResponseDto>(
+  ): Promise<SavedLocationResponseDto> {
+    return bodyOf<SavedLocationResponseDto>(
       request(app.getHttpServer())
-        .put('/api/v1/users/me/discovery-location')
+        .post('/api/v1/users/me/locations')
         .set('Authorization', `Bearer ${token}`)
         .send({
+          name: null,
           city: 'Poznań',
           region: null,
           countryCode: 'PL',
           latitude: 52.4064,
           longitude: 16.9252,
-          displayName: null,
-          source: 'manual',
           ...overrides,
         })
-        .expect(200),
+        .expect(201),
     );
   }
 
@@ -774,7 +793,7 @@ describe('Community Home (e2e)', () => {
   });
 
   describe('Nearby discovery', () => {
-    it('no discovery location configured: location.configured is false and nearbySections/nearbyGroups are empty, mySections/myGroups still work', async () => {
+    it('no location context sent: location.configured is false and nearbySections/nearbyGroups are empty, mySections/myGroups still work', async () => {
       const home = await getHome(tokenFor('ch-newuser'));
 
       expect(home.location).toEqual({ configured: false });
@@ -791,7 +810,7 @@ describe('Community Home (e2e)', () => {
     });
 
     it('nearbySections excludes the caller own Section, and nearbyGroups excludes myGroups, both ranked distance ASC', async () => {
-      await setDiscoveryLocation(tokenFor('ch-nearby-user'), {
+      const location = await createSavedLocation(tokenFor('ch-nearby-user'), {
         latitude: 52.4064,
         longitude: 16.9252,
       });
@@ -843,7 +862,12 @@ describe('Community Home (e2e)', () => {
         geonameId: 3091293,
       });
 
-      const home = await getHome(tokenFor('ch-nearby-user'));
+      const home = await getHome(tokenFor('ch-nearby-user'), {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        countryCode: location.countryCode ?? undefined,
+        city: location.city ?? undefined,
+      });
 
       expect(home.location).toMatchObject({
         configured: true,
@@ -910,17 +934,13 @@ describe('Community Home (e2e)', () => {
     });
 
     it('GET /community/{sections,groups}/nearby accept a radiusKm override and mirror nearbySections/nearbyGroups', async () => {
-      // SectionsService now always derives a Section's coordinates from its
-      // own geonameId (see sections.service.ts#applyFields) rather than
-      // trusting a client-supplied latitude/longitude - createSection's own
-      // default geonameId (3088171, Poznań) is what actually determines
-      // where this fixture Section ends up, so the caller's own discovery
-      // location must be set to that same real place (not an arbitrary
-      // (0,0) the Section could never actually be derived to).
-      await setDiscoveryLocation(tokenFor('ch-follower'), {
-        latitude: 52.4064,
-        longitude: 16.9252,
-      });
+      // SectionsService always derives a Section's coordinates from its own
+      // geonameId (see sections.service.ts#applyFields) rather than trusting
+      // a client-supplied latitude/longitude - createSection's own default
+      // geonameId (3088171, Poznań) is what actually determines where this
+      // fixture Section ends up, so the request's own location query params
+      // (below) must point at that same real place (not an arbitrary (0,0)
+      // the Section could never actually be derived to).
       const org = await createRootGroup(tokenFor('ch-owner'), {
         name: 'See All Nearby Org',
       });
@@ -928,11 +948,12 @@ describe('Community Home (e2e)', () => {
         name: 'See All Nearby Section',
       });
 
+      const locationQuery = '&latitude=52.4064&longitude=16.9252';
       const sectionsPage = await bodyOf<
         PaginatedResponse<NearbySectionCardDto>
       >(
         request(app.getHttpServer())
-          .get('/api/v1/community/sections/nearby?radiusKm=10')
+          .get(`/api/v1/community/sections/nearby?radiusKm=10${locationQuery}`)
           .set('Authorization', `Bearer ${tokenFor('ch-follower')}`)
           .expect(200),
       );
@@ -940,7 +961,7 @@ describe('Community Home (e2e)', () => {
 
       const groupsPage = await bodyOf<PaginatedResponse<NearbyGroupCardDto>>(
         request(app.getHttpServer())
-          .get('/api/v1/community/groups/nearby?radiusKm=10')
+          .get(`/api/v1/community/groups/nearby?radiusKm=10${locationQuery}`)
           .set('Authorization', `Bearer ${tokenFor('ch-follower')}`)
           .expect(200),
       );
@@ -948,61 +969,175 @@ describe('Community Home (e2e)', () => {
     });
   });
 
-  describe('Discovery location (GET/PUT/DELETE /users/me/discovery-location)', () => {
-    it('is null until set, reflects what was set, and is idempotently removable', async () => {
-      // Nest sends an empty body (not the JSON literal `null`) for a
-      // controller method that resolves to `null` - same behavior as this
-      // codebase's other nullable GETs (e.g. GET /groups/:id/parent).
-      // Asserted on the raw response text, not supertest's `.body` (which
-      // falls back to `{}` for an empty/unparseable body).
-      const beforeRes = await request(app.getHttpServer())
-        .get('/api/v1/users/me/discovery-location')
-        .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
-        .expect(200);
-      expect(beforeRes.text).toBe('');
+  describe('Saved locations (GET/POST/PATCH/DELETE /users/me/locations)', () => {
+    it('is empty until one is created, and lists every created location', async () => {
+      const beforeList = await bodyOf<SavedLocationResponseDto[]>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/me/locations')
+          .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
+          .expect(200),
+      );
+      expect(beforeList).toEqual([]);
 
-      const set = await setDiscoveryLocation(tokenFor('ch-newuser'));
-      expect(set).toMatchObject({
+      const poznan = await createSavedLocation(tokenFor('ch-newuser'), {
         city: 'Poznań',
         countryCode: 'PL',
         latitude: 52.4064,
         longitude: 16.9252,
       });
+      expect(poznan).toMatchObject({
+        name: null,
+        city: 'Poznań',
+        countryCode: 'PL',
+        latitude: 52.4064,
+        longitude: 16.9252,
+        radiusKm: 50,
+        notificationsEnabled: false,
+      });
 
-      const after = await bodyOf<UserDiscoveryLocationResponseDto>(
+      const wroclaw = await createSavedLocation(tokenFor('ch-newuser'), {
+        name: 'Praca',
+        city: 'Wrocław',
+        countryCode: 'PL',
+        latitude: 51.1079,
+        longitude: 17.0385,
+        radiusKm: 25,
+      });
+      expect(wroclaw).toMatchObject({ name: 'Praca', radiusKm: 25 });
+
+      const afterList = await bodyOf<SavedLocationResponseDto[]>(
         request(app.getHttpServer())
-          .get('/api/v1/users/me/discovery-location')
+          .get('/api/v1/users/me/locations')
           .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
           .expect(200),
       );
-      expect(after).toMatchObject({ city: 'Poznań', countryCode: 'PL' });
+      expect(afterList.map((l) => l.id).sort()).toEqual(
+        [poznan.id, wroclaw.id].sort(),
+      );
+    });
+
+    it('never lists another caller own locations - each user only ever sees their own', async () => {
+      await createSavedLocation(tokenFor('ch-owner'));
+
+      const list = await bodyOf<SavedLocationResponseDto[]>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/me/locations')
+          .set('Authorization', `Bearer ${tokenFor('ch-member')}`)
+          .expect(200),
+      );
+      expect(list).toEqual([]);
+    });
+
+    it('PATCH renaming a location never changes its latitude/longitude', async () => {
+      const location = await createSavedLocation(tokenFor('ch-newuser'));
+
+      const renamed = await bodyOf<SavedLocationResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/users/me/locations/${location.id}`)
+          .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
+          .send({ name: 'Dom' })
+          .expect(200),
+      );
+      expect(renamed.name).toBe('Dom');
+      expect(renamed.latitude).toBe(location.latitude);
+      expect(renamed.longitude).toBe(location.longitude);
+      expect(renamed.city).toBe(location.city);
+    });
+
+    it('PATCH radiusKm-only leaves the name untouched', async () => {
+      const location = await createSavedLocation(tokenFor('ch-newuser'), {
+        name: 'Dom',
+      });
+
+      const updated = await bodyOf<SavedLocationResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/users/me/locations/${location.id}`)
+          .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
+          .send({ radiusKm: 100 })
+          .expect(200),
+      );
+      expect(updated.radiusKm).toBe(100);
+      expect(updated.name).toBe('Dom');
+    });
+
+    it('PATCH silently ignores an attempt to change latitude/longitude - only name/radiusKm are accepted', async () => {
+      const location = await createSavedLocation(tokenFor('ch-newuser'));
+
+      const updated = await bodyOf<SavedLocationResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/users/me/locations/${location.id}`)
+          .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
+          .send({ latitude: 0, longitude: 0, name: 'Still Poznań' })
+          .expect(200),
+      );
+      expect(updated.latitude).toBe(location.latitude);
+      expect(updated.longitude).toBe(location.longitude);
+    });
+
+    it('DELETE removes the location - it no longer appears in the list', async () => {
+      const location = await createSavedLocation(tokenFor('ch-newuser'));
 
       await request(app.getHttpServer())
-        .delete('/api/v1/users/me/discovery-location')
-        .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
-        .expect(204);
-      // Idempotent - deleting an already-absent location is still 204.
-      await request(app.getHttpServer())
-        .delete('/api/v1/users/me/discovery-location')
+        .delete(`/api/v1/users/me/locations/${location.id}`)
         .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
         .expect(204);
 
-      const afterDeleteRes = await request(app.getHttpServer())
-        .get('/api/v1/users/me/discovery-location')
-        .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
-        .expect(200);
-      expect(afterDeleteRes.text).toBe('');
+      const list = await bodyOf<SavedLocationResponseDto[]>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/me/locations')
+          .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
+          .expect(200),
+      );
+      expect(list.find((l) => l.id === location.id)).toBeUndefined();
+    });
+
+    it('never lets a caller update or delete another caller own location (404, not 403 - IDOR-safe)', async () => {
+      const location = await createSavedLocation(tokenFor('ch-owner'));
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/users/me/locations/${location.id}`)
+        .set('Authorization', `Bearer ${tokenFor('ch-member')}`)
+        .send({ name: 'Not mine' })
+        .expect(404);
+
+      await request(app.getHttpServer())
+        .delete(`/api/v1/users/me/locations/${location.id}`)
+        .set('Authorization', `Bearer ${tokenFor('ch-member')}`)
+        .expect(404);
+
+      // Still there - the ch-member attempts above must not have touched it.
+      const list = await bodyOf<SavedLocationResponseDto[]>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/me/locations')
+          .set('Authorization', `Bearer ${tokenFor('ch-owner')}`)
+          .expect(200),
+      );
+      expect(list.some((l) => l.id === location.id)).toBe(true);
     });
 
     it('rejects an out-of-range latitude/longitude', async () => {
       await request(app.getHttpServer())
-        .put('/api/v1/users/me/discovery-location')
+        .post('/api/v1/users/me/locations')
         .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
         .send({
           city: 'Nowhere',
           countryCode: 'PL',
           latitude: 200,
           longitude: 16.9252,
+        })
+        .expect(400);
+    });
+
+    it('rejects an out-of-range radiusKm', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/users/me/locations')
+        .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
+        .send({
+          city: 'Poznań',
+          countryCode: 'PL',
+          latitude: 52.4064,
+          longitude: 16.9252,
+          radiusKm: 1000,
         })
         .expect(400);
     });

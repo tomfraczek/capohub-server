@@ -10,17 +10,8 @@ export type Theme = (typeof THEMES)[number];
 export const USERS_NUMERIC_CODE_UNIQUE_INDEX = 'users_numeric_code_unique';
 
 @Entity({ tableName: 'users' })
-// Mirrors sections_country_check (see section.entity.ts) - same ISO
-// 3166-1 alpha-2 shape, same reason for a DB-level backstop alongside the
-// application-level normalization in UserProfileService.
-@Check<User>({
-  name: 'users_country_check',
-  expression: (columns) =>
-    `"${columns.country}" is null or "${columns.country}" ~ '^[A-Z]{2}$'`,
-})
-// Same DB-level backstop pattern as the country check above - guards
-// numericCode's shape independently of the application-level generator
-// (see common/utils/numeric-code.ts).
+// Guards numericCode's shape independently of the application-level
+// generator (see common/utils/numeric-code.ts).
 @Check<User>({
   name: 'users_numeric_code_check',
   expression: (columns) => `"${columns.numericCode}" ~ '^[0-9]{6}$'`,
@@ -198,37 +189,23 @@ export class User extends BaseEntity {
   @Property({ nullable: true, length: 100 })
   apelido: string | null = null;
 
-  @Property({ nullable: true, length: 100 })
-  city: string | null = null;
-
-  // ISO 3166-1 alpha-2, uppercase - same convention as Section.country
-  // (see section.entity.ts), normalized to uppercase in
-  // UserProfileService before being persisted.
-  @Property({ nullable: true, length: 2 })
-  country: string | null = null;
-
   @Property({ nullable: true, type: 'date' })
   capoeiraStartedAt: Date | null = null;
 
   // ─── Profile privacy (see UserProfileService.getPublicProfile) ────────
-  // All default false (private) - a freshly created profile shows nothing
-  // beyond the safe name fallback (see PublicUserProfileResponseDto) until
-  // the owner explicitly opts a field in. Plain booleans, not a general
-  // ACL: each one gates exactly one profile field/list, described on
+  // All default true (visible) - a freshly created profile shows every
+  // field below (see PublicUserProfileResponseDto) until the owner
+  // explicitly opts a field out. Plain booleans, not a general ACL: each
+  // one gates exactly one profile field/list, described on
   // PublicUserProfileResponseDto.
   @Property()
-  showFullName: boolean = false;
+  showFullName: boolean = true;
 
   @Property()
-  showApelido: boolean = false;
-
-  // Gates city + country together - the spec treats "location" as one
-  // disclosure decision, not two.
-  @Property()
-  showLocation: boolean = false;
+  showApelido: boolean = true;
 
   @Property()
-  showCapoeiraStartedAt: boolean = false;
+  showCapoeiraStartedAt: boolean = true;
 
   // Gates the `sections` list on the public profile (current
   // SectionMembership only - never role/status data). There is
@@ -238,13 +215,13 @@ export class User extends BaseEntity {
   // public profile would leak an administrative fact through a field that
   // reads as ordinary membership.
   @Property()
-  showSections: boolean = false;
+  showSections: boolean = true;
 
   @Property()
-  showFormalGroup: boolean = false;
+  showFormalGroup: boolean = true;
 
   @Property()
-  showFormalRank: boolean = false;
+  showFormalRank: boolean = true;
 
   // Gates the whole GET /users/:userId/career-timeline endpoint - see
   // career-timeline.service.ts. Per-category toggles were deliberately
@@ -252,7 +229,7 @@ export class User extends BaseEntity {
   // underlying source data (formal group, formal rank, event
   // participation) still applies its own privacy toggle on top of this one.
   @Property()
-  showCareerTimeline: boolean = false;
+  showCareerTimeline: boolean = true;
 
   // Gates whether this user's participation in an Event (EventAttendee row)
   // may ever be revealed to a viewer other than the owner - both directly
@@ -260,5 +237,5 @@ export class User extends BaseEntity {
   // EVENT entries. No such toggle existed before the career timeline
   // module.
   @Property()
-  showEventParticipation: boolean = false;
+  showEventParticipation: boolean = true;
 }

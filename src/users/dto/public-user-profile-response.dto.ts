@@ -80,8 +80,6 @@ export interface PublicUserProfileResponseDto {
   firstName: string | null;
   lastName: string | null;
   apelido: string | null;
-  city: string | null;
-  country: string | null;
   capoeiraStartedAt: string | null;
   sections: PublicSectionRefDto[] | null;
   formalGroup: PublicFormalGroupRefDto | null;

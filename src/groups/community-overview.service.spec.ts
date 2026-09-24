@@ -27,7 +27,7 @@ import { SectionMembershipStatus } from './enums/section-membership-status.enum'
 import { GroupStatus } from './enums/group-status.enum';
 import { GroupFollowService } from './group-follow.service';
 import { R2StorageService } from '../storage/r2-storage.service';
-import { UserDiscoveryLocation } from '../users/entities/user-discovery-location.entity';
+import { CommunityLocationContext } from './dto/community-location-context.schema';
 import { CommunityOverviewService } from './community-overview.service';
 
 function buildGroup(overrides: Partial<Group> = {}): Group {
@@ -62,19 +62,20 @@ function buildMembership(
 }
 
 function buildLocation(
-  overrides: Partial<UserDiscoveryLocation> = {},
-): UserDiscoveryLocation {
-  const location = new UserDiscoveryLocation();
-  location.city = 'Poznań';
-  location.countryCode = 'PL';
-  location.region = null;
-  location.latitude = 52.4064;
-  location.longitude = 16.9252;
-  return Object.assign(location, overrides);
+  overrides: Partial<CommunityLocationContext> = {},
+): CommunityLocationContext {
+  return {
+    city: 'Poznań',
+    countryCode: 'PL',
+    region: null,
+    latitude: 52.4064,
+    longitude: 16.9252,
+    ...overrides,
+  };
 }
 
 interface Routing {
-  location?: UserDiscoveryLocation | null;
+  location?: CommunityLocationContext | null;
   memberships?: SectionMembership[];
   // Section find({id: {$in: [...]}}) - used by resolveMyGroupRelations to
   // resolve each of the caller's own Sections' parentGroup.
@@ -88,13 +89,6 @@ interface Routing {
 }
 
 function buildEm(routing: Routing) {
-  const findOne = jest.fn((entity: unknown) => {
-    if (entity === UserDiscoveryLocation) {
-      return Promise.resolve(routing.location ?? null);
-    }
-    throw new Error(`Unexpected findOne entity: ${String(entity)}`);
-  });
-
   const find = jest.fn((entity: unknown, filter: Record<string, unknown>) => {
     if (entity === SectionMembership) {
       return Promise.resolve(routing.memberships ?? []);
@@ -118,7 +112,7 @@ function buildEm(routing: Routing) {
     throw new Error(`Unexpected findAndCount entity: ${String(entity)}`);
   });
 
-  return { findOne, find, findAndCount } as unknown as EntityManager;
+  return { find, findAndCount } as unknown as EntityManager;
 }
 
 function buildService(routing: Routing) {
@@ -261,14 +255,15 @@ describe('CommunityOverviewService', () => {
       latitude: 52.41,
       longitude: 16.93,
     });
+    const location = buildLocation();
     const service = buildService({
-      location: buildLocation(),
+      location,
       memberships: [buildMembership('section-mine')],
       sectionsByIds: [mine],
       nearbyCandidates: [mine, other],
     });
 
-    const nearby = await service.getNearbySections('user-1', {
+    const nearby = await service.getNearbySections('user-1', location, {
       ...PAGE,
       radiusKm: 300,
     });
@@ -291,8 +286,9 @@ describe('CommunityOverviewService', () => {
       latitude: 52.41,
       longitude: 16.93,
     });
+    const location = buildLocation();
     const service = buildService({
-      location: buildLocation(),
+      location,
       memberships: [buildMembership('section-mine')],
       sectionsByIds: [mySection],
       nearbyCandidates: [mySection, otherSection],
@@ -300,7 +296,7 @@ describe('CommunityOverviewService', () => {
       followedGroupIds: [],
     });
 
-    const nearbyGroups = await service.getNearbyGroups('user-1', {
+    const nearbyGroups = await service.getNearbyGroups('user-1', location, {
       ...PAGE,
       radiusKm: 300,
     });
@@ -324,8 +320,9 @@ describe('CommunityOverviewService', () => {
       latitude: 53.0,
       longitude: 17.5,
     });
+    const location = buildLocation();
     const service = buildService({
-      location: buildLocation(),
+      location,
       memberships: [],
       sectionsByIds: [],
       nearbyCandidates: [far, near],
@@ -333,7 +330,7 @@ describe('CommunityOverviewService', () => {
       followedGroupIds: [],
     });
 
-    const nearbyGroups = await service.getNearbyGroups('user-1', {
+    const nearbyGroups = await service.getNearbyGroups('user-1', location, {
       ...PAGE,
       radiusKm: 300,
     });
@@ -355,13 +352,17 @@ describe('CommunityOverviewService', () => {
       followedGroupIds: [],
     });
 
-    const location = await service.getLocationSummary('user-1');
-    expect(location).toEqual({ configured: false });
+    const locationSummary = service.getLocationSummary(null);
+    expect(locationSummary).toEqual({ configured: false });
 
-    const nearbySections = await service.getNearbySections('user-1', PAGE);
+    const nearbySections = await service.getNearbySections(
+      'user-1',
+      null,
+      PAGE,
+    );
     expect(nearbySections).toEqual({ items: [], total: 0, hasMore: false });
 
-    const nearbyGroups = await service.getNearbyGroups('user-1', PAGE);
+    const nearbyGroups = await service.getNearbyGroups('user-1', null, PAGE);
     expect(nearbyGroups).toEqual({ items: [], total: 0, hasMore: false });
 
     const mySections = await service.getMySections('user-1', PAGE);

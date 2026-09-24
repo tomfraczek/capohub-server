@@ -19,7 +19,7 @@ import { SectionMembership } from './entities/section-membership.entity';
 import { GroupStatus } from './enums/group-status.enum';
 import { GroupFollowService } from './group-follow.service';
 import { R2StorageService } from '../storage/r2-storage.service';
-import { UserDiscoveryLocation } from '../users/entities/user-discovery-location.entity';
+import { CommunityLocationContext } from './dto/community-location-context.schema';
 import { CommunityOverviewService } from './community-overview.service';
 
 function buildGroup(overrides: Partial<Group> = {}): Group {
@@ -53,19 +53,20 @@ function buildMembershipRow(sectionId: string): SectionMembership {
 }
 
 function buildLocation(
-  overrides: Partial<UserDiscoveryLocation> = {},
-): UserDiscoveryLocation {
-  const location = new UserDiscoveryLocation();
-  location.city = 'Poznań';
-  location.countryCode = 'PL';
-  location.region = null;
-  location.latitude = 52.4064;
-  location.longitude = 16.9252;
-  return Object.assign(location, overrides);
+  overrides: Partial<CommunityLocationContext> = {},
+): CommunityLocationContext {
+  return {
+    city: 'Poznań',
+    countryCode: 'PL',
+    region: null,
+    latitude: 52.4064,
+    longitude: 16.9252,
+    ...overrides,
+  };
 }
 
 interface Routing {
-  location?: UserDiscoveryLocation | null;
+  location?: CommunityLocationContext | null;
   myMemberships?: SectionMembership[];
   countryCandidates?: Section[];
   memberCountRows?: SectionMembership[];
@@ -73,13 +74,6 @@ interface Routing {
 }
 
 function buildEm(routing: Routing) {
-  const findOne = jest.fn((entity: unknown) => {
-    if (entity === UserDiscoveryLocation) {
-      return Promise.resolve(routing.location ?? null);
-    }
-    throw new Error(`Unexpected findOne entity: ${String(entity)}`);
-  });
-
   const find = jest.fn((entity: unknown, filter: Record<string, unknown>) => {
     if (entity === Section) {
       // The country-fallback candidate scan (findCountrySectionCandidates)
@@ -104,7 +98,7 @@ function buildEm(routing: Routing) {
     throw new Error(`Unexpected find entity: ${String(entity)}`);
   });
 
-  return { findOne, find } as unknown as EntityManager;
+  return { find } as unknown as EntityManager;
 }
 
 function buildService(routing: Routing) {
@@ -137,8 +131,9 @@ describe('CommunityOverviewService - country discovery fallback', () => {
       id: 'section-new-few',
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
     });
+    const location = buildLocation();
     const service = buildService({
-      location: buildLocation(),
+      location,
       countryCandidates: [oldFewMembers, newManyMembers, newFewMembers],
       memberCountRows: [
         buildMembershipRow('section-old-few'),
@@ -149,7 +144,11 @@ describe('CommunityOverviewService - country discovery fallback', () => {
       ],
     });
 
-    const result = await service.getCountryDiscoverySections('user-1', PAGE);
+    const result = await service.getCountryDiscoverySections(
+      'user-1',
+      location,
+      PAGE,
+    );
 
     expect(result.items.map((s) => s.id)).toEqual([
       'section-new-many', // 3 members
@@ -161,14 +160,19 @@ describe('CommunityOverviewService - country discovery fallback', () => {
   it('2. excludes the caller own Sections', async () => {
     const mine = buildSection({ id: 'section-mine' });
     const other = buildSection({ id: 'section-other' });
+    const location = buildLocation();
     const service = buildService({
-      location: buildLocation(),
+      location,
       myMemberships: [buildMembershipRow('section-mine')],
       countryCandidates: [mine, other],
       memberCountRows: [],
     });
 
-    const result = await service.getCountryDiscoverySections('user-1', PAGE);
+    const result = await service.getCountryDiscoverySections(
+      'user-1',
+      location,
+      PAGE,
+    );
 
     expect(result.items.map((s) => s.id)).toEqual(['section-other']);
   });
@@ -176,8 +180,16 @@ describe('CommunityOverviewService - country discovery fallback', () => {
   it('3. no discovery location configured: both discoverySections and discoveryGroups are empty, never an error', async () => {
     const service = buildService({ location: null });
 
-    const sections = await service.getCountryDiscoverySections('user-1', PAGE);
-    const groups = await service.getCountryDiscoveryGroups('user-1', PAGE);
+    const sections = await service.getCountryDiscoverySections(
+      'user-1',
+      null,
+      PAGE,
+    );
+    const groups = await service.getCountryDiscoveryGroups(
+      'user-1',
+      null,
+      PAGE,
+    );
 
     expect(sections).toEqual({ items: [], total: 0, hasMore: false });
     expect(groups).toEqual({ items: [], total: 0, hasMore: false });
@@ -198,8 +210,9 @@ describe('CommunityOverviewService - country discovery fallback', () => {
       id: 'section-other-strong',
       parentGroup: otherGroup,
     });
+    const location = buildLocation();
     const service = buildService({
-      location: buildLocation(),
+      location,
       myMemberships: [buildMembershipRow('section-mine')],
       countryCandidates: [mySection, weakSection, strongSection],
       memberCountRows: [
@@ -210,7 +223,11 @@ describe('CommunityOverviewService - country discovery fallback', () => {
       followedGroupIds: [],
     });
 
-    const result = await service.getCountryDiscoveryGroups('user-1', PAGE);
+    const result = await service.getCountryDiscoveryGroups(
+      'user-1',
+      location,
+      PAGE,
+    );
 
     expect(result.items.map((g) => g.id)).toEqual(['group-other']);
     expect(result.items[0].nearestSection.id).toBe('section-other-strong');
@@ -220,14 +237,23 @@ describe('CommunityOverviewService - country discovery fallback', () => {
   it('5. ranking is stable across repeated calls with identical input', async () => {
     const a = buildSection({ id: 'section-a' });
     const b = buildSection({ id: 'section-b' });
+    const location = buildLocation();
     const service = buildService({
-      location: buildLocation(),
+      location,
       countryCandidates: [a, b],
       memberCountRows: [],
     });
 
-    const first = await service.getCountryDiscoverySections('user-1', PAGE);
-    const second = await service.getCountryDiscoverySections('user-1', PAGE);
+    const first = await service.getCountryDiscoverySections(
+      'user-1',
+      location,
+      PAGE,
+    );
+    const second = await service.getCountryDiscoverySections(
+      'user-1',
+      location,
+      PAGE,
+    );
 
     expect(first.items.map((s) => s.id)).toEqual(second.items.map((s) => s.id));
   });

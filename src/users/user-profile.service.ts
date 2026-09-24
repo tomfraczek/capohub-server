@@ -104,12 +104,6 @@ export class UserProfileService {
     if (changes.apelido !== undefined) {
       user.apelido = changes.apelido;
     }
-    if (changes.city !== undefined) {
-      user.city = changes.city;
-    }
-    if (changes.country !== undefined) {
-      user.country = changes.country;
-    }
     if (changes.capoeiraStartedAt !== undefined) {
       user.capoeiraStartedAt = changes.capoeiraStartedAt
         ? parseDateOnly(changes.capoeiraStartedAt)
@@ -120,9 +114,6 @@ export class UserProfileService {
     }
     if (changes.showApelido !== undefined) {
       user.showApelido = changes.showApelido;
-    }
-    if (changes.showLocation !== undefined) {
-      user.showLocation = changes.showLocation;
     }
     if (changes.showCapoeiraStartedAt !== undefined) {
       user.showCapoeiraStartedAt = changes.showCapoeiraStartedAt;
@@ -170,7 +161,6 @@ export class UserProfileService {
     const canSeeFullName =
       isOwner || (await this.canSeeFullName(viewer.id, target));
     const canSeeApelido = isOwner || target.showApelido;
-    const canSeeLocation = isOwner || target.showLocation;
     const canSeeCapoeiraStartedAt = isOwner || target.showCapoeiraStartedAt;
     const canSeeSections = isOwner || target.showSections;
     const canSeeFormalGroup = isOwner || target.showFormalGroup;
@@ -203,7 +193,6 @@ export class UserProfileService {
     return toPublicUserProfileResponseDto(target, {
       canSeeFullName,
       canSeeApelido,
-      canSeeLocation,
       canSeeCapoeiraStartedAt,
       sections,
       sectionRoles,

@@ -31,7 +31,7 @@ describe('CommunityHomeController', () => {
     expect(guards).toBeUndefined();
   });
 
-  it('delegates GET /community/home to CommunityHomeService.getHome, scoped to the current user', async () => {
+  it('delegates GET /community/home to CommunityHomeService.getHome, scoped to the current user, with no location when the query carries none', async () => {
     const response = {
       myCommunities: [],
     } as unknown as CommunityHomeResponseDto;
@@ -39,9 +39,31 @@ describe('CommunityHomeController', () => {
     const controller = buildController({ getHome });
     const user = Object.assign(new User(), { id: 'user-1' });
 
-    const result = await controller.getHome(user);
+    const result = await controller.getHome(user, {});
 
-    expect(getHome).toHaveBeenCalledWith(user);
+    expect(getHome).toHaveBeenCalledWith(user, null);
     expect(result).toBe(response);
+  });
+
+  it('resolves latitude/longitude/countryCode from the query into a location context', async () => {
+    const getHome = jest.fn().mockResolvedValue({
+      myCommunities: [],
+    });
+    const controller = buildController({ getHome });
+    const user = Object.assign(new User(), { id: 'user-1' });
+
+    await controller.getHome(user, {
+      latitude: 52.4064,
+      longitude: 16.9252,
+      countryCode: 'PL',
+    });
+
+    expect(getHome).toHaveBeenCalledWith(user, {
+      latitude: 52.4064,
+      longitude: 16.9252,
+      countryCode: 'PL',
+      city: null,
+      region: null,
+    });
   });
 });

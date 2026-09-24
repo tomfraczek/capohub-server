@@ -2,13 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { haversineKm, nearbyBoundingBox } from '../common/geo/distance';
 import { R2StorageService } from '../storage/r2-storage.service';
-import { UserDiscoveryLocation } from '../users/entities/user-discovery-location.entity';
 import {
   DEFAULT_NEARBY_RADIUS_KM,
   DISCOVERY_CANDIDATE_SCAN_LIMIT,
   MAX_NEARBY_RADIUS_KM,
   NEARBY_CANDIDATE_SCAN_LIMIT,
 } from './community-overview.constants';
+import { CommunityLocationContext } from './dto/community-location-context.schema';
 import {
   CommunityGroupCardDto,
   CommunityLocationSummaryDto,
@@ -78,6 +78,16 @@ const ACTIVE_MEMBERSHIP_STATUSES = [
  * (`section.parentGroup === group.id`), never the whole hierarchy subtree -
  * same "no inheritance in either direction" rule GroupsService.
  * resolveViewerRelation and CommunityHomeService already follow.
+ *
+ * Every location-dependent method below (getLocationSummary,
+ * getNearbySections/Groups, getCountryDiscoverySections/Groups) takes an
+ * already-resolved `CommunityLocationContext | null` from its caller
+ * instead of looking one up itself - the caller's active location (device
+ * GPS or a SavedLocation) is a per-request, per-client concept now, not a
+ * single row this service can read off the database (see
+ * community-location-context.schema.ts). `null` means exactly what a
+ * missing UserDiscoveryLocation row used to mean: no location configured
+ * for this request, every nearby/discovery result comes back empty.
  */
 @Injectable()
 export class CommunityOverviewService {
@@ -88,23 +98,21 @@ export class CommunityOverviewService {
   ) {}
 
   /**
-   * GET /community/home's `location` block. Row-presence in
-   * UserDiscoveryLocation is "configured" - see that entity's own comment.
+   * GET /community/home's `location` block. `configured` now reflects
+   * whether the caller's request carried a resolved location context, not
+   * row-presence in a stored table - see this class's own comment.
    */
-  async getLocationSummary(
-    userId: string,
-  ): Promise<CommunityLocationSummaryDto> {
-    const location = await this.em.findOne(UserDiscoveryLocation, {
-      user: userId,
-    });
+  getLocationSummary(
+    location: CommunityLocationContext | null,
+  ): CommunityLocationSummaryDto {
     if (!location) {
       return { configured: false };
     }
     return {
       configured: true,
-      city: location.city,
+      city: location.city ?? undefined,
       region: location.region ?? undefined,
-      countryCode: location.countryCode,
+      countryCode: location.countryCode ?? undefined,
     };
   }
 
@@ -179,11 +187,9 @@ export class CommunityOverviewService {
    */
   async getNearbySections(
     userId: string,
+    location: CommunityLocationContext | null,
     page: NearbyPageParams,
   ): Promise<CommunityOverviewBoundedSectionDto<NearbySectionCardDto>> {
-    const location = await this.em.findOne(UserDiscoveryLocation, {
-      user: userId,
-    });
     if (!location) {
       return { items: [], total: 0, hasMore: false };
     }
@@ -224,11 +230,9 @@ export class CommunityOverviewService {
    */
   async getNearbyGroups(
     userId: string,
+    location: CommunityLocationContext | null,
     page: NearbyPageParams,
   ): Promise<CommunityOverviewBoundedSectionDto<NearbyGroupCardDto>> {
-    const location = await this.em.findOne(UserDiscoveryLocation, {
-      user: userId,
-    });
     if (!location) {
       return { items: [], total: 0, hasMore: false };
     }
@@ -315,18 +319,18 @@ export class CommunityOverviewService {
    */
   async getCountryDiscoverySections(
     userId: string,
+    location: CommunityLocationContext | null,
     page: PageParams,
   ): Promise<CommunityOverviewBoundedSectionDto<NearbySectionCardDto>> {
-    const location = await this.em.findOne(UserDiscoveryLocation, {
-      user: userId,
-    });
-    if (!location) {
+    if (!location || !location.countryCode) {
       return emptyBoundedSection();
     }
+    const countryCode = location.countryCode;
 
     const mySectionIds = new Set(await this.listMySectionIds(userId));
     const candidates = await this.findCountrySectionCandidates(
       location,
+      countryCode,
       mySectionIds,
     );
 
@@ -359,19 +363,19 @@ export class CommunityOverviewService {
    */
   async getCountryDiscoveryGroups(
     userId: string,
+    location: CommunityLocationContext | null,
     page: PageParams,
   ): Promise<CommunityOverviewBoundedSectionDto<NearbyGroupCardDto>> {
-    const location = await this.em.findOne(UserDiscoveryLocation, {
-      user: userId,
-    });
-    if (!location) {
+    if (!location || !location.countryCode) {
       return emptyBoundedSection();
     }
+    const countryCode = location.countryCode;
 
     const { relationByGroupId } = await this.resolveMyGroupRelations(userId);
     const mySectionIds = new Set(await this.listMySectionIds(userId));
     const candidates = await this.findCountrySectionCandidates(
       location,
+      countryCode,
       mySectionIds,
     );
 
@@ -442,13 +446,14 @@ export class CommunityOverviewService {
    * bounding box here - there is no radius to pre-filter by in this tier).
    */
   private async findCountrySectionCandidates(
-    location: UserDiscoveryLocation,
+    location: CommunityLocationContext,
+    countryCode: string,
     excludeSectionIds: Set<string>,
   ): Promise<SectionDiscoveryCandidate[]> {
     const rows = await this.em.find(
       Section,
       {
-        country: location.countryCode,
+        country: countryCode,
         isHidden: false,
         status: GroupStatus.ACTIVE,
         latitude: { $ne: null },
@@ -603,7 +608,7 @@ export class CommunityOverviewService {
    * path).
    */
   private async findNearbySectionCandidates(
-    location: UserDiscoveryLocation,
+    location: CommunityLocationContext,
     radiusKm: number,
   ): Promise<SectionDistanceCandidate[]> {
     const box = nearbyBoundingBox(

@@ -20,6 +20,20 @@ export const positiveIntegerQuerySchema = integerQueryParam(
   z.number().int().positive(),
 );
 
+// Same "parse the query string, then pipe through a number schema for
+// bounds" shape as integerQueryParam above, but for a signed decimal - used
+// for latitude/longitude query params (e.g. "-90.123456"), which
+// integerQueryParam's unsigned-integer-only pattern can't accept.
+const SIGNED_DECIMAL_PATTERN = /^-?\d+(\.\d+)?$/;
+
+export function numberQueryParam(numberSchema: z.ZodNumber) {
+  return z
+    .string()
+    .regex(SIGNED_DECIMAL_PATTERN, 'Must be a number')
+    .transform((value) => Number(value))
+    .pipe(numberSchema);
+}
+
 // Deliberately not z.coerce.boolean() - that treats any non-empty string
 // (including the literal "false") as truthy.
 export const booleanQuerySchema = z

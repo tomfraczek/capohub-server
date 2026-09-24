@@ -111,7 +111,7 @@ function buildService(setup: Setup) {
   // just returns empty/unconfigured, keeping every existing myCommunities/
   // capabilities test above unaffected.
   const communityOverviewService = {
-    getLocationSummary: jest.fn().mockResolvedValue({ configured: false }),
+    getLocationSummary: jest.fn().mockReturnValue({ configured: false }),
     getMySections: jest
       .fn()
       .mockResolvedValue({ items: [], total: 0, hasMore: false }),
@@ -149,7 +149,7 @@ describe('CommunityHomeService', () => {
       groups: [group],
     });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), null);
 
     expect(home.capabilities.canArchiveGroupIds).toEqual(['group-1']);
     expect(home.capabilities.canArchiveSectionIds).toEqual([]);
@@ -165,7 +165,7 @@ describe('CommunityHomeService', () => {
       groups: [group],
     });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), null);
 
     expect(home.capabilities.canManageMembersInSectionIds).toEqual([]);
     // There is no canManageMembersInGroupIds field at all - Group has no
@@ -188,7 +188,7 @@ describe('CommunityHomeService', () => {
       sectionMemberships: [membership],
     });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), null);
 
     expect(home.capabilities.canManageMembersInSectionIds).toEqual([
       'section-1',
@@ -214,7 +214,7 @@ describe('CommunityHomeService', () => {
       sectionMemberships: [membership],
     });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), null);
 
     expect(home.capabilities.canManageNotificationsInSectionIds).toEqual([]);
   });
@@ -231,7 +231,7 @@ describe('CommunityHomeService', () => {
       groups: [archivedGroup],
     });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), null);
 
     expect(home.myCommunities).toEqual([]);
     expect(home.capabilities.canRestoreGroupIds).toEqual(['group-1']);
@@ -246,7 +246,7 @@ describe('CommunityHomeService', () => {
       groups: [group],
     });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), null);
 
     for (const [key, value] of Object.entries(home.capabilities)) {
       if (key.endsWith('SectionIds')) {
@@ -266,7 +266,7 @@ describe('CommunityHomeService', () => {
       sectionMemberships: [membership],
     });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), null);
 
     expect(home.capabilities.canManageMembersInSectionIds).toEqual([]);
     expect(home.capabilities.canArchiveSectionIds).toEqual([]);
@@ -284,7 +284,7 @@ describe('CommunityHomeService', () => {
       groups: [group],
     });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), null);
 
     expect(home.capabilities.canCreateSectionInGroupIds).toEqual(['group-1']);
     expect(home.capabilities.canManageAnyCommunity).toBe(true);
@@ -302,7 +302,7 @@ describe('CommunityHomeService', () => {
         sectionMemberships: [membership],
       });
 
-      const home = await service.getHome(buildUser());
+      const home = await service.getHome(buildUser(), null);
 
       expect(home.capabilities.canCreateTrainingInSectionIds).toEqual([
         'section-1',
@@ -334,7 +334,7 @@ describe('CommunityHomeService', () => {
       sectionMemberships: [membership],
     });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), null);
 
     expect(home.capabilities.canCreateTrainingInSectionIds).toEqual([
       'section-1',
@@ -359,7 +359,7 @@ describe('CommunityHomeService', () => {
       sectionMemberships: [membership],
     });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), null);
 
     expect(home.capabilities.canCreateTrainingInSectionIds).toEqual([]);
     expect(home.capabilities.canCreateTrainingSeriesInSectionIds).toEqual([]);
@@ -376,7 +376,7 @@ describe('CommunityHomeService', () => {
       groups: [group],
     });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), null);
 
     expect(home.capabilities.canCreateTrainingInSectionIds).toEqual([]);
     expect(home.capabilities.canCreateTrainingSeriesInSectionIds).toEqual([]);
@@ -392,7 +392,7 @@ describe('CommunityHomeService', () => {
   it('returns an empty dashboard when the user participates in nothing', async () => {
     const { service } = buildService({ participation: [] });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), null);
 
     expect(home.myCommunities).toEqual([]);
     expect(home.summary.communitiesCount).toBe(0);

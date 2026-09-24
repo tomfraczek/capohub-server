@@ -1,7 +1,13 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { User } from '../users/entities/user.entity';
 import { CommunityHomeService } from './community-home.service';
+import {
+  locationContextQuerySchema,
+  LocationContextQueryDto,
+  resolveLocationContext,
+} from './dto/community-location-context.schema';
 import { CommunityHomeResponseDto } from './dto/community-home-response.dto';
 
 /**
@@ -19,10 +25,22 @@ export class CommunityHomeController {
   constructor(private readonly communityHomeService: CommunityHomeService) {}
 
   /**
-   * GET /community/home
+   * GET /community/home?latitude=&longitude=&countryCode=&city=&region= -
+   * the location params describe the caller's currently active location
+   * (device GPS or a SavedLocation) - see community-location-context.schema.ts.
+   * Omitted entirely when the caller has no active location yet (never
+   * pointed at a location the server itself remembers - see
+   * CommunityOverviewService's own class comment).
    */
   @Get('home')
-  getHome(@CurrentUser() user: User): Promise<CommunityHomeResponseDto> {
-    return this.communityHomeService.getHome(user);
+  getHome(
+    @CurrentUser() user: User,
+    @Query(new ZodValidationPipe(locationContextQuerySchema))
+    query: LocationContextQueryDto,
+  ): Promise<CommunityHomeResponseDto> {
+    return this.communityHomeService.getHome(
+      user,
+      resolveLocationContext(query),
+    );
   }
 }

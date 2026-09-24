@@ -32,14 +32,9 @@ import { SetAvatarPresetDto } from './dto/set-avatar-preset.schema';
 import { FormalGroupResponseDto } from './dto/formal-group-response.dto';
 import { PublicUserProfileResponseDto } from './dto/public-user-profile-response.dto';
 import { SetFormalGroupDto } from './dto/set-formal-group.schema';
-import {
-  SetUserDiscoveryLocationDto,
-  setUserDiscoveryLocationSchema,
-} from './dto/set-user-discovery-location.schema';
 import { buildSongCapabilities } from './dto/song-capabilities.dto';
 import { UpdateUserDto } from './dto/update-user.schema';
 import { UpdateUserProfileDto } from './dto/update-user-profile.schema';
-import type { UserDiscoveryLocationResponseDto } from './dto/user-discovery-location-response.dto';
 import {
   userSearchQuerySchema,
   UserSearchQueryDto,
@@ -49,7 +44,6 @@ import type { UserProfileResponseDto } from './dto/user-profile-response.dto';
 import type { UserResponseDto } from './dto/user-response.dto';
 import { User } from './entities/user.entity';
 import { UserIdentityService } from './user-identity.service';
-import { UserLocationService } from './user-location.service';
 import { UserProfileService } from './user-profile.service';
 import { toUserResponseDto } from './user.mapper';
 import { UserService } from './user.service';
@@ -65,7 +59,6 @@ export class UsersController {
     private readonly permissionService: PermissionService,
     private readonly r2StorageService: R2StorageService,
     private readonly userCheckInIdentityService: UserCheckInIdentityService,
-    private readonly userLocationService: UserLocationService,
   ) {}
 
   // Shared by every route below that returns a UserResponseDto - keeps
@@ -194,33 +187,6 @@ export class UsersController {
   @HttpCode(204)
   endMyFormalGroup(@CurrentUser() user: User): Promise<void> {
     return this.userProfileService.endFormalGroup(user);
-  }
-
-  // Discovery-only location (see user-discovery-location.entity.ts) - never
-  // the public-profile city/country field above (that stays gated by
-  // showLocation and carries no coordinates). `null` here means "not
-  // configured yet", mirrored by GET /community/home's
-  // `location.configured`.
-  @Get('me/discovery-location')
-  getMyDiscoveryLocation(
-    @CurrentUser() user: User,
-  ): Promise<UserDiscoveryLocationResponseDto | null> {
-    return this.userLocationService.getOwn(user);
-  }
-
-  @Put('me/discovery-location')
-  setMyDiscoveryLocation(
-    @CurrentUser() user: User,
-    @Body(new ZodValidationPipe(setUserDiscoveryLocationSchema))
-    dto: SetUserDiscoveryLocationDto,
-  ): Promise<UserDiscoveryLocationResponseDto> {
-    return this.userLocationService.setOwn(user, dto);
-  }
-
-  @Delete('me/discovery-location')
-  @HttpCode(204)
-  deleteMyDiscoveryLocation(@CurrentUser() user: User): Promise<void> {
-    return this.userLocationService.deleteOwn(user);
   }
 
   // Declared after every `me/*` route, and before `:userId/profile` below -

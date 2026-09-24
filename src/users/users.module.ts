@@ -10,8 +10,9 @@ import { SongLibraryModule } from '../song-library/song-library.module';
 import { StorageModule } from '../storage/storage.module';
 import { User } from './entities/user.entity';
 import { GooglePeopleApiService } from './google-people-api.service';
+import { SavedLocationsController } from './saved-locations.controller';
+import { SavedLocationsService } from './saved-locations.service';
 import { UserIdentityService } from './user-identity.service';
-import { UserLocationService } from './user-location.service';
 import { UserProfileService } from './user-profile.service';
 import { UserService } from './user.service';
 import { UsersController } from './users.controller';
@@ -48,7 +49,7 @@ import { UsersController } from './users.controller';
     // UserResponseDto (see user.mapper.ts's resolveUserAvatarUrl).
     StorageModule,
   ],
-  controllers: [UsersController],
+  controllers: [UsersController, SavedLocationsController],
   providers: [
     UserService,
     UserProfileService,
@@ -61,13 +62,14 @@ import { UsersController } from './users.controller';
     // TrainingsModule already do (see the service's own comment) - backs
     // GET /users/resolve-identity (see users.controller.ts).
     UserCheckInIdentityService,
-    // Backs GET/PUT/DELETE /users/me/discovery-location. Not exported -
-    // GroupsModule's CommunityOverviewService reads UserDiscoveryLocation
-    // directly via EntityManager instead (entities are auto-discovered
-    // globally - see groups.module.ts's own comment - and GroupsModule must
-    // never import UsersModule back, see that module's comment), so no
-    // cross-module DI is needed here.
-    UserLocationService,
+    // Backs GET/POST/PATCH/DELETE /users/me/locations. Not exported -
+    // GroupsModule's nearby-discovery endpoints now take a resolved
+    // {latitude, longitude, countryCode} as request params instead of
+    // looking up anything on User themselves (see
+    // CommunityOverviewService), so no cross-module DI is needed here
+    // either - a cleaner boundary than the UserDiscoveryLocation this
+    // replaces, which GroupsModule used to read directly via EntityManager.
+    SavedLocationsService,
   ],
   // UserIdentityService is additionally exported so a future
   // attendance/check-in module can call resolveUserByNumericCode without

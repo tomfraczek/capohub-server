@@ -20,6 +20,7 @@ import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
 import { CommunityHomeService } from './community-home.service';
 import { CommunityOverviewService } from './community-overview.service';
+import { CommunityLocationContext } from './dto/community-location-context.schema';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupPermissionService } from './permissions/group-permission.service';
 import { RoleAssignmentsService } from './role-assignments.service';
@@ -33,6 +34,14 @@ interface BoundedSection {
 }
 
 const EMPTY: BoundedSection = { items: [], total: 0, hasMore: false };
+
+const CONFIGURED_LOCATION: CommunityLocationContext = {
+  latitude: 52.4064,
+  longitude: 16.9252,
+  countryCode: 'PL',
+  city: 'Poznań',
+  region: null,
+};
 
 function buildUser(): User {
   const user = new User();
@@ -56,7 +65,11 @@ function buildService(routing: OverviewRouting) {
   } as unknown as EntityManager;
 
   const getNearbySections = jest.fn(
-    (_userId: string, params: { radiusKm?: number }) => {
+    (
+      _userId: string,
+      _location: CommunityLocationContext | null,
+      params: { radiusKm?: number },
+    ) => {
       if (params.radiusKm) {
         return Promise.resolve(routing.expandedSections ?? EMPTY);
       }
@@ -64,7 +77,11 @@ function buildService(routing: OverviewRouting) {
     },
   );
   const getNearbyGroups = jest.fn(
-    (_userId: string, params: { radiusKm?: number }) => {
+    (
+      _userId: string,
+      _location: CommunityLocationContext | null,
+      params: { radiusKm?: number },
+    ) => {
       if (params.radiusKm) {
         return Promise.resolve(routing.expandedGroups ?? EMPTY);
       }
@@ -79,7 +96,7 @@ function buildService(routing: OverviewRouting) {
     .mockResolvedValue(routing.countryGroups ?? EMPTY);
 
   const communityOverviewService = {
-    getLocationSummary: jest.fn().mockResolvedValue(routing.location),
+    getLocationSummary: jest.fn().mockReturnValue(routing.location),
     getMySections: jest.fn().mockResolvedValue(EMPTY),
     getMyGroups: jest.fn().mockResolvedValue(EMPTY),
     getNearbySections,
@@ -125,7 +142,7 @@ describe('CommunityHomeService - discovery fallback', () => {
     const { service, getNearbySections, getCountryDiscoverySections } =
       buildService({ location: { configured: false } });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), null);
 
     expect(home.discoveryContext).toEqual({
       nearbyRadiusKm: 50,
@@ -151,7 +168,7 @@ describe('CommunityHomeService - discovery fallback', () => {
         },
       });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), CONFIGURED_LOCATION);
 
     expect(home.discoveryContext.fallbackType).toBe('NONE');
     expect(getNearbySections).toHaveBeenCalledTimes(1);
@@ -169,7 +186,7 @@ describe('CommunityHomeService - discovery fallback', () => {
       expandedSections,
     });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), CONFIGURED_LOCATION);
 
     expect(home.discoveryContext.fallbackType).toBe('EXPANDED_RADIUS');
     expect(home.discoverySections).toEqual(expandedSections);
@@ -187,7 +204,7 @@ describe('CommunityHomeService - discovery fallback', () => {
       countrySections,
     });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), CONFIGURED_LOCATION);
 
     expect(home.discoveryContext.fallbackType).toBe('COUNTRY');
     expect(home.discoverySections).toEqual(countrySections);
@@ -196,7 +213,7 @@ describe('CommunityHomeService - discovery fallback', () => {
   it('5. every tier empty: fallbackType NONE, discoverySections/discoveryGroups stay empty (never an error)', async () => {
     const { service } = buildService({ location: { configured: true } });
 
-    const home = await service.getHome(buildUser());
+    const home = await service.getHome(buildUser(), CONFIGURED_LOCATION);
 
     expect(home.discoveryContext.fallbackType).toBe('NONE');
     expect(home.discoverySections).toEqual(EMPTY);

@@ -63,14 +63,11 @@ export function toUserProfileResponseDto(
     firstName: user.firstName,
     lastName: user.lastName,
     apelido: user.apelido,
-    city: user.city,
-    country: user.country,
     capoeiraStartedAt: toDateOnly(user.capoeiraStartedAt),
     profileComplete: user.firstName !== null && user.lastName !== null,
     privacy: {
       showFullName: user.showFullName,
       showApelido: user.showApelido,
-      showLocation: user.showLocation,
       showCapoeiraStartedAt: user.showCapoeiraStartedAt,
       showSections: user.showSections,
       showFormalGroup: user.showFormalGroup,
@@ -114,7 +111,6 @@ export function toFormalGroupResponseDto(
 export interface PublicProfileViewerContext {
   canSeeFullName: boolean;
   canSeeApelido: boolean;
-  canSeeLocation: boolean;
   canSeeCapoeiraStartedAt: boolean;
   sections: Section[] | null;
   // The target's Role(s) per Section id, already scoped to `sections` -
@@ -146,8 +142,6 @@ export function toPublicUserProfileResponseDto(
     firstName: fullNameKnown ? target.firstName : null,
     lastName: fullNameKnown ? target.lastName : null,
     apelido: apelidoKnown ? target.apelido : null,
-    city: ctx.canSeeLocation ? target.city : null,
-    country: ctx.canSeeLocation ? target.country : null,
     capoeiraStartedAt: ctx.canSeeCapoeiraStartedAt
       ? toDateOnly(target.capoeiraStartedAt)
       : null,
