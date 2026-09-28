@@ -20,7 +20,6 @@ function buildLocation(overrides: Partial<SavedLocation> = {}): SavedLocation {
   location.countryCode = 'PL';
   location.latitude = 52.4064;
   location.longitude = 16.9252;
-  location.radiusKm = 50;
   location.notificationsEnabled = false;
   location.createdAt = new Date('2026-01-01T00:00:00.000Z');
   location.updatedAt = new Date('2026-01-01T00:00:00.000Z');
@@ -99,13 +98,13 @@ describe('SavedLocationsService', () => {
         countryCode: 'PL',
         latitude: 51.1079,
         longitude: 17.0385,
-        radiusKm: 25,
       });
 
       expect(persist).toHaveBeenCalled();
       expect(flush).toHaveBeenCalled();
       expect(result.city).toBe('Wrocław');
-      expect(result.radiusKm).toBe(25);
+      // A SavedLocation only answers "where" - no search radius at all.
+      expect(result).not.toHaveProperty('radiusKm');
     });
 
     it('never sets the user field from anything other than the caller', async () => {
@@ -120,7 +119,6 @@ describe('SavedLocationsService', () => {
         countryCode: null,
         latitude: 0,
         longitude: 0,
-        radiusKm: 50,
       });
 
       // toResponseDto never echoes back the user relation - this asserts the
@@ -131,17 +129,14 @@ describe('SavedLocationsService', () => {
   });
 
   describe('update', () => {
-    it('updates only the fields present in the input, leaving the rest untouched', async () => {
-      const existing = buildLocation({ name: 'Dom', radiusKm: 50 });
+    it('leaves the name untouched when it is omitted from the input', async () => {
+      const existing = buildLocation({ name: 'Dom' });
       const { em, flush } = buildMockEm({ findOneResult: existing });
       const service = new SavedLocationsService(em);
 
-      const result = await service.update(buildUser(), 'location-1', {
-        radiusKm: 100,
-      });
+      const result = await service.update(buildUser(), 'location-1', {});
 
       expect(result.name).toBe('Dom');
-      expect(result.radiusKm).toBe(100);
       expect(flush).toHaveBeenCalled();
     });
 

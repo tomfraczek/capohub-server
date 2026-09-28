@@ -109,6 +109,14 @@ export class UserProfileService {
         ? parseDateOnly(changes.capoeiraStartedAt)
         : null;
     }
+    if (changes.birthDate !== undefined) {
+      user.birthDate = changes.birthDate
+        ? parseDateOnly(changes.birthDate)
+        : null;
+    }
+    if (changes.phoneNumber !== undefined) {
+      user.phoneNumber = changes.phoneNumber;
+    }
     if (changes.showFullName !== undefined) {
       user.showFullName = changes.showFullName;
     }

@@ -645,6 +645,44 @@ describe('User Profile (e2e)', () => {
       expect(nullValue.statusCode).toBe(400);
     });
 
+    it('updates and clears the private birthDate/phoneNumber, never exposing them publicly', async () => {
+      const updated = (await patchOwnProfile(TARGET_TOKEN, {
+        birthDate: '1990-03-15',
+        phoneNumber: '  +48 600 100 200  ',
+      })) as UserProfileResponseDto;
+      expect(updated.birthDate).toBe('1990-03-15');
+      expect(updated.phoneNumber).toBe('+48 600 100 200');
+
+      const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
+      const publicProfile = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(publicProfile).not.toHaveProperty('birthDate');
+      expect(publicProfile).not.toHaveProperty('phoneNumber');
+
+      const cleared = (await patchOwnProfile(TARGET_TOKEN, {
+        birthDate: null,
+        phoneNumber: null,
+      })) as UserProfileResponseDto;
+      expect(cleared.birthDate).toBeNull();
+      expect(cleared.phoneNumber).toBeNull();
+    });
+
+    it('rejects an invalid phoneNumber or a future birthDate', async () => {
+      for (const body of [
+        { phoneNumber: 'abc123' },
+        { phoneNumber: '123' },
+        { phoneNumber: '' },
+        { birthDate: '2999-01-01' },
+        { birthDate: '1850-01-01' },
+      ]) {
+        const response = (await patchOwnProfile(
+          SECTION_ADMIN_TOKEN,
+          body,
+          400,
+        )) as HttpErrorResponse;
+        expect(response.statusCode).toBe(400);
+      }
+    });
+
     it('never exposes email/phone/account fields on the own-profile DTO', async () => {
       const profile = await getOwnProfile(VIEWER_TOKEN);
       expect(profile).not.toHaveProperty('email');

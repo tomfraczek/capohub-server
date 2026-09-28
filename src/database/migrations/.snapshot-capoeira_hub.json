@@ -11570,22 +11570,6 @@
           "enumItems": [],
           "mappedType": "float"
         },
-        "radius_km": {
-          "name": "radius_km",
-          "type": "int2",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": 16,
-          "scale": 0,
-          "default": "50",
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "smallint"
-        },
         "notifications_enabled": {
           "name": "notifications_enabled",
           "type": "bool",
@@ -17552,6 +17536,38 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "boolean"
+        },
+        "birth_date": {
+          "name": "birth_date",
+          "type": "date",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 0,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "date"
+        },
+        "phone_number": {
+          "name": "phone_number",
+          "type": "varchar(32)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 32,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "users",

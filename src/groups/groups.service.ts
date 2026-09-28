@@ -37,6 +37,7 @@ import {
   toGroupSummaryResponseDto,
 } from './mappers/group.mapper';
 import { RoleAssignmentsService } from './role-assignments.service';
+import { userOwnsGroup } from './user-owns-group';
 
 @Injectable()
 export class GroupsService {
@@ -189,6 +190,12 @@ export class GroupsService {
           code: 'USER_ALREADY_HAS_FORMAL_GROUP',
           message:
             'You already have an active formal group - leave/change it before creating a new one',
+        });
+      }
+      if (await userOwnsGroup(em, user.id)) {
+        throw new ConflictException({
+          code: 'USER_ALREADY_OWNS_GROUP',
+          message: 'You already own a group - a user may own only one',
         });
       }
 

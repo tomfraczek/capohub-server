@@ -36,6 +36,8 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.lastName = null;
   user.apelido = null;
   user.capoeiraStartedAt = null;
+  user.birthDate = null;
+  user.phoneNumber = null;
   user.showFullName = false;
   user.showApelido = false;
   user.showCapoeiraStartedAt = false;
@@ -151,6 +153,22 @@ describe('toUserProfileResponseDto', () => {
       null,
     );
     expect(dto.profileComplete).toBe(true);
+  });
+
+  it('maps the private birthDate/phoneNumber on the own profile', () => {
+    const dto = toUserProfileResponseDto(
+      buildUser({
+        birthDate: new Date('1990-03-15'),
+        phoneNumber: '+48 600 100 200',
+      }),
+      null,
+    );
+    expect(dto.birthDate).toBe('1990-03-15');
+    expect(dto.phoneNumber).toBe('+48 600 100 200');
+
+    const empty = toUserProfileResponseDto(buildUser(), null);
+    expect(empty.birthDate).toBeNull();
+    expect(empty.phoneNumber).toBeNull();
   });
 
   it('reflects every privacy toggle verbatim, unfiltered for the owner', () => {

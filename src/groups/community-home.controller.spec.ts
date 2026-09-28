@@ -41,7 +41,7 @@ describe('CommunityHomeController', () => {
 
     const result = await controller.getHome(user, {});
 
-    expect(getHome).toHaveBeenCalledWith(user, null);
+    expect(getHome).toHaveBeenCalledWith(user, null, undefined);
     expect(result).toBe(response);
   });
 
@@ -58,12 +58,40 @@ describe('CommunityHomeController', () => {
       countryCode: 'PL',
     });
 
-    expect(getHome).toHaveBeenCalledWith(user, {
+    expect(getHome).toHaveBeenCalledWith(
+      user,
+      {
+        latitude: 52.4064,
+        longitude: 16.9252,
+        countryCode: 'PL',
+        city: null,
+        region: null,
+      },
+      undefined,
+    );
+  });
+
+  it('forwards the search radiusKm from the query as a separate filter, never folded into the location', async () => {
+    const getHome = jest.fn().mockResolvedValue({ myCommunities: [] });
+    const controller = buildController({ getHome });
+    const user = Object.assign(new User(), { id: 'user-1' });
+
+    await controller.getHome(user, {
       latitude: 52.4064,
       longitude: 16.9252,
-      countryCode: 'PL',
-      city: null,
-      region: null,
+      radiusKm: 25,
     });
+
+    expect(getHome).toHaveBeenCalledWith(
+      user,
+      {
+        latitude: 52.4064,
+        longitude: 16.9252,
+        countryCode: null,
+        city: null,
+        region: null,
+      },
+      25,
+    );
   });
 });

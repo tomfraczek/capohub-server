@@ -6,7 +6,7 @@ import { User } from './user.entity';
 // CommunityOverviewService/GroupsModule) and, later, location-scoped
 // notifications (see `notificationsEnabled` below). Replaces the old
 // UserDiscoveryLocation (one row per user) - a user may now have many of
-// these, each with its own search radius, switched between via a client-
+// these, switched between via a client-
 // side "active location" concept (device GPS or one specific
 // SavedLocation) that this entity deliberately knows nothing about: no
 // `isActive`/`isDefault` flag lives here, since "which one is active" is a
@@ -59,13 +59,10 @@ export class SavedLocation extends BaseEntity {
   @Property({ type: 'float' })
   longitude!: number;
 
-  // Search radius (km) this location's own nearby queries use, distinct
-  // from a device-GPS search's own client-local `deviceRadiusKm` (which
-  // has no backend column at all - see the mobile ActiveLocation store).
-  // Defaults to DEFAULT_NEARBY_RADIUS_KM (community-overview.constants.ts)
-  // for consistency with the rest of nearby discovery.
-  @Property({ type: 'smallint' })
-  radiusKm = 50;
+  // Deliberately no search radius here - a SavedLocation only answers
+  // "where". How far to search from it is a per-search filter sent with
+  // each nearby/home request (`?radiusKm=`, see community-overview-query.
+  // schema.ts), the same for a SavedLocation as for device GPS.
 
   // Prepares this model for a future "notify me about activity near this
   // saved place, independent of whichever location is currently active"

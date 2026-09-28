@@ -36,7 +36,6 @@ export class SavedLocationsService {
     location.countryCode = input.countryCode;
     location.latitude = input.latitude;
     location.longitude = input.longitude;
-    location.radiusKm = input.radiusKm;
     await this.em.persist(location).flush();
     return toResponseDto(location);
   }
@@ -49,9 +48,6 @@ export class SavedLocationsService {
     const location = await this.loadOwn(user.id, id);
     if (input.name !== undefined) {
       location.name = input.name;
-    }
-    if (input.radiusKm !== undefined) {
-      location.radiusKm = input.radiusKm;
     }
     await this.em.flush();
     return toResponseDto(location);
@@ -86,7 +82,6 @@ function toResponseDto(location: SavedLocation): SavedLocationResponseDto {
     countryCode: location.countryCode,
     latitude: location.latitude,
     longitude: location.longitude,
-    radiusKm: location.radiusKm,
     notificationsEnabled: location.notificationsEnabled,
     createdAt: location.createdAt.toISOString(),
     updatedAt: location.updatedAt.toISOString(),

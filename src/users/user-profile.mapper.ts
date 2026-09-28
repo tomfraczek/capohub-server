@@ -64,6 +64,8 @@ export function toUserProfileResponseDto(
     lastName: user.lastName,
     apelido: user.apelido,
     capoeiraStartedAt: toDateOnly(user.capoeiraStartedAt),
+    birthDate: toDateOnly(user.birthDate),
+    phoneNumber: user.phoneNumber,
     profileComplete: user.firstName !== null && user.lastName !== null,
     privacy: {
       showFullName: user.showFullName,

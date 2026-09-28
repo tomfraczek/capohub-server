@@ -37,6 +37,7 @@ import {
   toCommunityHomeJoinRequestDto,
 } from './mappers/community-home.mapper';
 import { MembershipRequestsService } from './membership-requests.service';
+import { userOwnsGroup } from './user-owns-group';
 import { GroupPermission } from './permissions/group-permission.enum';
 import { GroupPermissionService } from './permissions/group-permission.service';
 import { RoleAssignmentsService } from './role-assignments.service';
@@ -77,6 +78,9 @@ export class CommunityHomeService {
   async getHome(
     user: User,
     location: CommunityLocationContext | null,
+    // The caller-chosen search radius (see communityHomeQuerySchema) -
+    // a per-request filter, never a property of the location itself.
+    radiusKm: number = DEFAULT_NEARBY_RADIUS_KM,
   ): Promise<CommunityHomeResponseDto> {
     // Sequential, not Promise.all - concurrent queries on the same
     // EntityManager/connection race each other at the driver level.
@@ -170,11 +174,12 @@ export class CommunityHomeService {
       await this.communityOverviewService.getNearbySections(user.id, location, {
         limit: HOME_NEARBY_SECTIONS_LIMIT,
         offset: 0,
+        radiusKm,
       });
     const nearbyGroups = await this.communityOverviewService.getNearbyGroups(
       user.id,
       location,
-      { limit: HOME_NEARBY_GROUPS_LIMIT, offset: 0 },
+      { limit: HOME_NEARBY_GROUPS_LIMIT, offset: 0, radiusKm },
     );
     const { discoverySections, discoveryGroups, discoveryContext } =
       await this.resolveDiscoveryFallback(
@@ -182,6 +187,7 @@ export class CommunityHomeService {
         location,
         locationSummary.configured,
         nearbySections.total === 0 && nearbyGroups.total === 0,
+        radiusKm,
       );
 
     // A user may have at most one *active* formal Group (see
@@ -197,6 +203,9 @@ export class CommunityHomeService {
         user: user.id,
         endedOn: null,
       })) > 0;
+    // Owning a Group blocks creating another one too, affiliation or not -
+    // see userOwnsGroup's own comment.
+    const ownsGroup = await userOwnsGroup(this.em, user.id);
 
     return {
       myCommunities: communities,
@@ -224,7 +233,7 @@ export class CommunityHomeService {
         // hasActiveFormalGroup above). Same for a standalone Section (no
         // parent Group, and no such one-per-user limit) - see
         // SectionsService.createStandalone and ADR-032.
-        canCreateGroup: !hasActiveFormalGroup,
+        canCreateGroup: !hasActiveFormalGroup && !ownsGroup,
         canCreateStandaloneSection: true,
         ...capabilityLists,
         canManageAnyCommunity:
@@ -242,7 +251,7 @@ export class CommunityHomeService {
    *  - `locationConfigured` is false -> 'NONE' immediately, no extra
    *    queries at all (an unconfigured location already gets its own CTA on
    *    the frontend - the fallback would never be shown next to it anyway).
-   *  - nearby (DEFAULT_NEARBY_RADIUS_KM) already found something -> 'NONE',
+   *  - nearby (the caller's own radiusKm) already found something -> 'NONE',
    *    same reasoning: nothing to fall back from.
    *  - otherwise, retries once at EXPANDED_NEARBY_RADIUS_KM; only if THAT
    *    also comes back fully empty does it fall through to the country-wide
@@ -256,13 +265,14 @@ export class CommunityHomeService {
     location: CommunityLocationContext | null,
     locationConfigured: boolean,
     nearbyIsEmpty: boolean,
+    nearbyRadiusKm: number,
   ): Promise<{
     discoverySections: CommunityHomeResponseDto['discoverySections'];
     discoveryGroups: CommunityHomeResponseDto['discoveryGroups'];
     discoveryContext: CommunityDiscoveryContextDto;
   }> {
     const context = (fallbackType: DiscoveryFallbackType) => ({
-      nearbyRadiusKm: DEFAULT_NEARBY_RADIUS_KM,
+      nearbyRadiusKm,
       expandedRadiusKm: EXPANDED_NEARBY_RADIUS_KM,
       fallbackType,
     });

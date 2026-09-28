@@ -192,6 +192,18 @@ export class User extends BaseEntity {
   @Property({ nullable: true, type: 'date' })
   capoeiraStartedAt: Date | null = null;
 
+  // Private contact/personal data - only ever returned on the owner's own
+  // profile (UserProfileResponseDto), never on PublicUserProfileResponseDto
+  // or any search/list DTO, and deliberately with no privacy toggle: there
+  // is no "show to others" option for either.
+  @Property({ nullable: true, type: 'date' })
+  birthDate: Date | null = null;
+
+  // Stored as entered (trimmed) - see update-user-profile.schema.ts for the
+  // accepted format. No uniqueness or verification: not used for auth.
+  @Property({ nullable: true, length: 32 })
+  phoneNumber: string | null = null;
+
   // ─── Profile privacy (see UserProfileService.getPublicProfile) ────────
   // All default true (visible) - a freshly created profile shows every
   // field below (see PublicUserProfileResponseDto) until the owner

@@ -18,6 +18,7 @@
 
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
+import { EXPANDED_NEARBY_RADIUS_KM } from './community-overview.constants';
 import { CommunityHomeService } from './community-home.service';
 import { CommunityOverviewService } from './community-overview.service';
 import { CommunityLocationContext } from './dto/community-location-context.schema';
@@ -74,7 +75,9 @@ function buildService(routing: OverviewRouting) {
       _location: CommunityLocationContext | null,
       params: { radiusKm?: number },
     ) => {
-      if (params.radiusKm) {
+      // Home now always passes its own (caller-chosen) radius - only the
+      // expanded tier's EXPANDED_NEARBY_RADIUS_KM call is routed to it.
+      if (params.radiusKm === EXPANDED_NEARBY_RADIUS_KM) {
         return Promise.resolve(routing.expandedSections ?? EMPTY);
       }
       return Promise.resolve(routing.nearbySections ?? EMPTY);
@@ -86,7 +89,9 @@ function buildService(routing: OverviewRouting) {
       _location: CommunityLocationContext | null,
       params: { radiusKm?: number },
     ) => {
-      if (params.radiusKm) {
+      // Home now always passes its own (caller-chosen) radius - only the
+      // expanded tier's EXPANDED_NEARBY_RADIUS_KM call is routed to it.
+      if (params.radiusKm === EXPANDED_NEARBY_RADIUS_KM) {
         return Promise.resolve(routing.expandedGroups ?? EMPTY);
       }
       return Promise.resolve(routing.nearbyGroups ?? EMPTY);
@@ -195,6 +200,34 @@ describe('CommunityHomeService - discovery fallback', () => {
     expect(home.discoveryContext.fallbackType).toBe('EXPANDED_RADIUS');
     expect(home.discoverySections).toEqual(expandedSections);
     expect(getCountryDiscoverySections).not.toHaveBeenCalled();
+  });
+
+  // The radius is a per-request filter (mobile "Odkryj sekcje" slider):
+  // Home's own nearby read and discoveryContext.nearbyRadiusKm must both
+  // follow it, never a fixed 50km.
+  it('uses the caller-chosen radiusKm for its own nearby read and echoes it as nearbyRadiusKm', async () => {
+    const { service, getNearbySections, getNearbyGroups } = buildService({
+      location: { configured: true },
+      nearbySections: {
+        items: [{ id: 'section-1' }],
+        total: 1,
+        hasMore: false,
+      },
+    });
+
+    const home = await service.getHome(buildUser(), CONFIGURED_LOCATION, 25);
+
+    expect(getNearbySections).toHaveBeenCalledWith(
+      expect.any(String),
+      CONFIGURED_LOCATION,
+      expect.objectContaining({ radiusKm: 25 }),
+    );
+    expect(getNearbyGroups).toHaveBeenCalledWith(
+      expect.any(String),
+      CONFIGURED_LOCATION,
+      expect.objectContaining({ radiusKm: 25 }),
+    );
+    expect(home.discoveryContext.nearbyRadiusKm).toBe(25);
   });
 
   it('4. nearby AND expanded both empty, country tier has results: fallbackType COUNTRY', async () => {

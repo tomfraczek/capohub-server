@@ -11,7 +11,6 @@ export interface SavedLocationResponseDto {
   countryCode: string | null;
   latitude: number;
   longitude: number;
-  radiusKm: number;
   notificationsEnabled: boolean;
   createdAt: string;
   updatedAt: string;

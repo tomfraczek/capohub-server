@@ -1,10 +1,6 @@
 import { z } from 'zod';
 import { createZodDto } from '../../common/dto/create-zod-dto';
 import { isValidIsoCountryCode } from '../../common/validation/iso-3166-alpha2';
-import {
-  DEFAULT_SAVED_LOCATION_RADIUS_KM,
-  MAX_SAVED_LOCATION_RADIUS_KM,
-} from '../saved-location.constants';
 
 const nullableTextSchema = (maxLength: number) =>
   z
@@ -20,7 +16,9 @@ const nullableTextSchema = (maxLength: number) =>
 // never from freehand latitude/longitude typed by the caller - the client
 // enforces that by construction (the "Dodaj lokalizację" flow only ever
 // forwards a search result here), this schema just validates the shape
-// lands in range regardless of where it came from.
+// lands in range regardless of where it came from. No search radius - see
+// SavedLocation's own comment (an older client still sending `radiusKm` is
+// fine: z.object strips unknown keys rather than rejecting them).
 export const createSavedLocationSchema = z.object({
   name: nullableTextSchema(100),
   city: nullableTextSchema(100),
@@ -37,12 +35,6 @@ export const createSavedLocationSchema = z.object({
     .transform((value) => (value ? value : null)),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
-  radiusKm: z
-    .number()
-    .int()
-    .positive()
-    .max(MAX_SAVED_LOCATION_RADIUS_KM)
-    .default(DEFAULT_SAVED_LOCATION_RADIUS_KM),
 });
 
 export class CreateSavedLocationDto extends createZodDto(

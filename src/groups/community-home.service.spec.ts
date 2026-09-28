@@ -15,6 +15,7 @@ import { User } from '../users/entities/user.entity';
 import { CommunityHomeService } from './community-home.service';
 import { CommunityOverviewService } from './community-overview.service';
 import { FormalGroupAffiliation } from './entities/formal-group-affiliation.entity';
+import { RoleAssignment } from './entities/role-assignment.entity';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
 import { SectionMembership } from './entities/section-membership.entity';
@@ -71,6 +72,7 @@ interface Setup {
   sections?: Section[];
   sectionMemberships?: SectionMembership[];
   hasActiveFormalGroup?: boolean;
+  ownsGroup?: boolean;
 }
 
 function buildService(setup: Setup) {
@@ -88,6 +90,10 @@ function buildService(setup: Setup) {
     count: jest.fn((entity: unknown) => {
       if (entity === FormalGroupAffiliation) {
         return Promise.resolve(setup.hasActiveFormalGroup ? 1 : 0);
+      }
+      // userOwnsGroup's OWNER RoleAssignment count - same opt-in default.
+      if (entity === RoleAssignment) {
+        return Promise.resolve(setup.ownsGroup ? 1 : 0);
       }
       return Promise.resolve(0);
     }),
@@ -408,6 +414,22 @@ describe('CommunityHomeService', () => {
     expect(home.summary.communitiesCount).toBe(0);
     expect(home.capabilities.canCreateGroup).toBe(true);
     expect(home.capabilities.canManageAnyCommunity).toBe(false);
+  });
+
+  // Owners of a Group created before GroupsService.create started writing
+  // the founder's FormalGroupAffiliation have no active affiliation - owning
+  // the Group alone must still block creating a second one.
+  it('canCreateGroup is false when the user owns a Group but has no active FormalGroupAffiliation', async () => {
+    const { service } = buildService({
+      participation: [],
+      hasActiveFormalGroup: false,
+      ownsGroup: true,
+    });
+
+    const home = await service.getHome(buildUser(), null);
+
+    expect(home.capabilities.canCreateGroup).toBe(false);
+    expect(home.capabilities.canCreateStandaloneSection).toBe(true);
   });
 
   it('canCreateGroup is false when the user already has an active FormalGroupAffiliation', async () => {

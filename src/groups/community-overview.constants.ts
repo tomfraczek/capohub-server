@@ -19,10 +19,19 @@ export const HOME_NEARBY_SECTIONS_LIMIT = 10;
 export const HOME_NEARBY_GROUPS_LIMIT = 10;
 
 // Default nearby search radius, in kilometers - used whenever a caller does
-// not override it via `?radiusKm=` on the paginated nearby endpoints (Home
-// itself never accepts an override - it always uses this default).
+// not send `?radiusKm=` (GET /community/home and the paginated nearby
+// endpoints alike). The radius is always a per-request search filter, never
+// a property of a stored location.
 export const DEFAULT_NEARBY_RADIUS_KM = 50;
 export const MAX_NEARBY_RADIUS_KM = 300;
+
+// Upper bound of the caller-chosen search radius on GET /community/home
+// (the mobile "Odkryj sekcje" radius slider). Deliberately lower than
+// MAX_NEARBY_RADIUS_KM: /nearby must also accept EXPANDED_NEARBY_RADIUS_KM
+// (150) for the expanded-radius tier's own "Zobacz wszystkie" list, but the
+// radius a user picks themselves never goes past this - and always staying
+// below EXPANDED_NEARBY_RADIUS_KM keeps the expanded tier a real widening.
+export const MAX_HOME_SEARCH_RADIUS_KM = 100;
 
 // Discovery fallback (see CommunityHomeService.getHome and this feature's
 // own report, "Community Home nie może być pusty") - when the caller's own

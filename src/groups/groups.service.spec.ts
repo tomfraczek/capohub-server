@@ -86,6 +86,7 @@ interface MockRouting {
   children?: Group[];
   sections?: Section[];
   formalGroupAffiliationResult?: FormalGroupAffiliation | null;
+  ownedGroupCount?: number;
 }
 
 function buildMockEm(routing: MockRouting = {}) {
@@ -149,7 +150,13 @@ function buildMockEm(routing: MockRouting = {}) {
     throw new Error(`Unexpected find entity in test mock: ${String(entity)}`);
   });
 
-  const count = jest.fn().mockResolvedValue(0);
+  // create()'s userOwnsGroup pre-check counts OWNER RoleAssignments -
+  // defaults to "owns no Group" unless a test routes one.
+  const count = jest.fn((entity: unknown) =>
+    Promise.resolve(
+      entity === RoleAssignment ? (routing.ownedGroupCount ?? 0) : 0,
+    ),
+  );
 
   const raw = {
     findOne,
@@ -283,6 +290,18 @@ describe('GroupsService', () => {
       // ever persisted - and the existing affiliation is left untouched.
       expect(persist).not.toHaveBeenCalled();
       expect(existingAffiliation.endedOn).toBeNull();
+    });
+
+    it('rejects with 409 USER_ALREADY_OWNS_GROUP when the user owns a Group but has no active formal affiliation, and creates nothing', async () => {
+      const { em, persist } = buildMockEm({ ownedGroupCount: 1 });
+      const { service } = buildService(em);
+      const promise = service.create(buildUser(), buildCreateInput());
+
+      await expect(promise).rejects.toBeInstanceOf(ConflictException);
+      await expect(promise).rejects.toMatchObject({
+        response: { code: 'USER_ALREADY_OWNS_GROUP' },
+      });
+      expect(persist).not.toHaveBeenCalled();
     });
 
     it('rolls back the whole transaction when creating the FormalGroupAffiliation fails', async () => {

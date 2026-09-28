@@ -26,6 +26,10 @@ export interface UserProfileResponseDto {
   lastName: string | null;
   apelido: string | null;
   capoeiraStartedAt: string | null;
+  // Private - own profile only, never on PublicUserProfileResponseDto (see
+  // User.birthDate/phoneNumber).
+  birthDate: string | null;
+  phoneNumber: string | null;
   // true only once both firstName and lastName have been set - never
   // reverts to false afterwards, since UpdateUserProfileDto never allows
   // clearing either back to null. Backend-only signal: no endpoint in this

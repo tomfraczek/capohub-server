@@ -999,9 +999,11 @@ describe('Community Home (e2e)', () => {
         countryCode: 'PL',
         latitude: 52.4064,
         longitude: 16.9252,
-        radiusKm: 50,
         notificationsEnabled: false,
       });
+      // A SavedLocation only answers "where" - the search radius is a
+      // per-request filter, never stored on it.
+      expect(poznan).not.toHaveProperty('radiusKm');
 
       const wroclaw = await createSavedLocation(tokenFor('ch-newuser'), {
         name: 'Praca',
@@ -1009,9 +1011,8 @@ describe('Community Home (e2e)', () => {
         countryCode: 'PL',
         latitude: 51.1079,
         longitude: 17.0385,
-        radiusKm: 25,
       });
-      expect(wroclaw).toMatchObject({ name: 'Praca', radiusKm: 25 });
+      expect(wroclaw).toMatchObject({ name: 'Praca' });
 
       const afterList = await bodyOf<SavedLocationResponseDto[]>(
         request(app.getHttpServer())
@@ -1052,10 +1053,12 @@ describe('Community Home (e2e)', () => {
       expect(renamed.city).toBe(location.city);
     });
 
-    it('PATCH radiusKm-only leaves the name untouched', async () => {
+    it('ignores a radiusKm sent by an older client - on create and on PATCH - never storing or echoing it', async () => {
       const location = await createSavedLocation(tokenFor('ch-newuser'), {
         name: 'Dom',
+        radiusKm: 25,
       });
+      expect(location).not.toHaveProperty('radiusKm');
 
       const updated = await bodyOf<SavedLocationResponseDto>(
         request(app.getHttpServer())
@@ -1064,11 +1067,11 @@ describe('Community Home (e2e)', () => {
           .send({ radiusKm: 100 })
           .expect(200),
       );
-      expect(updated.radiusKm).toBe(100);
+      expect(updated).not.toHaveProperty('radiusKm');
       expect(updated.name).toBe('Dom');
     });
 
-    it('PATCH silently ignores an attempt to change latitude/longitude - only name/radiusKm are accepted', async () => {
+    it('PATCH silently ignores an attempt to change latitude/longitude - only name is accepted', async () => {
       const location = await createSavedLocation(tokenFor('ch-newuser'));
 
       const updated = await bodyOf<SavedLocationResponseDto>(
@@ -1132,20 +1135,6 @@ describe('Community Home (e2e)', () => {
           countryCode: 'PL',
           latitude: 200,
           longitude: 16.9252,
-        })
-        .expect(400);
-    });
-
-    it('rejects an out-of-range radiusKm', async () => {
-      await request(app.getHttpServer())
-        .post('/api/v1/users/me/locations')
-        .set('Authorization', `Bearer ${tokenFor('ch-newuser')}`)
-        .send({
-          city: 'Poznań',
-          countryCode: 'PL',
-          latitude: 52.4064,
-          longitude: 16.9252,
-          radiusKm: 1000,
         })
         .expect(400);
     });
