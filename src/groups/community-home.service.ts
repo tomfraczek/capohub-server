@@ -22,6 +22,7 @@ import {
   CommunityHomeCommunityDto,
   CommunityHomeResponseDto,
 } from './dto/community-home-response.dto';
+import { FormalGroupAffiliation } from './entities/formal-group-affiliation.entity';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
 import { SectionMembership } from './entities/section-membership.entity';
@@ -183,6 +184,20 @@ export class CommunityHomeService {
         nearbySections.total === 0 && nearbyGroups.total === 0,
       );
 
+    // A user may have at most one *active* formal Group (see
+    // formal-group-affiliation.entity.ts) - GroupsService.create now sets
+    // the new Group as the creator's formal Group directly, so creating a
+    // second one is pointless and is blocked server-side with
+    // USER_ALREADY_HAS_FORMAL_GROUP (see that method's own comment).
+    // canCreateGroup mirrors that rule here so the frontend's "Utwórz
+    // grupę" CTA can hide/disable itself proactively - the backend stays
+    // the source of truth; this is UX guidance, not the enforcement.
+    const hasActiveFormalGroup =
+      (await this.em.count(FormalGroupAffiliation, {
+        user: user.id,
+        endedOn: null,
+      })) > 0;
+
     return {
       myCommunities: communities,
       pendingInvitations,
@@ -204,10 +219,12 @@ export class CommunityHomeService {
       },
       capabilities: {
         // Creating a Group requires no permission at all - any
-        // authenticated user may (see GroupsService.create). Same for a
-        // standalone Section (no parent Group) - see
+        // authenticated user may, provided they don't already have an
+        // active formal Group (see GroupsService.create and
+        // hasActiveFormalGroup above). Same for a standalone Section (no
+        // parent Group, and no such one-per-user limit) - see
         // SectionsService.createStandalone and ADR-032.
-        canCreateGroup: true,
+        canCreateGroup: !hasActiveFormalGroup,
         canCreateStandaloneSection: true,
         ...capabilityLists,
         canManageAnyCommunity:

@@ -20,6 +20,7 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { User } from '../src/users/entities/user.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
@@ -36,11 +37,14 @@ import { Rank } from '../src/graduation/entities/rank.entity';
 import { FormalRankAssignment } from '../src/graduation/entities/formal-rank-assignment.entity';
 import { RankTrack } from '../src/graduation/enums/rank-track.enum';
 
-const OWNER_TOKEN = 'valid-fro-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs an
+// independent Group (+ graduation catalog) owner per call, so
+// createGroupWithCatalog() mints one via createFreshGroupOwner instead.
 const MEMBER_TOKEN = 'valid-fro-member-token';
 const NO_GROUP_TOKEN = 'valid-fro-no-group-token';
 
-const TOKENS = [OWNER_TOKEN, MEMBER_TOKEN, NO_GROUP_TOKEN];
+const TOKENS = [MEMBER_TOKEN, NO_GROUP_TOKEN];
 
 function clerkIdFor(token: string): string {
   return `user_test_${token.replace(/-/g, '_')}`;
@@ -76,8 +80,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     ];
   }),
 );
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -193,8 +195,12 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
         { parentGroup: null },
       );
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // Must be read fresh here (not a stale snapshot taken at module load)
+      // since createGroupWithCatalog (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -218,21 +224,6 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
       memberInvitesAllowed: false,
       ...overrides,
     };
-  }
-
-  async function createGroup(
-    token: string,
-    overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
   }
 
   function sectionPayload(
@@ -296,44 +287,57 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
   // before returning the Group ready for setFormalGroup.
   async function createGroupWithCatalog(
     memberToken: string,
-  ): Promise<GroupResponseDto> {
-    const group = await createGroup(OWNER_TOKEN, {
-      name: `FRO Group ${Date.now()}-${Math.random()}`,
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'fro',
+      groupOverrides: groupPayload({
+        name: `FRO Group ${Date.now()}-${Math.random()}`,
+      }),
     });
-    const section = await createSection(OWNER_TOKEN, group.id);
-    await joinSection(OWNER_TOKEN, section.id, memberToken);
-    return group;
+    const section = await createSection(owner.token, owner.group.id);
+    await joinSection(owner.token, section.id, memberToken);
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   async function createSystem(
+    token: string,
     groupId: string,
   ): Promise<GraduationSystemResponseDto> {
     return bodyOf<GraduationSystemResponseDto>(
       request(app.getHttpServer())
         .post(`/api/v1/groups/${groupId}/graduation-system`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ name: 'System' })
         .expect(201),
     );
   }
 
   async function createRank(
+    token: string,
     groupId: string,
     body: Record<string, unknown>,
   ): Promise<RankResponseDto> {
     return bodyOf<RankResponseDto>(
       request(app.getHttpServer())
         .post(`/api/v1/groups/${groupId}/ranks`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${token}`)
         .send(body)
         .expect(201),
     );
   }
 
-  async function archiveRank(groupId: string, rankId: string): Promise<void> {
+  async function archiveRank(
+    token: string,
+    groupId: string,
+    rankId: string,
+  ): Promise<void> {
     await request(app.getHttpServer())
       .post(`/api/v1/groups/${groupId}/ranks/${rankId}/archive`)
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(201);
   }
 
@@ -367,29 +371,29 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
 
   it("returns the caller's formal group catalog, both CHILD and ADULT tracks, in gradation order", async () => {
     const group = await createGroupWithCatalog(MEMBER_TOKEN);
-    await createSystem(group.id);
-    const adultA = await createRank(group.id, {
+    await createSystem(group.token, group.id);
+    const adultA = await createRank(group.token, group.id, {
       track: RankTrack.ADULT,
       name: 'Corda Crua',
       description: 'First adult rank',
       previousRankId: null,
       cordSegments: oneSegment(),
     });
-    const adultB = await createRank(group.id, {
+    const adultB = await createRank(group.token, group.id, {
       track: RankTrack.ADULT,
       name: 'Corda Verde',
       description: null,
       previousRankId: adultA.id,
       cordSegments: oneSegment('#00FF00'),
     });
-    const adultC = await createRank(group.id, {
+    const adultC = await createRank(group.token, group.id, {
       track: RankTrack.ADULT,
       name: 'Corda Azul',
       description: null,
       previousRankId: adultB.id,
       cordSegments: oneSegment('#0000FF'),
     });
-    const childA = await createRank(group.id, {
+    const childA = await createRank(group.token, group.id, {
       track: RankTrack.CHILD,
       name: 'Corda Infantil 1',
       description: null,
@@ -429,29 +433,29 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
 
   it('excludes an archived Rank from the options, without breaking the order of the ones around it', async () => {
     const group = await createGroupWithCatalog(MEMBER_TOKEN);
-    await createSystem(group.id);
-    const rankA = await createRank(group.id, {
+    await createSystem(group.token, group.id);
+    const rankA = await createRank(group.token, group.id, {
       track: RankTrack.ADULT,
       name: 'Rank A',
       description: null,
       previousRankId: null,
       cordSegments: oneSegment(),
     });
-    const rankB = await createRank(group.id, {
+    const rankB = await createRank(group.token, group.id, {
       track: RankTrack.ADULT,
       name: 'Rank B (will be archived)',
       description: null,
       previousRankId: rankA.id,
       cordSegments: oneSegment('#00FF00'),
     });
-    const rankC = await createRank(group.id, {
+    const rankC = await createRank(group.token, group.id, {
       track: RankTrack.ADULT,
       name: 'Rank C',
       description: null,
       previousRankId: rankB.id,
       cordSegments: oneSegment('#0000FF'),
     });
-    await archiveRank(group.id, rankB.id);
+    await archiveRank(group.token, group.id, rankB.id);
 
     await setFormalGroup(MEMBER_TOKEN, group.id);
     const options = await getOptions(MEMBER_TOKEN);
@@ -464,8 +468,8 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
 
   it('never leaks another Group catalog - options always reflect only the current formal group', async () => {
     const groupA = await createGroupWithCatalog(MEMBER_TOKEN);
-    await createSystem(groupA.id);
-    const rankGroupA = await createRank(groupA.id, {
+    await createSystem(groupA.token, groupA.id);
+    const rankGroupA = await createRank(groupA.token, groupA.id, {
       track: RankTrack.ADULT,
       name: 'Group A Only Rank',
       description: null,
@@ -474,8 +478,8 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
     });
 
     const groupB = await createGroupWithCatalog(MEMBER_TOKEN);
-    await createSystem(groupB.id);
-    const rankGroupB = await createRank(groupB.id, {
+    await createSystem(groupB.token, groupB.id);
+    const rankGroupB = await createRank(groupB.token, groupB.id, {
       track: RankTrack.ADULT,
       name: 'Group B Only Rank',
       description: null,
@@ -504,8 +508,8 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
 
   it('the options returned are exactly what PUT /users/me/formal-rank accepts', async () => {
     const group = await createGroupWithCatalog(MEMBER_TOKEN);
-    await createSystem(group.id);
-    const rank = await createRank(group.id, {
+    await createSystem(group.token, group.id);
+    const rank = await createRank(group.token, group.id, {
       track: RankTrack.ADULT,
       name: 'Acceptable Rank',
       description: null,

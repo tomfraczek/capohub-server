@@ -19,10 +19,12 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { User } from '../src/users/entities/user.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
@@ -41,14 +43,16 @@ import { TrainingSeries } from '../src/trainings/entities/training-series.entity
 import { TrainingRsvpStatus } from '../src/trainings/enums/training-rsvp-status.enum';
 import { TrainingVisibility } from '../src/trainings/enums/training-visibility.enum';
 
-const OWNER_TOKEN = 'valid-training-attendance-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const ADMIN_TOKEN = 'valid-training-attendance-admin-token';
 const MEMBER_TOKEN = 'valid-training-attendance-member-token';
 const EXTERNAL_TRAINER_TOKEN =
   'valid-training-attendance-external-trainer-token';
 const OUTSIDER_TOKEN = 'valid-training-attendance-outsider-token';
 
-const OWNER_CLERK_ID = 'user_test_training_attendance_owner';
 const ADMIN_CLERK_ID = 'user_test_training_attendance_admin';
 const MEMBER_CLERK_ID = 'user_test_training_attendance_member';
 const EXTERNAL_TRAINER_CLERK_ID =
@@ -56,12 +60,6 @@ const EXTERNAL_TRAINER_CLERK_ID =
 const OUTSIDER_CLERK_ID = 'user_test_training_attendance_outsider';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [OWNER_TOKEN]: {
-    userId: OWNER_CLERK_ID,
-    sessionId: 'sess_training_attendance_owner',
-    tokenType: 'session_token',
-    claims: { sub: OWNER_CLERK_ID, sid: 'sess_training_attendance_owner' },
-  },
   [ADMIN_TOKEN]: {
     userId: ADMIN_CLERK_ID,
     sessionId: 'sess_training_attendance_admin',
@@ -109,8 +107,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     ];
   }),
 );
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -221,9 +217,19 @@ describe('Training Attendance (e2e)', () => {
         { id: { $in: createdGroupIds } },
         { parentGroup: null },
       );
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -246,16 +252,18 @@ describe('Training Attendance (e2e)', () => {
     };
   }
 
-  async function createGroup(token: string): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload())
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  async function createGroup(): Promise<
+    GroupResponseDto & { token: string; userId: string }
+  > {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'train-att',
+      groupOverrides: groupPayload(),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   function sectionPayload(
@@ -325,19 +333,26 @@ describe('Training Attendance (e2e)', () => {
       .expect(201);
   }
 
-  /** OWNER (creator) + ADMIN + MEMBER, all active members of one Section. */
-  async function createSectionWithRoles(): Promise<SectionResponseDto> {
-    const group = await createGroup(OWNER_TOKEN);
-    const section = await createSection(OWNER_TOKEN, group.id);
-    await addSectionMember(OWNER_TOKEN, section.id, ADMIN_TOKEN);
+  /**
+   * OWNER (creator) + ADMIN + MEMBER, all active members of one Section.
+   * Each call mints a fresh, throwaway Group owner (see createGroup's own
+   * comment) - `.token`/`.userId` are merged onto the returned Section so
+   * callers can act as (or reference) that owner afterward.
+   */
+  async function createSectionWithRoles(): Promise<
+    SectionResponseDto & { token: string; userId: string }
+  > {
+    const group = await createGroup();
+    const section = await createSection(group.token, group.id);
+    await addSectionMember(group.token, section.id, ADMIN_TOKEN);
     await grantSectionRole(
-      OWNER_TOKEN,
+      group.token,
       section.id,
       ADMIN_TOKEN,
       GroupRole.ADMIN,
     );
-    await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
-    return section;
+    await addSectionMember(group.token, section.id, MEMBER_TOKEN);
+    return { ...section, token: group.token, userId: group.userId };
   }
 
   /** A Training that already started, so attendance may be recorded. */
@@ -355,7 +370,10 @@ describe('Training Attendance (e2e)', () => {
           endsAt: new Date(Date.now() + 60 * 60_000).toISOString(),
           locationName: null,
           locationAddress: null,
-          trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+          // Just needs to be some valid, always-registered user id - every
+          // call site below overrides this explicitly with its own fresh
+          // Section owner's id anyway.
+          trainerUserId: localUserIdByToken.get(MEMBER_TOKEN),
           description: null,
           visibility: TrainingVisibility.MEMBERS_ONLY,
           ...overrides,
@@ -369,8 +387,8 @@ describe('Training Attendance (e2e)', () => {
   describe('recording attendance', () => {
     it('the assigned trainer can record attendance for a member', async () => {
       const section = await createSectionWithRoles();
-      const training = await createStartedTraining(OWNER_TOKEN, section.id, {
-        trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+      const training = await createStartedTraining(section.token, section.id, {
+        trainerUserId: section.userId,
       });
 
       const recorded = await bodyOf<TrainingAttendanceResponseDto>(
@@ -380,7 +398,7 @@ describe('Training Attendance (e2e)', () => {
               MEMBER_TOKEN,
             )}`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .send({ attended: true })
           .expect(200),
       );
@@ -390,8 +408,8 @@ describe('Training Attendance (e2e)', () => {
 
     it('Section ADMIN can record attendance even without being the assigned trainer', async () => {
       const section = await createSectionWithRoles();
-      const training = await createStartedTraining(OWNER_TOKEN, section.id, {
-        trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+      const training = await createStartedTraining(section.token, section.id, {
+        trainerUserId: section.userId,
       });
 
       await request(app.getHttpServer())
@@ -407,8 +425,8 @@ describe('Training Attendance (e2e)', () => {
 
     it('a participant cannot record their own attendance', async () => {
       const section = await createSectionWithRoles();
-      const training = await createStartedTraining(OWNER_TOKEN, section.id, {
-        trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+      const training = await createStartedTraining(section.token, section.id, {
+        trainerUserId: section.userId,
       });
 
       await request(app.getHttpServer())
@@ -427,13 +445,13 @@ describe('Training Attendance (e2e)', () => {
       const training = await bodyOf<TrainingResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/sections/${section.id}/trainings`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .send({
             startsAt: '2031-08-01T18:00:00.000Z',
             endsAt: '2031-08-01T20:00:00.000Z',
             locationName: null,
             locationAddress: null,
-            trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+            trainerUserId: section.userId,
             description: null,
             visibility: TrainingVisibility.MEMBERS_ONLY,
           })
@@ -446,33 +464,33 @@ describe('Training Attendance (e2e)', () => {
             MEMBER_TOKEN,
           )}`,
         )
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({ attended: true })
         .expect(409);
     });
 
     it('recording attendance twice for the same user updates one row, never a duplicate', async () => {
       const section = await createSectionWithRoles();
-      const training = await createStartedTraining(OWNER_TOKEN, section.id, {
-        trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+      const training = await createStartedTraining(section.token, section.id, {
+        trainerUserId: section.userId,
       });
       const memberId = localUserIdByToken.get(MEMBER_TOKEN);
 
       await request(app.getHttpServer())
         .put(`/api/v1/trainings/${training.id}/attendance/${memberId}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({ attended: true })
         .expect(200);
       await request(app.getHttpServer())
         .put(`/api/v1/trainings/${training.id}/attendance/${memberId}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({ attended: false })
         .expect(200);
 
       const roster = await bodyOf<TrainingAttendanceRosterEntryDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/trainings/${training.id}/attendance`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       const rows = roster.filter((entry) => entry.user.id === memberId);
@@ -482,8 +500,8 @@ describe('Training Attendance (e2e)', () => {
 
     it('an external RSVP holder (PUBLIC training) may be recorded present', async () => {
       const section = await createSectionWithRoles();
-      const training = await createStartedTraining(OWNER_TOKEN, section.id, {
-        trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+      const training = await createStartedTraining(section.token, section.id, {
+        trainerUserId: section.userId,
         visibility: TrainingVisibility.PUBLIC,
       });
 
@@ -512,7 +530,7 @@ describe('Training Attendance (e2e)', () => {
               OUTSIDER_TOKEN,
             )}`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .send({ attended: true })
           .expect(200),
       );
@@ -521,8 +539,8 @@ describe('Training Attendance (e2e)', () => {
 
     it('a user with no membership and no RSVP is not eligible for attendance', async () => {
       const section = await createSectionWithRoles();
-      const training = await createStartedTraining(OWNER_TOKEN, section.id, {
-        trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+      const training = await createStartedTraining(section.token, section.id, {
+        trainerUserId: section.userId,
       });
 
       await request(app.getHttpServer())
@@ -531,7 +549,7 @@ describe('Training Attendance (e2e)', () => {
             OUTSIDER_TOKEN,
           )}`,
         )
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({ attended: true })
         .expect(400);
     });
@@ -542,7 +560,7 @@ describe('Training Attendance (e2e)', () => {
   describe('external trainer scope', () => {
     it('an external trainer (no SectionMembership) can record attendance only for their assigned Training', async () => {
       const section = await createSectionWithRoles();
-      const training = await createStartedTraining(OWNER_TOKEN, section.id, {
+      const training = await createStartedTraining(section.token, section.id, {
         trainerUserId: localUserIdByToken.get(EXTERNAL_TRAINER_TOKEN),
       });
 
@@ -559,7 +577,7 @@ describe('Training Attendance (e2e)', () => {
 
     it('an external trainer gets no Section admin rights - cannot edit the Training itself', async () => {
       const section = await createSectionWithRoles();
-      const training = await createStartedTraining(OWNER_TOKEN, section.id, {
+      const training = await createStartedTraining(section.token, section.id, {
         trainerUserId: localUserIdByToken.get(EXTERNAL_TRAINER_TOKEN),
       });
 
@@ -572,14 +590,18 @@ describe('Training Attendance (e2e)', () => {
 
     it("an external trainer cannot manage attendance for a different Training they don't lead", async () => {
       const section = await createSectionWithRoles();
-      const ownTraining = await createStartedTraining(OWNER_TOKEN, section.id, {
-        trainerUserId: localUserIdByToken.get(EXTERNAL_TRAINER_TOKEN),
-      });
-      const otherTraining = await createStartedTraining(
-        OWNER_TOKEN,
+      const ownTraining = await createStartedTraining(
+        section.token,
         section.id,
         {
-          trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+          trainerUserId: localUserIdByToken.get(EXTERNAL_TRAINER_TOKEN),
+        },
+      );
+      const otherTraining = await createStartedTraining(
+        section.token,
+        section.id,
+        {
+          trainerUserId: section.userId,
         },
       );
       void ownTraining;
@@ -601,7 +623,7 @@ describe('Training Attendance (e2e)', () => {
   describe('trainingPlan / trainerNotes visibility', () => {
     it("the assigned trainer can set and see this Training's plan and notes", async () => {
       const section = await createSectionWithRoles();
-      const training = await createStartedTraining(OWNER_TOKEN, section.id, {
+      const training = await createStartedTraining(section.token, section.id, {
         trainerUserId: localUserIdByToken.get(EXTERNAL_TRAINER_TOKEN),
       });
 
@@ -618,12 +640,12 @@ describe('Training Attendance (e2e)', () => {
 
     it('a plain member never sees trainingPlan/trainerNotes in the Training response', async () => {
       const section = await createSectionWithRoles();
-      const training = await createStartedTraining(OWNER_TOKEN, section.id, {
-        trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+      const training = await createStartedTraining(section.token, section.id, {
+        trainerUserId: section.userId,
       });
       await request(app.getHttpServer())
         .patch(`/api/v1/trainings/${training.id}/plan-notes`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({ trainingPlan: 'Secret plan', trainerNotes: 'Private note' })
         .expect(200);
 
@@ -640,8 +662,8 @@ describe('Training Attendance (e2e)', () => {
 
     it('a member cannot update trainingPlan/trainerNotes', async () => {
       const section = await createSectionWithRoles();
-      const training = await createStartedTraining(OWNER_TOKEN, section.id, {
-        trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+      const training = await createStartedTraining(section.token, section.id, {
+        trainerUserId: section.userId,
       });
 
       await request(app.getHttpServer())

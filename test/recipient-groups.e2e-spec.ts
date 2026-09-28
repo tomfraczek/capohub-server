@@ -45,11 +45,13 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { RecipientGroupEligibleMembersResponseDto } from '../src/groups/dto/recipient-group-eligible-member.dto';
 import { RecipientGroupResponseDto } from '../src/groups/dto/recipient-group-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
@@ -63,23 +65,19 @@ import { Announcement } from '../src/announcements/entities/announcement.entity'
 import { AnnouncementRecipient } from '../src/announcements/entities/announcement-recipient.entity';
 import { AnnouncementRead } from '../src/announcements/entities/announcement-read.entity';
 
-const OWNER_TOKEN = 'valid-rg-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const ADMIN_TOKEN = 'valid-rg-admin-token';
 const MEMBER_TOKEN = 'valid-rg-member-token';
 const OUTSIDER_TOKEN = 'valid-rg-outsider-token';
 
-const OWNER_CLERK_ID = 'user_test_rg_owner';
 const ADMIN_CLERK_ID = 'user_test_rg_admin';
 const MEMBER_CLERK_ID = 'user_test_rg_member';
 const OUTSIDER_CLERK_ID = 'user_test_rg_outsider';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [OWNER_TOKEN]: {
-    userId: OWNER_CLERK_ID,
-    sessionId: 'sess_rg_owner',
-    tokenType: 'session_token',
-    claims: { sub: OWNER_CLERK_ID, sid: 'sess_rg_owner' },
-  },
   [ADMIN_TOKEN]: {
     userId: ADMIN_CLERK_ID,
     sessionId: 'sess_rg_admin',
@@ -104,10 +102,6 @@ const FIXTURE_CLERK_PROFILES: Record<
   string,
   { imageUrl: string; primaryEmailAddress: { emailAddress: string } | null }
 > = {
-  [OWNER_CLERK_ID]: {
-    imageUrl: 'https://img.clerk.com/rg-owner.png',
-    primaryEmailAddress: { emailAddress: 'rg.owner@example.com' },
-  },
   [ADMIN_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/rg-admin.png',
     primaryEmailAddress: { emailAddress: 'rg.admin@example.com' },
@@ -121,8 +115,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     primaryEmailAddress: { emailAddress: 'rg.outsider@example.com' },
   },
 };
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -242,9 +234,19 @@ describe('Recipient Groups (e2e)', () => {
       // Sections must be removed before their parent Groups to satisfy the
       // parent_group_id foreign key (no cascade - see section.entity.ts).
       await cleanup.nativeDelete(Section, { id: { $in: createdSectionIds } });
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -271,18 +273,17 @@ describe('Recipient Groups (e2e)', () => {
   }
 
   async function createGroup(
-    token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'rg',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   async function grantGroupRole(
@@ -301,11 +302,13 @@ describe('Recipient Groups (e2e)', () => {
   // Group with an OWNER (the creator) and an ADMIN - the only two Roles a
   // Group ever holds. Used by tests that just need "an authorized Group",
   // not a specific member count.
-  async function createOrgWithGroupAdmin(): Promise<GroupResponseDto> {
-    const org = await createGroup(OWNER_TOKEN, {
+  async function createOrgWithGroupAdmin(): Promise<
+    GroupResponseDto & { token: string; userId: string }
+  > {
+    const org = await createGroup({
       name: `Recipient Groups Test Org ${Date.now()}`,
     });
-    await grantGroupRole(OWNER_TOKEN, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
+    await grantGroupRole(org.token, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
     return org;
   }
 
@@ -410,7 +413,7 @@ describe('Recipient Groups (e2e)', () => {
     const adminUserId = localUserIdByToken.get(ADMIN_TOKEN);
 
     const created = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+      createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
         name: 'Trenerzy',
         memberUserIds: [adminUserId],
       }).expect(201),
@@ -435,13 +438,13 @@ describe('Recipient Groups (e2e)', () => {
   });
 
   it('a plain Section MEMBER cannot create, edit, activate, or deactivate a Recipient Group (Group has no MEMBER tier at all)', async () => {
-    const root = await createGroup(OWNER_TOKEN, {
+    const root = await createGroup({
       name: `Plain Member Root ${Date.now()}`,
     });
-    const section = await createSection(OWNER_TOKEN, root.id);
-    await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+    const section = await createSection(root.token, root.id);
+    await addSectionMember(root.token, section.id, MEMBER_TOKEN);
     const created = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, `/api/v1/sections/${section.id}`, {
+      createRecipientGroup(root.token, `/api/v1/sections/${section.id}`, {
         name: 'Musicos',
       }).expect(201),
     );
@@ -468,7 +471,7 @@ describe('Recipient Groups (e2e)', () => {
     const org = await createOrgWithGroupAdmin();
     const outsiderUserId = localUserIdByToken.get(OUTSIDER_TOKEN);
 
-    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+    await createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
       name: 'Zarząd',
       memberUserIds: [outsiderUserId],
     }).expect(400);
@@ -477,7 +480,7 @@ describe('Recipient Groups (e2e)', () => {
   it('can be deactivated and reactivated, and stays visible in the list either way', async () => {
     const org = await createOrgWithGroupAdmin();
     const createRes = await createRecipientGroup(
-      OWNER_TOKEN,
+      org.token,
       `/api/v1/groups/${org.id}`,
       { name: 'Rodzice' },
     );
@@ -494,7 +497,7 @@ describe('Recipient Groups (e2e)', () => {
       .post(
         `/api/v1/groups/${org.id}/recipient-groups/${created.id}/deactivate`,
       )
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`);
+      .set('Authorization', `Bearer ${org.token}`);
 
     console.error(
       'DIAG deactivateRes',
@@ -524,7 +527,7 @@ describe('Recipient Groups (e2e)', () => {
         .post(
           `/api/v1/groups/${org.id}/recipient-groups/${created.id}/activate`,
         )
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(201),
     );
     expect(reactivated.isActive).toBe(true);
@@ -532,11 +535,11 @@ describe('Recipient Groups (e2e)', () => {
 
   it('enforces case-insensitive name uniqueness among active Recipient Groups within the same Group', async () => {
     const org = await createOrgWithGroupAdmin();
-    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+    await createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
       name: 'Organizatorzy Batizado',
     }).expect(201);
 
-    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+    await createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
       name: 'organizatorzy batizado',
     }).expect(409);
   });
@@ -544,7 +547,7 @@ describe('Recipient Groups (e2e)', () => {
   it('frees the name for a brand new Recipient Group once the old one holding it is deactivated', async () => {
     const org = await createOrgWithGroupAdmin();
     const original = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+      createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
         name: 'Trenerzy',
       }).expect(201),
     );
@@ -553,12 +556,12 @@ describe('Recipient Groups (e2e)', () => {
       .post(
         `/api/v1/groups/${org.id}/recipient-groups/${original.id}/deactivate`,
       )
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${org.token}`)
       .expect(201);
 
     // No 409 - the old, now-inactive "Trenerzy" no longer occupies the name.
     const recreated = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+      createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
         name: 'Trenerzy',
       }).expect(201),
     );
@@ -569,7 +572,7 @@ describe('Recipient Groups (e2e)', () => {
     const list = await bodyOf<RecipientGroupResponseDto[]>(
       request(app.getHttpServer())
         .get(`/api/v1/groups/${org.id}/recipient-groups`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(200),
     );
     const trenerzyRows = list.filter((rg) => rg.name === 'Trenerzy');
@@ -582,7 +585,7 @@ describe('Recipient Groups (e2e)', () => {
     );
 
     // Two *active* "Trenerzy" is still rejected, case-insensitively.
-    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+    await createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
       name: 'TRENERZY',
     }).expect(409);
   });
@@ -590,7 +593,7 @@ describe('Recipient Groups (e2e)', () => {
   it('rejects reactivating a Recipient Group whose name was reused by a newer, still-active one', async () => {
     const org = await createOrgWithGroupAdmin();
     const original = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+      createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
         name: 'Rada',
       }).expect(201),
     );
@@ -598,17 +601,17 @@ describe('Recipient Groups (e2e)', () => {
       .post(
         `/api/v1/groups/${org.id}/recipient-groups/${original.id}/deactivate`,
       )
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${org.token}`)
       .expect(201);
 
-    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+    await createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
       name: 'Rada',
     }).expect(201);
 
     // Reactivating the original would now collide with the newer active one.
     await request(app.getHttpServer())
       .post(`/api/v1/groups/${org.id}/recipient-groups/${original.id}/activate`)
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${org.token}`)
       .expect(409);
   });
 
@@ -616,24 +619,24 @@ describe('Recipient Groups (e2e)', () => {
     const org = await createOrgWithGroupAdmin();
     const adminUserId = localUserIdByToken.get(ADMIN_TOKEN);
     const original = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+      createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
         name: 'Reused Name',
         memberUserIds: [adminUserId],
       }).expect(201),
     );
     const announcement = await bodyOf<AnnouncementResponseDto>(
-      createAnnouncement(OWNER_TOKEN, org.id, original.id).expect(201),
+      createAnnouncement(org.token, org.id, original.id).expect(201),
     );
 
     await request(app.getHttpServer())
       .post(
         `/api/v1/groups/${org.id}/recipient-groups/${original.id}/deactivate`,
       )
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${org.token}`)
       .expect(201);
 
     const newGroup = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+      createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
         name: 'Reused Name',
         memberUserIds: [],
       }).expect(201),
@@ -665,13 +668,13 @@ describe('Recipient Groups (e2e)', () => {
     const orgA = await createOrgWithGroupAdmin();
     const orgB = await createOrgWithGroupAdmin();
 
-    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${orgA.id}`, {
+    await createRecipientGroup(orgA.token, `/api/v1/groups/${orgA.id}`, {
       name: 'Zarząd',
     }).expect(201);
 
     // Uniqueness is scoped per-Group, not global - the same name in an
     // unrelated Group must not collide.
-    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${orgB.id}`, {
+    await createRecipientGroup(orgB.token, `/api/v1/groups/${orgB.id}`, {
       name: 'Zarząd',
     }).expect(201);
   });
@@ -680,7 +683,7 @@ describe('Recipient Groups (e2e)', () => {
     const org = await createOrgWithGroupAdmin();
     const adminUserId = localUserIdByToken.get(ADMIN_TOKEN);
 
-    await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+    await createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
       name: 'Duplicated members',
       memberUserIds: [adminUserId, adminUserId],
     }).expect(400);
@@ -690,14 +693,14 @@ describe('Recipient Groups (e2e)', () => {
     const org = await createOrgWithGroupAdmin();
     const outsiderUserId = localUserIdByToken.get(OUTSIDER_TOKEN);
     const created = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+      createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
         name: 'Zespół',
       }).expect(201),
     );
 
     await request(app.getHttpServer())
       .patch(`/api/v1/groups/${org.id}/recipient-groups/${created.id}`)
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${org.token}`)
       .send({ name: 'Zespół', memberUserIds: [outsiderUserId] })
       .expect(400);
   });
@@ -706,7 +709,7 @@ describe('Recipient Groups (e2e)', () => {
     const org = await createOrgWithGroupAdmin();
     const adminUserId = localUserIdByToken.get(ADMIN_TOKEN);
     const created = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+      createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
         name: 'Detale',
         memberUserIds: [adminUserId],
       }).expect(201),
@@ -731,30 +734,30 @@ describe('Recipient Groups (e2e)', () => {
 
     await request(app.getHttpServer())
       .get(`/api/v1/groups/${org.id}/recipient-groups/${fakeId}`)
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${org.token}`)
       .expect(404);
 
     await request(app.getHttpServer())
       .patch(`/api/v1/groups/${org.id}/recipient-groups/${fakeId}`)
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${org.token}`)
       .send({ name: 'Nope', memberUserIds: [] })
       .expect(404);
 
     await request(app.getHttpServer())
       .post(`/api/v1/groups/${org.id}/recipient-groups/${fakeId}/activate`)
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${org.token}`)
       .expect(404);
 
     await request(app.getHttpServer())
       .post(`/api/v1/groups/${org.id}/recipient-groups/${fakeId}/deactivate`)
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${org.token}`)
       .expect(404);
   });
 
   it('returns 404, not 403, for a caller with no Role Assignment on this Group at all', async () => {
     const org = await createOrgWithGroupAdmin();
     const created = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+      createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
         name: 'Prywatne',
       }).expect(201),
     );
@@ -778,14 +781,14 @@ describe('Recipient Groups (e2e)', () => {
     const org = await createOrgWithGroupAdmin();
     const adminUserId = localUserIdByToken.get(ADMIN_TOKEN);
     const recipientGroup = await bodyOf<RecipientGroupResponseDto>(
-      createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+      createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
         name: 'Grupa dla ogłoszenia',
         memberUserIds: [adminUserId],
       }).expect(201),
     );
 
     const announcement = await bodyOf<AnnouncementResponseDto>(
-      createAnnouncement(OWNER_TOKEN, org.id, recipientGroup.id).expect(201),
+      createAnnouncement(org.token, org.id, recipientGroup.id).expect(201),
     );
 
     const em = app.get(EntityManager).fork();
@@ -798,7 +801,7 @@ describe('Recipient Groups (e2e)', () => {
     // already-published Announcement's immutable snapshot.
     await request(app.getHttpServer())
       .patch(`/api/v1/groups/${org.id}/recipient-groups/${recipientGroup.id}`)
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${org.token}`)
       .send({ name: 'Grupa dla ogłoszenia', memberUserIds: [] })
       .expect(200);
 
@@ -823,7 +826,7 @@ describe('Recipient Groups (e2e)', () => {
       .post(
         `/api/v1/groups/${org.id}/recipient-groups/${recipientGroup.id}/deactivate`,
       )
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${org.token}`)
       .expect(201);
 
     await request(app.getHttpServer())
@@ -841,25 +844,23 @@ describe('Recipient Groups (e2e)', () => {
 
     // And, as documented, the deactivated group can no longer be selected
     // for a brand new Announcement.
-    await createAnnouncement(OWNER_TOKEN, org.id, recipientGroup.id).expect(
-      409,
-    );
+    await createAnnouncement(org.token, org.id, recipientGroup.id).expect(409);
   });
 
   describe('GET .../recipient-groups/eligible-members', () => {
     it('for a Group, returns every user holding an active RoleAssignment there (only ever OWNER/ADMIN), minimally shaped, sorted deterministically', async () => {
-      const org = await createGroup(OWNER_TOKEN, {
+      const org = await createGroup({
         name: `Eligible Group Org ${Date.now()}`,
       });
-      const ownerUserId = localUserIdByToken.get(OWNER_TOKEN);
+      const ownerUserId = localUserIdByToken.get(org.token);
       // Two ADMINs alongside the OWNER - Group has no other Role tier.
-      await grantGroupRole(OWNER_TOKEN, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
-      await grantGroupRole(OWNER_TOKEN, org.id, MEMBER_TOKEN, GroupRole.ADMIN);
+      await grantGroupRole(org.token, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
+      await grantGroupRole(org.token, org.id, MEMBER_TOKEN, GroupRole.ADMIN);
       const adminUserId = localUserIdByToken.get(ADMIN_TOKEN);
       const secondAdminUserId = localUserIdByToken.get(MEMBER_TOKEN);
 
       const result = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
-        getEligibleMembers(OWNER_TOKEN, `/api/v1/groups/${org.id}`).expect(200),
+        getEligibleMembers(org.token, `/api/v1/groups/${org.id}`).expect(200),
       );
 
       expect(result.total).toBe(3);
@@ -886,27 +887,26 @@ describe('Recipient Groups (e2e)', () => {
     });
 
     it('for a Section, returns only users with an active/READ_ONLY membership in that exact Section - a Group-only OWNER/ADMIN is excluded unless they also joined', async () => {
-      const org = await createGroup(OWNER_TOKEN, {
+      const org = await createGroup({
         name: `Eligible Section Org ${Date.now()}`,
       });
-      await grantGroupRole(OWNER_TOKEN, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
-      const section = await createSection(OWNER_TOKEN, org.id);
+      await grantGroupRole(org.token, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
+      const section = await createSection(org.token, org.id);
       // OWNER automatically became a member+OWNER of the Section by
       // creating it. ADMIN is only a Group-level ADMIN, never joined the
       // Section itself.
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(org.token, section.id, MEMBER_TOKEN);
 
       const result = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
-        getEligibleMembers(
-          OWNER_TOKEN,
-          `/api/v1/sections/${section.id}`,
-        ).expect(200),
+        getEligibleMembers(org.token, `/api/v1/sections/${section.id}`).expect(
+          200,
+        ),
       );
 
       const ids = result.items.map((i) => i.id);
       expect(ids.sort()).toEqual(
         [
-          localUserIdByToken.get(OWNER_TOKEN),
+          localUserIdByToken.get(org.token),
           localUserIdByToken.get(MEMBER_TOKEN),
         ].sort(),
       );
@@ -921,7 +921,7 @@ describe('Recipient Groups (e2e)', () => {
       const org = await createOrgWithGroupAdmin();
 
       const result = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
-        getEligibleMembers(OWNER_TOKEN, `/api/v1/groups/${org.id}`).expect(200),
+        getEligibleMembers(org.token, `/api/v1/groups/${org.id}`).expect(200),
       );
       expect(result.items.map((i) => i.id)).not.toContain(
         localUserIdByToken.get(OUTSIDER_TOKEN),
@@ -940,7 +940,7 @@ describe('Recipient Groups (e2e)', () => {
 
       const result = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
         getEligibleMembers(
-          OWNER_TOKEN,
+          org.token,
           `/api/v1/groups/${org.id}`,
           `?search=${encodeURIComponent(distinctiveFragment)}`,
         ).expect(200),
@@ -959,15 +959,15 @@ describe('Recipient Groups (e2e)', () => {
     });
 
     it('paginates with a correct total/hasMore', async () => {
-      const org = await createGroup(OWNER_TOKEN, {
+      const org = await createGroup({
         name: `Paginate Org ${Date.now()}`,
       });
-      await grantGroupRole(OWNER_TOKEN, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
-      await grantGroupRole(OWNER_TOKEN, org.id, MEMBER_TOKEN, GroupRole.ADMIN);
+      await grantGroupRole(org.token, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
+      await grantGroupRole(org.token, org.id, MEMBER_TOKEN, GroupRole.ADMIN);
 
       const page1 = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
         getEligibleMembers(
-          OWNER_TOKEN,
+          org.token,
           `/api/v1/groups/${org.id}`,
           '?limit=2&offset=0',
         ).expect(200),
@@ -978,7 +978,7 @@ describe('Recipient Groups (e2e)', () => {
 
       const page2 = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
         getEligibleMembers(
-          OWNER_TOKEN,
+          org.token,
           `/api/v1/groups/${org.id}`,
           '?limit=2&offset=2',
         ).expect(200),
@@ -995,12 +995,12 @@ describe('Recipient Groups (e2e)', () => {
       const org = await createOrgWithGroupAdmin();
 
       await getEligibleMembers(
-        OWNER_TOKEN,
+        org.token,
         `/api/v1/groups/${org.id}`,
         '?limit=101',
       ).expect(400);
       await getEligibleMembers(
-        OWNER_TOKEN,
+        org.token,
         `/api/v1/groups/${org.id}`,
         '?offset=-1',
       ).expect(400);
@@ -1010,7 +1010,7 @@ describe('Recipient Groups (e2e)', () => {
       const orgA = await createOrgWithGroupAdmin();
       // orgB deliberately does NOT grant ADMIN_TOKEN/MEMBER_TOKEN anything -
       // they only have standing in orgA.
-      const orgB = await createGroup(OWNER_TOKEN, {
+      const orgB = await createGroup({
         name: `Recipient Groups Test Org B ${Date.now()}`,
       });
 
@@ -1018,9 +1018,9 @@ describe('Recipient Groups (e2e)', () => {
         404,
       );
 
-      const sectionA = await createSection(OWNER_TOKEN, orgA.id);
-      const sectionB = await createSection(OWNER_TOKEN, orgB.id);
-      await addSectionMember(OWNER_TOKEN, sectionA.id, MEMBER_TOKEN);
+      const sectionA = await createSection(orgA.token, orgA.id);
+      const sectionB = await createSection(orgB.token, orgB.id);
+      await addSectionMember(orgA.token, sectionA.id, MEMBER_TOKEN);
 
       // MEMBER_TOKEN holds membership in sectionA but has no access to orgB
       // or sectionB at all.
@@ -1034,13 +1034,13 @@ describe('Recipient Groups (e2e)', () => {
       const org = await createOrgWithGroupAdmin();
 
       const eligible = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
-        getEligibleMembers(OWNER_TOKEN, `/api/v1/groups/${org.id}`).expect(200),
+        getEligibleMembers(org.token, `/api/v1/groups/${org.id}`).expect(200),
       );
       const eligibleIds = eligible.items.map((i) => i.id);
       expect(eligibleIds.length).toBeGreaterThan(0);
 
       const created = await bodyOf<RecipientGroupResponseDto>(
-        createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+        createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
           name: 'Parity Check',
           memberUserIds: eligibleIds,
         }).expect(201),
@@ -1052,7 +1052,7 @@ describe('Recipient Groups (e2e)', () => {
       const updated = await bodyOf<RecipientGroupResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${org.id}/recipient-groups/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${org.token}`)
           .send({ name: 'Parity Check', memberUserIds: eligibleIds })
           .expect(200),
       );
@@ -1065,14 +1065,14 @@ describe('Recipient Groups (e2e)', () => {
       const outsiderId = localUserIdByToken.get(OUTSIDER_TOKEN);
       expect(eligibleIds).not.toContain(outsiderId);
 
-      await createRecipientGroup(OWNER_TOKEN, `/api/v1/groups/${org.id}`, {
+      await createRecipientGroup(org.token, `/api/v1/groups/${org.id}`, {
         name: 'Should Fail',
         memberUserIds: [outsiderId],
       }).expect(400);
 
       await request(app.getHttpServer())
         .patch(`/api/v1/groups/${org.id}/recipient-groups/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .send({ name: 'Parity Check', memberUserIds: [outsiderId] })
         .expect(400);
     });

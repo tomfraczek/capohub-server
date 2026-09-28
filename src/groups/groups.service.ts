@@ -12,6 +12,7 @@ import {
   buildGroupProfileImageKey,
 } from '../storage/object-keys.util';
 import { R2StorageService } from '../storage/r2-storage.service';
+import { isUniqueViolationOn } from '../common/utils/db-errors';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
 import { CreateGroupInput } from './dto/create-group.schema';
@@ -26,6 +27,10 @@ import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
 import { SectionMembership } from './entities/section-membership.entity';
 import { SectionMembershipStatus } from './enums/section-membership-status.enum';
+import {
+  FORMAL_GROUP_AFFILIATIONS_ACTIVE_UNIQUE_INDEX,
+  FormalGroupAffiliation,
+} from './entities/formal-group-affiliation.entity';
 import { GroupFollowService } from './group-follow.service';
 import {
   toGroupResponseDto,
@@ -150,11 +155,43 @@ export class GroupsService {
   // such role - see group-role-permissions.map.ts); OWNER is their only
   // Role Assignment here.
   //
+  // A user may have at most one *active* formal Group (see
+  // formal-group-affiliation.entity.ts): creating a Group is the other way
+  // (besides UserProfileService.setFormalGroup) a FormalGroupAffiliation
+  // comes into being, so a user who already has one is blocked outright -
+  // USER_ALREADY_HAS_FORMAL_GROUP, 409 - before anything is written. This
+  // is the one path that creates a FormalGroupAffiliation without first
+  // requiring a SectionMembership in the target Group: the creator's OWNER
+  // grant is itself a strong enough tie that making them join/create a
+  // Section of their own Group first, purely to satisfy
+  // setFormalGroup's usual qualifying-membership check, would be
+  // pointless ceremony. UserProfileService.setFormalGroup's own
+  // SectionMembership requirement is untouched for every other case
+  // (changing to/setting an *existing* Group as formal).
+  //
+  // Group, OWNER RoleAssignment and FormalGroupAffiliation are all created
+  // in one transaction - if the affiliation insert fails (including the
+  // FORMAL_GROUP_AFFILIATIONS_ACTIVE_UNIQUE_INDEX race backstop below), the
+  // whole transaction rolls back, so a Group/OWNER is never left orphaned
+  // without its founder's formal affiliation.
+  //
   // A Group is always root-level. Creating a Section (nested under an
   // existing Group or Section, which always creates a real membership) is
   // a different operation - see SectionsService.create.
   async create(user: User, input: CreateGroupInput): Promise<GroupResponseDto> {
     const group = await this.em.transactional(async (em) => {
+      const existingAffiliation = await em.findOne(FormalGroupAffiliation, {
+        user: user.id,
+        endedOn: null,
+      });
+      if (existingAffiliation) {
+        throw new ConflictException({
+          code: 'USER_ALREADY_HAS_FORMAL_GROUP',
+          message:
+            'You already have an active formal group - leave/change it before creating a new one',
+        });
+      }
+
       const group = new Group();
       group.publicCode = await generateUniquePublicCode(em);
       this.applyFields(group, input);
@@ -174,6 +211,30 @@ export class GroupsService {
         GroupRole.OWNER,
         user,
       );
+
+      const affiliation = new FormalGroupAffiliation();
+      affiliation.user = user;
+      affiliation.group = group;
+      affiliation.startedOn = null;
+      try {
+        em.persist(affiliation);
+        await em.flush();
+      } catch (error) {
+        // Race backstop - see the equivalent comment in
+        // UserProfileService.setFormalGroup.
+        if (
+          isUniqueViolationOn(
+            error,
+            FORMAL_GROUP_AFFILIATIONS_ACTIVE_UNIQUE_INDEX,
+          )
+        ) {
+          throw new ConflictException({
+            code: 'USER_ALREADY_HAS_FORMAL_GROUP',
+            message: 'A concurrent change already set an active formal group',
+          });
+        }
+        throw error;
+      }
 
       this.auditLogService.record(em, {
         community: group,

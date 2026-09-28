@@ -31,6 +31,7 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
@@ -51,12 +52,15 @@ import { GraduationSystem } from '../src/graduation/entities/graduation-system.e
 import { Rank } from '../src/graduation/entities/rank.entity';
 import { RankTrack } from '../src/graduation/enums/rank-track.enum';
 
-const OWNER_TOKEN = 'valid-grad-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs an
+// independent Group owner per call, so createGroupWithSystem()/
+// createFreshGroup() mint one via createFreshGroupOwner instead.
 const ADMIN_TOKEN = 'valid-grad-admin-token';
 const SECTION_ADMIN_TOKEN = 'valid-grad-section-admin-token';
 const OUTSIDER_TOKEN = 'valid-grad-outsider-token';
 
-const TOKENS = [OWNER_TOKEN, ADMIN_TOKEN, SECTION_ADMIN_TOKEN, OUTSIDER_TOKEN];
+const TOKENS = [ADMIN_TOKEN, SECTION_ADMIN_TOKEN, OUTSIDER_TOKEN];
 
 function clerkIdFor(token: string): string {
   return `user_test_${token.replace(/-/g, '_')}`;
@@ -92,8 +96,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     ];
   }),
 );
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -209,8 +211,12 @@ describe('Graduation Catalog (e2e)', () => {
         { parentGroup: null },
       );
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // Must be read fresh here (not a stale snapshot taken at module load)
+      // since createFreshGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -261,21 +267,6 @@ describe('Graduation Catalog (e2e)', () => {
       geonameId: 3088171,
       ...overrides,
     };
-  }
-
-  async function createGroup(
-    token: string,
-    overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
   }
 
   async function createSection(
@@ -376,11 +367,27 @@ describe('Graduation Catalog (e2e)', () => {
     };
   }
 
-  async function createGroupWithSystem(): Promise<GroupResponseDto> {
-    const group = await createGroup(OWNER_TOKEN, {
+  async function createFreshGroup(
+    overrides: Record<string, unknown> = {},
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'grad',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
+  }
+
+  async function createGroupWithSystem(): Promise<
+    GroupResponseDto & { token: string; userId: string }
+  > {
+    const group = await createFreshGroup({
       name: `System Group ${Date.now()}-${Math.random()}`,
     });
-    await createSystem(OWNER_TOKEN, group.id);
+    await createSystem(group.token, group.id);
     return group;
   }
 
@@ -388,19 +395,19 @@ describe('Graduation Catalog (e2e)', () => {
 
   describe('GraduationSystem', () => {
     it('allows exactly one active system per group', async () => {
-      const group = await createGroup(OWNER_TOKEN, {
+      const group = await createFreshGroup({
         name: 'One System Group',
       });
 
       const created = (await createSystem(
-        OWNER_TOKEN,
+        group.token,
         group.id,
       )) as GraduationSystemResponseDto;
       expect(created.isActive).toBe(true);
       expect(created.groupId).toBe(group.id);
 
       const conflict = (await createSystem(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         'Second System',
         409,
@@ -409,11 +416,11 @@ describe('Graduation Catalog (e2e)', () => {
     });
 
     it('404s for a group that has no system yet - a valid, permanent state', async () => {
-      const group = await createGroup(OWNER_TOKEN, { name: 'No System Group' });
+      const group = await createFreshGroup({ name: 'No System Group' });
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${group.id}/graduation-system`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(404),
       );
       expect(error.statusCode).toBe(404);
@@ -421,7 +428,7 @@ describe('Graduation Catalog (e2e)', () => {
 
     it('lets OWNER/ADMIN edit the system name', async () => {
       const group = await createGroupWithSystem();
-      await grantGroupAdmin(OWNER_TOKEN, group.id, ADMIN_TOKEN);
+      await grantGroupAdmin(group.token, group.id, ADMIN_TOKEN);
 
       const updated = await bodyOf<GraduationSystemResponseDto>(
         request(app.getHttpServer())
@@ -435,9 +442,9 @@ describe('Graduation Catalog (e2e)', () => {
 
     it('rejects a Section OWNER/ADMIN managing the catalog - no inheritance through membership', async () => {
       const group = await createGroupWithSystem();
-      const section = await createSection(OWNER_TOKEN, group.id);
+      const section = await createSection(group.token, group.id);
       await grantSectionAdmin(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         section.id,
         SECTION_ADMIN_TOKEN,
@@ -478,22 +485,22 @@ describe('Graduation Catalog (e2e)', () => {
       const group = await createGroupWithSystem();
 
       const z = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ name: 'Z last' }),
       )) as RankResponseDto;
       const a = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ name: 'A middle', previousRankId: z.id }),
       )) as RankResponseDto;
       const m = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ name: 'M final', previousRankId: a.id }),
       )) as RankResponseDto;
       const child1 = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ name: 'Child first', track: RankTrack.CHILD }),
       )) as RankResponseDto;
@@ -501,7 +508,7 @@ describe('Graduation Catalog (e2e)', () => {
       const list = await bodyOf<RanksByTrackResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${group.id}/ranks`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(200),
       );
 
@@ -521,7 +528,7 @@ describe('Graduation Catalog (e2e)', () => {
     it('rejects a self-referencing previousRank', async () => {
       const group = await createGroupWithSystem();
       const rank = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload(),
       )) as RankResponseDto;
@@ -529,7 +536,7 @@ describe('Graduation Catalog (e2e)', () => {
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${group.id}/ranks/${rank.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .send(rankPayload({ previousRankId: rank.id }))
           .expect(409),
       );
@@ -539,12 +546,12 @@ describe('Graduation Catalog (e2e)', () => {
     it('rejects a cycle (a -> b -> a)', async () => {
       const group = await createGroupWithSystem();
       const a = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ name: 'A' }),
       )) as RankResponseDto;
       const b = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ name: 'B', previousRankId: a.id }),
       )) as RankResponseDto;
@@ -552,7 +559,7 @@ describe('Graduation Catalog (e2e)', () => {
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${group.id}/ranks/${a.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .send(rankPayload({ name: 'A', previousRankId: b.id }))
           .expect(409),
       );
@@ -562,18 +569,18 @@ describe('Graduation Catalog (e2e)', () => {
     it('rejects branching - a second rank cannot point at an already-claimed previousRank', async () => {
       const group = await createGroupWithSystem();
       const a = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ name: 'A' }),
       )) as RankResponseDto;
       await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ name: 'B', previousRankId: a.id }),
       );
 
       const error = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ name: 'C', previousRankId: a.id }),
         409,
@@ -583,10 +590,10 @@ describe('Graduation Catalog (e2e)', () => {
 
     it('rejects a second first-rank (previousRankId null) for the same system+track', async () => {
       const group = await createGroupWithSystem();
-      await createRank(OWNER_TOKEN, group.id, rankPayload({ name: 'First' }));
+      await createRank(group.token, group.id, rankPayload({ name: 'First' }));
 
       const error = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ name: 'Also first' }),
         409,
@@ -598,13 +605,13 @@ describe('Graduation Catalog (e2e)', () => {
       const groupA = await createGroupWithSystem();
       const groupB = await createGroupWithSystem();
       const rankInB = (await createRank(
-        OWNER_TOKEN,
+        groupB.token,
         groupB.id,
         rankPayload(),
       )) as RankResponseDto;
 
       const error = (await createRank(
-        OWNER_TOKEN,
+        groupA.token,
         groupA.id,
         rankPayload({ previousRankId: rankInB.id }),
         409,
@@ -615,13 +622,13 @@ describe('Graduation Catalog (e2e)', () => {
     it('rejects a previousRank belonging to a different track in the same system', async () => {
       const group = await createGroupWithSystem();
       const childRank = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ track: RankTrack.CHILD }),
       )) as RankResponseDto;
 
       const error = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ track: RankTrack.ADULT, previousRankId: childRank.id }),
         409,
@@ -637,14 +644,14 @@ describe('Graduation Catalog (e2e)', () => {
       const group = await createGroupWithSystem();
 
       const one = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ name: 'One color', cordSegments: oneSegment() }),
       )) as RankResponseDto;
       expect(one.cordSegments).toHaveLength(1);
 
       const two = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({
           name: 'Two colors',
@@ -661,7 +668,7 @@ describe('Graduation Catalog (e2e)', () => {
       ]);
 
       const many = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({
           name: 'Matching tips',
@@ -680,7 +687,7 @@ describe('Graduation Catalog (e2e)', () => {
     it('rejects a proportion sum different from 100', async () => {
       const group = await createGroupWithSystem();
       const error = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({
           cordSegments: [
@@ -696,7 +703,7 @@ describe('Graduation Catalog (e2e)', () => {
     it('rejects a malformed hex color', async () => {
       const group = await createGroupWithSystem();
       const error = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ cordSegments: oneSegment({ colorHex: 'not-a-color' }) }),
         400,
@@ -707,7 +714,7 @@ describe('Graduation Catalog (e2e)', () => {
     it('replaces segments atomically on update (old set fully gone, new set fully present)', async () => {
       const group = await createGroupWithSystem();
       const rank = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({
           cordSegments: [
@@ -720,7 +727,7 @@ describe('Graduation Catalog (e2e)', () => {
       const updated = await bodyOf<RankResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${group.id}/ranks/${rank.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .send(
             rankPayload({ cordSegments: oneSegment({ colorHex: '#ABCDEF' }) }),
           )
@@ -738,7 +745,7 @@ describe('Graduation Catalog (e2e)', () => {
     it('archives and restores a rank, and blocks archiving twice', async () => {
       const group = await createGroupWithSystem();
       const rank = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload(),
       )) as RankResponseDto;
@@ -746,7 +753,7 @@ describe('Graduation Catalog (e2e)', () => {
       const archived = await bodyOf<RankResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${group.id}/ranks/${rank.id}/archive`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(201),
       );
       expect(archived.isArchived).toBe(true);
@@ -754,7 +761,7 @@ describe('Graduation Catalog (e2e)', () => {
       const doubleArchive = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${group.id}/ranks/${rank.id}/archive`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(409),
       );
       expect(doubleArchive.statusCode).toBe(409);
@@ -762,7 +769,7 @@ describe('Graduation Catalog (e2e)', () => {
       const restored = await bodyOf<RankResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${group.id}/ranks/${rank.id}/restore`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(201),
       );
       expect(restored.isArchived).toBe(false);
@@ -771,24 +778,24 @@ describe('Graduation Catalog (e2e)', () => {
     it('keeps an archived rank visible in the catalog list, correctly ordered', async () => {
       const group = await createGroupWithSystem();
       const a = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ name: 'A' }),
       )) as RankResponseDto;
       const b = (await createRank(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         rankPayload({ name: 'B', previousRankId: a.id }),
       )) as RankResponseDto;
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/ranks/${a.id}/archive`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${group.token}`)
         .expect(201);
 
       const list = await bodyOf<RanksByTrackResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${group.id}/ranks`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(200),
       );
       expect(list[RankTrack.ADULT].map((r) => r.name)).toEqual(['A', 'B']);

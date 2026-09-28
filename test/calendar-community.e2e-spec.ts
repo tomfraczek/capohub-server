@@ -25,10 +25,12 @@ import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { User } from '../src/users/entities/user.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
@@ -47,21 +49,17 @@ import { TrainingResponseDto } from '../src/trainings/dto/training-response.dto'
 import { TrainingVisibility } from '../src/trainings/enums/training-visibility.enum';
 import { CalendarResponseDto } from '../src/calendar/dto/calendar-item.dto';
 
-const OWNER_TOKEN = 'valid-calendar-community-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const MEMBER_TOKEN = 'valid-calendar-community-member-token';
 const OUTSIDER_TOKEN = 'valid-calendar-community-outsider-token';
 
-const OWNER_CLERK_ID = 'user_test_calendar_community_owner';
 const MEMBER_CLERK_ID = 'user_test_calendar_community_member';
 const OUTSIDER_CLERK_ID = 'user_test_calendar_community_outsider';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [OWNER_TOKEN]: {
-    userId: OWNER_CLERK_ID,
-    sessionId: 'sess_calendar_community_owner',
-    tokenType: 'session_token',
-    claims: { sub: OWNER_CLERK_ID, sid: 'sess_calendar_community_owner' },
-  },
   [MEMBER_TOKEN]: {
     userId: MEMBER_CLERK_ID,
     sessionId: 'sess_calendar_community_member',
@@ -80,12 +78,6 @@ const FIXTURE_CLERK_PROFILES: Record<
   string,
   { imageUrl: string; primaryEmailAddress: { emailAddress: string } | null }
 > = {
-  [OWNER_CLERK_ID]: {
-    imageUrl: 'https://img.clerk.com/calendar-community-owner.png',
-    primaryEmailAddress: {
-      emailAddress: 'calendar.community.owner@example.com',
-    },
-  },
   [MEMBER_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/calendar-community-member.png',
     primaryEmailAddress: {
@@ -99,8 +91,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     },
   },
 };
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -220,9 +210,19 @@ describe('Calendar - Community (e2e)', () => {
         { id: { $in: createdGroupIds } },
         { parentGroup: null },
       );
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -247,18 +247,17 @@ describe('Calendar - Community (e2e)', () => {
   }
 
   async function createGroup(
-    token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'cal-community',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   function sectionPayload(overrides: Record<string, unknown> = {}) {
@@ -322,7 +321,11 @@ describe('Calendar - Community (e2e)', () => {
       locationAddress: null,
       latitude: null,
       longitude: null,
-      trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+      // Just needs to be some valid, always-registered user id - no test in
+      // this file asserts on trainer identity, and the section's own owner
+      // is now a fresh, per-test throwaway user (see createGroup's own
+      // comment), not a fixed token this default could reach.
+      trainerUserId: localUserIdByToken.get(MEMBER_TOKEN),
       description: 'Regular training',
       visibility: TrainingVisibility.MEMBERS_ONLY,
       ...overrides,
@@ -428,15 +431,15 @@ describe('Calendar - Community (e2e)', () => {
 
   describe('Section calendar', () => {
     it('includes Trainings and Events belonging exactly to this Section', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id);
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id);
+      const training = await createTraining(group.token, section.id, {
         visibility: TrainingVisibility.PUBLIC,
         startsAt: '2031-06-05T18:00:00.000Z',
         endsAt: '2031-06-05T20:00:00.000Z',
       });
       const event = await createPublishedEvent(
-        OWNER_TOKEN,
+        group.token,
         `/api/v1/sections/${section.id}/events`,
         {
           startsAt: '2031-06-06T10:00:00.000Z',
@@ -444,7 +447,7 @@ describe('Calendar - Community (e2e)', () => {
         },
       );
 
-      const calendar = await getSectionCalendar(OWNER_TOKEN, section.id);
+      const calendar = await getSectionCalendar(group.token, section.id);
 
       const sourceIds = calendar.items.map((item) => item.sourceId);
       expect(sourceIds).toContain(training.id);
@@ -452,14 +455,14 @@ describe('Calendar - Community (e2e)', () => {
     });
 
     it("never includes the parent Group's own Event", async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id);
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id);
       const groupEvent = await createPublishedEvent(
-        OWNER_TOKEN,
+        group.token,
         `/api/v1/groups/${group.id}/events`,
       );
 
-      const calendar = await getSectionCalendar(OWNER_TOKEN, section.id);
+      const calendar = await getSectionCalendar(group.token, section.id);
 
       expect(calendar.items.map((item) => item.sourceId)).not.toContain(
         groupEvent.id,
@@ -467,22 +470,22 @@ describe('Calendar - Community (e2e)', () => {
     });
 
     it("never includes a sibling Section's Training or Event", async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id, {
         name: 'Sibling Test Section A',
       });
-      const sibling = await createSection(OWNER_TOKEN, group.id, {
+      const sibling = await createSection(group.token, group.id, {
         name: 'Sibling Test Section B',
       });
-      const siblingTraining = await createTraining(OWNER_TOKEN, sibling.id, {
+      const siblingTraining = await createTraining(group.token, sibling.id, {
         visibility: TrainingVisibility.PUBLIC,
       });
       const siblingEvent = await createPublishedEvent(
-        OWNER_TOKEN,
+        group.token,
         `/api/v1/sections/${sibling.id}/events`,
       );
 
-      const calendar = await getSectionCalendar(OWNER_TOKEN, section.id);
+      const calendar = await getSectionCalendar(group.token, section.id);
 
       const sourceIds = calendar.items.map((item) => item.sourceId);
       expect(sourceIds).not.toContain(siblingTraining.id);
@@ -490,17 +493,17 @@ describe('Calendar - Community (e2e)', () => {
     });
 
     it('lets a non-member see a PUBLIC Training but not a MEMBERS_ONLY one, and lets a member see both', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id, {
         name: 'Access Rules Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
-      const publicTraining = await createTraining(OWNER_TOKEN, section.id, {
+      await addSectionMember(group.token, section.id, MEMBER_TOKEN);
+      const publicTraining = await createTraining(group.token, section.id, {
         visibility: TrainingVisibility.PUBLIC,
         startsAt: '2031-06-05T18:00:00.000Z',
         endsAt: '2031-06-05T20:00:00.000Z',
       });
-      const privateTraining = await createTraining(OWNER_TOKEN, section.id, {
+      const privateTraining = await createTraining(group.token, section.id, {
         visibility: TrainingVisibility.MEMBERS_ONLY,
         startsAt: '2031-06-06T18:00:00.000Z',
         endsAt: '2031-06-06T20:00:00.000Z',
@@ -521,16 +524,16 @@ describe('Calendar - Community (e2e)', () => {
     });
 
     it('keeps a CANCELLED Training visible, marked isCancelled', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id, {
         name: 'Cancelled Section Fixture',
       });
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const training = await createTraining(group.token, section.id, {
         visibility: TrainingVisibility.PUBLIC,
       });
-      await cancelTraining(OWNER_TOKEN, section.id, training.id);
+      await cancelTraining(group.token, section.id, training.id);
 
-      const calendar = await getSectionCalendar(OWNER_TOKEN, section.id);
+      const calendar = await getSectionCalendar(group.token, section.id);
 
       const item = calendar.items.find((item) => item.sourceId === training.id);
       expect(item?.isCancelled).toBe(true);
@@ -539,26 +542,26 @@ describe('Calendar - Community (e2e)', () => {
 
   describe('Group calendar', () => {
     it('includes Events belonging exactly to this Group', async () => {
-      const group = await createGroup(OWNER_TOKEN);
+      const group = await createGroup();
       const event = await createPublishedEvent(
-        OWNER_TOKEN,
+        group.token,
         `/api/v1/groups/${group.id}/events`,
       );
 
-      const calendar = await getGroupCalendar(OWNER_TOKEN, group.id);
+      const calendar = await getGroupCalendar(group.token, group.id);
 
       expect(calendar.items.map((item) => item.sourceId)).toContain(event.id);
       expect(calendar.items.every((item) => item.type === 'EVENT')).toBe(true);
     });
 
     it("never includes a child Section's Training (a Group owns no Training)", async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id);
-      await createTraining(OWNER_TOKEN, section.id, {
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id);
+      await createTraining(group.token, section.id, {
         visibility: TrainingVisibility.PUBLIC,
       });
 
-      const calendar = await getGroupCalendar(OWNER_TOKEN, group.id);
+      const calendar = await getGroupCalendar(group.token, group.id);
 
       expect(calendar.items.some((item) => item.type === 'TRAINING')).toBe(
         false,
@@ -566,14 +569,14 @@ describe('Calendar - Community (e2e)', () => {
     });
 
     it("never includes a child Section's own Event", async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id);
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id);
       const sectionEvent = await createPublishedEvent(
-        OWNER_TOKEN,
+        group.token,
         `/api/v1/sections/${section.id}/events`,
       );
 
-      const calendar = await getGroupCalendar(OWNER_TOKEN, group.id);
+      const calendar = await getGroupCalendar(group.token, group.id);
 
       expect(calendar.items.map((item) => item.sourceId)).not.toContain(
         sectionEvent.id,
@@ -583,34 +586,34 @@ describe('Calendar - Community (e2e)', () => {
 
   describe('route-kind IDOR guard', () => {
     it('404s when a real Group id is used on the Section calendar route', async () => {
-      const group = await createGroup(OWNER_TOKEN);
+      const group = await createGroup();
 
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${group.id}/calendar`)
           .query(FULL_RANGE)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(404),
       );
       expect(error.code).toBe('SECTION_NOT_FOUND');
     });
 
     it('404s when a real Section id is used on the Group calendar route', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id);
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id);
 
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${section.id}/calendar`)
           .query(FULL_RANGE)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(404),
       );
       expect(error.code).toBe('GROUP_NOT_FOUND');
     });
 
     it('returns 401 for an unauthenticated request', async () => {
-      const group = await createGroup(OWNER_TOKEN);
+      const group = await createGroup();
       await request(app.getHttpServer())
         .get(`/api/v1/groups/${group.id}/calendar`)
         .query(FULL_RANGE)

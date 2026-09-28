@@ -62,6 +62,10 @@ interface OverviewRouting {
 function buildService(routing: OverviewRouting) {
   const em = {
     find: jest.fn().mockResolvedValue([]),
+    // Backs canCreateGroup's hasActiveFormalGroup check - irrelevant to
+    // this file's discovery-fallback focus, always "no active formal
+    // group".
+    count: jest.fn().mockResolvedValue(0),
   } as unknown as EntityManager;
 
   const getNearbySections = jest.fn(

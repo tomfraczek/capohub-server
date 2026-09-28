@@ -41,6 +41,7 @@ import { HttpErrorResponse } from '../src/common/types/http-error-response.type'
 import { PaginatedResponse } from '../src/common/pagination/pagination.types';
 import { User } from '../src/users/entities/user.entity';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { HierarchyInvitation } from '../src/groups/entities/hierarchy-invitation.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
@@ -194,6 +195,12 @@ describe('Standalone Sections (e2e)', () => {
         { id: { $in: createdGroupOrSectionIds } },
         { parentGroup: null },
       );
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupOrSectionIds },
+      });
       await cleanup.nativeDelete(Group, {
         id: { $in: createdGroupOrSectionIds },
       });

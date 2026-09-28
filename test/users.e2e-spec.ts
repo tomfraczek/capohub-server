@@ -14,6 +14,7 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
@@ -21,28 +22,25 @@ import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { RoleAssignmentResponseDto } from '../src/groups/dto/role-assignment-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
 
-const ADMIN_TOKEN = 'valid-users-admin-token';
+// No fixed "ADMIN_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs a fresh Group
+// (+ Section) owner in each of the three "DELETE /users/me" tests below, so
+// createGroup() mints one via createFreshGroupOwner per call instead.
 const REGULAR_TOKEN = 'valid-users-regular-token';
 const CHILD_OWNER_TOKEN = 'valid-users-child-owner-token';
 const SECOND_TOKEN = 'valid-users-second-token';
 
-const ADMIN_CLERK_ID = 'user_test_users_admin';
 const REGULAR_CLERK_ID = 'user_test_users_regular';
 const CHILD_OWNER_CLERK_ID = 'user_test_users_child_owner';
 const SECOND_CLERK_ID = 'user_test_users_second';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [ADMIN_TOKEN]: {
-    userId: ADMIN_CLERK_ID,
-    sessionId: 'sess_users_admin',
-    tokenType: 'session_token',
-    claims: { sub: ADMIN_CLERK_ID, sid: 'sess_users_admin' },
-  },
   [REGULAR_TOKEN]: {
     userId: REGULAR_CLERK_ID,
     sessionId: 'sess_users_regular',
@@ -67,10 +65,6 @@ const FIXTURE_CLERK_PROFILES: Record<
   string,
   { imageUrl: string; primaryEmailAddress: { emailAddress: string } | null }
 > = {
-  [ADMIN_CLERK_ID]: {
-    imageUrl: 'https://img.clerk.com/users-admin.png',
-    primaryEmailAddress: { emailAddress: 'users.admin@example.com' },
-  },
   [REGULAR_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/users-regular.png',
     primaryEmailAddress: { emailAddress: 'users.regular@example.com' },
@@ -84,8 +78,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     primaryEmailAddress: { emailAddress: 'users.second@example.com' },
   },
 };
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -185,9 +177,18 @@ describe('Users (e2e)', () => {
         { id: { $in: createdGroupIds } },
         { parentGroup: null },
       );
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // Must be read fresh here (not a stale snapshot taken at module load)
+      // since createGroup (via createFreshGroupOwner) registers a fresh
+      // fixture user per call, mutating FIXTURE_CLERK_PROFILES in place.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -214,18 +215,17 @@ describe('Users (e2e)', () => {
   }
 
   async function createGroup(
-    token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'users',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   async function createSection(
@@ -322,27 +322,22 @@ describe('Users (e2e)', () => {
 
   describe('DELETE /users/me - regular user', () => {
     it('deletes the account of a user who holds ADMIN on a Group and MEMBER/INSTRUCTOR/ADMIN on a Section under it, without a 500 or FK error, leaving the Group/Section and their OWNER untouched', async () => {
-      const root = await createGroup(ADMIN_TOKEN, {
+      const root = await createGroup({
         name: 'Delete Account Root',
       });
-      const child = await createSection(ADMIN_TOKEN, root.id, {
+      const child = await createSection(root.token, root.id, {
         name: 'Delete Account Child',
       });
-      await grantGroupRole(
-        ADMIN_TOKEN,
-        root.id,
-        REGULAR_TOKEN,
-        GroupRole.ADMIN,
-      );
-      await joinSection(ADMIN_TOKEN, child.id, REGULAR_TOKEN);
+      await grantGroupRole(root.token, root.id, REGULAR_TOKEN, GroupRole.ADMIN);
+      await joinSection(root.token, child.id, REGULAR_TOKEN);
       await grantSectionRole(
-        ADMIN_TOKEN,
+        root.token,
         child.id,
         REGULAR_TOKEN,
         GroupRole.INSTRUCTOR,
       );
       await grantSectionRole(
-        ADMIN_TOKEN,
+        root.token,
         child.id,
         REGULAR_TOKEN,
         GroupRole.ADMIN,
@@ -383,7 +378,7 @@ describe('Users (e2e)', () => {
       const rootOwners = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${root.id}/role-assignments`)
-          .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       expect(
@@ -393,7 +388,7 @@ describe('Users (e2e)', () => {
       const childOwners = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${child.id}/role-assignments`)
-          .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       expect(
@@ -402,17 +397,17 @@ describe('Users (e2e)', () => {
     });
 
     it('allows a user with only the base MEMBER role (no additional role) to delete the account', async () => {
-      const root = await createGroup(ADMIN_TOKEN, {
+      const root = await createGroup({
         name: 'Delete Account Bare Membership Root',
       });
-      const child = await createSection(ADMIN_TOKEN, root.id, {
+      const child = await createSection(root.token, root.id, {
         name: 'Delete Account Bare Membership Section',
       });
 
       // Joining with no additional `role` still atomically grants MEMBER -
       // there is no "membership with zero roles" under the new model (see
       // SectionMembershipsService.addMember).
-      await joinSection(ADMIN_TOKEN, child.id, SECOND_TOKEN);
+      await joinSection(root.token, child.id, SECOND_TOKEN);
 
       await request(app.getHttpServer())
         .delete('/api/v1/users/me')
@@ -429,17 +424,22 @@ describe('Users (e2e)', () => {
 
   describe('DELETE /users/me - OWNER', () => {
     it('blocks deleting the account while the user owns a Section, and allows it once ownership has been transferred - the Section keeps exactly one OWNER throughout', async () => {
-      const root = await createGroup(ADMIN_TOKEN, {
+      const root = await createGroup({
         name: 'Delete Account Owner Root',
       });
-      const child = await createSection(ADMIN_TOKEN, root.id, {
+      // transferSectionOwnership resolves its newOwnerToken argument through
+      // this map, which createFreshGroupOwner (unlike beforeAll) does not
+      // populate - root.token is only transferred BACK to below, so it must
+      // be registered here first.
+      localUserIdByToken.set(root.token, root.userId);
+      const child = await createSection(root.token, root.id, {
         name: 'Delete Account Owner Child',
       });
       // Must be an ACTIVE Section member before ownership can be
       // transferred to them (see RoleAssignmentsService.transferOwnership).
-      await joinSection(ADMIN_TOKEN, child.id, CHILD_OWNER_TOKEN);
+      await joinSection(root.token, child.id, CHILD_OWNER_TOKEN);
 
-      await transferSectionOwnership(ADMIN_TOKEN, child.id, CHILD_OWNER_TOKEN);
+      await transferSectionOwnership(root.token, child.id, CHILD_OWNER_TOKEN);
 
       const blocked = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
@@ -459,10 +459,10 @@ describe('Users (e2e)', () => {
       );
       expect(stillThere.id).toBe(localUserIdByToken.get(CHILD_OWNER_TOKEN));
 
-      // Transfer the Section's ownership away, back to ADMIN_TOKEN - who
-      // is already an ACTIVE member of it (the creator, from createSection
+      // Transfer the Section's ownership away, back to root.token - who is
+      // already an ACTIVE member of it (the creator, from createSection
       // above).
-      await transferSectionOwnership(CHILD_OWNER_TOKEN, child.id, ADMIN_TOKEN);
+      await transferSectionOwnership(CHILD_OWNER_TOKEN, child.id, root.token);
 
       await request(app.getHttpServer())
         .delete('/api/v1/users/me')
@@ -478,7 +478,7 @@ describe('Users (e2e)', () => {
       const childOwners = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${child.id}/role-assignments`)
-          .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       expect(

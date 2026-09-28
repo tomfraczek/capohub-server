@@ -39,7 +39,9 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
@@ -49,23 +51,19 @@ import { User } from '../src/users/entities/user.entity';
 
 // ─── Tokens / Clerk fixtures ──────────────────────────────────────────────────
 
-const OWNER_TOKEN = 'valid-mr-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const MEMBER_TOKEN = 'valid-mr-member-token';
 const OUTSIDER_TOKEN = 'valid-mr-outsider-token';
 const SECOND_OUTSIDER_TOKEN = 'valid-mr-second-outsider-token';
 
-const OWNER_CLERK_ID = 'user_test_mr_owner';
 const MEMBER_CLERK_ID = 'user_test_mr_member';
 const OUTSIDER_CLERK_ID = 'user_test_mr_outsider';
 const SECOND_OUTSIDER_CLERK_ID = 'user_test_mr_second_outsider';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [OWNER_TOKEN]: {
-    userId: OWNER_CLERK_ID,
-    sessionId: 'sess_mr_owner',
-    tokenType: 'session_token',
-    claims: { sub: OWNER_CLERK_ID, sid: 'sess_mr_owner' },
-  },
   [MEMBER_TOKEN]: {
     userId: MEMBER_CLERK_ID,
     sessionId: 'sess_mr_member',
@@ -90,10 +88,6 @@ const FIXTURE_CLERK_PROFILES: Record<
   string,
   { imageUrl: string; primaryEmailAddress: { emailAddress: string } | null }
 > = {
-  [OWNER_CLERK_ID]: {
-    imageUrl: 'https://img.clerk.com/mr-owner.png',
-    primaryEmailAddress: { emailAddress: 'mr.owner@example.com' },
-  },
   [MEMBER_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/mr-member.png',
     primaryEmailAddress: { emailAddress: 'mr.member@example.com' },
@@ -107,8 +101,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     primaryEmailAddress: { emailAddress: 'mr.second.outsider@example.com' },
   },
 };
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -197,10 +189,20 @@ describe('MembershipRequests + Discovery (e2e)', () => {
           ],
         });
         await cleanup.nativeDelete(Section, { id: { $in: createdSectionIds } });
+        // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+        // cleared before the Groups themselves are deleted below (see
+        // user-profile.e2e-spec.ts's identical cleanup step).
+        await cleanup.nativeDelete(FormalGroupAffiliation, {
+          group: { $in: createdGroupIds },
+        });
         await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
       }
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -226,18 +228,21 @@ describe('MembershipRequests + Discovery (e2e)', () => {
     };
   }
 
-  async function createGroup(
-    token: string,
-    overrides: Record<string, unknown> = {},
-  ): Promise<{ id: string; publicCode: string }> {
-    const res = await request(app.getHttpServer())
-      .post('/api/v1/groups')
-      .set('Authorization', `Bearer ${token}`)
-      .send(groupPayload(overrides))
-      .expect(201);
-    const group = res.body as { id: string; publicCode: string };
-    createdGroupIds.push(group.id);
-    return group;
+  async function createGroup(overrides: Record<string, unknown> = {}): Promise<{
+    id: string;
+    publicCode: string | null;
+    token: string;
+    userId: string;
+  }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'mr',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   async function createSection(
@@ -283,8 +288,8 @@ describe('MembershipRequests + Discovery (e2e)', () => {
 
   describe('POST /sections/:id/join', () => {
     it('returns 400 when targetType is missing', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id);
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id);
 
       const res = await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/join`)
@@ -298,8 +303,8 @@ describe('MembershipRequests + Discovery (e2e)', () => {
     });
 
     it('returns 400 when targetType is an invalid value', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id);
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id);
 
       const res = await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/join`)
@@ -321,7 +326,7 @@ describe('MembershipRequests + Discovery (e2e)', () => {
     });
 
     it('rejects targetType=GROUP with GROUP_HAS_NO_MEMBERSHIP - a Group has no join flow at all', async () => {
-      const group = await createGroup(OWNER_TOKEN);
+      const group = await createGroup();
 
       const res = await request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/join`)
@@ -333,8 +338,8 @@ describe('MembershipRequests + Discovery (e2e)', () => {
     });
 
     it('auto-joins a public Section and returns 200 with { joined: true }', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id, {
         isPublic: true,
       });
 
@@ -348,8 +353,8 @@ describe('MembershipRequests + Discovery (e2e)', () => {
     });
 
     it('creates a PENDING JOIN_REQUEST for a private (isPublic=false) Section', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id, {
         isPublic: false,
       });
 
@@ -367,8 +372,8 @@ describe('MembershipRequests + Discovery (e2e)', () => {
 
     it('creates a JOIN_REQUEST for a hidden+private Section (isHidden does not block join)', async () => {
       // isHidden=true means "not in search results", not "unjoinable via direct link"
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id, {
         isPublic: false,
         isHidden: true,
       });
@@ -392,7 +397,7 @@ describe('MembershipRequests + Discovery (e2e)', () => {
 
   describe('GET /discovery/resolve/:code', () => {
     it('resolves a Group as resourceType=GROUP with isRootGroup=true', async () => {
-      const group = await createGroup(OWNER_TOKEN);
+      const group = await createGroup();
       // A Group with no parent is always root-level.
 
       const res = await request(app.getHttpServer())
@@ -412,7 +417,7 @@ describe('MembershipRequests + Discovery (e2e)', () => {
     });
 
     it('resolves a hidden Group (isHidden=true) via publicCode — hidden bypass works', async () => {
-      const hidden = await createGroup(OWNER_TOKEN, { isHidden: true });
+      const hidden = await createGroup({ isHidden: true });
 
       const res = await request(app.getHttpServer())
         .get(`/api/v1/discovery/resolve/${hidden.publicCode}`)
@@ -432,10 +437,10 @@ describe('MembershipRequests + Discovery (e2e)', () => {
     });
 
     it('resolves code case-insensitively', async () => {
-      const group = await createGroup(OWNER_TOKEN);
+      const group = await createGroup();
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/discovery/resolve/${group.publicCode.toLowerCase()}`)
+        .get(`/api/v1/discovery/resolve/${group.publicCode!.toLowerCase()}`)
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .expect(200);
 
@@ -450,11 +455,11 @@ describe('MembershipRequests + Discovery (e2e)', () => {
 
   describe('GET /discovery/search', () => {
     it('does not include hidden (isHidden=true) groups in search results', async () => {
-      const visible = await createGroup(OWNER_TOKEN, {
+      const visible = await createGroup({
         name: 'MR Visible Group',
         isHidden: false,
       });
-      const hidden = await createGroup(OWNER_TOKEN, {
+      const hidden = await createGroup({
         name: 'MR Hidden Group',
         isHidden: true,
       });
@@ -471,7 +476,7 @@ describe('MembershipRequests + Discovery (e2e)', () => {
     });
 
     it('returns type=GROUP for a Group in search results', async () => {
-      const rootGroup = await createGroup(OWNER_TOKEN, {
+      const rootGroup = await createGroup({
         name: 'MR Root Discovery Group',
         isHidden: false,
       });
@@ -499,10 +504,11 @@ describe('MembershipRequests + Discovery (e2e)', () => {
       sectionId: string;
       invitationId: string;
       memberId: string;
+      ownerToken: string;
     }> {
       // Owner creates the group and a Section under it with invites allowed.
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id, {
         memberInvitesAllowed: true,
       });
 
@@ -539,6 +545,7 @@ describe('MembershipRequests + Discovery (e2e)', () => {
         sectionId: section.id,
         invitationId: (invRes.body as { id: string }).id,
         memberId: memberUser.id,
+        ownerToken: group.token,
       };
     }
 
@@ -554,21 +561,22 @@ describe('MembershipRequests + Discovery (e2e)', () => {
     });
 
     it('allows the OWNER to cancel an invitation created by a MEMBER', async () => {
-      const { sectionId, invitationId } = await setupSectionAndInvitation();
+      const { sectionId, invitationId, ownerToken } =
+        await setupSectionAndInvitation();
 
       await request(app.getHttpServer())
         .post(
           `/api/v1/sections/${sectionId}/invitations/${invitationId}/cancel`,
         )
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
         .expect(204);
     });
 
     it('returns 403 when a plain MEMBER tries to cancel an invitation sent by a different MEMBER', async () => {
       // Owner creates the group+section; member1 invites outsider; second_outsider
       // (also a plain MEMBER) tries to cancel member1's invitation.
-      const group = await createGroup(OWNER_TOKEN);
-      const section = await createSection(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const section = await createSection(group.token, group.id, {
         memberInvitesAllowed: true,
       });
 

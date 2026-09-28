@@ -22,7 +22,9 @@ import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { User } from '../src/users/entities/user.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { Section } from '../src/groups/entities/section.entity';
@@ -75,8 +77,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     ];
   }),
 );
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -183,9 +183,20 @@ describe('Notification preferences / devices (e2e)', () => {
       await cleanup.nativeDelete(Section, {
         parentGroup: { $in: createdGroupIds },
       });
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroupOnly/createSectionWithOwnerAsMember (via
+      // createFreshGroupOwner) register a fresh fixture user per call,
+      // mutating FIXTURE_CLERK_PROFILES in place, so it must be read fresh
+      // here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -232,36 +243,46 @@ describe('Notification preferences / devices (e2e)', () => {
     };
   }
 
-  async function createSectionWithOwnerAsMember(): Promise<SectionResponseDto> {
-    const group = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-        .send(groupPayload())
-        .expect(201),
-    );
-    createdGroupIds.push(group.id);
+  // These two mint a fresh, throwaway Group owner (see createFreshGroupOwner
+  // - GroupsService.create now allows at most one active
+  // FormalGroupAffiliation per user, and OWNER_TOKEN itself stays a fixed,
+  // reused identity throughout this file for the unrelated own-preferences/
+  // push-device tests below) - `.token` is merged onto the returned
+  // Group/Section so callers can act as its real owner afterward.
+  async function createSectionWithOwnerAsMember(): Promise<
+    SectionResponseDto & { token: string }
+  > {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'notif-prefs',
+      groupOverrides: groupPayload(),
+    });
     const section = await bodyOf<SectionResponseDto>(
       request(app.getHttpServer())
-        .post(`/api/v1/groups/${group.id}/sections`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .post(`/api/v1/groups/${owner.group.id}/sections`)
+        .set('Authorization', `Bearer ${owner.token}`)
         .send(sectionPayload())
         .expect(201),
     );
     createdGroupIds.push(section.id);
-    return section;
+    return { ...section, token: owner.token };
   }
 
-  async function createGroupOnly(): Promise<GroupResponseDto> {
-    const group = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-        .send(groupPayload())
-        .expect(201),
-    );
-    createdGroupIds.push(group.id);
-    return group;
+  async function createGroupOnly(): Promise<
+    GroupResponseDto & { token: string }
+  > {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'notif-prefs',
+      groupOverrides: groupPayload(),
+    });
+    return { ...owner.group, token: owner.token };
   }
 
   describe('GET/PATCH /users/me/notification-preferences', () => {
@@ -340,7 +361,7 @@ describe('Notification preferences / devices (e2e)', () => {
       const before = await bodyOf<CommunityNotificationSettingsResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/notification-settings`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       expect(before.muted).toBe(false);
@@ -348,7 +369,7 @@ describe('Notification preferences / devices (e2e)', () => {
       const after = await bodyOf<CommunityNotificationSettingsResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/sections/${section.id}/notification-settings`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .send({ muted: true })
           .expect(200),
       );
@@ -365,7 +386,7 @@ describe('Notification preferences / devices (e2e)', () => {
       const before = await bodyOf<GroupNotificationSettingsResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${group.id}/notification-settings`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(200),
       );
       expect(before).toEqual({ communityId: group.id, muted: false });
@@ -373,7 +394,7 @@ describe('Notification preferences / devices (e2e)', () => {
       const after = await bodyOf<GroupNotificationSettingsResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${group.id}/notification-settings`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .send({ muted: true })
           .expect(200),
       );
@@ -382,7 +403,7 @@ describe('Notification preferences / devices (e2e)', () => {
       const refetched = await bodyOf<GroupNotificationSettingsResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${group.id}/notification-settings`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(200),
       );
       expect(refetched.muted).toBe(true);
@@ -405,7 +426,7 @@ describe('Notification preferences / devices (e2e)', () => {
 
       await request(app.getHttpServer())
         .patch(`/api/v1/groups/${group.id}/notification-settings`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${group.token}`)
         .send({ newJoinRequests: false })
         .expect(400);
     });
@@ -415,7 +436,7 @@ describe('Notification preferences / devices (e2e)', () => {
 
       await request(app.getHttpServer())
         .get(`/api/v1/groups/${section.id}/notification-settings`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .expect(404);
     });
   });

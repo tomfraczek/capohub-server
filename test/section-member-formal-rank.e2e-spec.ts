@@ -20,6 +20,7 @@ import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { User } from '../src/users/entities/user.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
@@ -42,7 +43,10 @@ import { Notification } from '../src/notifications/entities/notification.entity'
 import { FormalRankCorrectionStatus } from '../src/graduation/enums/formal-rank-correction-status.enum';
 import { RankTrack } from '../src/graduation/enums/rank-track.enum';
 
-const OWNER_TOKEN = 'valid-smfr-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs a fresh
+// Group/Section owner per setupSectionWithTarget() call, so it mints one via
+// createFreshGroupOwner instead.
 const ADMIN_TOKEN = 'valid-smfr-admin-token';
 const INSTRUCTOR_TOKEN = 'valid-smfr-instructor-token';
 const ASSISTANT_TOKEN = 'valid-smfr-assistant-token';
@@ -57,7 +61,6 @@ const OUTSIDE_OWNER_TOKEN = 'valid-smfr-outside-owner-token';
 const NO_RANK_TARGET_TOKEN = 'valid-smfr-no-rank-target-token';
 
 const TOKENS = [
-  OWNER_TOKEN,
   ADMIN_TOKEN,
   INSTRUCTOR_TOKEN,
   ASSISTANT_TOKEN,
@@ -101,8 +104,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     ];
   }),
 );
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -224,8 +225,12 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
         { parentGroup: null },
       );
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // Must be read fresh here (not a stale snapshot taken at module load)
+      // since setupSectionWithTarget (via createFreshGroupOwner) registers
+      // a fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -278,19 +283,18 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
     };
   }
 
-  async function createGroup(
-    token: string,
+  async function createFreshGroup(
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'smfr',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   async function createSection(
@@ -335,13 +339,14 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
   }
 
   async function membershipIdFor(
+    ownerToken: string,
     sectionId: string,
     userToken: string,
   ): Promise<string> {
     const members = await bodyOf<SectionMembershipResponseDto[]>(
       request(app.getHttpServer())
         .get(`/api/v1/sections/${sectionId}/members`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
         .expect(200),
     );
     const userId = localUserIdByToken.get(userToken);
@@ -363,25 +368,27 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
   }
 
   async function createSystem(
+    token: string,
     groupId: string,
   ): Promise<GraduationSystemResponseDto> {
     return bodyOf<GraduationSystemResponseDto>(
       request(app.getHttpServer())
         .post(`/api/v1/groups/${groupId}/graduation-system`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ name: 'System' })
         .expect(201),
     );
   }
 
   async function createRank(
+    token: string,
     groupId: string,
     body: Record<string, unknown>,
   ): Promise<RankResponseDto> {
     return bodyOf<RankResponseDto>(
       request(app.getHttpServer())
         .post(`/api/v1/groups/${groupId}/ranks`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${token}`)
         .send(body)
         .expect(201),
     );
@@ -418,25 +425,27 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
    * clean Group/Section.
    */
   async function setupSectionWithTarget(): Promise<{
+    token: string;
     group: GroupResponseDto;
     section: SectionResponseDto;
     rankA: RankResponseDto;
     rankB: RankResponseDto;
     targetMembershipId: string;
   }> {
-    const group = await createGroup(OWNER_TOKEN, {
+    const group = await createFreshGroup({
       name: `SMFR Group ${Date.now()}-${Math.random()}`,
     });
-    const section = await createSection(OWNER_TOKEN, group.id);
-    await createSystem(group.id);
-    const rankA = await createRank(group.id, {
+    const { token } = group;
+    const section = await createSection(token, group.id);
+    await createSystem(token, group.id);
+    const rankA = await createRank(token, group.id, {
       track: RankTrack.ADULT,
       name: 'Corda Crua',
       description: null,
       previousRankId: null,
       cordSegments: oneSegment(),
     });
-    const rankB = await createRank(group.id, {
+    const rankB = await createRank(token, group.id, {
       track: RankTrack.ADULT,
       name: 'Corda Verde',
       description: null,
@@ -444,46 +453,45 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
       cordSegments: oneSegment('#00FF00'),
     });
 
-    await joinSection(OWNER_TOKEN, section.id, ADMIN_TOKEN);
+    await joinSection(token, section.id, ADMIN_TOKEN);
+    await grantSectionRole(token, section.id, ADMIN_TOKEN, GroupRole.ADMIN);
+    await joinSection(token, section.id, INSTRUCTOR_TOKEN);
     await grantSectionRole(
-      OWNER_TOKEN,
-      section.id,
-      ADMIN_TOKEN,
-      GroupRole.ADMIN,
-    );
-    await joinSection(OWNER_TOKEN, section.id, INSTRUCTOR_TOKEN);
-    await grantSectionRole(
-      OWNER_TOKEN,
+      token,
       section.id,
       INSTRUCTOR_TOKEN,
       GroupRole.INSTRUCTOR,
     );
-    await joinSection(OWNER_TOKEN, section.id, ASSISTANT_TOKEN);
+    await joinSection(token, section.id, ASSISTANT_TOKEN);
     await grantSectionRole(
-      OWNER_TOKEN,
+      token,
       section.id,
       ASSISTANT_TOKEN,
       GroupRole.ASSISTANT,
     );
-    await joinSection(OWNER_TOKEN, section.id, MEMBER_TOKEN);
-    await joinSection(OWNER_TOKEN, section.id, TARGET_TOKEN);
+    await joinSection(token, section.id, MEMBER_TOKEN);
+    await joinSection(token, section.id, TARGET_TOKEN);
 
     await setFormalGroup(TARGET_TOKEN, group.id);
     await setFormalRank(TARGET_TOKEN, rankA.id);
 
-    const targetMembershipId = await membershipIdFor(section.id, TARGET_TOKEN);
+    const targetMembershipId = await membershipIdFor(
+      token,
+      section.id,
+      TARGET_TOKEN,
+    );
 
-    return { group, section, rankA, rankB, targetMembershipId };
+    return { token, group, section, rankA, rankB, targetMembershipId };
   }
 
   it('lets the Section OWNER see the current formal rank of a member', async () => {
-    const { group, section, rankA, targetMembershipId } =
+    const { token, group, section, rankA, targetMembershipId } =
       await setupSectionWithTarget();
 
     const result = (await getMemberFormalRank(
       section.id,
       targetMembershipId,
-      OWNER_TOKEN,
+      token,
     )) as SectionMemberFormalRankResponseDto;
 
     expect(result.user.id).toBe(localUserIdByToken.get(TARGET_TOKEN));
@@ -528,7 +536,7 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
   });
 
   it('rejects a Group ADMIN with no local Section role (404 - no inheritance from the parent Group)', async () => {
-    const { group, section, targetMembershipId } =
+    const { token, group, section, targetMembershipId } =
       await setupSectionWithTarget();
 
     // Granted on the exact parent Group of `section`, never on the Section
@@ -537,7 +545,7 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
     // group-permissions.guard.ts).
     await request(app.getHttpServer())
       .post(`/api/v1/groups/${group.id}/role-assignments`)
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${token}`)
       .send({
         userId: localUserIdByToken.get(OUTSIDE_OWNER_TOKEN),
         role: GroupRole.ADMIN,
@@ -560,19 +568,20 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
     const error = (await getMemberFormalRank(
       first.section.id,
       second.targetMembershipId,
-      OWNER_TOKEN,
+      first.token,
       404,
     )) as HttpErrorResponse;
     expect(error.statusCode).toBe(404);
   });
 
   it('returns formalRank: null when the member has no active formal rank', async () => {
-    const group = await createGroup(OWNER_TOKEN, {
+    const group = await createFreshGroup({
       name: `SMFR No Rank Group ${Date.now()}`,
     });
-    const section = await createSection(OWNER_TOKEN, group.id);
-    await joinSection(OWNER_TOKEN, section.id, NO_RANK_TARGET_TOKEN);
+    const section = await createSection(group.token, group.id);
+    await joinSection(group.token, section.id, NO_RANK_TARGET_TOKEN);
     const membershipId = await membershipIdFor(
+      group.token,
       section.id,
       NO_RANK_TARGET_TOKEN,
     );
@@ -580,7 +589,7 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
     const result = (await getMemberFormalRank(
       section.id,
       membershipId,
-      OWNER_TOKEN,
+      group.token,
     )) as SectionMemberFormalRankResponseDto;
 
     expect(result.formalRank).toBeNull();
@@ -588,13 +597,13 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
   });
 
   it('returns the active correction state when one exists for the member', async () => {
-    const { section, rankB, targetMembershipId } =
+    const { token, section, rankB, targetMembershipId } =
       await setupSectionWithTarget();
 
     const created = await bodyOf<{ id: string }>(
       request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/formal-rank-corrections`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ targetUserId: localUserIdByToken.get(TARGET_TOKEN) })
         .expect(201),
     );
@@ -602,7 +611,7 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
     const beforeSubmit = (await getMemberFormalRank(
       section.id,
       targetMembershipId,
-      OWNER_TOKEN,
+      token,
     )) as SectionMemberFormalRankResponseDto;
     expect(beforeSubmit.correction?.id).toBe(created.id);
     expect(beforeSubmit.correction?.status).toBe(
@@ -619,7 +628,7 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
     const afterSubmit = (await getMemberFormalRank(
       section.id,
       targetMembershipId,
-      OWNER_TOKEN,
+      token,
     )) as SectionMemberFormalRankResponseDto;
     expect(afterSubmit.correction?.status).toBe(
       FormalRankCorrectionStatus.PENDING_APPROVAL,
@@ -628,14 +637,15 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
   });
 
   it('never exposes email, phone, clerkUserId, or other roles in the response', async () => {
-    const { section, targetMembershipId } = await setupSectionWithTarget();
+    const { token, section, targetMembershipId } =
+      await setupSectionWithTarget();
 
     const raw = await bodyOf<Record<string, unknown>>(
       request(app.getHttpServer())
         .get(
           `/api/v1/sections/${section.id}/members/${targetMembershipId}/formal-rank`,
         )
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${token}`)
         .expect(200),
     );
     const json = JSON.stringify(raw);

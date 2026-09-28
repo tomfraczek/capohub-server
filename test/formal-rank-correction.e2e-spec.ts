@@ -43,6 +43,7 @@ import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { PaginatedResponse } from '../src/common/pagination/pagination.types';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
@@ -71,14 +72,16 @@ import { FormalRankCorrectionStatus } from '../src/graduation/enums/formal-rank-
 import { FormalRankCorrectionService } from '../src/graduation/formal-rank-correction.service';
 import { RankTrack } from '../src/graduation/enums/rank-track.enum';
 
-const OWNER_TOKEN = 'valid-frc-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs an
+// independent Group/Section owner per setupTargetWithFormalRank() call, so
+// it mints one via createFreshGroupOwner instead.
 const ADMIN1_TOKEN = 'valid-frc-admin1-token';
 const ADMIN2_TOKEN = 'valid-frc-admin2-token';
 const TARGET_TOKEN = 'valid-frc-target-token';
 const OUTSIDER_TOKEN = 'valid-frc-outsider-token';
 
 const TOKENS = [
-  OWNER_TOKEN,
   ADMIN1_TOKEN,
   ADMIN2_TOKEN,
   TARGET_TOKEN,
@@ -119,8 +122,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     ];
   }),
 );
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -244,8 +245,12 @@ describe('Formal Rank Correction (e2e)', () => {
         { parentGroup: null },
       );
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // Must be read fresh here (not a stale snapshot taken at module load)
+      // since createFreshGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -298,19 +303,18 @@ describe('Formal Rank Correction (e2e)', () => {
     };
   }
 
-  async function createGroup(
-    token: string,
+  async function createFreshGroup(
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'frc',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   async function createSection(

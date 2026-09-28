@@ -14,6 +14,7 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { UserResponseDto } from '../src/users/dto/user-response.dto';
@@ -46,7 +47,13 @@ import { EventRole } from '../src/events/enums/event-role.enum';
 import { EventVisibility } from '../src/events/enums/event-visibility.enum';
 import { EventWaitlistPolicy } from '../src/events/enums/event-waitlist-policy.enum';
 
-const ADMIN_TOKEN = 'valid-profile-admin-token';
+// No fixed "ADMIN_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user (see USER_ALREADY_HAS_FORMAL_GROUP),
+// and this file needs many independent Groups all administered by "some
+// actor" across its tests, so createGroup() below mints a fresh, throwaway
+// owner per call instead (see its own comment). Every token that remains
+// here is a stable *subject* some assertion actually cares about (a
+// specific viewer, target, or role holder), never a Group creator.
 const TARGET_TOKEN = 'valid-profile-target-token';
 const VIEWER_TOKEN = 'valid-profile-viewer-token';
 const SECTION_ADMIN_TOKEN = 'valid-profile-section-admin-token';
@@ -56,7 +63,6 @@ const EVENT_MODERATOR_TOKEN = 'valid-profile-event-moderator-token';
 const EVENT_ATTENDEE_TOKEN = 'valid-profile-event-attendee-token';
 
 const TOKENS = [
-  ADMIN_TOKEN,
   TARGET_TOKEN,
   VIEWER_TOKEN,
   SECTION_ADMIN_TOKEN,
@@ -100,8 +106,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     ];
   }),
 );
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -224,11 +228,12 @@ describe('User Profile (e2e)', () => {
         { parentGroup: null },
       );
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
-      // Any remaining formal affiliation (target Group not in
-      // createdGroupIds' delete order edge cases) cascades from the User
-      // delete below (user_id is `on delete cascade`).
+      // FIXTURE_CLERK_PROFILES, not a frozen snapshot - createGroup (via
+      // createFreshGroupOwner) registers a fresh fixture user per call,
+      // mutating FIXTURE_CLERK_PROFILES in place, so it must be read fresh
+      // here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -283,19 +288,33 @@ describe('User Profile (e2e)', () => {
     };
   }
 
+  // ADMIN_TOKEN is the only actor that ever creates a Group in this file -
+  // its own FormalGroupAffiliation is never itself under test anywhere
+  // here (it only ever acts as the administrator of whatever
+  // Group/Section/Event a given test needs; the SUBJECT of every
+  // formal-group assertion is always a different token, e.g.
+  // EVENT_MODERATOR_TOKEN). GroupsService.create now allows at most one
+  // active FormalGroupAffiliation per user (see
+  // USER_ALREADY_HAS_FORMAL_GROUP), and ADMIN_TOKEN is reused across the
+  // whole file (plus some tests need *several* Groups administered by "the
+  // same actor" within one test) - so this mints a fresh, throwaway owner
+  // per call instead of ever reusing ADMIN_TOKEN's own identity to create.
+  // The returned object carries the full GroupResponseDto directly (so
+  // `group.id`/`.name`/... keep working exactly as before) plus
+  // `.token`/`.userId` for the fresh owner, for callers to act as
+  // afterward.
   async function createGroup(
-    token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'profile-admin',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   async function createSection(
@@ -500,29 +519,31 @@ describe('User Profile (e2e)', () => {
   }
 
   // Mirrors formal-rank.e2e-spec.ts's own createGroupWithCatalog - a Group
-  // with an active graduation system and one catalog Rank, owned by
-  // `token`. A fresh, unique-named Group per call (avoids catalog
-  // collisions across tests in this file).
-  async function createGroupWithCatalog(token: string): Promise<{
-    group: GroupResponseDto;
+  // with an active graduation system and one catalog Rank, owned by a
+  // fresh throwaway owner (see createGroup's own comment on why). A fresh,
+  // unique-named Group per call (avoids catalog collisions across tests in
+  // this file). The returned `group` carries `.token` for callers that
+  // need to act as its owner afterward (e.g. joinSection).
+  async function createGroupWithCatalog(): Promise<{
+    group: GroupResponseDto & { token: string; userId: string };
     section: SectionResponseDto;
     rank: RankResponseDto;
   }> {
-    const group = await createGroup(token, {
+    const group = await createGroup({
       name: `Formal Rank Catalog Group ${Date.now()}-${Math.random()}`,
     });
-    const section = await createSection(token, group.id);
+    const section = await createSection(group.token, group.id);
     await bodyOf<GraduationSystemResponseDto>(
       request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/graduation-system`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Authorization', `Bearer ${group.token}`)
         .send({ name: 'System' })
         .expect(201),
     );
     const rank = await bodyOf<RankResponseDto>(
       request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/ranks`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Authorization', `Bearer ${group.token}`)
         .send({
           track: RankTrack.ADULT,
           name: 'Corda Crua',
@@ -705,23 +726,23 @@ describe('User Profile (e2e)', () => {
   });
 
   describe('GET /users/:userId/profile - exact-Section admin access to full name', () => {
-    let group: GroupResponseDto;
+    let group: Awaited<ReturnType<typeof createGroup>>;
     let section: SectionResponseDto;
-    let otherGroup: GroupResponseDto;
+    let otherGroup: Awaited<ReturnType<typeof createGroup>>;
     let otherSection: SectionResponseDto;
     let targetId: string;
 
     beforeAll(async () => {
-      group = await createGroup(ADMIN_TOKEN, {
+      group = await createGroup({
         name: 'Full Name Access Group',
       });
-      section = await createSection(ADMIN_TOKEN, group.id, {
+      section = await createSection(group.token, group.id, {
         name: 'Full Name Access Section',
       });
-      otherGroup = await createGroup(ADMIN_TOKEN, {
+      otherGroup = await createGroup({
         name: 'Unrelated Group',
       });
-      otherSection = await createSection(ADMIN_TOKEN, otherGroup.id, {
+      otherSection = await createSection(otherGroup.token, otherGroup.id, {
         name: 'Unrelated Section',
       });
 
@@ -732,18 +753,18 @@ describe('User Profile (e2e)', () => {
         showFullName: false,
       });
 
-      await joinSection(ADMIN_TOKEN, section.id, TARGET_TOKEN);
-      await joinSection(ADMIN_TOKEN, section.id, SECTION_ADMIN_TOKEN);
+      await joinSection(group.token, section.id, TARGET_TOKEN);
+      await joinSection(group.token, section.id, SECTION_ADMIN_TOKEN);
       await grantSectionRole(
-        ADMIN_TOKEN,
+        group.token,
         section.id,
         SECTION_ADMIN_TOKEN,
         GroupRole.ADMIN,
       );
 
-      await joinSection(ADMIN_TOKEN, otherSection.id, OTHER_ADMIN_TOKEN);
+      await joinSection(otherGroup.token, otherSection.id, OTHER_ADMIN_TOKEN);
       await grantSectionRole(
-        ADMIN_TOKEN,
+        otherGroup.token,
         otherSection.id,
         OTHER_ADMIN_TOKEN,
         GroupRole.ADMIN,
@@ -771,12 +792,12 @@ describe('User Profile (e2e)', () => {
   });
 
   describe('GET /users/:userId/profile - Event organizer access to full name', () => {
-    let group: GroupResponseDto;
+    let group: Awaited<ReturnType<typeof createGroup>>;
     let event: EventResponseDto;
     let targetId: string;
 
     beforeAll(async () => {
-      group = await createGroup(ADMIN_TOKEN, {
+      group = await createGroup({
         name: 'Event Access Group',
       });
       // Group-level ADMIN is this codebase's stand-in for "community
@@ -785,7 +806,7 @@ describe('User Profile (e2e)', () => {
       // COMMUNITY_MEMBERS event visibility/registration.
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/role-assignments`)
-        .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+        .set('Authorization', `Bearer ${group.token}`)
         .send({
           userId: localUserIdByToken.get(TARGET_TOKEN),
           role: GroupRole.ADMIN,
@@ -798,7 +819,7 @@ describe('User Profile (e2e)', () => {
       ]) {
         await request(app.getHttpServer())
           .post(`/api/v1/groups/${group.id}/role-assignments`)
-          .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .send({
             userId: localUserIdByToken.get(token),
             role: GroupRole.ADMIN,
@@ -806,16 +827,16 @@ describe('User Profile (e2e)', () => {
           .expect(201);
       }
 
-      event = await createEvent(ADMIN_TOKEN, group.id);
-      await publishEvent(ADMIN_TOKEN, event.id);
+      event = await createEvent(group.token, group.id);
+      await publishEvent(group.token, event.id);
       await grantEventRole(
-        ADMIN_TOKEN,
+        group.token,
         event.id,
         EVENT_ORGANIZER_TOKEN,
         EventRole.ORGANIZER,
       );
       await grantEventRole(
-        ADMIN_TOKEN,
+        group.token,
         event.id,
         EVENT_MODERATOR_TOKEN,
         EventRole.MODERATOR,
@@ -863,19 +884,19 @@ describe('User Profile (e2e)', () => {
     // never exposed here regardless of what the target's real
     // RoleAssignments say (see the dedicated OWNER/ADMIN test below).
     it('shows id/name/logoUrl/roles for active-membership sections, gated by showSections', async () => {
-      const group = await createGroup(ADMIN_TOKEN, {
+      const group = await createGroup({
         name: 'Sections List Group',
       });
-      const sectionA = await createSection(ADMIN_TOKEN, group.id, {
+      const sectionA = await createSection(group.token, group.id, {
         name: 'Sections List Section A',
       });
-      const sectionB = await createSection(ADMIN_TOKEN, group.id, {
+      const sectionB = await createSection(group.token, group.id, {
         name: 'Sections List Section B',
       });
-      await joinSection(ADMIN_TOKEN, sectionA.id, VIEWER_TOKEN);
-      await joinSection(ADMIN_TOKEN, sectionB.id, VIEWER_TOKEN);
+      await joinSection(group.token, sectionA.id, VIEWER_TOKEN);
+      await joinSection(group.token, sectionB.id, VIEWER_TOKEN);
       await grantSectionRole(
-        ADMIN_TOKEN,
+        group.token,
         sectionA.id,
         VIEWER_TOKEN,
         GroupRole.INSTRUCTOR,
@@ -910,15 +931,15 @@ describe('User Profile (e2e)', () => {
     });
 
     it('never exposes OWNER/ADMIN as a section role, even when the target genuinely holds it', async () => {
-      const group = await createGroup(ADMIN_TOKEN, {
+      const group = await createGroup({
         name: 'Sections List Admin Group',
       });
-      const section = await createSection(ADMIN_TOKEN, group.id, {
+      const section = await createSection(group.token, group.id, {
         name: 'Sections List Admin Section',
       });
-      await joinSection(ADMIN_TOKEN, section.id, VIEWER_TOKEN);
+      await joinSection(group.token, section.id, VIEWER_TOKEN);
       await grantSectionRole(
-        ADMIN_TOKEN,
+        group.token,
         section.id,
         VIEWER_TOKEN,
         GroupRole.ADMIN,
@@ -939,9 +960,8 @@ describe('User Profile (e2e)', () => {
 
   describe('GET /users/:userId/profile - formal rank', () => {
     it('is null when not visible, null when never set, and always visible to the owner regardless of showFormalRank', async () => {
-      const { group, section, rank } =
-        await createGroupWithCatalog(ADMIN_TOKEN);
-      await joinSection(ADMIN_TOKEN, section.id, TARGET_TOKEN);
+      const { group, section, rank } = await createGroupWithCatalog();
+      await joinSection(group.token, section.id, TARGET_TOKEN);
       await setFormalGroup(TARGET_TOKEN, group.id);
       const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
 
@@ -1019,9 +1039,8 @@ describe('User Profile (e2e)', () => {
     });
 
     it('shows the independent rank instead of a stale formal rank once the owner has left their formal group, or neither when there is no independent rank either', async () => {
-      const { group, section, rank } =
-        await createGroupWithCatalog(ADMIN_TOKEN);
-      await joinSection(ADMIN_TOKEN, section.id, TARGET_TOKEN);
+      const { group, section, rank } = await createGroupWithCatalog();
+      await joinSection(group.token, section.id, TARGET_TOKEN);
       await setFormalGroup(TARGET_TOKEN, group.id);
       await setFormalRank(TARGET_TOKEN, rank.id);
       await patchOwnProfile(TARGET_TOKEN, { showFormalRank: true });
@@ -1103,7 +1122,7 @@ describe('User Profile (e2e)', () => {
 
   describe('PUT/DELETE /users/me/formal-group', () => {
     it('rejects setting a formal group with no active section membership anywhere in its hierarchy', async () => {
-      const group = await createGroup(ADMIN_TOKEN, {
+      const group = await createGroup({
         name: 'No Membership Formal Group',
       });
       const error = (await setFormalGroup(
@@ -1116,17 +1135,36 @@ describe('User Profile (e2e)', () => {
     });
 
     it('accepts a section under a nested child group, not just direct sections', async () => {
-      const root = await createGroup(ADMIN_TOKEN, {
+      const root = await createGroup({
         name: 'Nested Formal Group Root',
       });
-      const child = await createGroup(ADMIN_TOKEN, {
+      const child = await createGroup({
         name: 'Nested Formal Group Child',
       });
-      await attachGroupParent(ADMIN_TOKEN, child.id, root.id);
-      const nestedSection = await createSection(ADMIN_TOKEN, child.id, {
+      // attachGroupParent requires HIERARCHY_MANAGE (OWNER only) on *both*
+      // nodes (see hierarchy-management.service.ts's assertHierarchyManage)
+      // - root and child are two independent fresh owners here, so grant
+      // root's owner ADMIN on child, then transfer child's ownership to
+      // them (never touches FormalGroupAffiliation - see
+      // role-assignments.service.ts) so a single actor can perform the
+      // attach, same reasoning as hierarchy.e2e-spec.ts's
+      // createGroupOwnedByA.
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${child.id}/role-assignments`)
+        .set('Authorization', `Bearer ${child.token}`)
+        .send({ userId: root.userId, role: 'ADMIN' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${child.id}/transfer-ownership`)
+        .set('Authorization', `Bearer ${child.token}`)
+        .send({ newOwnerUserId: root.userId })
+        .expect(201);
+
+      await attachGroupParent(root.token, child.id, root.id);
+      const nestedSection = await createSection(root.token, child.id, {
         name: 'Nested Formal Group Section',
       });
-      await joinSection(ADMIN_TOKEN, nestedSection.id, EVENT_ORGANIZER_TOKEN);
+      await joinSection(root.token, nestedSection.id, EVENT_ORGANIZER_TOKEN);
 
       const result = (await setFormalGroup(
         EVENT_ORGANIZER_TOKEN,
@@ -1137,21 +1175,21 @@ describe('User Profile (e2e)', () => {
     });
 
     it('supports many SectionMemberships under a single formal Group, and switches atomically between two formal Groups', async () => {
-      const groupA = await createGroup(ADMIN_TOKEN, { name: 'Formal Group A' });
-      const sectionA1 = await createSection(ADMIN_TOKEN, groupA.id, {
+      const groupA = await createGroup({ name: 'Formal Group A' });
+      const sectionA1 = await createSection(groupA.token, groupA.id, {
         name: 'Formal Group A Section 1',
       });
-      const sectionA2 = await createSection(ADMIN_TOKEN, groupA.id, {
+      const sectionA2 = await createSection(groupA.token, groupA.id, {
         name: 'Formal Group A Section 2',
       });
-      const groupB = await createGroup(ADMIN_TOKEN, { name: 'Formal Group B' });
-      const sectionB = await createSection(ADMIN_TOKEN, groupB.id, {
+      const groupB = await createGroup({ name: 'Formal Group B' });
+      const sectionB = await createSection(groupB.token, groupB.id, {
         name: 'Formal Group B Section',
       });
 
-      await joinSection(ADMIN_TOKEN, sectionA1.id, EVENT_MODERATOR_TOKEN);
-      await joinSection(ADMIN_TOKEN, sectionA2.id, EVENT_MODERATOR_TOKEN);
-      await joinSection(ADMIN_TOKEN, sectionB.id, EVENT_MODERATOR_TOKEN);
+      await joinSection(groupA.token, sectionA1.id, EVENT_MODERATOR_TOKEN);
+      await joinSection(groupA.token, sectionA2.id, EVENT_MODERATOR_TOKEN);
+      await joinSection(groupB.token, sectionB.id, EVENT_MODERATOR_TOKEN);
 
       const setA = (await setFormalGroup(
         EVENT_MODERATOR_TOKEN,
@@ -1186,13 +1224,13 @@ describe('User Profile (e2e)', () => {
     });
 
     it('rejects a future-dated startedOn', async () => {
-      const group = await createGroup(ADMIN_TOKEN, {
+      const group = await createGroup({
         name: 'Future Started On Group',
       });
-      const section = await createSection(ADMIN_TOKEN, group.id, {
+      const section = await createSection(group.token, group.id, {
         name: 'Future Started On Section',
       });
-      await joinSection(ADMIN_TOKEN, section.id, OTHER_ADMIN_TOKEN);
+      await joinSection(group.token, section.id, OTHER_ADMIN_TOKEN);
 
       const error = (await setFormalGroup(
         OTHER_ADMIN_TOKEN,
@@ -1204,14 +1242,14 @@ describe('User Profile (e2e)', () => {
     });
 
     it('rejects an archived group as a formal group', async () => {
-      const group = await createGroup(ADMIN_TOKEN, {
+      const group = await createGroup({
         name: 'Archived Formal Group',
       });
-      const section = await createSection(ADMIN_TOKEN, group.id, {
+      const section = await createSection(group.token, group.id, {
         name: 'Archived Formal Group Section',
       });
-      await joinSection(ADMIN_TOKEN, section.id, VIEWER_TOKEN);
-      await archiveGroup(ADMIN_TOKEN, group.id);
+      await joinSection(group.token, section.id, VIEWER_TOKEN);
+      await archiveGroup(group.token, group.id);
 
       const error = (await setFormalGroup(
         VIEWER_TOKEN,
@@ -1223,17 +1261,17 @@ describe('User Profile (e2e)', () => {
     });
 
     it('rejects when the only qualifying membership is in an archived section, but accepts once an active section also qualifies', async () => {
-      const group = await createGroup(ADMIN_TOKEN, {
+      const group = await createGroup({
         name: 'Archived Section Formal Group',
       });
-      const archivedSection = await createSection(ADMIN_TOKEN, group.id, {
+      const archivedSection = await createSection(group.token, group.id, {
         name: 'Archived Formal Section',
       });
-      const activeSection = await createSection(ADMIN_TOKEN, group.id, {
+      const activeSection = await createSection(group.token, group.id, {
         name: 'Active Formal Section',
       });
-      await joinSection(ADMIN_TOKEN, archivedSection.id, EVENT_ATTENDEE_TOKEN);
-      await archiveSection(ADMIN_TOKEN, archivedSection.id);
+      await joinSection(group.token, archivedSection.id, EVENT_ATTENDEE_TOKEN);
+      await archiveSection(group.token, archivedSection.id);
 
       const stillRejected = (await setFormalGroup(
         EVENT_ATTENDEE_TOKEN,
@@ -1243,7 +1281,7 @@ describe('User Profile (e2e)', () => {
       )) as HttpErrorResponse;
       expect(stillRejected.statusCode).toBe(409);
 
-      await joinSection(ADMIN_TOKEN, activeSection.id, EVENT_ATTENDEE_TOKEN);
+      await joinSection(group.token, activeSection.id, EVENT_ATTENDEE_TOKEN);
       const accepted = (await setFormalGroup(
         EVENT_ATTENDEE_TOKEN,
         group.id,
@@ -1252,13 +1290,13 @@ describe('User Profile (e2e)', () => {
     });
 
     it('DELETE ends the active affiliation, and repeating it 404s', async () => {
-      const group = await createGroup(ADMIN_TOKEN, {
+      const group = await createGroup({
         name: 'End Formal Group',
       });
-      const section = await createSection(ADMIN_TOKEN, group.id, {
+      const section = await createSection(group.token, group.id, {
         name: 'End Formal Group Section',
       });
-      await joinSection(ADMIN_TOKEN, section.id, SECTION_ADMIN_TOKEN);
+      await joinSection(group.token, section.id, SECTION_ADMIN_TOKEN);
       // SECTION_ADMIN_TOKEN already has a formal group set from an earlier
       // describe block in this file - switching first proves the DELETE
       // path independently of that history.
@@ -1282,13 +1320,13 @@ describe('User Profile (e2e)', () => {
     });
 
     it('does not end the formal Group affiliation when the user leaves their last qualifying section', async () => {
-      const group = await createGroup(ADMIN_TOKEN, {
+      const group = await createGroup({
         name: 'Leave Does Not End Formal Group',
       });
-      const section = await createSection(ADMIN_TOKEN, group.id, {
+      const section = await createSection(group.token, group.id, {
         name: 'Leave Does Not End Formal Group Section',
       });
-      await joinSection(ADMIN_TOKEN, section.id, OTHER_ADMIN_TOKEN);
+      await joinSection(group.token, section.id, OTHER_ADMIN_TOKEN);
       const set = (await setFormalGroup(
         OTHER_ADMIN_TOKEN,
         group.id,

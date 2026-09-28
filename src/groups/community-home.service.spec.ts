@@ -14,6 +14,7 @@ import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
 import { CommunityHomeService } from './community-home.service';
 import { CommunityOverviewService } from './community-overview.service';
+import { FormalGroupAffiliation } from './entities/formal-group-affiliation.entity';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
 import { SectionMembership } from './entities/section-membership.entity';
@@ -69,6 +70,7 @@ interface Setup {
   groups?: Group[];
   sections?: Section[];
   sectionMemberships?: SectionMembership[];
+  hasActiveFormalGroup?: boolean;
 }
 
 function buildService(setup: Setup) {
@@ -80,6 +82,14 @@ function buildService(setup: Setup) {
         return Promise.resolve(setup.sectionMemberships ?? []);
       }
       return Promise.resolve([]);
+    }),
+    // Backs canCreateGroup's hasActiveFormalGroup check - defaults to "no
+    // active formal group" unless a test opts in.
+    count: jest.fn((entity: unknown) => {
+      if (entity === FormalGroupAffiliation) {
+        return Promise.resolve(setup.hasActiveFormalGroup ? 1 : 0);
+      }
+      return Promise.resolve(0);
     }),
   } as unknown as EntityManager;
 
@@ -398,5 +408,19 @@ describe('CommunityHomeService', () => {
     expect(home.summary.communitiesCount).toBe(0);
     expect(home.capabilities.canCreateGroup).toBe(true);
     expect(home.capabilities.canManageAnyCommunity).toBe(false);
+  });
+
+  it('canCreateGroup is false when the user already has an active FormalGroupAffiliation', async () => {
+    const { service } = buildService({
+      participation: [],
+      hasActiveFormalGroup: true,
+    });
+
+    const home = await service.getHome(buildUser(), null);
+
+    expect(home.capabilities.canCreateGroup).toBe(false);
+    // canCreateStandaloneSection is unaffected - the one-formal-group
+    // limit only ever applies to creating a Group.
+    expect(home.capabilities.canCreateStandaloneSection).toBe(true);
   });
 });

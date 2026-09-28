@@ -25,10 +25,12 @@ import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { User } from '../src/users/entities/user.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
@@ -47,19 +49,15 @@ import { TrainingResponseDto } from '../src/trainings/dto/training-response.dto'
 import { TrainingVisibility } from '../src/trainings/enums/training-visibility.enum';
 import { CalendarResponseDto } from '../src/calendar/dto/calendar-item.dto';
 
-const OWNER_TOKEN = 'valid-calendar-user-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const MEMBER_TOKEN = 'valid-calendar-user-member-token';
 
-const OWNER_CLERK_ID = 'user_test_calendar_user_owner';
 const MEMBER_CLERK_ID = 'user_test_calendar_user_member';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [OWNER_TOKEN]: {
-    userId: OWNER_CLERK_ID,
-    sessionId: 'sess_calendar_user_owner',
-    tokenType: 'session_token',
-    claims: { sub: OWNER_CLERK_ID, sid: 'sess_calendar_user_owner' },
-  },
   [MEMBER_TOKEN]: {
     userId: MEMBER_CLERK_ID,
     sessionId: 'sess_calendar_user_member',
@@ -72,17 +70,11 @@ const FIXTURE_CLERK_PROFILES: Record<
   string,
   { imageUrl: string; primaryEmailAddress: { emailAddress: string } | null }
 > = {
-  [OWNER_CLERK_ID]: {
-    imageUrl: 'https://img.clerk.com/calendar-user-owner.png',
-    primaryEmailAddress: { emailAddress: 'calendar.user.owner@example.com' },
-  },
   [MEMBER_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/calendar-user-member.png',
     primaryEmailAddress: { emailAddress: 'calendar.user.member@example.com' },
   },
 };
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -223,9 +215,19 @@ describe('Calendar - User (e2e)', () => {
         { id: { $in: createdGroupIds } },
         { parentGroup: null },
       );
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -250,18 +252,17 @@ describe('Calendar - User (e2e)', () => {
   }
 
   async function createGroup(
-    token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'cal-user',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   function sectionPayload(overrides: Record<string, unknown> = {}) {
@@ -325,7 +326,11 @@ describe('Calendar - User (e2e)', () => {
       locationAddress: null,
       latitude: null,
       longitude: null,
-      trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+      // Just needs to be some valid, always-registered user id - no test in
+      // this file asserts on trainer identity, and the section's own owner
+      // is now a fresh, per-test throwaway user (see createGroup's own
+      // comment), not a fixed token this default could reach.
+      trainerUserId: localUserIdByToken.get(MEMBER_TOKEN),
       description: 'Regular training',
       visibility: TrainingVisibility.MEMBERS_ONLY,
       ...overrides,
@@ -444,10 +449,10 @@ describe('Calendar - User (e2e)', () => {
   };
 
   it('includes a Training from my own Section without any RSVP', async () => {
-    const group = await createGroup(OWNER_TOKEN);
-    const mySection = await createSection(OWNER_TOKEN, group.id);
-    await addSectionMember(OWNER_TOKEN, mySection.id, MEMBER_TOKEN);
-    const training = await createTraining(OWNER_TOKEN, mySection.id, {
+    const group = await createGroup();
+    const mySection = await createSection(group.token, group.id);
+    await addSectionMember(group.token, mySection.id, MEMBER_TOKEN);
+    const training = await createTraining(group.token, mySection.id, {
       startsAt: '2031-06-05T18:00:00.000Z',
       endsAt: '2031-06-05T20:00:00.000Z',
     });
@@ -460,11 +465,11 @@ describe('Calendar - User (e2e)', () => {
   });
 
   it('never includes a PUBLIC Training from a Section I am not a member of', async () => {
-    const group = await createGroup(OWNER_TOKEN);
-    const foreignSection = await createSection(OWNER_TOKEN, group.id, {
+    const group = await createGroup();
+    const foreignSection = await createSection(group.token, group.id, {
       name: 'Foreign Section',
     });
-    const training = await createTraining(OWNER_TOKEN, foreignSection.id, {
+    const training = await createTraining(group.token, foreignSection.id, {
       visibility: TrainingVisibility.PUBLIC,
       startsAt: '2031-06-06T18:00:00.000Z',
       endsAt: '2031-06-06T20:00:00.000Z',
@@ -478,8 +483,8 @@ describe('Calendar - User (e2e)', () => {
   });
 
   it('includes an Event I actually registered for', async () => {
-    const group = await createGroup(OWNER_TOKEN);
-    const event = await createPublishedEvent(OWNER_TOKEN, group.id, {
+    const group = await createGroup();
+    const event = await createPublishedEvent(group.token, group.id, {
       startsAt: '2031-06-07T10:00:00.000Z',
       endsAt: '2031-06-07T12:00:00.000Z',
     });
@@ -512,21 +517,23 @@ describe('Calendar - User (e2e)', () => {
   });
 
   it("never includes another user's personal Event", async () => {
-    const event = await createPersonalEvent(OWNER_TOKEN, {
+    // Just needs to be a distinct, real user - createGroup() mints a fresh
+    // one (see its own comment); the Group it creates along the way is
+    // unused here, only its owner's identity matters.
+    const otherUser = await createGroup();
+    const event = await createPersonalEvent(otherUser.token, {
       startsAt: '2031-06-18T10:00:00.000Z',
       endsAt: '2031-06-18T12:00:00.000Z',
     });
 
     const calendar = await getCalendar(MEMBER_TOKEN, FULL_RANGE);
 
-    expect(calendar.items.map((item) => item.sourceId)).not.toContain(
-      event.id,
-    );
+    expect(calendar.items.map((item) => item.sourceId)).not.toContain(event.id);
   });
 
   it('never includes a PUBLIC Event I never registered for, even though I could see it', async () => {
-    const group = await createGroup(OWNER_TOKEN);
-    const event = await createPublishedEvent(OWNER_TOKEN, group.id, {
+    const group = await createGroup();
+    const event = await createPublishedEvent(group.token, group.id, {
       startsAt: '2031-06-08T10:00:00.000Z',
       endsAt: '2031-06-08T12:00:00.000Z',
     });
@@ -537,16 +544,16 @@ describe('Calendar - User (e2e)', () => {
   });
 
   it('keeps a CANCELLED Training visible, marked isCancelled', async () => {
-    const group = await createGroup(OWNER_TOKEN);
-    const mySection = await createSection(OWNER_TOKEN, group.id, {
+    const group = await createGroup();
+    const mySection = await createSection(group.token, group.id, {
       name: 'Cancelled Fixture Section',
     });
-    await addSectionMember(OWNER_TOKEN, mySection.id, MEMBER_TOKEN);
-    const training = await createTraining(OWNER_TOKEN, mySection.id, {
+    await addSectionMember(group.token, mySection.id, MEMBER_TOKEN);
+    const training = await createTraining(group.token, mySection.id, {
       startsAt: '2031-06-09T18:00:00.000Z',
       endsAt: '2031-06-09T20:00:00.000Z',
     });
-    await cancelTraining(OWNER_TOKEN, mySection.id, training.id);
+    await cancelTraining(group.token, mySection.id, training.id);
 
     const calendar = await getCalendar(MEMBER_TOKEN, FULL_RANGE);
 
@@ -555,25 +562,25 @@ describe('Calendar - User (e2e)', () => {
   });
 
   it('returns items sorted by startsAt ascending across multiple Sections and Events', async () => {
-    const group = await createGroup(OWNER_TOKEN);
-    const sectionA = await createSection(OWNER_TOKEN, group.id, {
+    const group = await createGroup();
+    const sectionA = await createSection(group.token, group.id, {
       name: 'Order Section A',
     });
-    const sectionB = await createSection(OWNER_TOKEN, group.id, {
+    const sectionB = await createSection(group.token, group.id, {
       name: 'Order Section B',
     });
-    await addSectionMember(OWNER_TOKEN, sectionA.id, MEMBER_TOKEN);
-    await addSectionMember(OWNER_TOKEN, sectionB.id, MEMBER_TOKEN);
+    await addSectionMember(group.token, sectionA.id, MEMBER_TOKEN);
+    await addSectionMember(group.token, sectionB.id, MEMBER_TOKEN);
 
-    const later = await createTraining(OWNER_TOKEN, sectionA.id, {
+    const later = await createTraining(group.token, sectionA.id, {
       startsAt: '2031-06-20T18:00:00.000Z',
       endsAt: '2031-06-20T20:00:00.000Z',
     });
-    const earliest = await createTraining(OWNER_TOKEN, sectionB.id, {
+    const earliest = await createTraining(group.token, sectionB.id, {
       startsAt: '2031-06-11T18:00:00.000Z',
       endsAt: '2031-06-11T20:00:00.000Z',
     });
-    const event = await createPublishedEvent(OWNER_TOKEN, group.id, {
+    const event = await createPublishedEvent(group.token, group.id, {
       startsAt: '2031-06-15T10:00:00.000Z',
       endsAt: '2031-06-15T12:00:00.000Z',
     });
@@ -588,12 +595,12 @@ describe('Calendar - User (e2e)', () => {
   });
 
   it('includes an item that starts before `from` but ends after it (range intersection)', async () => {
-    const group = await createGroup(OWNER_TOKEN);
-    const mySection = await createSection(OWNER_TOKEN, group.id, {
+    const group = await createGroup();
+    const mySection = await createSection(group.token, group.id, {
       name: 'Boundary Section',
     });
-    await addSectionMember(OWNER_TOKEN, mySection.id, MEMBER_TOKEN);
-    const crossing = await createTraining(OWNER_TOKEN, mySection.id, {
+    await addSectionMember(group.token, mySection.id, MEMBER_TOKEN);
+    const crossing = await createTraining(group.token, mySection.id, {
       startsAt: '2031-06-13T23:00:00.000Z',
       endsAt: '2031-06-14T01:00:00.000Z',
     });
@@ -607,12 +614,12 @@ describe('Calendar - User (e2e)', () => {
   });
 
   it('excludes items entirely outside the requested range', async () => {
-    const group = await createGroup(OWNER_TOKEN);
-    const mySection = await createSection(OWNER_TOKEN, group.id, {
+    const group = await createGroup();
+    const mySection = await createSection(group.token, group.id, {
       name: 'Outside Range Section',
     });
-    await addSectionMember(OWNER_TOKEN, mySection.id, MEMBER_TOKEN);
-    const training = await createTraining(OWNER_TOKEN, mySection.id, {
+    await addSectionMember(group.token, mySection.id, MEMBER_TOKEN);
+    const training = await createTraining(group.token, mySection.id, {
       startsAt: '2031-06-05T18:00:00.000Z',
       endsAt: '2031-06-05T20:00:00.000Z',
     });

@@ -32,6 +32,7 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
@@ -39,27 +40,30 @@ import { GroupSummaryResponseDto } from '../src/groups/dto/group-summary-respons
 import { RoleAssignmentResponseDto } from '../src/groups/dto/role-assignment-response.dto';
 import { TransferOwnershipResponseDto } from '../src/groups/dto/transfer-ownership-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
 
-const OWNER_TOKEN = 'valid-groups-owner-token';
+// No fixed "OWNER_TOKEN" here (unlike SECOND_TOKEN/THIRD_TOKEN/
+// OUTSIDER_TOKEN below, which stay - each is a stable *other* actor
+// relative to whichever Group is under test: an ADMIN-to-be, a second
+// grantee, a non-member). GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user (see USER_ALREADY_HAS_FORMAL_GROUP
+// on GroupsService.create) - since every test here creates its own Group to
+// exercise in isolation, each now mints its own fresh owner via
+// createFreshGroupOwner (see the local createGroup() below), rather than
+// reusing one shared owner identity across the whole file the way this used
+// to work. A fixed OWNER_TOKEN would 409 on every create after the first.
 const SECOND_TOKEN = 'valid-groups-second-token';
 const THIRD_TOKEN = 'valid-groups-third-token';
 const OUTSIDER_TOKEN = 'valid-groups-outsider-token';
 
-const OWNER_CLERK_ID = 'user_test_groups_owner';
 const SECOND_CLERK_ID = 'user_test_groups_second';
 const THIRD_CLERK_ID = 'user_test_groups_third';
 const OUTSIDER_CLERK_ID = 'user_test_groups_outsider';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [OWNER_TOKEN]: {
-    userId: OWNER_CLERK_ID,
-    sessionId: 'sess_groups_owner',
-    tokenType: 'session_token',
-    claims: { sub: OWNER_CLERK_ID, sid: 'sess_groups_owner' },
-  },
   [SECOND_TOKEN]: {
     userId: SECOND_CLERK_ID,
     sessionId: 'sess_groups_second',
@@ -84,10 +88,6 @@ const FIXTURE_CLERK_PROFILES: Record<
   string,
   { imageUrl: string; primaryEmailAddress: { emailAddress: string } | null }
 > = {
-  [OWNER_CLERK_ID]: {
-    imageUrl: 'https://img.clerk.com/groups-owner.png',
-    primaryEmailAddress: { emailAddress: 'groups.owner@example.com' },
-  },
   [SECOND_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/groups-second.png',
     primaryEmailAddress: { emailAddress: 'groups.second@example.com' },
@@ -101,8 +101,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     primaryEmailAddress: { emailAddress: 'groups.outsider@example.com' },
   },
 };
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -183,9 +181,21 @@ describe('Groups (e2e)', () => {
       await cleanup.nativeDelete(AuditLogEntry, {
         group: { $in: createdGroupIds },
       });
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step). Every Group
+      // created via createGroup() below now sets one automatically (see
+      // GroupsService.create).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup() (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -211,19 +221,25 @@ describe('Groups (e2e)', () => {
     };
   }
 
+  // Mints a brand-new fixture user and has them create a Group - see
+  // createFreshGroupOwner's own comment for why this file no longer reuses
+  // one fixed OWNER_TOKEN across tests (GroupsService.create now allows at
+  // most one active FormalGroupAffiliation per user). The returned object
+  // carries the full GroupResponseDto directly (so `created.id`/`.name`/...
+  // keep working exactly as before) plus `.token`/`.userId` for the fresh
+  // owner, since every test still needs to act as that owner afterward.
   async function createGroup(
-    token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'groups',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   // Group only ever grants OWNER/ADMIN - a direct RoleAssignment, no
@@ -281,20 +297,18 @@ describe('Groups (e2e)', () => {
 
   describe('create', () => {
     it('creates a group and automatically makes the creator OWNER (only Role - Group has no MEMBER tier)', async () => {
-      const created = await createGroup(OWNER_TOKEN, { name: 'Nova Geração' });
+      const created = await createGroup({ name: 'Nova Geração' });
 
       expect(created.name).toBe('Nova Geração');
       expect(created.status).toBe('ACTIVE');
 
       const roleAssignments = await getGroupRoleAssignments(
-        OWNER_TOKEN,
+        created.token,
         created.id,
       );
       expect(roleAssignments).toHaveLength(1);
       expect(roleAssignments[0].role).toBe(GroupRole.OWNER);
-      expect(roleAssignments[0].user.id).toBe(
-        localUserIdByToken.get(OWNER_TOKEN),
-      );
+      expect(roleAssignments[0].user.id).toBe(created.userId);
     });
 
     it('rejects unauthenticated requests with 401', async () => {
@@ -312,14 +326,14 @@ describe('Groups (e2e)', () => {
     // GroupResponseDto (no product need for it there yet), so asserted
     // directly against the persisted row.
     it('records the creator as founderUser, with a displayName snapshot', async () => {
-      const created = await createGroup(OWNER_TOKEN, {
+      const created = await createGroup({
         name: 'Founder Snapshot Test',
       });
 
       const em = app.get(EntityManager).fork();
       const group = await em.findOneOrFail(Group, { id: created.id });
       const creator = await em.findOneOrFail(User, {
-        id: localUserIdByToken.get(OWNER_TOKEN),
+        id: created.userId,
       });
 
       expect(group.founderUser?.id).toBe(creator.id);
@@ -334,7 +348,7 @@ describe('Groups (e2e)', () => {
     // create-section.schema.spec.ts and group-hierarchy.e2e-spec.ts's
     // Section creation tests.
     it('creates a Group with no location fields at all, and the response never carries any', async () => {
-      const created = await createGroup(OWNER_TOKEN, {
+      const created = await createGroup({
         name: 'Country City Test',
       });
 
@@ -345,7 +359,7 @@ describe('Groups (e2e)', () => {
     });
 
     it('silently ignores a country/city/geonameId sent in the create payload - Group never persists them', async () => {
-      const created = await createGroup(OWNER_TOKEN, {
+      const created = await createGroup({
         name: 'Group With Stray Location Fields',
         country: 'BR',
         city: 'São Paulo',
@@ -360,12 +374,12 @@ describe('Groups (e2e)', () => {
 
   describe('listMine', () => {
     it('lists only groups the caller holds a Role Assignment on', async () => {
-      const created = await createGroup(OWNER_TOKEN, { name: 'Only Mine' });
+      const created = await createGroup({ name: 'Only Mine' });
 
       const list = await bodyOf<GroupSummaryResponseDto[]>(
         request(app.getHttpServer())
           .get('/api/v1/groups')
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(200),
       );
 
@@ -376,7 +390,7 @@ describe('Groups (e2e)', () => {
     });
 
     it('excludes a Group the caller holds no Role Assignment on', async () => {
-      const created = await createGroup(OWNER_TOKEN, { name: 'Not Mine' });
+      const created = await createGroup({ name: 'Not Mine' });
 
       const list = await bodyOf<GroupSummaryResponseDto[]>(
         request(app.getHttpServer())
@@ -390,7 +404,7 @@ describe('Groups (e2e)', () => {
 
   describe('getById', () => {
     it('returns 404 for a user with no Role Assignment on this Private Group at all', async () => {
-      const created = await createGroup(OWNER_TOKEN, { isPublic: false });
+      const created = await createGroup({ isPublic: false });
 
       await request(app.getHttpServer())
         .get(`/api/v1/groups/${created.id}`)
@@ -404,7 +418,7 @@ describe('Groups (e2e)', () => {
     // search results are actually viewable before deciding to join (see
     // GroupPermissionsGuard's own comment for the bug this fixes).
     it('returns 200 for a user with no Role Assignment at all on a Public Group', async () => {
-      const created = await createGroup(OWNER_TOKEN, { isPublic: true });
+      const created = await createGroup({ isPublic: true });
 
       const details = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
@@ -416,15 +430,17 @@ describe('Groups (e2e)', () => {
     });
 
     it('returns 404 for a non-existent group id', async () => {
+      // No Group created in this test at all - any authenticated user gets
+      // 404 for an id that doesn't exist, regardless of who they are.
       await request(app.getHttpServer())
         .get('/api/v1/groups/11111111-1111-4111-8111-111111111111')
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .expect(404);
     });
 
     it('returns group details for OWNER/ADMIN', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, SECOND_TOKEN);
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
 
       const details = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
@@ -439,12 +455,12 @@ describe('Groups (e2e)', () => {
 
   describe('update', () => {
     it('allows the owner to edit the group', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
 
       const updated = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .send(groupPayload({ name: 'Renamed Group' }))
           .expect(200),
       );
@@ -453,8 +469,8 @@ describe('Groups (e2e)', () => {
     });
 
     it('allows an ADMIN to edit the group too', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, SECOND_TOKEN);
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
 
       const updated = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
@@ -473,11 +489,11 @@ describe('Groups (e2e)', () => {
     // "predates geonameId" case) now lives on Section only - see
     // update-section.schema.spec.ts.
     it('rejects an edit payload carrying the now-removed location fields', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
 
       await request(app.getHttpServer())
         .patch(`/api/v1/groups/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${created.token}`)
         .send(groupPayload({ country: 'DE', city: 'Berlin' }))
         .expect(400);
     });
@@ -487,11 +503,11 @@ describe('Groups (e2e)', () => {
     // above no longer includes them and submitting them here is rejected
     // the same way the location fields above are.
     it('rejects an edit payload carrying the now-removed timezone/currencyCode fields', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
 
       await request(app.getHttpServer())
         .patch(`/api/v1/groups/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${created.token}`)
         .send(groupPayload({ timezone: 'Europe/Warsaw', currencyCode: 'PLN' }))
         .expect(400);
     });
@@ -499,12 +515,12 @@ describe('Groups (e2e)', () => {
 
   describe('archive', () => {
     it('allows the owner to archive the group', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
 
       const archived = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/archive`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(201),
       );
 
@@ -512,8 +528,8 @@ describe('Groups (e2e)', () => {
     });
 
     it('forbids an admin from archiving the group - archive is OWNER-only', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, SECOND_TOKEN);
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
@@ -527,13 +543,13 @@ describe('Groups (e2e)', () => {
 
   describe('transferOwnership', () => {
     it('transfers ownership atomically: the target must already hold ADMIN, and becomes the sole OWNER', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, SECOND_TOKEN);
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
 
       const result = await bodyOf<TransferOwnershipResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/transfer-ownership`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .send({ newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN) })
           .expect(201),
       );
@@ -571,7 +587,7 @@ describe('Groups (e2e)', () => {
       // Group's existence to them).
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${created.id}/archive`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${created.token}`)
         .expect(404);
 
       const archived = await bodyOf<GroupResponseDto>(
@@ -584,13 +600,13 @@ describe('Groups (e2e)', () => {
     });
 
     it('rejects a smuggled previousOwnerRole field with 400 VALIDATION_ERROR', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, SECOND_TOKEN);
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/transfer-ownership`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .send({
             newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN),
             previousOwnerRole: 'ADMIN',
@@ -601,9 +617,9 @@ describe('Groups (e2e)', () => {
     });
 
     it('rejects transfer attempted by a non-owner admin with 403', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, SECOND_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, THIRD_TOKEN);
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
+      await grantGroupRole(created.token, created.id, THIRD_TOKEN);
 
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${created.id}/transfer-ownership`)
@@ -613,12 +629,12 @@ describe('Groups (e2e)', () => {
     });
 
     it('rejects transferring to a user who does not already hold ADMIN - 400 TARGET_NOT_GROUP_ADMIN', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/transfer-ownership`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .send({ newOwnerUserId: localUserIdByToken.get(OUTSIDER_TOKEN) })
           .expect(400),
       );
@@ -628,10 +644,10 @@ describe('Groups (e2e)', () => {
 
   describe('role-assignments on a Group', () => {
     it('grants ADMIN directly via userId - no membership involved', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
 
       const granted = await grantGroupRole(
-        OWNER_TOKEN,
+        created.token,
         created.id,
         SECOND_TOKEN,
       );
@@ -640,13 +656,13 @@ describe('Groups (e2e)', () => {
     });
 
     it('rejects granting the exact same Role twice - 409 ROLE_ASSIGNMENT_ALREADY_EXISTS', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, SECOND_TOKEN);
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .send({
             userId: localUserIdByToken.get(SECOND_TOKEN),
             role: GroupRole.ADMIN,
@@ -657,7 +673,7 @@ describe('Groups (e2e)', () => {
     });
 
     it('forbids a caller with no Role Assignment on the Group from granting one', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
 
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${created.id}/role-assignments`)
@@ -670,28 +686,28 @@ describe('Groups (e2e)', () => {
     });
 
     it('revokes an ADMIN Role Assignment', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
       const granted = await grantGroupRole(
-        OWNER_TOKEN,
+        created.token,
         created.id,
         SECOND_TOKEN,
       );
 
       await request(app.getHttpServer())
         .delete(`/api/v1/groups/${created.id}/role-assignments/${granted.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${created.token}`)
         .expect(204);
 
       await request(app.getHttpServer())
         .get(`/api/v1/groups/${created.id}/role-assignments/${granted.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${created.token}`)
         .expect(404);
     });
 
     it('never allows revoking OWNER directly - 409 CANNOT_REMOVE_OWNER, and there is no PATCH to change it instead', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
       const roleAssignments = await getGroupRoleAssignments(
-        OWNER_TOKEN,
+        created.token,
         created.id,
       );
       const ownerRoleAssignment = roleAssignments.find(
@@ -704,7 +720,7 @@ describe('Groups (e2e)', () => {
         .patch(
           `/api/v1/groups/${created.id}/role-assignments/${ownerRoleAssignment?.id}`,
         )
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${created.token}`)
         .send({ role: 'ADMIN' })
         .expect(404);
 
@@ -713,7 +729,7 @@ describe('Groups (e2e)', () => {
           .delete(
             `/api/v1/groups/${created.id}/role-assignments/${ownerRoleAssignment?.id}`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(409),
       );
       expect(response.code).toBe('CANNOT_REMOVE_OWNER');
@@ -722,13 +738,13 @@ describe('Groups (e2e)', () => {
 
   describe('archived group (writes blocked)', () => {
     it('still allows OWNER/ADMIN to read group details and see it in "my groups"', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await archiveGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await archiveGroup(created.token, created.id);
 
       const details = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(200),
       );
       expect(details.status).toBe('ARCHIVED');
@@ -736,7 +752,7 @@ describe('Groups (e2e)', () => {
       const mine = await bodyOf<GroupSummaryResponseDto[]>(
         request(app.getHttpServer())
           .get('/api/v1/groups')
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(200),
       );
       expect(mine.find((item) => item.id === created.id)?.status).toBe(
@@ -745,13 +761,13 @@ describe('Groups (e2e)', () => {
     });
 
     it('blocks PATCH /groups/:id with 409 GROUP_ARCHIVED', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await archiveGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await archiveGroup(created.token, created.id);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .send(groupPayload({ name: 'Should not apply' }))
           .expect(409),
       );
@@ -759,26 +775,26 @@ describe('Groups (e2e)', () => {
     });
 
     it('blocks re-archiving an already-archived group with 409 GROUP_ARCHIVED', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await archiveGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await archiveGroup(created.token, created.id);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/archive`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(409),
       );
       expect(response.code).toBe('GROUP_ARCHIVED');
     });
 
     it('blocks POST .../role-assignments (grant a Role) with 409 GROUP_ARCHIVED', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await archiveGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await archiveGroup(created.token, created.id);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .send({
             userId: localUserIdByToken.get(SECOND_TOKEN),
             role: 'ADMIN',
@@ -789,32 +805,32 @@ describe('Groups (e2e)', () => {
     });
 
     it('blocks DELETE .../role-assignments/:id (revoke a Role) with 409 GROUP_ARCHIVED', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
       const granted = await grantGroupRole(
-        OWNER_TOKEN,
+        created.token,
         created.id,
         SECOND_TOKEN,
       );
-      await archiveGroup(OWNER_TOKEN, created.id);
+      await archiveGroup(created.token, created.id);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .delete(`/api/v1/groups/${created.id}/role-assignments/${granted.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(409),
       );
       expect(response.code).toBe('GROUP_ARCHIVED');
     });
 
     it('blocks POST /groups/:id/transfer-ownership with 409 GROUP_ARCHIVED', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, SECOND_TOKEN);
-      await archiveGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
+      await archiveGroup(created.token, created.id);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/transfer-ownership`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .send({
             newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN),
           })
@@ -826,13 +842,13 @@ describe('Groups (e2e)', () => {
 
   describe('unarchive', () => {
     it('allows the owner to restore an archived group', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await archiveGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await archiveGroup(created.token, created.id);
 
       const restored = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/unarchive`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(201),
       );
 
@@ -840,9 +856,9 @@ describe('Groups (e2e)', () => {
     });
 
     it('forbids an admin from restoring the group - 403', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, SECOND_TOKEN);
-      await archiveGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
+      await archiveGroup(created.token, created.id);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
@@ -854,48 +870,48 @@ describe('Groups (e2e)', () => {
     });
 
     it('rejects unarchiving an already-active group with 409 GROUP_ACTIVE', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/unarchive`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(409),
       );
       expect(response.code).toBe('GROUP_ACTIVE');
     });
 
     it('rejects unarchiving a READ_ONLY group with 409 GROUP_READ_ONLY', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await setReadOnlyGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await setReadOnlyGroup(created.token, created.id);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/unarchive`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(409),
       );
       expect(response.code).toBe('GROUP_READ_ONLY');
     });
 
     it('allows editing again after restoring, without touching any RoleAssignment row', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
       const granted = await grantGroupRole(
-        OWNER_TOKEN,
+        created.token,
         created.id,
         SECOND_TOKEN,
       );
-      await archiveGroup(OWNER_TOKEN, created.id);
+      await archiveGroup(created.token, created.id);
 
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${created.id}/unarchive`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${created.token}`)
         .expect(201);
 
       const updated = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .send(groupPayload({ name: 'Active Again' }))
           .expect(200),
       );
@@ -904,7 +920,7 @@ describe('Groups (e2e)', () => {
       // Archiving/unarchiving must never touch any RoleAssignment row -
       // same ids, same roles, still active.
       const roleAssignments = await getGroupRoleAssignments(
-        OWNER_TOKEN,
+        created.token,
         created.id,
       );
       const secondAssignment = roleAssignments.find(
@@ -917,12 +933,12 @@ describe('Groups (e2e)', () => {
 
   describe('READ_ONLY status', () => {
     it('OWNER can set an ACTIVE group to READ_ONLY', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
 
       const updated = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/read-only`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(201),
       );
 
@@ -930,8 +946,8 @@ describe('Groups (e2e)', () => {
     });
 
     it('ADMIN cannot set the group to READ_ONLY - 403', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, SECOND_TOKEN);
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
 
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${created.id}/read-only`)
@@ -940,39 +956,39 @@ describe('Groups (e2e)', () => {
     });
 
     it('rejects setting an already-READ_ONLY group to read-only again with 409 GROUP_READ_ONLY', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await setReadOnlyGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await setReadOnlyGroup(created.token, created.id);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/read-only`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(409),
       );
       expect(response.code).toBe('GROUP_READ_ONLY');
     });
 
     it('rejects setting an ARCHIVED group to read-only with 409 GROUP_ARCHIVED (ARCHIVED -> READ_ONLY unsupported)', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await archiveGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await archiveGroup(created.token, created.id);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/read-only`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(409),
       );
       expect(response.code).toBe('GROUP_ARCHIVED');
     });
 
     it('OWNER can reactivate a READ_ONLY group', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await setReadOnlyGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await setReadOnlyGroup(created.token, created.id);
 
       const updated = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/activate`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(201),
       );
 
@@ -980,9 +996,9 @@ describe('Groups (e2e)', () => {
     });
 
     it('ADMIN cannot reactivate a READ_ONLY group - 403', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, SECOND_TOKEN);
-      await setReadOnlyGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
+      await setReadOnlyGroup(created.token, created.id);
 
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${created.id}/activate`)
@@ -991,38 +1007,38 @@ describe('Groups (e2e)', () => {
     });
 
     it('rejects activating an ACTIVE group with 409 GROUP_ACTIVE', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/activate`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(409),
       );
       expect(response.code).toBe('GROUP_ACTIVE');
     });
 
     it('rejects activating an ARCHIVED group with 409 GROUP_ARCHIVED (must use /unarchive instead)', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await archiveGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await archiveGroup(created.token, created.id);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/activate`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(409),
       );
       expect(response.code).toBe('GROUP_ARCHIVED');
     });
 
     it('OWNER can archive directly from READ_ONLY', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await setReadOnlyGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await setReadOnlyGroup(created.token, created.id);
 
       const archived = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/archive`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(201),
       );
 
@@ -1030,9 +1046,9 @@ describe('Groups (e2e)', () => {
     });
 
     it('still allows reading group details while READ_ONLY', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, SECOND_TOKEN);
-      await setReadOnlyGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
+      await setReadOnlyGroup(created.token, created.id);
 
       const details = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
@@ -1044,13 +1060,13 @@ describe('Groups (e2e)', () => {
     });
 
     it('blocks PATCH /groups/:id (edit) with 409 GROUP_READ_ONLY', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await setReadOnlyGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await setReadOnlyGroup(created.token, created.id);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .send(groupPayload({ name: 'Nope' }))
           .expect(409),
       );
@@ -1058,14 +1074,14 @@ describe('Groups (e2e)', () => {
     });
 
     it('blocks POST /groups/:id/transfer-ownership with 409 GROUP_READ_ONLY', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, created.id, SECOND_TOKEN);
-      await setReadOnlyGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
+      await setReadOnlyGroup(created.token, created.id);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/transfer-ownership`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .send({
             newOwnerUserId: localUserIdByToken.get(SECOND_TOKEN),
           })
@@ -1075,13 +1091,13 @@ describe('Groups (e2e)', () => {
     });
 
     it('blocks POST .../role-assignments (grant a Role) with 409 GROUP_READ_ONLY', async () => {
-      const created = await createGroup(OWNER_TOKEN);
-      await setReadOnlyGroup(OWNER_TOKEN, created.id);
+      const created = await createGroup();
+      await setReadOnlyGroup(created.token, created.id);
 
       const secondUserId = localUserIdByToken.get(SECOND_TOKEN);
       const res = await request(app.getHttpServer())
         .post(`/api/v1/groups/${created.id}/role-assignments`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${created.token}`)
         .send({ userId: secondUserId, role: 'ADMIN' });
       if (res.status !== 409) {
         console.error(
@@ -1100,36 +1116,36 @@ describe('Groups (e2e)', () => {
     });
 
     it('blocks DELETE .../role-assignments/:id (revoke a Role) with 409 GROUP_READ_ONLY', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
       const granted = await grantGroupRole(
-        OWNER_TOKEN,
+        created.token,
         created.id,
         SECOND_TOKEN,
       );
-      await setReadOnlyGroup(OWNER_TOKEN, created.id);
+      await setReadOnlyGroup(created.token, created.id);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .delete(`/api/v1/groups/${created.id}/role-assignments/${granted.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(409),
       );
       expect(response.code).toBe('GROUP_READ_ONLY');
     });
 
     it('does not create, remove, or change any RoleAssignment row across a READ_ONLY -> ACTIVE cycle', async () => {
-      const created = await createGroup(OWNER_TOKEN);
+      const created = await createGroup();
       const granted = await grantGroupRole(
-        OWNER_TOKEN,
+        created.token,
         created.id,
         SECOND_TOKEN,
       );
 
-      await setReadOnlyGroup(OWNER_TOKEN, created.id);
-      await activateGroup(OWNER_TOKEN, created.id);
+      await setReadOnlyGroup(created.token, created.id);
+      await activateGroup(created.token, created.id);
 
       const roleAssignments = await getGroupRoleAssignments(
-        OWNER_TOKEN,
+        created.token,
         created.id,
       );
       expect(roleAssignments).toHaveLength(2);

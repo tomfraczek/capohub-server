@@ -23,10 +23,12 @@ import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { User } from '../src/users/entities/user.entity';
 import { UserProfileResponseDto } from '../src/users/dto/user-profile-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { EventResponseDto } from '../src/events/dto/event-response.dto';
@@ -50,7 +52,10 @@ import { EventWaitlistPolicy } from '../src/events/enums/event-waitlist-policy.e
 
 const CONFIGURED_WEB_BASE_URL = 'https://capohub.test';
 
-const OWNER_TOKEN = 'valid-event-attendance-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const ORGANIZER_TOKEN = 'valid-event-attendance-organizer-token';
 const MODERATOR_TOKEN = 'valid-event-attendance-moderator-token';
 const OUTSIDER_TOKEN = 'valid-event-attendance-outsider-token';
@@ -59,7 +64,6 @@ const ATTENDEE2_TOKEN = 'valid-event-attendance-attendee2-token';
 const NON_ATTENDEE_TOKEN = 'valid-event-attendance-non-attendee-token';
 
 const CLERK_IDS: Record<string, string> = {
-  [OWNER_TOKEN]: 'user_test_evt_att_owner',
   [ORGANIZER_TOKEN]: 'user_test_evt_att_organizer',
   [MODERATOR_TOKEN]: 'user_test_evt_att_moderator',
   [OUTSIDER_TOKEN]: 'user_test_evt_att_outsider',
@@ -92,8 +96,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     },
   ]),
 );
-
-const TEST_CLERK_USER_IDS = Object.values(CLERK_IDS);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -198,6 +200,12 @@ describe('Event Attendance (e2e)', () => {
       await cleanup.nativeDelete(AuditLogEntry, {
         group: { $in: createdGroupIds },
       });
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
       // Safety net, scoped directly by user id rather than through
       // Event/Group tracking: EventRoleAssignment.user is a non-nullable,
@@ -214,8 +222,12 @@ describe('Event Attendance (e2e)', () => {
       await cleanup.nativeDelete(EventRoleAssignment, {
         user: { $in: [...localUserIdByToken.values()] },
       });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -238,16 +250,18 @@ describe('Event Attendance (e2e)', () => {
     };
   }
 
-  async function createGroup(token: string): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload())
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  async function createGroup(): Promise<
+    GroupResponseDto & { token: string; userId: string }
+  > {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'evt-att',
+      groupOverrides: groupPayload(),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   // EventRolesService.grantRole requires the target to already be an
@@ -384,39 +398,44 @@ describe('Event Attendance (e2e)', () => {
 
   // ─── setup shared across most tests: one Group, one started Event, OWNER/
   // ORGANIZER/MODERATOR Event roles, one registered attendee ──────────────
+  // Each call mints a fresh, throwaway Group owner (see createGroup's own
+  // comment) - `ownerToken` is returned alongside `group`/`event` so
+  // callers can act as that owner for the rest of their test, the same
+  // role OWNER_TOKEN used to play before it was a fixed, file-wide identity.
   async function setupStandardFixture(): Promise<{
     group: GroupResponseDto;
     event: EventResponseDto;
+    ownerToken: string;
   }> {
-    const group = await createGroup(OWNER_TOKEN);
-    await grantGroupRole(OWNER_TOKEN, group.id, ORGANIZER_TOKEN);
-    await grantGroupRole(OWNER_TOKEN, group.id, MODERATOR_TOKEN);
-    const event = await createStartedEvent(OWNER_TOKEN, group.id);
+    const group = await createGroup();
+    await grantGroupRole(group.token, group.id, ORGANIZER_TOKEN);
+    await grantGroupRole(group.token, group.id, MODERATOR_TOKEN);
+    const event = await createStartedEvent(group.token, group.id);
     await grantEventRole(
-      OWNER_TOKEN,
+      group.token,
       event.id,
       ORGANIZER_TOKEN,
       EventRole.ORGANIZER,
     );
     await grantEventRole(
-      OWNER_TOKEN,
+      group.token,
       event.id,
       MODERATOR_TOKEN,
       EventRole.MODERATOR,
     );
     await registerSelf(ATTENDEE_TOKEN, event.id);
-    return { group, event };
+    return { group, event, ownerToken: group.token };
   }
 
   describe('PUT /events/:eventId/attendance/:userId', () => {
     it('lets the Event OWNER mark an attendee present, then absent', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const attendeeUserId = localUserIdByToken.get(ATTENDEE_TOKEN)!;
 
       const present = await bodyOf<EventAttendanceEntryDto>(
         request(app.getHttpServer())
           .put(`/api/v1/events/${event.id}/attendance/${attendeeUserId}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ attended: true })
           .expect(200),
       );
@@ -426,7 +445,7 @@ describe('Event Attendance (e2e)', () => {
       const absent = await bodyOf<EventAttendanceEntryDto>(
         request(app.getHttpServer())
           .put(`/api/v1/events/${event.id}/attendance/${attendeeUserId}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ attended: false })
           .expect(200),
       );
@@ -459,13 +478,13 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('rejects a user with no EventAttendee row - EVENT_ATTENDEE_NOT_FOUND', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const nonAttendeeUserId = localUserIdByToken.get(NON_ATTENDEE_TOKEN)!;
 
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .put(`/api/v1/events/${event.id}/attendance/${nonAttendeeUserId}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ attended: true })
           .expect(404),
       );
@@ -473,8 +492,8 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('rejects before the Event has started', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const futureEvent = await createAndPublishEvent(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const futureEvent = await createAndPublishEvent(group.token, group.id, {
         startsAt: new Date(Date.now() + 60 * 60_000).toISOString(),
         endsAt: new Date(Date.now() + 120 * 60_000).toISOString(),
       });
@@ -484,7 +503,7 @@ describe('Event Attendance (e2e)', () => {
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .put(`/api/v1/events/${futureEvent.id}/attendance/${attendeeUserId}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .send({ attended: true })
           .expect(409),
       );
@@ -492,18 +511,18 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('rejects for a CANCELLED Event', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const attendeeUserId = localUserIdByToken.get(ATTENDEE_TOKEN)!;
       await request(app.getHttpServer())
         .post(`/api/v1/events/${event.id}/cancel`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
         .send({ reason: null })
         .expect(201);
 
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .put(`/api/v1/events/${event.id}/attendance/${attendeeUserId}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ attended: true })
           .expect(409),
       );
@@ -513,12 +532,12 @@ describe('Event Attendance (e2e)', () => {
 
   describe('GET /events/:eventId/attendance (roster)', () => {
     it('returns RSVP + attendance for every attendee, safe user refs only', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       await registerSelf(ATTENDEE2_TOKEN, event.id);
       const attendeeUserId = localUserIdByToken.get(ATTENDEE_TOKEN)!;
       await request(app.getHttpServer())
         .put(`/api/v1/events/${event.id}/attendance/${attendeeUserId}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
         .send({ attended: true })
         .expect(200);
 
@@ -569,13 +588,13 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('checks in by User QR payload', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const code = await getNumericCode(ATTENDEE_TOKEN);
 
       const result = await bodyOf<EventCheckInResultDto>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/check-in`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ identity: `${CONFIGURED_WEB_BASE_URL}/u/${code}` })
           .expect(201),
       );
@@ -583,13 +602,13 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('rejects a user with no EventAttendee row', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const code = await getNumericCode(NON_ATTENDEE_TOKEN);
 
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/check-in`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ identity: code })
           .expect(404),
       );
@@ -597,12 +616,12 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('rejects an Event QR payload as the check-in identity - WRONG_IDENTITY_TYPE', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
 
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/check-in`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ identity: 'capohub:v1:f:999999' })
           .expect(400),
       );
@@ -610,11 +629,11 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('rejects malformed identity with 400, never 500', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
 
       await request(app.getHttpServer())
         .post(`/api/v1/events/${event.id}/check-in`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
         .send({ identity: 'not-a-real-code' })
         .expect(400);
     });
@@ -631,14 +650,14 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('two concurrent check-ins of the same user never duplicate or 500 - exactly one logical attendance', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       await registerSelf(ATTENDEE2_TOKEN, event.id);
       const code = await getNumericCode(ATTENDEE2_TOKEN);
 
       const [first, second] = await Promise.all([
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/check-in`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ identity: code }),
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/check-in`)
@@ -651,7 +670,7 @@ describe('Event Attendance (e2e)', () => {
       const roster = await bodyOf<EventAttendanceRosterResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${event.id}/attendance`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .expect(200),
       );
       const attendee2UserId = localUserIdByToken.get(ATTENDEE2_TOKEN);
@@ -665,13 +684,13 @@ describe('Event Attendance (e2e)', () => {
 
   describe('POST /events/:eventId/attendance/identify', () => {
     it('returns selfAttendee for a plain attendee with no children', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const code = await getNumericCode(ATTENDEE_TOKEN);
 
       const result = await bodyOf<EventAttendanceIdentifyResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/attendance/identify`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ identity: code })
           .expect(201),
       );
@@ -682,7 +701,7 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('returns selfAttendee plus one child under guardianship', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const child = await registerChildDependent(
         ATTENDEE_TOKEN,
         event.id,
@@ -694,7 +713,7 @@ describe('Event Attendance (e2e)', () => {
       const result = await bodyOf<EventAttendanceIdentifyResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/attendance/identify`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ identity: code })
           .expect(201),
       );
@@ -709,7 +728,7 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('returns selfAttendee plus several children under guardianship', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       await registerChildDependent(
         ATTENDEE_TOKEN,
         event.id,
@@ -734,7 +753,7 @@ describe('Event Attendance (e2e)', () => {
       const result = await bodyOf<EventAttendanceIdentifyResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/attendance/identify`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ identity: code })
           .expect(201),
       );
@@ -747,7 +766,7 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('returns selfAttendee=null plus the child when the guardian is not themselves an attendee', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const child = await registerChildDependent(
         NON_ATTENDEE_TOKEN,
         event.id,
@@ -759,7 +778,7 @@ describe('Event Attendance (e2e)', () => {
       const result = await bodyOf<EventAttendanceIdentifyResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/attendance/identify`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ identity: code })
           .expect(201),
       );
@@ -770,13 +789,13 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('returns EVENT_ATTENDEE_NOT_FOUND when the User has no selfAttendee and no children', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const code = await getNumericCode(NON_ATTENDEE_TOKEN);
 
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/attendance/identify`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ identity: code })
           .expect(404),
       );
@@ -784,12 +803,12 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('rejects an Event QR payload as the identify identity - WRONG_IDENTITY_TYPE', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
 
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/attendance/identify`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ identity: 'capohub:v1:f:999999' })
           .expect(400),
       );
@@ -797,11 +816,11 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('rejects malformed identity with 400, never 500', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
 
       await request(app.getHttpServer())
         .post(`/api/v1/events/${event.id}/attendance/identify`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
         .send({ identity: 'not-a-real-code' })
         .expect(400);
     });
@@ -818,7 +837,7 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('performs zero mutation - checkedIn/checkedInAt are unchanged after identify', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const child = await registerChildDependent(
         ATTENDEE_TOKEN,
         event.id,
@@ -829,14 +848,14 @@ describe('Event Attendance (e2e)', () => {
 
       await request(app.getHttpServer())
         .post(`/api/v1/events/${event.id}/attendance/identify`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
         .send({ identity: code })
         .expect(201);
 
       const roster = await bodyOf<EventAttendanceRosterResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${event.id}/attendance`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .expect(200),
       );
       const attendeeUserId = localUserIdByToken.get(ATTENDEE_TOKEN);
@@ -855,7 +874,7 @@ describe('Event Attendance (e2e)', () => {
 
   describe('self check-in never touches children under guardianship', () => {
     it('checking in the guardian via POST check-in leaves their children untouched', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const child = await registerChildDependent(
         ATTENDEE_TOKEN,
         event.id,
@@ -866,14 +885,14 @@ describe('Event Attendance (e2e)', () => {
 
       await request(app.getHttpServer())
         .post(`/api/v1/events/${event.id}/check-in`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
         .send({ identity: code })
         .expect(201);
 
       const roster = await bodyOf<EventAttendanceRosterResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${event.id}/attendance`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .expect(200),
       );
       const attendeeUserId = localUserIdByToken.get(ATTENDEE_TOKEN);
@@ -889,7 +908,7 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('rejects check-in for a guardian with no selfAttendee, without guessing a child', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       await registerChildDependent(
         NON_ATTENDEE_TOKEN,
         event.id,
@@ -901,7 +920,7 @@ describe('Event Attendance (e2e)', () => {
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/check-in`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ identity: code })
           .expect(404),
       );
@@ -911,7 +930,7 @@ describe('Event Attendance (e2e)', () => {
 
   describe('PUT /events/:eventId/attendance/attendees/:attendeeId (CHILD_DEPENDENT)', () => {
     it('marks a CHILD_DEPENDENT attendee present, then explicitly absent', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const child = await registerChildDependent(
         ATTENDEE_TOKEN,
         event.id,
@@ -922,7 +941,7 @@ describe('Event Attendance (e2e)', () => {
       const present = await bodyOf<EventAttendanceEntryDto>(
         request(app.getHttpServer())
           .put(`/api/v1/events/${event.id}/attendance/attendees/${child.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ attended: true })
           .expect(200),
       );
@@ -932,7 +951,7 @@ describe('Event Attendance (e2e)', () => {
       const absent = await bodyOf<EventAttendanceEntryDto>(
         request(app.getHttpServer())
           .put(`/api/v1/events/${event.id}/attendance/attendees/${child.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ attended: false })
           .expect(200),
       );
@@ -941,7 +960,7 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('flips false back to true', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const child = await registerChildDependent(
         ATTENDEE_TOKEN,
         event.id,
@@ -951,14 +970,14 @@ describe('Event Attendance (e2e)', () => {
 
       await request(app.getHttpServer())
         .put(`/api/v1/events/${event.id}/attendance/attendees/${child.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
         .send({ attended: false })
         .expect(200);
 
       const flipped = await bodyOf<EventAttendanceEntryDto>(
         request(app.getHttpServer())
           .put(`/api/v1/events/${event.id}/attendance/attendees/${child.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ attended: true })
           .expect(200),
       );
@@ -966,7 +985,7 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('the roster exposes attendeeId, with no private data leaked for the child', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
       const child = await registerChildDependent(
         ATTENDEE_TOKEN,
         event.id,
@@ -977,7 +996,7 @@ describe('Event Attendance (e2e)', () => {
       const roster = await bodyOf<EventAttendanceRosterResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${event.id}/attendance`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .expect(200),
       );
       const childItem = roster.items.find(
@@ -994,14 +1013,14 @@ describe('Event Attendance (e2e)', () => {
     });
 
     it('rejects an unknown attendeeId with EVENT_ATTENDEE_NOT_FOUND', async () => {
-      const { event } = await setupStandardFixture();
+      const { event, ownerToken } = await setupStandardFixture();
 
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .put(
             `/api/v1/events/${event.id}/attendance/attendees/00000000-0000-0000-0000-000000000000`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
           .send({ attended: true })
           .expect(404),
       );

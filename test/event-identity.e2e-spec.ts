@@ -26,9 +26,11 @@ import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { User } from '../src/users/entities/user.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { EventResponseDto } from '../src/events/dto/event-response.dto';
@@ -38,19 +40,15 @@ import { EventStatusHistory } from '../src/events/entities/event-status-history.
 import { EventVisibility } from '../src/events/enums/event-visibility.enum';
 import { EventWaitlistPolicy } from '../src/events/enums/event-waitlist-policy.enum';
 
-const OWNER_TOKEN = 'valid-event-identity-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const OUTSIDER_TOKEN = 'valid-event-identity-outsider-token';
 
-const OWNER_CLERK_ID = 'user_test_event_identity_owner';
 const OUTSIDER_CLERK_ID = 'user_test_event_identity_outsider';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [OWNER_TOKEN]: {
-    userId: OWNER_CLERK_ID,
-    sessionId: 'sess_event_identity_owner',
-    tokenType: 'session_token',
-    claims: { sub: OWNER_CLERK_ID, sid: 'sess_event_identity_owner' },
-  },
   [OUTSIDER_TOKEN]: {
     userId: OUTSIDER_CLERK_ID,
     sessionId: 'sess_event_identity_outsider',
@@ -63,10 +61,6 @@ const FIXTURE_CLERK_PROFILES: Record<
   string,
   { imageUrl: string; primaryEmailAddress: { emailAddress: string } | null }
 > = {
-  [OWNER_CLERK_ID]: {
-    imageUrl: 'https://img.clerk.com/event-identity-owner.png',
-    primaryEmailAddress: { emailAddress: 'event.identity.owner@example.com' },
-  },
   [OUTSIDER_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/event-identity-outsider.png',
     primaryEmailAddress: {
@@ -74,8 +68,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     },
   },
 };
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -155,9 +147,19 @@ describe('Event Identity (e2e)', () => {
       await cleanup.nativeDelete(AuditLogEntry, {
         group: { $in: createdGroupIds },
       });
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -183,16 +185,18 @@ describe('Event Identity (e2e)', () => {
     };
   }
 
-  async function createGroup(token: string): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload())
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  async function createGroup(): Promise<
+    GroupResponseDto & { token: string; userId: string }
+  > {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'evt-id',
+      groupOverrides: groupPayload(),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   function eventPayload(
@@ -253,8 +257,8 @@ describe('Event Identity (e2e)', () => {
   };
 
   it('generates a 6-digit numericCode and matching short qrPayload for a new Event', async () => {
-    const group = await createGroup(OWNER_TOKEN);
-    const event = await createEvent(OWNER_TOKEN, group.id, {
+    const group = await createGroup();
+    const event = await createEvent(group.token, group.id, {
       type: 'FESTIVAL',
     });
 
@@ -265,8 +269,8 @@ describe('Event Identity (e2e)', () => {
   it.each(['FESTIVAL', 'WORKSHOP', 'OPEN_RODA', 'OTHER'])(
     'builds the correct short qrPayload for type %s',
     async (type) => {
-      const group = await createGroup(OWNER_TOKEN);
-      const event = await createEvent(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const event = await createEvent(group.token, group.id, {
         type,
         customTypeLabel: type === 'OTHER' ? 'Batizado' : null,
       });
@@ -278,26 +282,26 @@ describe('Event Identity (e2e)', () => {
   );
 
   it('never changes numericCode across an update, publish, or cancel', async () => {
-    const group = await createGroup(OWNER_TOKEN);
-    const created = await createEvent(OWNER_TOKEN, group.id);
+    const group = await createGroup();
+    const created = await createEvent(group.token, group.id);
     const originalCode = created.numericCode;
 
     const updated = await bodyOf<EventResponseDto>(
       request(app.getHttpServer())
         .patch(`/api/v1/events/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${group.token}`)
         .send({ ...eventPayload(), name: 'Renamed Workshop' })
         .expect(200),
     );
     expect(updated.numericCode).toBe(originalCode);
 
-    const published = await publishEvent(OWNER_TOKEN, created.id);
+    const published = await publishEvent(group.token, created.id);
     expect(published.numericCode).toBe(originalCode);
 
     const cancelled = await bodyOf<EventResponseDto>(
       request(app.getHttpServer())
         .post(`/api/v1/events/${created.id}/cancel`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${group.token}`)
         .send({ reason: 'Test cancellation' })
         .expect(201),
     );
@@ -307,11 +311,11 @@ describe('Event Identity (e2e)', () => {
 
   describe('per-EventType namespace', () => {
     it('allows the same numericCode to be reused across two different EventTypes', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const festival = await createEvent(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const festival = await createEvent(group.token, group.id, {
         type: 'FESTIVAL',
       });
-      const workshop = await createEvent(OWNER_TOKEN, group.id, {
+      const workshop = await createEvent(group.token, group.id, {
         type: 'WORKSHOP',
       });
 
@@ -334,13 +338,13 @@ describe('Event Identity (e2e)', () => {
       const foundFestival = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/events/by-code/FESTIVAL/${sharedCode}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(200),
       );
       const foundWorkshop = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/events/by-code/WORKSHOP/${sharedCode}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(200),
       );
       expect(foundFestival.id).toBe(festival.id);
@@ -348,12 +352,12 @@ describe('Event Identity (e2e)', () => {
     });
 
     it('rejects the same (type, numericCode) pair twice at the database level', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const first = await createEvent(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const first = await createEvent(group.token, group.id, {
         type: 'OTHER',
         customTypeLabel: 'A',
       });
-      const second = await createEvent(OWNER_TOKEN, group.id, {
+      const second = await createEvent(group.token, group.id, {
         type: 'OTHER',
         customTypeLabel: 'B',
       });
@@ -373,15 +377,15 @@ describe('Event Identity (e2e)', () => {
 
   describe('GET /events/by-code/:type/:code', () => {
     it('finds the exact Event and returns the normal EventResponseDto', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const event = await createEvent(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const event = await createEvent(group.token, group.id, {
         type: 'OPEN_RODA',
       });
 
       const found = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/events/by-code/OPEN_RODA/${event.numericCode}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(200),
       );
       expect(found.id).toBe(event.id);
@@ -389,8 +393,8 @@ describe('Event Identity (e2e)', () => {
     });
 
     it('preserves normal Event access control - a DRAFT Event is invisible to a non-role-holder via lookup too', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const event = await createEvent(OWNER_TOKEN, group.id);
+      const group = await createGroup();
+      const event = await createEvent(group.token, group.id);
 
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
@@ -402,11 +406,11 @@ describe('Event Identity (e2e)', () => {
     });
 
     it('a PUBLIC, PUBLISHED Event remains visible to an outsider via lookup', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const event = await createEvent(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const event = await createEvent(group.token, group.id, {
         visibility: EventVisibility.PUBLIC,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(group.token, event.id);
 
       const found = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
@@ -418,21 +422,21 @@ describe('Event Identity (e2e)', () => {
     });
 
     it('a cancelled Event keeps its exact numericCode reachable by lookup', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const event = await createEvent(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const event = await createEvent(group.token, group.id, {
         visibility: EventVisibility.PUBLIC,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(group.token, event.id);
       await request(app.getHttpServer())
         .post(`/api/v1/events/${event.id}/cancel`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${group.token}`)
         .send({ reason: 'No longer happening' })
         .expect(201);
 
       const found = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/events/by-code/WORKSHOP/${event.numericCode}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(200),
       );
       expect(found.status).toBe('CANCELLED');
@@ -443,7 +447,7 @@ describe('Event Identity (e2e)', () => {
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .get('/api/v1/events/by-code/OPEN_TRAINING/123456')
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
           .expect(400),
       );
       expect(error.code).toBe('INVALID_EVENT_TYPE');
@@ -455,7 +459,7 @@ describe('Event Identity (e2e)', () => {
         const error = await bodyOf<HttpErrorResponse>(
           request(app.getHttpServer())
             .get(`/api/v1/events/by-code/FESTIVAL/${malformed}`)
-            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
             .expect(400),
         );
         expect(error.code).toBe('INVALID_NUMERIC_CODE');
@@ -466,7 +470,7 @@ describe('Event Identity (e2e)', () => {
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .get('/api/v1/events/by-code/FESTIVAL/000000')
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
           .expect(404),
       );
       expect(error.code).toBe('EVENT_NOT_FOUND');
@@ -488,8 +492,8 @@ describe('Event Identity (e2e)', () => {
     ])(
       'resolves a %s QR payload (letter %s) to the correct Event',
       async (type, letter) => {
-        const group = await createGroup(OWNER_TOKEN);
-        const event = await createEvent(OWNER_TOKEN, group.id, {
+        const group = await createGroup();
+        const event = await createEvent(group.token, group.id, {
           type,
           customTypeLabel: type === 'OTHER' ? 'Custom Kind' : null,
         });
@@ -498,7 +502,7 @@ describe('Event Identity (e2e)', () => {
           request(app.getHttpServer())
             .get('/api/v1/events/by-qr')
             .query({ payload: `capohub:v1:${letter}:${event.numericCode}` })
-            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .set('Authorization', `Bearer ${group.token}`)
             .expect(200),
         );
         expect(found.id).toBe(event.id);
@@ -511,7 +515,7 @@ describe('Event Identity (e2e)', () => {
         request(app.getHttpServer())
           .get('/api/v1/events/by-qr')
           .query({ payload: 'capohub:v1:u:123456' })
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
           .expect(400),
       );
       expect(error.code).toBe('INVALID_EVENT_QR_PAYLOAD');
@@ -524,7 +528,7 @@ describe('Event Identity (e2e)', () => {
           request(app.getHttpServer())
             .get('/api/v1/events/by-qr')
             .query({ payload: malformed })
-            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
             .expect(400),
         );
         expect(error.statusCode).toBe(400);
@@ -535,15 +539,15 @@ describe('Event Identity (e2e)', () => {
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .get('/api/v1/events/by-qr')
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
           .expect(400),
       );
       expect(error.code).toBe('MISSING_QR_PAYLOAD');
     });
 
     it('preserves normal Event access control - a DRAFT Event is invisible to a non-role-holder via QR lookup too', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const event = await createEvent(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const event = await createEvent(group.token, group.id, {
         type: 'FESTIVAL',
       });
 
@@ -558,12 +562,12 @@ describe('Event Identity (e2e)', () => {
     });
 
     it('a PUBLIC, PUBLISHED Event remains visible to an outsider via QR lookup', async () => {
-      const group = await createGroup(OWNER_TOKEN);
-      const event = await createEvent(OWNER_TOKEN, group.id, {
+      const group = await createGroup();
+      const event = await createEvent(group.token, group.id, {
         type: 'FESTIVAL',
         visibility: EventVisibility.PUBLIC,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(group.token, event.id);
 
       const found = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())

@@ -14,6 +14,7 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { CommunityNotificationSettingsResponseDto } from '../src/groups/dto/community-notification-settings-response.dto';
@@ -23,28 +24,25 @@ import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { SectionBan } from '../src/groups/entities/section-ban.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
 
-const OWNER_TOKEN = 'valid-comm-admin-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const ADMIN_TOKEN = 'valid-comm-admin-admin-token';
 const MEMBER_TOKEN = 'valid-comm-admin-member-token';
 const OUTSIDER_TOKEN = 'valid-comm-admin-outsider-token';
 
-const OWNER_CLERK_ID = 'user_test_comm_admin_owner';
 const ADMIN_CLERK_ID = 'user_test_comm_admin_admin';
 const MEMBER_CLERK_ID = 'user_test_comm_admin_member';
 const OUTSIDER_CLERK_ID = 'user_test_comm_admin_outsider';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [OWNER_TOKEN]: {
-    userId: OWNER_CLERK_ID,
-    sessionId: 'sess_comm_admin_owner',
-    tokenType: 'session_token',
-    claims: { sub: OWNER_CLERK_ID, sid: 'sess_comm_admin_owner' },
-  },
   [ADMIN_TOKEN]: {
     userId: ADMIN_CLERK_ID,
     sessionId: 'sess_comm_admin_admin',
@@ -69,10 +67,6 @@ const FIXTURE_CLERK_PROFILES: Record<
   string,
   { imageUrl: string; primaryEmailAddress: { emailAddress: string } | null }
 > = {
-  [OWNER_CLERK_ID]: {
-    imageUrl: 'https://img.clerk.com/comm-admin-owner.png',
-    primaryEmailAddress: { emailAddress: 'comm.admin.owner@example.com' },
-  },
   [ADMIN_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/comm-admin-admin.png',
     primaryEmailAddress: { emailAddress: 'comm.admin.admin@example.com' },
@@ -86,8 +80,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     primaryEmailAddress: { emailAddress: 'comm.admin.outsider@example.com' },
   },
 };
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -191,9 +183,19 @@ describe('Community Administration (e2e)', () => {
       // Sections must be removed before their parent Groups to satisfy the
       // parent_group_id foreign key (no cascade - see section.entity.ts).
       await cleanup.nativeDelete(Section, { id: { $in: createdSectionIds } });
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -220,18 +222,17 @@ describe('Community Administration (e2e)', () => {
   }
 
   async function createGroup(
-    token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'comm-admin',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   async function createSection(
@@ -303,12 +304,12 @@ describe('Community Administration (e2e)', () => {
 
   describe('Delete Community', () => {
     it('allows the OWNER to permanently delete the Community', async () => {
-      const created = await createGroup(OWNER_TOKEN, { name: 'To Delete' });
+      const created = await createGroup({ name: 'To Delete' });
 
       const deleted = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/delete`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(201),
       );
 
@@ -318,41 +319,41 @@ describe('Community Administration (e2e)', () => {
       const details = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(200),
       );
       expect(details.status).toBe('DELETED');
     });
 
     it('is terminal - deleting an already-DELETED Group returns 409 GROUP_DELETED', async () => {
-      const created = await createGroup(OWNER_TOKEN, { name: 'Delete Twice' });
+      const created = await createGroup({ name: 'Delete Twice' });
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${created.id}/delete`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${created.token}`)
         .expect(201);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${created.id}/delete`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(409),
       );
       expect(response.code).toBe('GROUP_DELETED');
     });
 
     it('blocks every other write on a DELETED Group with 409 GROUP_DELETED', async () => {
-      const created = await createGroup(OWNER_TOKEN, {
+      const created = await createGroup({
         name: 'Delete Blocks Writes',
       });
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${created.id}/delete`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${created.token}`)
         .expect(201);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .send(groupPayload({ name: 'Should not apply' }))
           .expect(409),
       );
@@ -360,11 +361,11 @@ describe('Community Administration (e2e)', () => {
     });
 
     it('forbids an ADMIN from deleting the Community - 403', async () => {
-      const created = await createGroup(OWNER_TOKEN, {
+      const created = await createGroup({
         name: 'Admin Cannot Delete',
       });
       await grantGroupRole(
-        OWNER_TOKEN,
+        created.token,
         created.id,
         ADMIN_TOKEN,
         GroupRole.ADMIN,
@@ -380,36 +381,36 @@ describe('Community Administration (e2e)', () => {
     });
 
     it('rejects deleting a Community that still has an active Child Group - 409 GROUP_HAS_ACTIVE_CHILDREN', async () => {
-      const root = await createGroup(OWNER_TOKEN, { name: 'Has Active Child' });
-      await createSection(OWNER_TOKEN, root.id, {
+      const root = await createGroup({ name: 'Has Active Child' });
+      await createSection(root.token, root.id, {
         name: 'Active Child',
       });
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${root.id}/delete`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(409),
       );
       expect(response.code).toBe('GROUP_HAS_ACTIVE_CHILDREN');
     });
 
     it('allows deleting a Community once every Child Group is archived first', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Root With Archived Child',
       });
-      const child = await createSection(OWNER_TOKEN, root.id, {
+      const child = await createSection(root.token, root.id, {
         name: 'Archived Child',
       });
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${child.id}/archive`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${root.token}`)
         .expect(201);
 
       const deleted = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${root.id}/delete`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(201),
       );
       expect(deleted.status).toBe('DELETED');
@@ -418,7 +419,7 @@ describe('Community Administration (e2e)', () => {
     it('returns 404 for a non-existent group id', async () => {
       await request(app.getHttpServer())
         .post('/api/v1/groups/11111111-1111-4111-8111-111111111111/delete')
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .expect(404);
     });
   });
@@ -426,29 +427,32 @@ describe('Community Administration (e2e)', () => {
   // ─── Ban / Unban (Section-only - Group has no membership) ─────────────────
 
   describe('Ban / Unban Member', () => {
-    async function makeSection(name: string): Promise<SectionResponseDto> {
-      const root = await createGroup(OWNER_TOKEN, { name: `${name} Root` });
-      return createSection(OWNER_TOKEN, root.id, { name });
+    async function makeSection(
+      name: string,
+    ): Promise<SectionResponseDto & { token: string }> {
+      const root = await createGroup({ name: `${name} Root` });
+      const section = await createSection(root.token, root.id, { name });
+      return { ...section, token: root.token };
     }
 
     it('bans a member, ending their membership and blocking rejoin, then unban allows rejoining', async () => {
       const section = await makeSection('Ban Flow');
       const membership = await addSectionMember(
-        OWNER_TOKEN,
+        section.token,
         section.id,
         MEMBER_TOKEN,
       );
 
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/members/${membership.id}/ban`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({ reason: 'Repeated rule violations' })
         .expect(204);
 
       const bannedMembership = await bodyOf<SectionMembershipResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/members/${membership.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       expect(bannedMembership.status).toBe('ARCHIVED');
@@ -467,7 +471,7 @@ describe('Community Administration (e2e)', () => {
       // Unban lifts the block.
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/members/${membership.id}/unban`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .expect(204);
 
       const rejoinResult: unknown = await bodyOf(
@@ -483,20 +487,20 @@ describe('Community Administration (e2e)', () => {
     it('rejects re-banning the same (now-archived) membership with 404 MEMBERSHIP_NOT_FOUND - banMember only ever targets an ACTIVE membership, so ALREADY_BANNED is a DB-race-only path, not reachable via two sequential calls (see the unit tests for that race)', async () => {
       const section = await makeSection('Double Ban');
       const membership = await addSectionMember(
-        OWNER_TOKEN,
+        section.token,
         section.id,
         MEMBER_TOKEN,
       );
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/members/${membership.id}/ban`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({})
         .expect(204);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/sections/${section.id}/members/${membership.id}/ban`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .send({})
           .expect(404),
       );
@@ -506,7 +510,7 @@ describe('Community Administration (e2e)', () => {
     it('rejects unbanning a member with no active ban - 404 BAN_NOT_FOUND', async () => {
       const section = await makeSection('Nothing To Unban');
       const membership = await addSectionMember(
-        OWNER_TOKEN,
+        section.token,
         section.id,
         MEMBER_TOKEN,
       );
@@ -514,7 +518,7 @@ describe('Community Administration (e2e)', () => {
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/sections/${section.id}/members/${membership.id}/unban`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(404),
       );
       expect(response.code).toBe('BAN_NOT_FOUND');
@@ -523,21 +527,21 @@ describe('Community Administration (e2e)', () => {
     it('cannot ban a member who owns the Section - 409 CANNOT_BAN_OWNER', async () => {
       const section = await makeSection('Ban Owner');
       const membership = await addSectionMember(
-        OWNER_TOKEN,
+        section.token,
         section.id,
         MEMBER_TOKEN,
       );
       // A second ADMIN so someone still holds ban permission after the
       // transfer below - the original OWNER keeps only MEMBER afterward.
       await addSectionMember(
-        OWNER_TOKEN,
+        section.token,
         section.id,
         ADMIN_TOKEN,
         GroupRole.ADMIN,
       );
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/transfer-ownership`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({ newOwnerUserId: localUserIdByToken.get(MEMBER_TOKEN) })
         .expect(201);
 
@@ -553,9 +557,9 @@ describe('Community Administration (e2e)', () => {
 
     it('forbids a plain MEMBER from banning another member - 403', async () => {
       const section = await makeSection('Member Cannot Ban');
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(section.token, section.id, MEMBER_TOKEN);
       const target = await addSectionMember(
-        OWNER_TOKEN,
+        section.token,
         section.id,
         ADMIN_TOKEN,
       );
@@ -571,15 +575,18 @@ describe('Community Administration (e2e)', () => {
   // ─── Suspend / Unsuspend (Section-only) ────────────────────────────────────
 
   describe('Suspend / Unsuspend Member', () => {
-    async function makeSection(name: string): Promise<SectionResponseDto> {
-      const root = await createGroup(OWNER_TOKEN, { name: `${name} Root` });
-      return createSection(OWNER_TOKEN, root.id, { name });
+    async function makeSection(
+      name: string,
+    ): Promise<SectionResponseDto & { token: string }> {
+      const root = await createGroup({ name: `${name} Root` });
+      const section = await createSection(root.token, root.id, { name });
+      return { ...section, token: root.token };
     }
 
     it('suspends a member (READ_ONLY), restricts their permissions, then unsuspend restores ACTIVE', async () => {
       const section = await makeSection('Suspend Flow');
       const membership = await addSectionMember(
-        OWNER_TOKEN,
+        section.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.ADMIN,
@@ -590,7 +597,7 @@ describe('Community Administration (e2e)', () => {
           .post(
             `/api/v1/sections/${section.id}/members/${membership.id}/suspend`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .send({ reason: 'Taking a break' })
           .expect(201),
       );
@@ -617,7 +624,7 @@ describe('Community Administration (e2e)', () => {
           .post(
             `/api/v1/sections/${section.id}/members/${membership.id}/unsuspend`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(201),
       );
       expect(unsuspended.status).toBe('ACTIVE');
@@ -656,13 +663,13 @@ describe('Community Administration (e2e)', () => {
     it('rejects re-suspending the same (now READ_ONLY) membership with 404 MEMBERSHIP_NOT_FOUND - suspendMember only ever targets an ACTIVE membership, so MEMBERSHIP_ALREADY_SUSPENDED is a DB-race-only path, not reachable via two sequential calls (see the unit tests for that race)', async () => {
       const section = await makeSection('Double Suspend');
       const membership = await addSectionMember(
-        OWNER_TOKEN,
+        section.token,
         section.id,
         MEMBER_TOKEN,
       );
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/members/${membership.id}/suspend`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({})
         .expect(201);
 
@@ -671,7 +678,7 @@ describe('Community Administration (e2e)', () => {
           .post(
             `/api/v1/sections/${section.id}/members/${membership.id}/suspend`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .send({})
           .expect(404),
       );
@@ -681,7 +688,7 @@ describe('Community Administration (e2e)', () => {
     it('rejects unsuspending a membership that is not currently suspended - 409 MEMBERSHIP_NOT_SUSPENDED', async () => {
       const section = await makeSection('Nothing To Unsuspend');
       const membership = await addSectionMember(
-        OWNER_TOKEN,
+        section.token,
         section.id,
         MEMBER_TOKEN,
       );
@@ -691,7 +698,7 @@ describe('Community Administration (e2e)', () => {
           .post(
             `/api/v1/sections/${section.id}/members/${membership.id}/unsuspend`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(409),
       );
       expect(response.code).toBe('MEMBERSHIP_NOT_SUSPENDED');
@@ -700,7 +707,7 @@ describe('Community Administration (e2e)', () => {
     it('rejects a suspend request with a past `until` date - 400 VALIDATION_ERROR', async () => {
       const section = await makeSection('Past Until');
       const membership = await addSectionMember(
-        OWNER_TOKEN,
+        section.token,
         section.id,
         MEMBER_TOKEN,
       );
@@ -710,7 +717,7 @@ describe('Community Administration (e2e)', () => {
           .post(
             `/api/v1/sections/${section.id}/members/${membership.id}/suspend`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .send({ until: '2020-01-01T00:00:00.000Z' })
           .expect(400),
       );
@@ -719,9 +726,9 @@ describe('Community Administration (e2e)', () => {
 
     it('forbids a plain MEMBER from suspending another member - 403', async () => {
       const section = await makeSection('Member Cannot Suspend');
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(section.token, section.id, MEMBER_TOKEN);
       const target = await addSectionMember(
-        OWNER_TOKEN,
+        section.token,
         section.id,
         ADMIN_TOKEN,
       );
@@ -738,7 +745,7 @@ describe('Community Administration (e2e)', () => {
 
   describe('Audit Log', () => {
     it('records CREATE_COMMUNITY on Group creation and lists it via the generic paginated endpoint', async () => {
-      const created = await createGroup(OWNER_TOKEN, {
+      const created = await createGroup({
         name: 'Audited Community',
       });
 
@@ -748,7 +755,7 @@ describe('Community Administration (e2e)', () => {
       }>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${created.id}/audit-log`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(200),
       );
 
@@ -757,37 +764,39 @@ describe('Community Administration (e2e)', () => {
         (entry) => entry.action === 'CREATE_COMMUNITY',
       );
       expect(createEntry).toBeDefined();
-      expect(createEntry?.actor?.id).toBe(localUserIdByToken.get(OWNER_TOKEN));
+      expect(createEntry?.actor?.id).toBe(
+        localUserIdByToken.get(created.token),
+      );
     });
 
     it("records BAN/UNBAN and SUSPEND/UNSUSPEND actions under the Section's own audit log - never the parent Group's (no inheritance)", async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Moderation Audited Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Moderation Audited Section',
       });
       const membership = await addSectionMember(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
       );
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/members/${membership.id}/suspend`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${root.token}`)
         .send({})
         .expect(201);
       await request(app.getHttpServer())
         .post(
           `/api/v1/sections/${section.id}/members/${membership.id}/unsuspend`,
         )
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${root.token}`)
         .expect(201);
 
       const sectionPage = await bodyOf<{ data: { action: string }[] }>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/audit-log`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       const sectionActions = sectionPage.data.map((entry) => entry.action);
@@ -798,7 +807,7 @@ describe('Community Administration (e2e)', () => {
       const rootPage = await bodyOf<{ data: { action: string }[] }>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${root.id}/audit-log`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       const rootActions = rootPage.data.map((entry) => entry.action);
@@ -808,7 +817,7 @@ describe('Community Administration (e2e)', () => {
     });
 
     it('filters by action and by actorId', async () => {
-      const created = await createGroup(OWNER_TOKEN, {
+      const created = await createGroup({
         name: 'Filtered Audit Log',
       });
 
@@ -816,7 +825,7 @@ describe('Community Administration (e2e)', () => {
         request(app.getHttpServer())
           .get(`/api/v1/groups/${created.id}/audit-log`)
           .query({ action: 'CREATE_COMMUNITY' })
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(200),
       );
       expect(
@@ -826,15 +835,15 @@ describe('Community Administration (e2e)', () => {
       const byActor = await bodyOf<{ data: unknown[] }>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${created.id}/audit-log`)
-          .query({ actorId: localUserIdByToken.get(OWNER_TOKEN) as string })
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .query({ actorId: localUserIdByToken.get(created.token) as string })
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(200),
       );
       expect(byActor.data.length).toBeGreaterThanOrEqual(1);
     });
 
     it('sorts ascending when sort=createdAt, descending (default) otherwise', async () => {
-      const created = await createGroup(OWNER_TOKEN, {
+      const created = await createGroup({
         name: 'Sorted Audit Log',
       });
 
@@ -842,7 +851,7 @@ describe('Community Administration (e2e)', () => {
         request(app.getHttpServer())
           .get(`/api/v1/groups/${created.id}/audit-log`)
           .query({ sort: 'createdAt' })
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(200),
       );
       const timestamps = ascending.data.map((entry) =>
@@ -852,7 +861,7 @@ describe('Community Administration (e2e)', () => {
     });
 
     it('rejects an invalid query with 400 VALIDATION_ERROR', async () => {
-      const created = await createGroup(OWNER_TOKEN, {
+      const created = await createGroup({
         name: 'Bad Audit Query',
       });
 
@@ -860,20 +869,20 @@ describe('Community Administration (e2e)', () => {
         request(app.getHttpServer())
           .get(`/api/v1/groups/${created.id}/audit-log`)
           .query({ action: 'NOT_A_REAL_ACTION' })
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(400),
       );
       expect(response.code).toBe('VALIDATION_ERROR');
     });
 
     it('forbids a plain Section MEMBER from viewing that Section audit log - 403', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Member Cannot View Log Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Member Cannot View Log Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
@@ -885,7 +894,7 @@ describe('Community Administration (e2e)', () => {
     });
 
     it('returns 404 GROUP_NOT_FOUND for an outsider (never confirms existence)', async () => {
-      const created = await createGroup(OWNER_TOKEN, {
+      const created = await createGroup({
         name: 'Hidden From Outsider',
       });
 
@@ -900,13 +909,13 @@ describe('Community Administration (e2e)', () => {
 
   describe('Community Notification Settings', () => {
     it('returns every default as true before any update, then lets a plain member (only MEMBER) patch a subset', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Notification Defaults Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Notification Defaults Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
 
       const defaults = await bodyOf<CommunityNotificationSettingsResponseDto>(
         request(app.getHttpServer())
@@ -942,10 +951,10 @@ describe('Community Administration (e2e)', () => {
     });
 
     it('returns 404 GROUP_NOT_FOUND for a non-member', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Notification Non Member Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Notification Non Member Section',
       });
 
@@ -956,17 +965,17 @@ describe('Community Administration (e2e)', () => {
     });
 
     it('rejects an unrecognized field with 400 VALIDATION_ERROR (schema is strict)', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Notification Strict Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Notification Strict Section',
       });
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .patch(`/api/v1/sections/${section.id}/notification-settings`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .send({ notARealField: true })
           .expect(400),
       );
@@ -978,11 +987,11 @@ describe('Community Administration (e2e)', () => {
 
   describe('Expanded capability flags on GET /community/home', () => {
     it('grants OWNER-only flags to the Group OWNER and withholds them from an ADMIN in the same Group', async () => {
-      const created = await createGroup(OWNER_TOKEN, {
+      const created = await createGroup({
         name: 'Capability Flags Community',
       });
       await grantGroupRole(
-        OWNER_TOKEN,
+        created.token,
         created.id,
         ADMIN_TOKEN,
         GroupRole.ADMIN,
@@ -993,7 +1002,7 @@ describe('Community Administration (e2e)', () => {
       }>(
         request(app.getHttpServer())
           .get('/api/v1/community/home')
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(200),
       );
       expect(ownerHome.capabilities.canDeleteGroupIds).toContain(created.id);
@@ -1022,14 +1031,14 @@ describe('Community Administration (e2e)', () => {
     });
 
     it('grants Section-only moderation flags (ban/suspend/manage members/view members) to a Section ADMIN, never to a Group', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Section Moderation Capability Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Section Moderation Capability Section',
       });
       await addSectionMember(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         ADMIN_TOKEN,
         GroupRole.ADMIN,
@@ -1058,13 +1067,13 @@ describe('Community Administration (e2e)', () => {
     });
 
     it('grants canManageNotificationsInSectionIds to a zero-extra-Role ACTIVE Section member', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Notifications Capability Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Notifications Capability Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
 
       const memberHome = await bodyOf<{
         capabilities: Record<string, string[] | boolean>;
@@ -1085,12 +1094,12 @@ describe('Community Administration (e2e)', () => {
     });
 
     it('still lists canRestoreGroupIds/canDeleteGroupIds for an ARCHIVED Group, even though it is absent from myCommunities', async () => {
-      const created = await createGroup(OWNER_TOKEN, {
+      const created = await createGroup({
         name: 'Archived Capability Community',
       });
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${created.id}/archive`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${created.token}`)
         .expect(201);
 
       const home = await bodyOf<{
@@ -1099,7 +1108,7 @@ describe('Community Administration (e2e)', () => {
       }>(
         request(app.getHttpServer())
           .get('/api/v1/community/home')
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${created.token}`)
           .expect(200),
       );
       expect(home.myCommunities.map((c) => c.id)).not.toContain(created.id);
@@ -1108,21 +1117,21 @@ describe('Community Administration (e2e)', () => {
     });
 
     it('keeps a suspended Section member visible in myCommunities with only READ_ONLY-safe capabilities', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Suspended Capability Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Suspended Capability Section',
       });
       const membership = await addSectionMember(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.ADMIN,
       );
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/members/${membership.id}/suspend`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${root.token}`)
         .send({})
         .expect(201);
 

@@ -15,6 +15,7 @@ import { NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
+import { GroupFollow } from './entities/group-follow.entity';
 import { SectionBan } from './entities/section-ban.entity';
 import { Section } from './entities/section.entity';
 import { SectionMembership } from './entities/section-membership.entity';
@@ -196,6 +197,25 @@ describe('SectionMembershipsService', () => {
         GroupRole.MEMBER,
         actor,
       );
+    });
+
+    it('never creates a GroupFollow row - SectionMembership and GroupFollow are entirely independent', async () => {
+      const section = buildSection();
+      const user = buildUser({ id: 'target-1' });
+      const { em, persist } = buildMockEm({
+        sectionResult: section,
+        membershipResult: null,
+        userResult: user,
+      });
+      const { service } = buildService(em);
+      const actor = buildUser({ id: 'actor-1' });
+
+      await service.addMember('section-1', { userId: 'target-1' }, actor);
+
+      expect(persist).toHaveBeenCalled();
+      expect(
+        persist.mock.calls.some(([entity]) => entity instanceof GroupFollow),
+      ).toBe(false);
     });
 
     it('additionally grants the requested non-MEMBER role in the same transaction', async () => {

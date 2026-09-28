@@ -39,6 +39,7 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
@@ -59,12 +60,15 @@ import { CustomUserRank } from '../src/graduation/entities/custom-user-rank.enti
 import { FormalRankAssignment } from '../src/graduation/entities/formal-rank-assignment.entity';
 import { RankTrack } from '../src/graduation/enums/rank-track.enum';
 
-const OWNER_TOKEN = 'valid-frank-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs an
+// independent Group (+ graduation catalog) owner per call, so
+// createGroupWithCatalog() mints one via createFreshGroupOwner instead.
 const MEMBER_TOKEN = 'valid-frank-member-token';
 const OTHER_MEMBER_TOKEN = 'valid-frank-other-member-token';
 const OUTSIDER_TOKEN = 'valid-frank-outsider-token';
 
-const TOKENS = [OWNER_TOKEN, MEMBER_TOKEN, OTHER_MEMBER_TOKEN, OUTSIDER_TOKEN];
+const TOKENS = [MEMBER_TOKEN, OTHER_MEMBER_TOKEN, OUTSIDER_TOKEN];
 
 function clerkIdFor(token: string): string {
   return `user_test_${token.replace(/-/g, '_')}`;
@@ -100,8 +104,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     ];
   }),
 );
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -227,8 +229,12 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
         { parentGroup: null },
       );
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // Must be read fresh here (not a stale snapshot taken at module load)
+      // since createGroupWithCatalog (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -279,21 +285,6 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
       geonameId: 3088171,
       ...overrides,
     };
-  }
-
-  async function createGroup(
-    token: string,
-    overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
   }
 
   async function createSection(
@@ -360,25 +351,36 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
   }
 
   async function createGroupWithCatalog(): Promise<{
+    token: string;
+    userId: string;
     group: GroupResponseDto;
     section: SectionResponseDto;
     rank: RankResponseDto;
   }> {
-    const group = await createGroup(OWNER_TOKEN, {
-      name: `Catalog Group ${Date.now()}-${Math.random()}`,
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'frank',
+      groupOverrides: groupPayload({
+        name: `Catalog Group ${Date.now()}-${Math.random()}`,
+      }),
     });
-    const section = await createSection(OWNER_TOKEN, group.id);
+    const { token } = owner;
+    const group = owner.group;
+    const section = await createSection(token, group.id);
     await bodyOf<GraduationSystemResponseDto>(
       request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/graduation-system`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ name: 'System' })
         .expect(201),
     );
     const rank = await bodyOf<RankResponseDto>(
       request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/ranks`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${token}`)
         .send({
           track: RankTrack.ADULT,
           name: 'Corda Crua',
@@ -388,7 +390,7 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
         })
         .expect(201),
     );
-    return { group, section, rank };
+    return { token, userId: owner.userId, group, section, rank };
   }
 
   async function getCurrentFormalRank(
@@ -476,10 +478,10 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
     });
 
     it('rejects a rank from a group the caller is not formally affiliated with', async () => {
-      const { section, group } = await createGroupWithCatalog();
+      const { section, group, token } = await createGroupWithCatalog();
       const otherCatalog = await createGroupWithCatalog();
 
-      await joinSection(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await joinSection(token, section.id, MEMBER_TOKEN);
       await setFormalGroup(MEMBER_TOKEN, group.id);
 
       const error = (await setFormalRank(
@@ -491,8 +493,8 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
     });
 
     it('sets a formal rank, persisting awardedByName and startedOn into history', async () => {
-      const { section, group, rank } = await createGroupWithCatalog();
-      await joinSection(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      const { section, group, rank, token } = await createGroupWithCatalog();
+      await joinSection(token, section.id, MEMBER_TOKEN);
       await setFormalGroup(MEMBER_TOKEN, group.id);
 
       const result = (await setFormalRank(MEMBER_TOKEN, rank.id, 200, {
@@ -510,21 +512,21 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
     });
 
     it('rejects an archived rank being newly selected, but a previously-current archived rank stays valid', async () => {
-      const { section, group, rank } = await createGroupWithCatalog();
-      await joinSection(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      const { section, group, rank, token } = await createGroupWithCatalog();
+      await joinSection(token, section.id, MEMBER_TOKEN);
       await setFormalGroup(MEMBER_TOKEN, group.id);
       await setFormalRank(MEMBER_TOKEN, rank.id);
 
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/ranks/${rank.id}/archive`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${token}`)
         .expect(201);
 
       const current = await getCurrentFormalRank(MEMBER_TOKEN);
       expect(current?.rank.id).toBe(rank.id);
       expect(current?.rank.isArchived).toBe(true);
 
-      await joinSection(OWNER_TOKEN, section.id, OTHER_MEMBER_TOKEN);
+      await joinSection(token, section.id, OTHER_MEMBER_TOKEN);
       await setFormalGroup(OTHER_MEMBER_TOKEN, group.id);
       const error = (await setFormalRank(
         OTHER_MEMBER_TOKEN,
@@ -535,14 +537,19 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
     });
 
     it('atomically swaps the active assignment, keeping the previous one in history with endedOn set', async () => {
-      const { section, group, rank: rankA } = await createGroupWithCatalog();
-      await joinSection(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      const {
+        section,
+        group,
+        rank: rankA,
+        token,
+      } = await createGroupWithCatalog();
+      await joinSection(token, section.id, MEMBER_TOKEN);
       await setFormalGroup(MEMBER_TOKEN, group.id);
 
       const rankB = await bodyOf<RankResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${group.id}/ranks`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${token}`)
           .send({
             track: RankTrack.ADULT,
             name: 'Corda Verde',
@@ -580,8 +587,8 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
 
   describe('DELETE /users/me/formal-rank', () => {
     it('ends the current formal rank, and repeating it 404s', async () => {
-      const { section, group, rank } = await createGroupWithCatalog();
-      await joinSection(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      const { section, group, rank, token } = await createGroupWithCatalog();
+      await joinSection(token, section.id, MEMBER_TOKEN);
       await setFormalGroup(MEMBER_TOKEN, group.id);
       await setFormalRank(MEMBER_TOKEN, rank.id);
 
@@ -629,8 +636,8 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
     });
 
     it('can be set (PUT) even while an active formal group is set - setting is always allowed, and never carries formal-only fields', async () => {
-      const { section, group } = await createGroupWithCatalog();
-      await joinSection(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      const { section, group, token } = await createGroupWithCatalog();
+      await joinSection(token, section.id, MEMBER_TOKEN);
       await setFormalGroup(MEMBER_TOKEN, group.id);
 
       const created = (await setCustomRank(MEMBER_TOKEN, {
@@ -669,8 +676,8 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
     });
 
     it('can be freely edited (PUT) by the owner regardless of formal group status', async () => {
-      const { section, group } = await createGroupWithCatalog();
-      await joinSection(OWNER_TOKEN, section.id, OTHER_MEMBER_TOKEN);
+      const { section, group, token } = await createGroupWithCatalog();
+      await joinSection(token, section.id, OTHER_MEMBER_TOKEN);
       await setFormalGroup(OTHER_MEMBER_TOKEN, group.id);
 
       const created = (await setCustomRank(OTHER_MEMBER_TOKEN, {
@@ -743,8 +750,8 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
         name: 'Cordão before formal',
       })) as CustomUserRankResponseDto;
 
-      const { section, group, rank } = await createGroupWithCatalog();
-      await joinSection(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      const { section, group, rank, token } = await createGroupWithCatalog();
+      await joinSection(token, section.id, MEMBER_TOKEN);
       await setFormalGroup(MEMBER_TOKEN, group.id);
       await setFormalRank(MEMBER_TOKEN, rank.id);
 

@@ -37,10 +37,12 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { HomeResponseDto } from '../src/home/dto/home-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
@@ -69,7 +71,10 @@ import { User } from '../src/users/entities/user.entity';
 import { Announcement } from '../src/announcements/entities/announcement.entity';
 import { AnnouncementRead } from '../src/announcements/entities/announcement-read.entity';
 
-const OWNER_TOKEN = 'valid-home-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const MEMBER_TOKEN = 'valid-home-member-token';
 const NEWUSER_TOKEN = 'valid-home-newuser-token';
 // Dedicated to the cross-community unreadCount test below - never added to
@@ -85,7 +90,6 @@ const MULTI_ORG_TOKEN = 'valid-home-multi-org-token';
 const TRAINING_MEMBER_TOKEN = 'valid-home-training-member-token';
 const TRAINING_MEMBER_TOKEN_2 = 'valid-home-training-member-2-token';
 
-const OWNER_CLERK_ID = 'user_test_home_owner';
 const MEMBER_CLERK_ID = 'user_test_home_member';
 const NEWUSER_CLERK_ID = 'user_test_home_newuser';
 const MULTI_ORG_CLERK_ID = 'user_test_home_multi_org';
@@ -93,12 +97,6 @@ const TRAINING_MEMBER_CLERK_ID = 'user_test_home_training_member';
 const TRAINING_MEMBER_CLERK_ID_2 = 'user_test_home_training_member_2';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [OWNER_TOKEN]: {
-    userId: OWNER_CLERK_ID,
-    sessionId: 'sess_home_owner',
-    tokenType: 'session_token',
-    claims: { sub: OWNER_CLERK_ID, sid: 'sess_home_owner' },
-  },
   [MEMBER_TOKEN]: {
     userId: MEMBER_CLERK_ID,
     sessionId: 'sess_home_member',
@@ -138,10 +136,6 @@ const FIXTURE_CLERK_PROFILES: Record<
   string,
   { imageUrl: string; primaryEmailAddress: { emailAddress: string } | null }
 > = {
-  [OWNER_CLERK_ID]: {
-    imageUrl: 'https://img.clerk.com/home-owner.png',
-    primaryEmailAddress: { emailAddress: 'home.owner@example.com' },
-  },
   [MEMBER_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/home-member.png',
     primaryEmailAddress: { emailAddress: 'home.member@example.com' },
@@ -163,8 +157,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     primaryEmailAddress: { emailAddress: 'home.training.member.2@example.com' },
   },
 };
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -320,9 +312,19 @@ describe('Home (e2e)', () => {
       await cleanup.nativeDelete(Section, {
         parentGroup: { $in: createdGroupIds },
       });
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -349,18 +351,17 @@ describe('Home (e2e)', () => {
   }
 
   async function createGroup(
-    token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'home',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   // Group has no membership/MEMBER role at all (see the Membership/
@@ -602,13 +603,13 @@ describe('Home (e2e)', () => {
 
   describe('nearestEvent / nearestTraining', () => {
     it('the soonest upcoming Event of any type becomes nearestEvent, independent of Trainings', async () => {
-      const group = await createGroup(OWNER_TOKEN, {
+      const group = await createGroup({
         name: 'Home Events Org',
       });
-      await addMember(OWNER_TOKEN, group.id, MEMBER_TOKEN);
+      await addMember(group.token, group.id, MEMBER_TOKEN);
 
       const soonerWorkshop = await createAndPublishEvent(
-        OWNER_TOKEN,
+        group.token,
         group.id,
         {
           type: 'WORKSHOP',
@@ -617,7 +618,7 @@ describe('Home (e2e)', () => {
           endsAt: '2031-02-01T18:00:00.000Z',
         },
       );
-      await createAndPublishEvent(OWNER_TOKEN, group.id, {
+      await createAndPublishEvent(group.token, group.id, {
         type: 'OPEN_RODA',
         name: 'Later Roda',
         startsAt: '2031-03-01T10:00:00.000Z',
@@ -630,19 +631,19 @@ describe('Home (e2e)', () => {
     });
 
     it('the soonest upcoming, visible, SCHEDULED Training for a Section the caller is an active member of becomes nearestTraining', async () => {
-      const group = await createGroup(OWNER_TOKEN, {
+      const group = await createGroup({
         name: 'Home Trainings Org',
       });
-      const section = await createSection(OWNER_TOKEN, group.id, {
+      const section = await createSection(group.token, group.id, {
         name: 'Home Trainings Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, TRAINING_MEMBER_TOKEN);
+      await addSectionMember(group.token, section.id, TRAINING_MEMBER_TOKEN);
 
-      await createTraining(OWNER_TOKEN, section.id, {
+      await createTraining(group.token, section.id, {
         startsAt: '2031-04-10T10:00:00.000Z',
         endsAt: '2031-04-10T12:00:00.000Z',
       });
-      const soonerTraining = await createTraining(OWNER_TOKEN, section.id, {
+      const soonerTraining = await createTraining(group.token, section.id, {
         startsAt: '2031-04-05T10:00:00.000Z',
         endsAt: '2031-04-05T12:00:00.000Z',
       });
@@ -653,21 +654,21 @@ describe('Home (e2e)', () => {
     });
 
     it('a cancelled Training is never returned as nearestTraining', async () => {
-      const group = await createGroup(OWNER_TOKEN, {
+      const group = await createGroup({
         name: 'Home Cancelled Training Org',
       });
-      const section = await createSection(OWNER_TOKEN, group.id, {
+      const section = await createSection(group.token, group.id, {
         name: 'Home Cancelled Training Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, TRAINING_MEMBER_TOKEN_2);
+      await addSectionMember(group.token, section.id, TRAINING_MEMBER_TOKEN_2);
 
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const training = await createTraining(group.token, section.id, {
         startsAt: '2031-05-01T10:00:00.000Z',
         endsAt: '2031-05-01T12:00:00.000Z',
       });
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/trainings/${training.id}/cancel`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${group.token}`)
         .send({ scope: 'THIS', reason: null })
         .expect(201);
 
@@ -726,24 +727,24 @@ describe('Home (e2e)', () => {
     }
 
     it('reuses AnnouncementsService visibility/sorting: at most 3 active items, newest/pinned first, with a correct unreadCount', async () => {
-      const group = await createGroup(OWNER_TOKEN, {
+      const group = await createGroup({
         name: 'Home Announcements Org',
       });
-      await addMember(OWNER_TOKEN, group.id, MEMBER_TOKEN);
+      await addMember(group.token, group.id, MEMBER_TOKEN);
 
       // Oldest unpinned - must fall out of the capped (limit 3) preview,
       // even though it is still an active, visible Announcement.
-      const oldest = await createAnnouncement(OWNER_TOKEN, group.id, {
+      const oldest = await createAnnouncement(group.token, group.id, {
         title: 'Oldest',
       });
-      const pinned = await createAnnouncement(OWNER_TOKEN, group.id, {
+      const pinned = await createAnnouncement(group.token, group.id, {
         title: 'Pinned',
         isPinned: true,
       });
-      const newer = await createAnnouncement(OWNER_TOKEN, group.id, {
+      const newer = await createAnnouncement(group.token, group.id, {
         title: 'Newer',
       });
-      const newest = await createAnnouncement(OWNER_TOKEN, group.id, {
+      const newest = await createAnnouncement(group.token, group.id, {
         title: 'Newest',
       });
 
@@ -773,21 +774,21 @@ describe('Home (e2e)', () => {
     });
 
     it('unreadCount reflects the full cross-community visible set, not just the capped 3-item preview', async () => {
-      const orgA = await createGroup(OWNER_TOKEN, {
+      const orgA = await createGroup({
         name: 'Home Multi-Org A',
       });
-      const orgB = await createGroup(OWNER_TOKEN, {
+      const orgB = await createGroup({
         name: 'Home Multi-Org B',
       });
-      await addMember(OWNER_TOKEN, orgA.id, MULTI_ORG_TOKEN);
-      await addMember(OWNER_TOKEN, orgB.id, MULTI_ORG_TOKEN);
+      await addMember(orgA.token, orgA.id, MULTI_ORG_TOKEN);
+      await addMember(orgB.token, orgB.id, MULTI_ORG_TOKEN);
 
       // 3 in org A, 2 in org B - 5 total visible, but the preview caps at 3.
-      await createAnnouncement(OWNER_TOKEN, orgA.id, { title: 'A1' });
-      await createAnnouncement(OWNER_TOKEN, orgA.id, { title: 'A2' });
-      await createAnnouncement(OWNER_TOKEN, orgA.id, { title: 'A3' });
-      await createAnnouncement(OWNER_TOKEN, orgB.id, { title: 'B1' });
-      await createAnnouncement(OWNER_TOKEN, orgB.id, { title: 'B2' });
+      await createAnnouncement(orgA.token, orgA.id, { title: 'A1' });
+      await createAnnouncement(orgA.token, orgA.id, { title: 'A2' });
+      await createAnnouncement(orgA.token, orgA.id, { title: 'A3' });
+      await createAnnouncement(orgB.token, orgB.id, { title: 'B1' });
+      await createAnnouncement(orgB.token, orgB.id, { title: 'B2' });
 
       const home = await getHome(MULTI_ORG_TOKEN);
 
@@ -796,22 +797,22 @@ describe('Home (e2e)', () => {
     });
 
     it('never includes a deleted or naturally-expired Announcement, and neither contributes to unreadCount', async () => {
-      const group = await createGroup(OWNER_TOKEN, {
+      const group = await createGroup({
         name: 'Home Announcements Lifecycle Org',
       });
-      await addMember(OWNER_TOKEN, group.id, MEMBER_TOKEN);
+      await addMember(group.token, group.id, MEMBER_TOKEN);
 
       const baseline = await getHome(MEMBER_TOKEN);
 
-      const toDelete = await createAnnouncement(OWNER_TOKEN, group.id, {
+      const toDelete = await createAnnouncement(group.token, group.id, {
         title: 'Will be deleted',
       });
       await request(app.getHttpServer())
         .delete(`/api/v1/groups/${group.id}/announcements/${toDelete.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${group.token}`)
         .expect(204);
 
-      const toExpire = await createAnnouncement(OWNER_TOKEN, group.id, {
+      const toExpire = await createAnnouncement(group.token, group.id, {
         title: 'Will expire',
         expiresAt: new Date(Date.now() + 1000).toISOString(),
       });

@@ -41,6 +41,7 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { UserProfileResponseDto } from '../src/users/dto/user-profile-response.dto';
@@ -76,19 +77,17 @@ import {
 import { CareerTimelineResponseDto } from '../src/career-timeline/dto/career-timeline-response.dto';
 import { CareerTimelineItemDto } from '../src/career-timeline/dto/career-timeline-item.dto';
 
-const OWNER_TOKEN = 'valid-ctl-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Group-owning actors, so createGroupWithCatalog() (and a couple
+// of one-off spots) mint a fresh, throwaway owner per call instead - see
+// createGroupWithCatalog's own comment.
 const MEMBER_TOKEN = 'valid-ctl-member-token';
 const VIEWER_TOKEN = 'valid-ctl-viewer-token';
 const OTHER_MEMBER_TOKEN = 'valid-ctl-other-member-token';
 const OUTSIDER_TOKEN = 'valid-ctl-outsider-token';
 
-const TOKENS = [
-  OWNER_TOKEN,
-  MEMBER_TOKEN,
-  VIEWER_TOKEN,
-  OTHER_MEMBER_TOKEN,
-  OUTSIDER_TOKEN,
-];
+const TOKENS = [MEMBER_TOKEN, VIEWER_TOKEN, OTHER_MEMBER_TOKEN, OUTSIDER_TOKEN];
 
 function clerkIdFor(token: string): string {
   return `user_test_${token.replace(/-/g, '_')}`;
@@ -124,8 +123,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     ];
   }),
 );
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -268,8 +265,11 @@ describe('Career Timeline (e2e)', () => {
         { parentGroup: null },
       );
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // Must be read fresh here (not a stale snapshot taken at module load)
+      // since createGroupWithCatalog/registerFreshUser register a fresh
+      // fixture user per call, mutating FIXTURE_CLERK_PROFILES in place.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -424,14 +424,30 @@ describe('Career Timeline (e2e)', () => {
       .expect(204);
   }
 
-  async function createGroupWithCatalog(token: string): Promise<{
+  // Mints its own fresh, throwaway owner - GroupsService.create now allows
+  // at most one active FormalGroupAffiliation per user, and the test bodies
+  // below only ever use this catalog's owner token to administer that one
+  // catalog (create its Section/graduation-system/rank/Events), never as a
+  // fixed shared identity, so a fresh actor per call is safe.
+  async function createGroupWithCatalog(): Promise<{
+    token: string;
+    userId: string;
     group: GroupResponseDto;
     section: SectionResponseDto;
     rank: RankResponseDto;
   }> {
-    const group = await createGroup(token, {
-      name: `Career Timeline Catalog Group ${Date.now()}-${Math.random()}`,
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'ctl-catalog',
+      groupOverrides: groupPayload({
+        name: `Career Timeline Catalog Group ${Date.now()}-${Math.random()}`,
+      }),
     });
+    const { token } = owner;
+    const group = owner.group;
     const section = await createSection(token, group.id);
     await bodyOf<GraduationSystemResponseDto>(
       request(app.getHttpServer())
@@ -453,7 +469,36 @@ describe('Career Timeline (e2e)', () => {
         })
         .expect(201),
     );
-    return { group, section, rank };
+    return { token, userId: owner.userId, group, section, rank };
+  }
+
+  // Registers a brand-new fixture user with no Group yet - unlike
+  // createFreshGroupOwner, which always creates one - for the rare test that
+  // needs to observe a specific actor's own career timeline strictly before
+  // any Group of theirs exists.
+  async function registerFreshUser(
+    namePrefix: string,
+  ): Promise<{ token: string; userId: string }> {
+    const suffix = `${namePrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const clerkUserId = `user_test_${suffix}`;
+    const token = `valid-${suffix}-token`;
+    TOKEN_TO_AUTH[token] = {
+      userId: clerkUserId,
+      sessionId: `sess_${suffix}`,
+      tokenType: 'session_token',
+      claims: { sub: clerkUserId, sid: `sess_${suffix}` },
+    };
+    FIXTURE_CLERK_PROFILES[clerkUserId] = {
+      imageUrl: `https://img.clerk.com/${suffix}.png`,
+      primaryEmailAddress: { emailAddress: `${suffix}@example.com` },
+    };
+    await request(app.getHttpServer())
+      .get('/api/v1/users/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    const em = app.get(EntityManager).fork();
+    const user = await em.findOneOrFail(User, { clerkUserId });
+    return { token, userId: user.id };
   }
 
   async function setFormalRank(
@@ -587,22 +632,22 @@ describe('Career Timeline (e2e)', () => {
         showCapoeiraStartedAt: true,
       });
 
-      const catalog1 = await createGroupWithCatalog(OWNER_TOKEN);
+      const catalog1 = await createGroupWithCatalog();
       group1 = catalog1.group;
-      await joinSection(OWNER_TOKEN, catalog1.section.id, MEMBER_TOKEN);
+      await joinSection(catalog1.token, catalog1.section.id, MEMBER_TOKEN);
       await setFormalGroup(MEMBER_TOKEN, group1.id, '2015-01-01');
       await endFormalGroup(MEMBER_TOKEN);
 
-      const catalog2 = await createGroupWithCatalog(OWNER_TOKEN);
+      const catalog2 = await createGroupWithCatalog();
       group2 = catalog2.group;
       rank2 = catalog2.rank;
-      await joinSection(OWNER_TOKEN, catalog2.section.id, MEMBER_TOKEN);
+      await joinSection(catalog2.token, catalog2.section.id, MEMBER_TOKEN);
       await setFormalGroup(MEMBER_TOKEN, group2.id, '2018-01-01');
 
-      linkedEvent = await createEvent(OWNER_TOKEN, catalog2.section.id, {
+      linkedEvent = await createEvent(catalog2.token, catalog2.section.id, {
         name: 'Batizado (linked to rank)',
       });
-      await publishEvent(OWNER_TOKEN, linkedEvent.id);
+      await publishEvent(catalog2.token, linkedEvent.id);
       await pushEventIntoThePast(
         linkedEvent.id,
         '2019-06-01T10:00:00.000Z',
@@ -737,16 +782,17 @@ describe('Career Timeline (e2e)', () => {
 
   describe('FOUNDED_GROUP / STARTED_TEACHING', () => {
     it('credits the creator with FOUNDED_GROUP, dated at group creation', async () => {
-      const before = await getOwnTimeline(OWNER_TOKEN);
+      const actor = await registerFreshUser('ctl-founder');
+      const before = await getOwnTimeline(actor.token);
       const foundedBefore = before.items.filter(
         (item) => item.type === CareerTimelineEntryType.FOUNDED_GROUP,
       ).length;
 
-      const group = await createGroup(OWNER_TOKEN, {
+      const group = await createGroup(actor.token, {
         name: `Founder Test Group ${Date.now()}`,
       });
 
-      const after = await getOwnTimeline(OWNER_TOKEN);
+      const after = await getOwnTimeline(actor.token);
       const founded = after.items.filter(
         (item) => item.type === CareerTimelineEntryType.FOUNDED_GROUP,
       );
@@ -767,13 +813,21 @@ describe('Career Timeline (e2e)', () => {
     // since deleting a fixture account here would break every other test in
     // this file that shares it.)
     it('keeps crediting the original creator with FOUNDED_GROUP after ownership is transferred away, and never credits the new owner', async () => {
-      const group = await createGroup(OWNER_TOKEN, {
-        name: `Transferred Group ${Date.now()}`,
+      const owner = await createFreshGroupOwner({
+        app,
+        tokenToAuth: TOKEN_TO_AUTH,
+        clerkProfiles: FIXTURE_CLERK_PROFILES,
+        onGroupCreated: (id) => createdGroupIds.push(id),
+        namePrefix: 'ctl-transferred',
+        groupOverrides: groupPayload({
+          name: `Transferred Group ${Date.now()}`,
+        }),
       });
-      await grantGroupRole(OWNER_TOKEN, group.id, OTHER_MEMBER_TOKEN, 'ADMIN');
-      await transferGroupOwnership(OWNER_TOKEN, group.id, OTHER_MEMBER_TOKEN);
+      const group = owner.group;
+      await grantGroupRole(owner.token, group.id, OTHER_MEMBER_TOKEN, 'ADMIN');
+      await transferGroupOwnership(owner.token, group.id, OTHER_MEMBER_TOKEN);
 
-      const originalCreatorTimeline = await getOwnTimeline(OWNER_TOKEN);
+      const originalCreatorTimeline = await getOwnTimeline(owner.token);
       expect(
         originalCreatorTimeline.items.some(
           (item) =>
@@ -793,13 +847,21 @@ describe('Career Timeline (e2e)', () => {
     });
 
     it('credits a granted INSTRUCTOR with STARTED_TEACHING on that Section', async () => {
-      const group = await createGroup(OWNER_TOKEN, {
-        name: `Teaching Test Group ${Date.now()}`,
+      const owner = await createFreshGroupOwner({
+        app,
+        tokenToAuth: TOKEN_TO_AUTH,
+        clerkProfiles: FIXTURE_CLERK_PROFILES,
+        onGroupCreated: (id) => createdGroupIds.push(id),
+        namePrefix: 'ctl-teaching',
+        groupOverrides: groupPayload({
+          name: `Teaching Test Group ${Date.now()}`,
+        }),
       });
-      const section = await createSection(OWNER_TOKEN, group.id);
-      await joinSection(OWNER_TOKEN, section.id, OTHER_MEMBER_TOKEN);
+      const group = owner.group;
+      const section = await createSection(owner.token, group.id);
+      await joinSection(owner.token, section.id, OTHER_MEMBER_TOKEN);
       await grantSectionRole(
-        OWNER_TOKEN,
+        owner.token,
         section.id,
         OTHER_MEMBER_TOKEN,
         'INSTRUCTOR',
@@ -820,13 +882,13 @@ describe('Career Timeline (e2e)', () => {
 
   describe('linked Event snapshot and visibility', () => {
     it("keeps showing the Event's original name/location after it is edited, but not its current values", async () => {
-      const catalog = await createGroupWithCatalog(OWNER_TOKEN);
-      const event = await createEvent(OWNER_TOKEN, catalog.section.id, {
+      const catalog = await createGroupWithCatalog();
+      const event = await createEvent(catalog.token, catalog.section.id, {
         name: 'Festival Capoeira 2022',
         locationName: 'Poznań',
         visibility: EventVisibility.PUBLIC,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(catalog.token, event.id);
 
       const created = await bodyOf<CareerTimelineItemDto>(
         request(app.getHttpServer())
@@ -866,16 +928,20 @@ describe('Career Timeline (e2e)', () => {
     });
 
     it("hides a linked private Event's own details from a viewer who has no access to it, without hiding the career-timeline fact", async () => {
-      const catalog = await createGroupWithCatalog(OWNER_TOKEN);
-      const privateEvent = await createEvent(OWNER_TOKEN, catalog.section.id, {
-        name: 'Members-only Batizado',
-        visibility: EventVisibility.COMMUNITY_MEMBERS,
-      });
-      await publishEvent(OWNER_TOKEN, privateEvent.id);
+      const catalog = await createGroupWithCatalog();
+      const privateEvent = await createEvent(
+        catalog.token,
+        catalog.section.id,
+        {
+          name: 'Members-only Batizado',
+          visibility: EventVisibility.COMMUNITY_MEMBERS,
+        },
+      );
+      await publishEvent(catalog.token, privateEvent.id);
       // OTHER_MEMBER_TOKEN links it themselves - linking never required the
       // caller to have access to the Event (see resolveEvent), only that it
       // exists.
-      await joinSection(OWNER_TOKEN, catalog.section.id, OTHER_MEMBER_TOKEN);
+      await joinSection(catalog.token, catalog.section.id, OTHER_MEMBER_TOKEN);
 
       const created = await bodyOf<CareerTimelineItemDto>(
         request(app.getHttpServer())
@@ -918,7 +984,7 @@ describe('Career Timeline (e2e)', () => {
 
   describe('possibleDuplicateOfId', () => {
     it('flags a MANUAL RECEIVED_RANK entry as a possible duplicate once a matching SYSTEM RECEIVED_RANK is recorded for the same date', async () => {
-      const catalog = await createGroupWithCatalog(OWNER_TOKEN);
+      const catalog = await createGroupWithCatalog();
 
       const created = await bodyOf<CareerTimelineItemDto>(
         request(app.getHttpServer())
@@ -933,7 +999,7 @@ describe('Career Timeline (e2e)', () => {
       );
       expect(created.possibleDuplicateOfId).toBeNull();
 
-      await joinSection(OWNER_TOKEN, catalog.section.id, OUTSIDER_TOKEN);
+      await joinSection(catalog.token, catalog.section.id, OUTSIDER_TOKEN);
       await setFormalRank(OUTSIDER_TOKEN, catalog.rank.id, {
         startedOn: '2023-06-01',
       });
@@ -1023,11 +1089,11 @@ describe('Career Timeline (e2e)', () => {
     });
 
     it('creates a BATIZADO entry linked to a real CapoHub Event, with the event ref resolved on read', async () => {
-      const catalog = await createGroupWithCatalog(OWNER_TOKEN);
-      const event = await createEvent(OWNER_TOKEN, catalog.section.id, {
+      const catalog = await createGroupWithCatalog();
+      const event = await createEvent(catalog.token, catalog.section.id, {
         name: 'Batizado Anual',
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(catalog.token, event.id);
 
       const created = (await createEntry(OTHER_MEMBER_TOKEN, {
         type: CareerTimelineEntryType.BATIZADO,

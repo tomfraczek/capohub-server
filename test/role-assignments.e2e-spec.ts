@@ -14,6 +14,7 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { SectionMembershipResponseDto } from '../src/groups/dto/section-membership-response.dto';
@@ -23,27 +24,24 @@ import { RoleAssignmentResponseDto } from '../src/groups/dto/role-assignment-res
 import { CohortResponseDto } from '../src/groups/dto/cohort-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { Cohort } from '../src/groups/entities/cohort.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
 
-const OWNER_TOKEN = 'valid-roleassign-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const MEMBER_TOKEN = 'valid-roleassign-member-token';
 const SECOND_TOKEN = 'valid-roleassign-second-token';
 
-const OWNER_CLERK_ID = 'user_test_roleassign_owner';
 const MEMBER_CLERK_ID = 'user_test_roleassign_member';
 const SECOND_CLERK_ID = 'user_test_roleassign_second';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [OWNER_TOKEN]: {
-    userId: OWNER_CLERK_ID,
-    sessionId: 'sess_roleassign_owner',
-    tokenType: 'session_token',
-    claims: { sub: OWNER_CLERK_ID, sid: 'sess_roleassign_owner' },
-  },
   [MEMBER_TOKEN]: {
     userId: MEMBER_CLERK_ID,
     sessionId: 'sess_roleassign_member',
@@ -62,10 +60,6 @@ const FIXTURE_CLERK_PROFILES: Record<
   string,
   { imageUrl: string; primaryEmailAddress: { emailAddress: string } | null }
 > = {
-  [OWNER_CLERK_ID]: {
-    imageUrl: 'https://img.clerk.com/roleassign-owner.png',
-    primaryEmailAddress: { emailAddress: 'roleassign.owner@example.com' },
-  },
   [MEMBER_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/roleassign-member.png',
     primaryEmailAddress: { emailAddress: 'roleassign.member@example.com' },
@@ -75,8 +69,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     primaryEmailAddress: { emailAddress: 'roleassign.second@example.com' },
   },
 };
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -185,9 +177,19 @@ describe('Role Assignments (e2e)', () => {
       // Sections must be removed before their parent Groups to satisfy the
       // parent_group_id foreign key (no cascade - see section.entity.ts).
       await cleanup.nativeDelete(Section, { id: { $in: createdSectionIds } });
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -214,18 +216,17 @@ describe('Role Assignments (e2e)', () => {
   }
 
   async function createGroup(
-    token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'role-assign',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   function sectionPayload(
@@ -345,14 +346,14 @@ describe('Role Assignments (e2e)', () => {
 
   describe('granting a Role for a Section', () => {
     it('grants a Role for the Section to an already-joined member, giving direct access to it', async () => {
-      const root = await createGroup(OWNER_TOKEN, { name: 'Grant Root' });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const root = await createGroup({ name: 'Grant Root' });
+      const section = await createSection(root.token, root.id, {
         name: 'Grant Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
 
       const assignment = await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.INSTRUCTOR,
@@ -369,17 +370,17 @@ describe('Role Assignments (e2e)', () => {
     });
 
     it('rejects granting a Role to a user with no active membership in that exact Section - 409 ROLE_MEMBERSHIP_NOT_ACTIVE', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Never Joined Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Never Joined Section',
       });
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/sections/${section.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .send({
             userId: localUserIdByToken.get(MEMBER_TOKEN),
             role: GroupRole.INSTRUCTOR,
@@ -390,13 +391,13 @@ describe('Role Assignments (e2e)', () => {
     });
 
     it('rejects granting a Role once the membership has ended - 409 ROLE_MEMBERSHIP_NOT_ACTIVE', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Inactive Membership Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Inactive Membership Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/leave`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
@@ -405,7 +406,7 @@ describe('Role Assignments (e2e)', () => {
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/sections/${section.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .send({
             userId: localUserIdByToken.get(MEMBER_TOKEN),
             role: GroupRole.INSTRUCTOR,
@@ -416,15 +417,15 @@ describe('Role Assignments (e2e)', () => {
     });
 
     it('rejects granting the exact same Role twice for the same (user, Section) pair - 409 ROLE_ASSIGNMENT_ALREADY_EXISTS', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Duplicate Role Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Duplicate Role Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
       await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.INSTRUCTOR,
@@ -433,7 +434,7 @@ describe('Role Assignments (e2e)', () => {
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/sections/${section.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .send({
             userId: localUserIdByToken.get(MEMBER_TOKEN),
             role: GroupRole.INSTRUCTOR,
@@ -444,22 +445,22 @@ describe('Role Assignments (e2e)', () => {
     });
 
     it('allows a member to hold several different Roles for the same Section at once (MEMBER + INSTRUCTOR + ADMIN)', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Multi-Role Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Multi-Role Section (Poznan)',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
 
       await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.INSTRUCTOR,
       );
       await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.ADMIN,
@@ -468,7 +469,7 @@ describe('Role Assignments (e2e)', () => {
       const roleAssignments = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       const rolesForMember = roleAssignments
@@ -483,21 +484,21 @@ describe('Role Assignments (e2e)', () => {
     });
 
     it('revoking one Role does not affect the others held for the same Section', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Revoke One Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Revoke One Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
       const instructorAssignment = await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.INSTRUCTOR,
       );
       await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.ADMIN,
@@ -507,13 +508,13 @@ describe('Role Assignments (e2e)', () => {
         .delete(
           `/api/v1/sections/${section.id}/role-assignments/${instructorAssignment.id}`,
         )
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${root.token}`)
         .expect(204);
 
       const roleAssignments = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       const rolesForMember = roleAssignments
@@ -531,10 +532,10 @@ describe('Role Assignments (e2e)', () => {
 
   describe('exactly one OWNER per Group', () => {
     it('is enforced at the database level by a partial unique index, independent of the app-level check', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'DB Owner Uniqueness Root',
       });
-      await grantGroupRole(OWNER_TOKEN, root.id, MEMBER_TOKEN, GroupRole.ADMIN);
+      await grantGroupRole(root.token, root.id, MEMBER_TOKEN, GroupRole.ADMIN);
       const em = app.get(EntityManager).fork();
 
       const secondOwner = new RoleAssignment();
@@ -557,7 +558,7 @@ describe('Role Assignments (e2e)', () => {
 
   describe('no inheritance', () => {
     it('an ADMIN Role on the Group grants no access to a Section under it without its own Role Assignment', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'No Inherit Down Root',
       });
       // Private - this assertion is about permission isolation (ADMIN on
@@ -565,11 +566,11 @@ describe('Role Assignments (e2e)', () => {
       // (RoleAssignmentsService.resolvePublicView), which would otherwise
       // let MEMBER_TOKEN read a Public Section's GET with zero Role
       // Assignments there.
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'No Inherit Down Section',
         isPublic: false,
       });
-      await grantGroupRole(OWNER_TOKEN, root.id, MEMBER_TOKEN, GroupRole.ADMIN);
+      await grantGroupRole(root.token, root.id, MEMBER_TOKEN, GroupRole.ADMIN);
 
       await request(app.getHttpServer())
         .get(`/api/v1/sections/${section.id}`)
@@ -584,10 +585,10 @@ describe('Role Assignments (e2e)', () => {
     // same as a Public Group (see groups.e2e-spec.ts's own "on a Public
     // Group" test).
     it('a Public Section is readable by a caller with zero Role Assignment/Membership at all', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Public Section View Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Public Section View Section',
         isPublic: true,
       });
@@ -602,15 +603,15 @@ describe('Role Assignments (e2e)', () => {
     });
 
     it('a Role granted on a Section grants no access to its parent Group at all - not even a 403, since there is zero standing there', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'No Inherit Up Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'No Inherit Up Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
       await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.ADMIN,
@@ -631,18 +632,18 @@ describe('Role Assignments (e2e)', () => {
     });
 
     it('a Role granted in one Section grants no access to a sibling Section', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'No Inherit Sibling Root',
       });
-      const sectionA = await createSection(OWNER_TOKEN, root.id, {
+      const sectionA = await createSection(root.token, root.id, {
         name: 'Sibling A',
       });
-      const sectionB = await createSection(OWNER_TOKEN, root.id, {
+      const sectionB = await createSection(root.token, root.id, {
         name: 'Sibling B',
       });
-      await addSectionMember(OWNER_TOKEN, sectionA.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, sectionA.id, MEMBER_TOKEN);
       await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         sectionA.id,
         MEMBER_TOKEN,
         GroupRole.ADMIN,
@@ -665,18 +666,18 @@ describe('Role Assignments (e2e)', () => {
 
   describe('Academy/Cohort owner-Group verification', () => {
     it('rejects PATCH /groups/:groupId/cohorts/:cohortId when the cohort belongs to a different Group - 404 COHORT_NOT_FOUND', async () => {
-      const groupA = await createGroup(OWNER_TOKEN, {
+      const groupA = await createGroup({
         name: 'Owner Verify Group A',
       });
-      const groupB = await createGroup(OWNER_TOKEN, {
+      const groupB = await createGroup({
         name: 'Owner Verify Group B',
       });
-      const cohortInA = await createCohort(OWNER_TOKEN, groupA.id, 'Kids');
+      const cohortInA = await createCohort(groupA.token, groupA.id, 'Kids');
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${groupB.id}/cohorts/${cohortInA.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${groupA.token}`)
           .send({ name: 'Hijacked', description: null })
           .expect(404),
       );
@@ -685,22 +686,22 @@ describe('Role Assignments (e2e)', () => {
       const stillIntact = await bodyOf<CohortResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${groupA.id}/cohorts/${cohortInA.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${groupA.token}`)
           .expect(200),
       );
       expect(stillIntact.name).toBe('Kids');
     });
 
     it('authorizes Cohort management in a Section via a Role Assignment scoped to that Section', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Cohort Auth Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Cohort Auth Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
       await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.ADMIN,
@@ -716,7 +717,7 @@ describe('Role Assignments (e2e)', () => {
 
   describe('Role Assignment inactivity after membership ends', () => {
     it('a Role Assignment grants no effective access once its Section membership is removed - the row itself is never deleted', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Inactivity Root',
       });
       // Private - the final 404 assertion below is about a removed
@@ -724,17 +725,17 @@ describe('Role Assignments (e2e)', () => {
       // fallback (RoleAssignmentsService.resolvePublicView), which would
       // otherwise let MEMBER_TOKEN keep reading a Public Section's GET
       // even after their membership/roles are gone.
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Inactivity Section',
         isPublic: false,
       });
       const membership = await addSectionMember(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
       );
       await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.ADMIN,
@@ -747,7 +748,7 @@ describe('Role Assignments (e2e)', () => {
 
       await request(app.getHttpServer())
         .delete(`/api/v1/sections/${section.id}/members/${membership.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${root.token}`)
         .expect(204);
 
       // Every Role Assignment row still exists (soft-revoked, never
@@ -772,13 +773,13 @@ describe('Role Assignments (e2e)', () => {
 
   describe('Role Assignment management', () => {
     it('lists and fetches Role Assignments for a Section', async () => {
-      const root = await createGroup(OWNER_TOKEN, { name: 'List Root' });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const root = await createGroup({ name: 'List Root' });
+      const section = await createSection(root.token, root.id, {
         name: 'List Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
       const created = await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.INSTRUCTOR,
@@ -787,7 +788,7 @@ describe('Role Assignments (e2e)', () => {
       const list = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       expect(list.map((item) => item.id)).toContain(created.id);
@@ -795,20 +796,20 @@ describe('Role Assignments (e2e)', () => {
       const fetched = await bodyOf<RoleAssignmentResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/role-assignments/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       expect(fetched.role).toBe(GroupRole.INSTRUCTOR);
     });
 
     it('granting an additional Role never "changes" an existing one - both coexist, and there is no PATCH to change one directly', async () => {
-      const root = await createGroup(OWNER_TOKEN, { name: 'Change Root' });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const root = await createGroup({ name: 'Change Root' });
+      const section = await createSection(root.token, root.id, {
         name: 'Change Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
       const created = await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.INSTRUCTOR,
@@ -818,12 +819,12 @@ describe('Role Assignments (e2e)', () => {
       // of one another (grantRole/revokeRole only).
       await request(app.getHttpServer())
         .patch(`/api/v1/sections/${section.id}/role-assignments/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${root.token}`)
         .send({ role: GroupRole.ASSISTANT })
         .expect(404);
 
       await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.ASSISTANT,
@@ -832,7 +833,7 @@ describe('Role Assignments (e2e)', () => {
       const roleAssignments = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       const rolesForMember = roleAssignments
@@ -850,13 +851,13 @@ describe('Role Assignments (e2e)', () => {
     });
 
     it('revokes a non-MEMBER Role Assignment', async () => {
-      const root = await createGroup(OWNER_TOKEN, { name: 'Revoke Root' });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const root = await createGroup({ name: 'Revoke Root' });
+      const section = await createSection(root.token, root.id, {
         name: 'Revoke Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
       const created = await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.INSTRUCTOR,
@@ -864,13 +865,13 @@ describe('Role Assignments (e2e)', () => {
 
       await request(app.getHttpServer())
         .delete(`/api/v1/sections/${section.id}/role-assignments/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${root.token}`)
         .expect(204);
 
       const fetched = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       // The revoked row is soft-revoked, not deleted - the list only shows
@@ -880,14 +881,14 @@ describe('Role Assignments (e2e)', () => {
     });
 
     it('forbids a Section MEMBER (no GROUP_EDIT there) from granting Roles in that Section', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Forbid Grant Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Forbid Grant Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
-      await addSectionMember(OWNER_TOKEN, section.id, SECOND_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, SECOND_TOKEN);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
@@ -905,13 +906,13 @@ describe('Role Assignments (e2e)', () => {
 
   describe('MEMBER is the base role of every Section, and can never be revoked directly', () => {
     it('joining a Section always grants MEMBER, and an additionally-granted Role coexists with it', async () => {
-      const root = await createGroup(OWNER_TOKEN, { name: 'Base Role Root' });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const root = await createGroup({ name: 'Base Role Root' });
+      const section = await createSection(root.token, root.id, {
         name: 'Base Role Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
       await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.ADMIN,
@@ -920,7 +921,7 @@ describe('Role Assignments (e2e)', () => {
       const roleAssignments = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       const rolesForMember = roleAssignments
@@ -935,15 +936,15 @@ describe('Role Assignments (e2e)', () => {
     });
 
     it('rejects revoking MEMBER directly, even when another Role is still held there - 409 CANNOT_REMOVE_MEMBER_ROLE', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Base Role Guard Root',
       });
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Base Role Guard Section',
       });
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(root.token, section.id, MEMBER_TOKEN);
       await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.ADMIN,
@@ -951,7 +952,7 @@ describe('Role Assignments (e2e)', () => {
       const roleAssignments = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       const memberRoleAssignment = roleAssignments.find(
@@ -965,30 +966,30 @@ describe('Role Assignments (e2e)', () => {
           .delete(
             `/api/v1/sections/${section.id}/role-assignments/${memberRoleAssignment?.id}`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(409),
       );
       expect(response.code).toBe('CANNOT_REMOVE_MEMBER_ROLE');
     });
 
     it('still rejects revoking MEMBER directly even once every other Role has been revoked - use leave/remove/ban instead', async () => {
-      const root = await createGroup(OWNER_TOKEN, {
+      const root = await createGroup({
         name: 'Base Role Leave Root',
       });
       // Private - the final 404 assertion below is about a removed
       // membership granting no effective access, not the Public-view
       // fallback (RoleAssignmentsService.resolvePublicView).
-      const section = await createSection(OWNER_TOKEN, root.id, {
+      const section = await createSection(root.token, root.id, {
         name: 'Base Role Leave Section',
         isPublic: false,
       });
       const membership = await addSectionMember(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
       );
       const adminAssignment = await grantSectionRole(
-        OWNER_TOKEN,
+        root.token,
         section.id,
         MEMBER_TOKEN,
         GroupRole.ADMIN,
@@ -996,7 +997,7 @@ describe('Role Assignments (e2e)', () => {
       const roleAssignmentsBefore = await bodyOf<RoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/role-assignments`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(200),
       );
       const memberRoleAssignment = roleAssignmentsBefore.find(
@@ -1009,7 +1010,7 @@ describe('Role Assignments (e2e)', () => {
         .delete(
           `/api/v1/sections/${section.id}/role-assignments/${adminAssignment.id}`,
         )
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${root.token}`)
         .expect(204);
 
       const response = await bodyOf<HttpErrorResponse>(
@@ -1017,7 +1018,7 @@ describe('Role Assignments (e2e)', () => {
           .delete(
             `/api/v1/sections/${section.id}/role-assignments/${memberRoleAssignment?.id}`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${root.token}`)
           .expect(409),
       );
       expect(response.code).toBe('CANNOT_REMOVE_MEMBER_ROLE');
@@ -1026,7 +1027,7 @@ describe('Role Assignments (e2e)', () => {
       // this - it revokes MEMBER as a side effect of ending the membership.
       await request(app.getHttpServer())
         .delete(`/api/v1/sections/${section.id}/members/${membership.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${root.token}`)
         .expect(204);
 
       await request(app.getHttpServer())

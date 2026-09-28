@@ -14,6 +14,7 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { PaginatedResponse } from '../src/common/pagination/pagination.types';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
@@ -23,6 +24,7 @@ import { CommunitySearchResultDto } from '../src/discovery/dto/community-search-
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
@@ -137,8 +139,22 @@ describe('Discovery search (e2e)', () => {
         { id: { $in: createdGroupIds } },
         { parentGroup: null },
       );
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
-      await cleanup.nativeDelete(User, { clerkUserId: OWNER_CLERK_ID });
+      // FIXTURE_CLERK_PROFILES, not just OWNER_CLERK_ID - createGroup (via
+      // createFreshGroupOwner) registers a fresh fixture user per call,
+      // mutating FIXTURE_CLERK_PROFILES in place, so it must be read fresh
+      // here to catch every one of them (OWNER_TOKEN itself no longer
+      // creates any Group - see createGroup's own comment - but stays a
+      // registered, valid "search viewer" identity throughout).
+      await cleanup.nativeDelete(User, {
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
+      });
     });
   });
 
@@ -164,28 +180,36 @@ describe('Discovery search (e2e)', () => {
     };
   }
 
+  // No fixed "OWNER_TOKEN" as a Group creator - GroupsService.create now
+  // allows at most one active FormalGroupAffiliation per user, and this
+  // file needs many independent Groups as search fixtures, so this mints a
+  // fresh, throwaway owner per call instead. OWNER_TOKEN itself stays a
+  // stable, valid identity throughout - it's now only ever used as the
+  // *viewer* performing each search() call below, a role untouched by this
+  // constraint (discovery search results are the same regardless of who's
+  // searching).
   async function createGroup(
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'discovery',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   async function createSection(
-    groupId: string,
+    group: { id: string; token: string },
     overrides: Record<string, unknown> = {},
   ): Promise<SectionResponseDto> {
     const created = await bodyOf<SectionResponseDto>(
       request(app.getHttpServer())
-        .post(`/api/v1/groups/${groupId}/sections`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .post(`/api/v1/groups/${group.id}/sections`)
+        .set('Authorization', `Bearer ${group.token}`)
         .send(sectionPayload(overrides))
         .expect(201),
     );
@@ -218,7 +242,7 @@ describe('Discovery search (e2e)', () => {
     const group = await createGroup({
       name: `${uniqueSuffix} FindByName`,
     });
-    await createSection(group.id);
+    await createSection(group);
 
     const res = await bodyOf<PaginatedResponse<CommunitySearchResultDto>>(
       search(`name=${encodeURIComponent('findbyname')}`).expect(200),
@@ -237,7 +261,7 @@ describe('Discovery search (e2e)', () => {
     const group = await createGroup({
       name: `${uniqueSuffix} ParentForSection`,
     });
-    const section = await createSection(group.id, {
+    const section = await createSection(group, {
       name: `${uniqueSuffix} FindableSection`,
     });
 
@@ -257,7 +281,7 @@ describe('Discovery search (e2e)', () => {
     const root = await createGroup({
       name: `${uniqueSuffix} CountryFilter Root`,
     });
-    const section = await createSection(root.id, {
+    const section = await createSection(root, {
       name: `${uniqueSuffix} CountryFilter`,
       country: 'DE',
       city: 'Berlin',
@@ -280,7 +304,7 @@ describe('Discovery search (e2e)', () => {
 
   it('filters by city (partial, case-insensitive) - Group has no location, so only a Section can match', async () => {
     const root = await createGroup({ name: `${uniqueSuffix} CityFilter Root` });
-    const section = await createSection(root.id, {
+    const section = await createSection(root, {
       name: `${uniqueSuffix} CityFilter`,
       country: 'PL',
       city: 'Warsaw',
@@ -298,7 +322,7 @@ describe('Discovery search (e2e)', () => {
     const group = await createGroup({
       name: `${uniqueSuffix} TypeFilterParent`,
     });
-    const section = await createSection(group.id, {
+    const section = await createSection(group, {
       name: `${uniqueSuffix} TypeFilterChild`,
     });
 
@@ -488,7 +512,7 @@ describe('Discovery search (e2e)', () => {
       const root = await createGroup({
         name: `${uniqueSuffix} CityContractMatch Root`,
       });
-      const created = await createSection(root.id, {
+      const created = await createSection(root, {
         name: `${uniqueSuffix} CityContractMatch`,
         country: 'BR',
         city: saoPaulo!.name,
@@ -512,14 +536,14 @@ describe('Discovery search (e2e)', () => {
 
       const [first, second] = piaskiEntries;
       const root = await createGroup({ name: `${uniqueSuffix} Piaski Root` });
-      const createdFirst = await createSection(root.id, {
+      const createdFirst = await createSection(root, {
         name: `${uniqueSuffix} Piaski First`,
         country: 'PL',
         city: first.name,
         region: first.region,
         geonameId: first.geonameId,
       });
-      const createdSecond = await createSection(root.id, {
+      const createdSecond = await createSection(root, {
         name: `${uniqueSuffix} Piaski Second`,
         country: 'PL',
         city: second.name,
@@ -546,7 +570,7 @@ describe('Discovery search (e2e)', () => {
         name: `${uniqueSuffix} CoordsCreate Root`,
       });
 
-      const created = await createSection(root.id, {
+      const created = await createSection(root, {
         name: `${uniqueSuffix} CoordsCreate`,
         country: 'BR',
         city: 'São Paulo',
@@ -565,7 +589,7 @@ describe('Discovery search (e2e)', () => {
         name: `${uniqueSuffix} CoordsIgnore Root`,
       });
 
-      const created = await createSection(root.id, {
+      const created = await createSection(root, {
         name: `${uniqueSuffix} CoordsIgnore`,
         country: 'BR',
         city: 'São Paulo',
@@ -587,7 +611,7 @@ describe('Discovery search (e2e)', () => {
       const root = await createGroup({
         name: `${uniqueSuffix} CoordsUpdate Root`,
       });
-      const created = await createSection(root.id, {
+      const created = await createSection(root, {
         name: `${uniqueSuffix} CoordsUpdate`,
         country: 'BR',
         city: 'São Paulo',
@@ -628,7 +652,7 @@ describe('Discovery search (e2e)', () => {
       const root = await createGroup({
         name: `${uniqueSuffix} CurrencySeed Root`,
       });
-      const created = await createSection(root.id, {
+      const created = await createSection(root, {
         name: `${uniqueSuffix} CurrencySeed`,
         // Deliberately absent from CreateSectionRequest on the real
         // frontend, and rejected outright by the schema if sent anyway

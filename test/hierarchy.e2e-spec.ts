@@ -23,9 +23,11 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { HierarchyInvitation } from '../src/groups/entities/hierarchy-invitation.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
@@ -86,8 +88,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     primaryEmailAddress: { emailAddress: 'hier.invite.outsider@example.com' },
   },
 };
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -200,11 +200,21 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
         { id: { $in: createdGroupOrSectionIds } },
         { parentGroup: null },
       );
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupOrSectionIds },
+      });
       await cleanup.nativeDelete(Group, {
         id: { $in: createdGroupOrSectionIds },
       });
+      // FIXTURE_CLERK_PROFILES, not a frozen snapshot - createGroupOwnedByA
+      // (via createFreshGroupOwner) registers a fresh fixture user per
+      // call, mutating FIXTURE_CLERK_PROFILES in place, so it must be read
+      // fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -243,6 +253,55 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     );
     createdGroupOrSectionIds.push(created.id);
     return created;
+  }
+
+  // The direct-attach/cycle/move/breadcrumb/audit-log tests below need
+  // TOKEN_A to hold real OWNER authority on *several* Group nodes at once
+  // within a single test (HIERARCHY_MANAGE - see
+  // hierarchy-management.service.ts's assertHierarchyManage - is granted to
+  // OWNER only, and is required on *both* the child and the parent to
+  // attach/move/detach). TOKEN_A itself can no longer call createGroup()
+  // more than once (GroupsService.create now allows at most one active
+  // FormalGroupAffiliation per user - see USER_ALREADY_HAS_FORMAL_GROUP),
+  // and TOKEN_A is reused across every `it()` in this whole file, so even
+  // its *first* createGroup(TOKEN_A, ...) call in file order would leave
+  // every later one 409ing.
+  //
+  // Fix: a throwaway fixture user creates the Group for real (their own,
+  // genuine FormalGroupAffiliation - never TOKEN_A's), grants TOKEN_A
+  // ADMIN, then transfers OWNERship to TOKEN_A (transferOwnership never
+  // touches FormalGroupAffiliation - see role-assignments.service.ts) -
+  // TOKEN_A ends up the real OWNER (and thus HIERARCHY_MANAGE holder) of
+  // as many Groups as a test needs, without ever spending its own
+  // one-per-user formal-group slot on any of them. `founderUser` stays the
+  // throwaway user (permanent, never reassigned by transferOwnership) - no
+  // test in this file asserts founderUser, so that's inert here.
+  async function createGroupOwnedByA(
+    overrides: Record<string, unknown> = {},
+  ): Promise<GroupResponseDto> {
+    const fresh = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      namePrefix: 'hier-a-owned',
+      onGroupCreated: (id) => createdGroupOrSectionIds.push(id),
+      groupOverrides: groupPayload(overrides),
+    });
+    const actorAUserId = localUserIdByToken.get(TOKEN_A);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/groups/${fresh.group.id}/role-assignments`)
+      .set('Authorization', `Bearer ${fresh.token}`)
+      .send({ userId: actorAUserId, role: 'ADMIN' })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/groups/${fresh.group.id}/transfer-ownership`)
+      .set('Authorization', `Bearer ${fresh.token}`)
+      .send({ newOwnerUserId: actorAUserId })
+      .expect(201);
+
+    return fresh.group;
   }
 
   function sectionPayload(
@@ -310,8 +369,8 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
 
   describe('direct attach: Group <-> Group and Group <-> Section', () => {
     it('attaches a standalone Group as a child of another Group', async () => {
-      const parent = await createGroup(TOKEN_A, { name: 'Attach Parent A' });
-      const child = await createGroup(TOKEN_A, { name: 'Attach Child A' });
+      const parent = await createGroupOwnedByA({ name: 'Attach Parent A' });
+      const child = await createGroupOwnedByA({ name: 'Attach Child A' });
 
       const attached = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
@@ -334,7 +393,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('attaches a standalone Section under a Group', async () => {
-      const parent = await createGroup(TOKEN_A, {
+      const parent = await createGroupOwnedByA({
         name: 'Attach Section Parent',
       });
       const section = await createStandaloneSection(TOKEN_A, {
@@ -362,8 +421,8 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('a Group can contain both child Groups and Sections at the same time', async () => {
-      const parent = await createGroup(TOKEN_A, { name: 'Mixed Parent' });
-      const childGroup = await createGroup(TOKEN_A, {
+      const parent = await createGroupOwnedByA({ name: 'Mixed Parent' });
+      const childGroup = await createGroupOwnedByA({
         name: 'Mixed Child Group',
       });
       const childSection = await createSection(TOKEN_A, parent.id, {
@@ -388,7 +447,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('rejects direct attach when the actor has no rights on the child (owned by someone else)', async () => {
-      const parent = await createGroup(TOKEN_A, { name: 'No Rights Parent' });
+      const parent = await createGroupOwnedByA({ name: 'No Rights Parent' });
       const foreignSection = await createStandaloneSection(TOKEN_B, {
         name: 'Foreign Section',
       });
@@ -418,7 +477,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
       const parentSection = await createStandaloneSection(TOKEN_A, {
         name: 'Would-be Parent Section',
       });
-      const orphanGroup = await createGroup(TOKEN_A, { name: 'Orphan Group' });
+      const orphanGroup = await createGroupOwnedByA({ name: 'Orphan Group' });
 
       const response = await request(app.getHttpServer())
         .post(`/api/v1/groups/${orphanGroup.id}/parent`)
@@ -433,7 +492,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
 
   describe('self-parent and cycle guards', () => {
     it('rejects a Group attaching itself as its own parent', async () => {
-      const group = await createGroup(TOKEN_A, { name: 'Self Parent Group' });
+      const group = await createGroupOwnedByA({ name: 'Self Parent Group' });
 
       const response = await request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/parent`)
@@ -446,8 +505,8 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('rejects a direct two-node cycle (A -> B, then B -> A)', async () => {
-      const a = await createGroup(TOKEN_A, { name: 'Cycle A' });
-      const b = await createGroup(TOKEN_A, { name: 'Cycle B' });
+      const a = await createGroupOwnedByA({ name: 'Cycle A' });
+      const b = await createGroupOwnedByA({ name: 'Cycle B' });
 
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${b.id}/parent`)
@@ -466,9 +525,9 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('rejects a multi-level cycle (A -> B -> C, then C -> A)', async () => {
-      const a = await createGroup(TOKEN_A, { name: 'Multi Cycle A' });
-      const b = await createGroup(TOKEN_A, { name: 'Multi Cycle B' });
-      const c = await createGroup(TOKEN_A, { name: 'Multi Cycle C' });
+      const a = await createGroupOwnedByA({ name: 'Multi Cycle A' });
+      const b = await createGroupOwnedByA({ name: 'Multi Cycle B' });
+      const c = await createGroupOwnedByA({ name: 'Multi Cycle C' });
 
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${b.id}/parent`)
@@ -492,11 +551,11 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('allows re-parenting a Group to an unrelated Group (not a cycle)', async () => {
-      const oldParent = await createGroup(TOKEN_A, { name: 'Old Parent' });
-      const newParent = await createGroup(TOKEN_A, {
+      const oldParent = await createGroupOwnedByA({ name: 'Old Parent' });
+      const newParent = await createGroupOwnedByA({
         name: 'New Unrelated Parent',
       });
-      const child = await createGroup(TOKEN_A, { name: 'Reparented Child' });
+      const child = await createGroupOwnedByA({ name: 'Reparented Child' });
 
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${child.id}/parent`)
@@ -517,8 +576,8 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
 
   describe('move and detach', () => {
     it('detaches a Group, making it a root Group again', async () => {
-      const parent = await createGroup(TOKEN_A, { name: 'Detach Parent' });
-      const child = await createGroup(TOKEN_A, { name: 'Detach Child' });
+      const parent = await createGroupOwnedByA({ name: 'Detach Parent' });
+      const child = await createGroupOwnedByA({ name: 'Detach Child' });
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${child.id}/parent`)
         .set('Authorization', `Bearer ${TOKEN_A}`)
@@ -542,7 +601,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('rejects detaching a Group that has no parent to begin with', async () => {
-      const root = await createGroup(TOKEN_A, { name: 'Already Root' });
+      const root = await createGroupOwnedByA({ name: 'Already Root' });
 
       const response = await request(app.getHttpServer())
         .delete(`/api/v1/groups/${root.id}/parent`)
@@ -552,7 +611,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('a Group stays a Group and a Section stays a Section after attach and detach', async () => {
-      const parent = await createGroup(TOKEN_A, {
+      const parent = await createGroupOwnedByA({
         name: 'Type Immutability Parent',
       });
       const section = await createStandaloneSection(TOKEN_A, {
@@ -581,7 +640,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('never changes SectionMembership or RoleAssignments as a side effect of attach/detach/move', async () => {
-      const parent = await createGroup(TOKEN_A, {
+      const parent = await createGroupOwnedByA({
         name: 'No Side Effects Parent',
       });
       const section = await createStandaloneSection(TOKEN_A, {
@@ -660,7 +719,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
 
   describe('permission isolation - no inheritance from parent to child', () => {
     it("a parent Group's OWNER cannot detach/move a child Section they do not own themselves (IDOR)", async () => {
-      const parent = await createGroup(TOKEN_A, {
+      const parent = await createGroupOwnedByA({
         name: 'No Inheritance Parent',
       });
       const childSection = await createStandaloneSection(TOKEN_B, {
@@ -709,7 +768,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
 
   describe('hierarchy invitations', () => {
     it('creates an invitation for a target the parent-admin does not control, without mutating anything', async () => {
-      const parent = await createGroup(TOKEN_A, { name: 'Invite Parent' });
+      const parent = await createGroupOwnedByA({ name: 'Invite Parent' });
       const target = await createStandaloneSection(TOKEN_B, {
         name: 'Invite Target',
       });
@@ -743,7 +802,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('rejects a duplicate pending invitation for the same relation', async () => {
-      const parent = await createGroup(TOKEN_A, { name: 'Dup Invite Parent' });
+      const parent = await createGroupOwnedByA({ name: 'Dup Invite Parent' });
       const target = await createStandaloneSection(TOKEN_B, {
         name: 'Dup Invite Target',
       });
@@ -765,7 +824,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('accepts an invitation and attaches the target - only the target OWNER may accept', async () => {
-      const parent = await createGroup(TOKEN_A, { name: 'Accept Parent' });
+      const parent = await createGroupOwnedByA({ name: 'Accept Parent' });
       const target = await createStandaloneSection(TOKEN_B, {
         name: 'Accept Target',
       });
@@ -802,7 +861,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('rejects accepting an already-terminal invitation, and a concurrent double-accept only succeeds once', async () => {
-      const parent = await createGroup(TOKEN_A, { name: 'Race Parent' });
+      const parent = await createGroupOwnedByA({ name: 'Race Parent' });
       const target = await createStandaloneSection(TOKEN_B, {
         name: 'Race Target',
       });
@@ -828,7 +887,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('rejects accepting after the target became archived in the meantime', async () => {
-      const parent = await createGroup(TOKEN_A, {
+      const parent = await createGroupOwnedByA({
         name: 'Archived Target Parent',
       });
       const target = await createStandaloneSection(TOKEN_B, {
@@ -857,7 +916,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('rejects accepting an invitation through the wrong target id in the URL (IDOR)', async () => {
-      const parent = await createGroup(TOKEN_A, { name: 'IDOR Parent' });
+      const parent = await createGroupOwnedByA({ name: 'IDOR Parent' });
       const realTarget = await createStandaloneSection(TOKEN_B, {
         name: 'IDOR Real Target',
       });
@@ -886,7 +945,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('rejects an invitation - no hierarchy relationship is created', async () => {
-      const parent = await createGroup(TOKEN_A, { name: 'Reject Parent' });
+      const parent = await createGroupOwnedByA({ name: 'Reject Parent' });
       const target = await createStandaloneSection(TOKEN_B, {
         name: 'Reject Target',
       });
@@ -923,7 +982,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('cancels a pending invitation from the parent side - no relationship is created', async () => {
-      const parent = await createGroup(TOKEN_A, { name: 'Cancel Parent' });
+      const parent = await createGroupOwnedByA({ name: 'Cancel Parent' });
       const target = await createStandaloneSection(TOKEN_B, {
         name: 'Cancel Target',
       });
@@ -965,8 +1024,8 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
 
   describe('breadcrumbs and parent chain', () => {
     it('returns deterministic root-first breadcrumbs for a multi-level Group -> Group -> Section chain', async () => {
-      const brasil = await createGroup(TOKEN_A, { name: 'Breadcrumb Brasil' });
-      const poland = await createGroup(TOKEN_A, { name: 'Breadcrumb Poland' });
+      const brasil = await createGroupOwnedByA({ name: 'Breadcrumb Brasil' });
+      const poland = await createGroupOwnedByA({ name: 'Breadcrumb Poland' });
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${poland.id}/parent`)
         .set('Authorization', `Bearer ${TOKEN_A}`)
@@ -1001,7 +1060,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
 
     it('returns a single-item breadcrumb and null parent for a standalone entity', async () => {
-      const standalone = await createGroup(TOKEN_A, { name: 'Lonely Root' });
+      const standalone = await createGroupOwnedByA({ name: 'Lonely Root' });
 
       const breadcrumbs = await bodyOf<HierarchyEntityRefDto[]>(
         request(app.getHttpServer())
@@ -1024,17 +1083,17 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
 
   describe('audit log', () => {
     it('logs attach/detach under the exact parent Group, and invitations under the exact parent Group too - never a resolved root', async () => {
-      const grandparent = await createGroup(TOKEN_A, {
+      const grandparent = await createGroupOwnedByA({
         name: 'Audit Grandparent',
       });
-      const parent = await createGroup(TOKEN_A, { name: 'Audit Parent' });
+      const parent = await createGroupOwnedByA({ name: 'Audit Parent' });
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${parent.id}/parent`)
         .set('Authorization', `Bearer ${TOKEN_A}`)
         .send({ parentGroupId: grandparent.id })
         .expect(201);
 
-      const child = await createGroup(TOKEN_A, { name: 'Audit Child' });
+      const child = await createGroupOwnedByA({ name: 'Audit Child' });
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${child.id}/parent`)
         .set('Authorization', `Bearer ${TOKEN_A}`)

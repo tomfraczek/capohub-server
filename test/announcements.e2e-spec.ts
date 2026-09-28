@@ -45,6 +45,7 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { AnnouncementResponseDto } from '../src/announcements/dto/announcement-response.dto';
 import { AnnouncementListResult } from '../src/announcements/announcements.service';
 import { Announcement } from '../src/announcements/entities/announcement.entity';
@@ -54,6 +55,7 @@ import { RecipientGroupResponseDto } from '../src/groups/dto/recipient-group-res
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { RecipientGroupMember } from '../src/groups/entities/recipient-group-member.entity';
@@ -62,7 +64,10 @@ import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
 import { User } from '../src/users/entities/user.entity';
 
-const OWNER_TOKEN = 'valid-ann-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const ADMIN_TOKEN = 'valid-ann-admin-token';
 const MEMBER_TOKEN = 'valid-ann-member-token';
 const SECTION_MEMBER_TOKEN = 'valid-ann-section-member-token';
@@ -83,7 +88,6 @@ const GLOBAL_PAGINATION_TOKEN = 'valid-ann-global-pagination-token';
 const GLOBAL_TIEBREAK_TOKEN = 'valid-ann-global-tiebreak-token';
 
 const TOKENS = [
-  OWNER_TOKEN,
   ADMIN_TOKEN,
   MEMBER_TOKEN,
   SECTION_MEMBER_TOKEN,
@@ -118,8 +122,6 @@ for (const token of TOKENS) {
     primaryEmailAddress: { emailAddress: `ann.${suffix}@example.com` },
   };
 }
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -239,9 +241,19 @@ describe('Announcements (e2e)', () => {
         { id: { $in: createdGroupIds } },
         { parentGroup: null },
       );
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -267,19 +279,26 @@ describe('Announcements (e2e)', () => {
     };
   }
 
+  // No fixed "OWNER_TOKEN" as a Group creator anymore - GroupsService.create
+  // now allows at most one active FormalGroupAffiliation per user (see
+  // USER_ALREADY_HAS_FORMAL_GROUP), and this file needs many independent
+  // Groups across its tests, so this mints a fresh, throwaway owner per
+  // call instead (see createFreshGroupOwner's own comment). The returned
+  // object carries the full GroupResponseDto directly (so `.id`/`.name`/...
+  // keep working exactly as before) plus `.token`/`.userId` for callers
+  // that need to act as its owner afterward.
   async function createGroup(
-    token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'ann',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   async function createSection(
@@ -342,27 +361,31 @@ describe('Announcements (e2e)', () => {
       .expect(201);
   }
 
+  // `org.token` (a fresh, throwaway owner - see createGroup's own comment)
+  // is always included in the returned object, even where a caller only
+  // destructures `{ section }`, so "act as this org's owner" is always
+  // reachable via `org.token` for the rest of that test.
   async function createOrgWithSection(): Promise<{
-    org: GroupResponseDto;
+    org: GroupResponseDto & { token: string; userId: string };
     section: GroupResponseDto;
   }> {
-    const org = await createGroup(OWNER_TOKEN);
-    await grantGroupRole(OWNER_TOKEN, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
-    await grantGroupRole(OWNER_TOKEN, org.id, MEMBER_TOKEN, GroupRole.ADMIN);
+    const org = await createGroup();
+    await grantGroupRole(org.token, org.id, ADMIN_TOKEN, GroupRole.ADMIN);
+    await grantGroupRole(org.token, org.id, MEMBER_TOKEN, GroupRole.ADMIN);
     await grantGroupRole(
-      OWNER_TOKEN,
+      org.token,
       org.id,
       SECTION_MEMBER_TOKEN,
       GroupRole.ADMIN,
     );
-    await grantGroupRole(OWNER_TOKEN, org.id, RECIPIENT_TOKEN, GroupRole.ADMIN);
+    await grantGroupRole(org.token, org.id, RECIPIENT_TOKEN, GroupRole.ADMIN);
 
-    const section = await createSection(OWNER_TOKEN, org.id);
+    const section = await createSection(org.token, org.id);
     // SECTION_MEMBER_TOKEN additionally joins the Section itself - this is
     // what actually matters for the Section-scoped visibility tests below
     // (their Group-level ADMIN above grants nothing on the Section - no
     // inheritance).
-    await addSectionMember(OWNER_TOKEN, section.id, SECTION_MEMBER_TOKEN);
+    await addSectionMember(org.token, section.id, SECTION_MEMBER_TOKEN);
 
     return { org, section };
   }
@@ -415,7 +438,7 @@ describe('Announcements (e2e)', () => {
     it('is visible to any active member of the Group, and not to an outsider', async () => {
       const { org } = await createOrgWithSection();
       const created = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'Group-wide notice',
         }).expect(201),
       );
@@ -441,9 +464,9 @@ describe('Announcements (e2e)', () => {
 
   describe('recipientType SECTION', () => {
     it('is visible only to members of that exact Section, not every root-org member', async () => {
-      const { section } = await createOrgWithSection();
+      const { org, section } = await createOrgWithSection();
       const created = await bodyOf<AnnouncementResponseDto>(
-        createSectionAnnouncement(OWNER_TOKEN, section.id, {
+        createSectionAnnouncement(org.token, section.id, {
           title: 'Section-only notice',
         }).expect(201),
       );
@@ -468,13 +491,13 @@ describe('Announcements (e2e)', () => {
 
   describe('recipientType RECIPIENT_GROUP', () => {
     async function createRecipientGroupWith(
-      org: GroupResponseDto,
+      org: GroupResponseDto & { token: string },
       memberTokens: string[],
     ): Promise<RecipientGroupResponseDto> {
       return bodyOf<RecipientGroupResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${org.id}/recipient-groups`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${org.token}`)
           .send({
             name: `Trenerzy ${Date.now()}-${Math.random()}`,
             memberUserIds: memberTokens.map((t) => localUserIdByToken.get(t)),
@@ -490,7 +513,7 @@ describe('Announcements (e2e)', () => {
       ]);
 
       const created = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'For trainers only',
           recipientGroupId: recipientGroup.id,
         }).expect(201),
@@ -510,7 +533,7 @@ describe('Announcements (e2e)', () => {
       // Add MEMBER_TOKEN to the Recipient Group *after* publish.
       await request(app.getHttpServer())
         .patch(`/api/v1/groups/${org.id}/recipient-groups/${recipientGroup.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .send({
           name: recipientGroup.name,
           memberUserIds: [
@@ -538,24 +561,24 @@ describe('Announcements (e2e)', () => {
         .post(
           `/api/v1/groups/${org.id}/recipient-groups/${recipientGroup.id}/deactivate`,
         )
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(201);
 
-      await createAnnouncement(OWNER_TOKEN, org.id, {
+      await createAnnouncement(org.token, org.id, {
         recipientGroupId: recipientGroup.id,
       }).expect(409);
     });
 
     it('an OWNER/ADMIN with archive access can open and mark-read an expired RECIPIENT_GROUP Announcement even when they were never in its snapshot', async () => {
       const { org } = await createOrgWithSection();
-      // OWNER_TOKEN is deliberately excluded from the Recipient Group -
+      // org.token is deliberately excluded from the Recipient Group -
       // regression test for the archive oversight rule: archive access
       // must never require snapshot membership too (see assertReadable).
       const recipientGroup = await createRecipientGroupWith(org, [
         RECIPIENT_TOKEN,
       ]);
       const created = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'Owner never a recipient',
           recipientGroupId: recipientGroup.id,
           expiresAt: futureIso(1 / 86400),
@@ -567,19 +590,19 @@ describe('Announcements (e2e)', () => {
       const archive = await bodyOf<AnnouncementListResult>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${org.id}/announcements/archive`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${org.token}`)
           .expect(200),
       );
       expect(archive.items.some((item) => item.id === created.id)).toBe(true);
 
       await request(app.getHttpServer())
         .get(`/api/v1/groups/${org.id}/announcements/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(200);
 
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${org.id}/announcements/${created.id}/read`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(204);
     });
   });
@@ -590,11 +613,11 @@ describe('Announcements (e2e)', () => {
 
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${org.id}/announcements`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .send({ title: 'X', body: 'Y', isPinned: false })
         .expect(400);
 
-      await createAnnouncement(OWNER_TOKEN, org.id, {
+      await createAnnouncement(org.token, org.id, {
         expiresAt: pastIso(),
       }).expect(400);
     });
@@ -611,7 +634,7 @@ describe('Announcements (e2e)', () => {
       // separately proves the Section's own Role, not the Group's, is what
       // authorizes creation here (no inheritance).
       await addSectionMember(
-        OWNER_TOKEN,
+        org.token,
         section.id,
         ADMIN_TOKEN,
         GroupRole.ADMIN,
@@ -625,7 +648,7 @@ describe('Announcements (e2e)', () => {
     it('sendPushNotification is not part of the public contract - sending it has no visible effect and the response never echoes it', async () => {
       const { org } = await createOrgWithSection();
       const created = await bodyOf<Record<string, unknown>>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           sendPushNotification: true,
         }).expect(201),
       );
@@ -638,25 +661,25 @@ describe('Announcements (e2e)', () => {
       const { org } = await createOrgWithSection();
 
       const first = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'Unpinned older',
           isPinned: false,
         }).expect(201),
       );
       const secondPinned = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'Pinned A',
           isPinned: true,
         }).expect(201),
       );
       const thirdPinned = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'Pinned B (newest pinned)',
           isPinned: true,
         }).expect(201),
       );
       const fourth = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'Unpinned newer',
           isPinned: false,
         }).expect(201),
@@ -665,7 +688,7 @@ describe('Announcements (e2e)', () => {
       const list = await bodyOf<AnnouncementListResult>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${org.id}/announcements`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${org.token}`)
           .expect(200),
       );
 
@@ -682,9 +705,9 @@ describe('Announcements (e2e)', () => {
     // Group-scoped Announcement anymore - this is exercised on the Section
     // instead, where MEMBER is a real, distinct, lesser Role.
     it('an expired Announcement disappears from the active list, cannot be opened directly by a plain Section member, but is reachable via detail and the archive by its OWNER', async () => {
-      const { section } = await createOrgWithSection();
+      const { org, section } = await createOrgWithSection();
       const soonToExpire = await bodyOf<AnnouncementResponseDto>(
-        createSectionAnnouncement(OWNER_TOKEN, section.id, {
+        createSectionAnnouncement(org.token, section.id, {
           title: 'Expiring soon',
           expiresAt: futureIso(1 / 86400), // ~1 second from now
         }).expect(201),
@@ -711,7 +734,7 @@ describe('Announcements (e2e)', () => {
 
       await request(app.getHttpServer())
         .get(`/api/v1/sections/${section.id}/announcements/${soonToExpire.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(200);
 
       await request(app.getHttpServer())
@@ -722,7 +745,7 @@ describe('Announcements (e2e)', () => {
       const archive = await bodyOf<AnnouncementListResult>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/announcements/archive`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${org.token}`)
           .expect(200),
       );
       expect(archive.items.some((item) => item.id === soonToExpire.id)).toBe(
@@ -731,9 +754,9 @@ describe('Announcements (e2e)', () => {
     });
 
     it('a plain Section member cannot mark an expired Announcement as read, but its OWNER with archive access can', async () => {
-      const { section } = await createOrgWithSection();
+      const { org, section } = await createOrgWithSection();
       const soonToExpire = await bodyOf<AnnouncementResponseDto>(
-        createSectionAnnouncement(OWNER_TOKEN, section.id, {
+        createSectionAnnouncement(org.token, section.id, {
           title: 'Expiring soon for read test',
           expiresAt: futureIso(1 / 86400),
         }).expect(201),
@@ -752,7 +775,7 @@ describe('Announcements (e2e)', () => {
         .post(
           `/api/v1/sections/${section.id}/announcements/${soonToExpire.id}/read`,
         )
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(204);
     });
   });
@@ -761,7 +784,7 @@ describe('Announcements (e2e)', () => {
     it('a new Announcement has editedAt: null', async () => {
       const { org } = await createOrgWithSection();
       const created = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id).expect(201),
+        createAnnouncement(org.token, org.id).expect(201),
       );
       expect(created.editedAt).toBeNull();
     });
@@ -769,13 +792,13 @@ describe('Announcements (e2e)', () => {
     it('a real content change updates title/body/pin/expiresAt and sets editedAt', async () => {
       const { org } = await createOrgWithSection();
       const created = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id).expect(201),
+        createAnnouncement(org.token, org.id).expect(201),
       );
 
       const updated = await bodyOf<AnnouncementResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${org.id}/announcements/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${org.token}`)
           .send({
             title: 'Updated title',
             body: 'Updated body',
@@ -795,14 +818,14 @@ describe('Announcements (e2e)', () => {
       const { org } = await createOrgWithSection();
       const payload = announcementPayload({ title: 'Stable title' });
       const created = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, payload).expect(201),
+        createAnnouncement(org.token, org.id, payload).expect(201),
       );
       expect(created.editedAt).toBeNull();
 
       const patched = await bodyOf<AnnouncementResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${org.id}/announcements/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${org.token}`)
           .send({
             title: payload.title,
             body: payload.body,
@@ -820,7 +843,7 @@ describe('Announcements (e2e)', () => {
     it('marking as read does not set editedAt', async () => {
       const { org } = await createOrgWithSection();
       const created = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id).expect(201),
+        createAnnouncement(org.token, org.id).expect(201),
       );
 
       await request(app.getHttpServer())
@@ -831,7 +854,7 @@ describe('Announcements (e2e)', () => {
       const afterRead = await bodyOf<AnnouncementResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${org.id}/announcements/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${org.token}`)
           .expect(200),
       );
       expect(afterRead.editedAt).toBeNull();
@@ -842,7 +865,7 @@ describe('Announcements (e2e)', () => {
       const recipientGroup = await bodyOf<RecipientGroupResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${org.id}/recipient-groups`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${org.token}`)
           .send({
             name: `Edit Recipient Test ${Date.now()}`,
             memberUserIds: [localUserIdByToken.get(RECIPIENT_TOKEN)],
@@ -850,7 +873,7 @@ describe('Announcements (e2e)', () => {
           .expect(201),
       );
       const created = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           recipientGroupId: recipientGroup.id,
         }).expect(201),
       );
@@ -858,7 +881,7 @@ describe('Announcements (e2e)', () => {
       const updated = await bodyOf<AnnouncementResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/groups/${org.id}/announcements/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${org.token}`)
           .send({
             title: 'Still trainers only',
             body: created.body,
@@ -893,12 +916,12 @@ describe('Announcements (e2e)', () => {
     it('sets a dedicated deleted state - distinct from expiry, and excluded from every standard read path', async () => {
       const { org } = await createOrgWithSection();
       const created = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id).expect(201),
+        createAnnouncement(org.token, org.id).expect(201),
       );
 
       await request(app.getHttpServer())
         .delete(`/api/v1/groups/${org.id}/announcements/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(204);
 
       const activeList = await bodyOf<AnnouncementListResult>(
@@ -918,7 +941,7 @@ describe('Announcements (e2e)', () => {
       const archive = await bodyOf<AnnouncementListResult>(
         request(app.getHttpServer())
           .get(`/api/v1/groups/${org.id}/announcements/archive`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${org.token}`)
           .expect(200),
       );
       expect(archive.items.some((item) => item.id === created.id)).toBe(false);
@@ -926,45 +949,45 @@ describe('Announcements (e2e)', () => {
       // Not even the OWNER can open it directly anymore.
       await request(app.getHttpServer())
         .get(`/api/v1/groups/${org.id}/announcements/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(404);
 
       // Cannot be marked as read once deleted.
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${org.id}/announcements/${created.id}/read`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(404);
     });
 
     it('is idempotent - deleting an already-deleted Announcement is a no-op success', async () => {
       const { org } = await createOrgWithSection();
       const created = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id).expect(201),
+        createAnnouncement(org.token, org.id).expect(201),
       );
 
       await request(app.getHttpServer())
         .delete(`/api/v1/groups/${org.id}/announcements/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(204);
       await request(app.getHttpServer())
         .delete(`/api/v1/groups/${org.id}/announcements/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(204);
     });
 
     it('cannot be un-deleted by changing expiresAt - PATCH on a deleted Announcement 404s, exactly like a nonexistent one', async () => {
       const { org } = await createOrgWithSection();
       const created = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id).expect(201),
+        createAnnouncement(org.token, org.id).expect(201),
       );
       await request(app.getHttpServer())
         .delete(`/api/v1/groups/${org.id}/announcements/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(204);
 
       await request(app.getHttpServer())
         .patch(`/api/v1/groups/${org.id}/announcements/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .send({
           title: created.title,
           body: created.body,
@@ -980,7 +1003,7 @@ describe('Announcements (e2e)', () => {
     it('defaults to isRead: false, marks as read idempotently, and updates unreadCount', async () => {
       const { org } = await createOrgWithSection();
       const created = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id).expect(201),
+        createAnnouncement(org.token, org.id).expect(201),
       );
 
       const beforeRead = await bodyOf<AnnouncementResponseDto>(
@@ -1036,13 +1059,13 @@ describe('Announcements (e2e)', () => {
 
   describe('GET /announcements (global feed)', () => {
     async function createRecipientGroup(
-      orgId: string,
+      org: { id: string; token: string },
       memberTokens: string[],
     ): Promise<RecipientGroupResponseDto> {
       return bodyOf<RecipientGroupResponseDto>(
         request(app.getHttpServer())
-          .post(`/api/v1/groups/${orgId}/recipient-groups`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .post(`/api/v1/groups/${org.id}/recipient-groups`)
+          .set('Authorization', `Bearer ${org.token}`)
           .send({
             name: `Global feed recipients ${Date.now()}-${Math.random()}`,
             memberUserIds: memberTokens.map((t) => localUserIdByToken.get(t)),
@@ -1064,28 +1087,28 @@ describe('Announcements (e2e)', () => {
     });
 
     it('aggregates active Announcements from every Group/Section the caller belongs to, excluding communities they do not', async () => {
-      const orgA = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, orgA.id, GLOBAL_MEMBER_TOKEN);
-      const sectionA = await createSection(OWNER_TOKEN, orgA.id);
+      const orgA = await createGroup();
+      await grantGroupRole(orgA.token, orgA.id, GLOBAL_MEMBER_TOKEN);
+      const sectionA = await createSection(orgA.token, orgA.id);
       // GLOBAL_MEMBER_TOKEN is a root-org member of orgA only - never added
       // to sectionA, so a Section-scoped Announcement there must not leak
       // into their global feed.
 
-      const orgB = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, orgB.id, GLOBAL_MEMBER_TOKEN);
+      const orgB = await createGroup();
+      await grantGroupRole(orgB.token, orgB.id, GLOBAL_MEMBER_TOKEN);
 
       const annA = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, orgA.id, {
+        createAnnouncement(orgA.token, orgA.id, {
           title: 'Global feed - org A',
         }).expect(201),
       );
       const annSectionA = await bodyOf<AnnouncementResponseDto>(
-        createSectionAnnouncement(OWNER_TOKEN, sectionA.id, {
+        createSectionAnnouncement(orgA.token, sectionA.id, {
           title: 'Global feed - section A (not a member)',
         }).expect(201),
       );
       const annB = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, orgB.id, {
+        createAnnouncement(orgB.token, orgB.id, {
           title: 'Global feed - org B',
         }).expect(201),
       );
@@ -1101,8 +1124,8 @@ describe('Announcements (e2e)', () => {
 
       // A Section member sees the root org's Announcement *and* their own
       // Section's, but not the unrelated org B they were never added to.
-      await grantGroupRole(OWNER_TOKEN, orgA.id, GLOBAL_SECTION_TOKEN);
-      await addSectionMember(OWNER_TOKEN, sectionA.id, GLOBAL_SECTION_TOKEN);
+      await grantGroupRole(orgA.token, orgA.id, GLOBAL_SECTION_TOKEN);
+      await addSectionMember(orgA.token, sectionA.id, GLOBAL_SECTION_TOKEN);
       const sectionFeed = await bodyOf<AnnouncementListResult>(
         getGlobalFeed(GLOBAL_SECTION_TOKEN).expect(200),
       );
@@ -1122,15 +1145,15 @@ describe('Announcements (e2e)', () => {
     });
 
     it('applies the exact same Recipient Group snapshot rule as the per-community list', async () => {
-      const org = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, org.id, GLOBAL_RECIPIENT_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, org.id, GLOBAL_NONRECIPIENT_TOKEN);
-      const recipientGroup = await createRecipientGroup(org.id, [
+      const org = await createGroup();
+      await grantGroupRole(org.token, org.id, GLOBAL_RECIPIENT_TOKEN);
+      await grantGroupRole(org.token, org.id, GLOBAL_NONRECIPIENT_TOKEN);
+      const recipientGroup = await createRecipientGroup(org, [
         GLOBAL_RECIPIENT_TOKEN,
       ]);
 
       const announcement = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'Global feed - recipient group only',
           recipientGroupId: recipientGroup.id,
         }).expect(201),
@@ -1152,23 +1175,23 @@ describe('Announcements (e2e)', () => {
     });
 
     it('never includes an expired or soft-deleted Announcement', async () => {
-      const org = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, org.id, GLOBAL_RECIPIENT_TOKEN);
+      const org = await createGroup();
+      await grantGroupRole(org.token, org.id, GLOBAL_RECIPIENT_TOKEN);
 
       const toExpire = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'Global feed - will expire',
           expiresAt: futureIso(1 / 86400),
         }).expect(201),
       );
       const toDelete = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'Global feed - will be deleted',
         }).expect(201),
       );
       await request(app.getHttpServer())
         .delete(`/api/v1/groups/${org.id}/announcements/${toDelete.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .expect(204);
 
       await new Promise((resolve) => setTimeout(resolve, 1100));
@@ -1182,18 +1205,18 @@ describe('Announcements (e2e)', () => {
     });
 
     it('sets communityResourceType to GROUP for a root-Group Announcement and SECTION for a Section Announcement', async () => {
-      const org = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, org.id, GLOBAL_SECTION_TOKEN);
-      const section = await createSection(OWNER_TOKEN, org.id);
-      await addSectionMember(OWNER_TOKEN, section.id, GLOBAL_SECTION_TOKEN);
+      const org = await createGroup();
+      await grantGroupRole(org.token, org.id, GLOBAL_SECTION_TOKEN);
+      const section = await createSection(org.token, org.id);
+      await addSectionMember(org.token, section.id, GLOBAL_SECTION_TOKEN);
 
       const groupAnnouncement = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'Global feed - resource type GROUP',
         }).expect(201),
       );
       const sectionAnnouncement = await bodyOf<AnnouncementResponseDto>(
-        createSectionAnnouncement(OWNER_TOKEN, section.id, {
+        createSectionAnnouncement(org.token, section.id, {
           title: 'Global feed - resource type SECTION',
         }).expect(201),
       );
@@ -1211,27 +1234,23 @@ describe('Announcements (e2e)', () => {
     });
 
     it('sorts pinned-first then newest-first, supports unreadOnly, and paginates with a correct total/hasMore', async () => {
-      const org = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, org.id, GLOBAL_PAGINATION_TOKEN);
+      const org = await createGroup();
+      await grantGroupRole(org.token, org.id, GLOBAL_PAGINATION_TOKEN);
 
       const oldest = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, { title: 'Oldest' }).expect(
-          201,
-        ),
+        createAnnouncement(org.token, org.id, { title: 'Oldest' }).expect(201),
       );
       const older = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, { title: 'Older' }).expect(201),
+        createAnnouncement(org.token, org.id, { title: 'Older' }).expect(201),
       );
       const pinned = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'Pinned',
           isPinned: true,
         }).expect(201),
       );
       const newest = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, { title: 'Newest' }).expect(
-          201,
-        ),
+        createAnnouncement(org.token, org.id, { title: 'Newest' }).expect(201),
       );
 
       // Default sort: pinned first, then newest-first among the rest.
@@ -1294,16 +1313,16 @@ describe('Announcements (e2e)', () => {
     });
 
     it('breaks a createdAt tie deterministically by id DESC', async () => {
-      const org = await createGroup(OWNER_TOKEN);
-      await grantGroupRole(OWNER_TOKEN, org.id, GLOBAL_TIEBREAK_TOKEN);
+      const org = await createGroup();
+      await grantGroupRole(org.token, org.id, GLOBAL_TIEBREAK_TOKEN);
 
       const first = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'Tiebreak A',
         }).expect(201),
       );
       const second = await bodyOf<AnnouncementResponseDto>(
-        createAnnouncement(OWNER_TOKEN, org.id, {
+        createAnnouncement(org.token, org.id, {
           title: 'Tiebreak B',
         }).expect(201),
       );

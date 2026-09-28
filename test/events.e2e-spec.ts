@@ -14,11 +14,13 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { User } from '../src/users/entities/user.entity';
 import { UserProfileResponseDto } from '../src/users/dto/user-profile-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
@@ -39,11 +41,23 @@ import { EventVisibility } from '../src/events/enums/event-visibility.enum';
 import { EventWaitlistPolicy } from '../src/events/enums/event-waitlist-policy.enum';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 
-const OWNER_TOKEN = 'valid-events-owner-token';
+// No fixed "OWNER_TOKEN" here as a *Group* creator - GroupsService.create
+// now allows at most one active FormalGroupAffiliation per user, and this
+// file needs many independent Groups (via createCommunityWithMembers/
+// createGroup), so those mint a fresh, throwaway owner per call instead
+// (see createGroup's own comment).
 const ORGANIZER_TOKEN = 'valid-events-organizer-token';
 const MODERATOR_TOKEN = 'valid-events-moderator-token';
 const MEMBER_TOKEN = 'valid-events-member-token';
 const OUTSIDER_TOKEN = 'valid-events-outsider-token';
+// A fixed identity is safe here, unlike a Group creator, because the whole
+// 'User-organized Events' describe block below tests *personal* Events
+// (POST /events, no Community at all) - it never calls createGroup(), so
+// reusing one token across its many tests never touches
+// FormalGroupAffiliation. Keeps the same Clerk id/profile the old fixed
+// OWNER_TOKEN used to have, since several assertions there check the exact
+// seeded display name ("Events Owner") and avatar URL.
+const SOLO_ORGANIZER_TOKEN = 'valid-events-solo-organizer-token';
 // Dedicated, single-use identities for DELETE /users/me tests below - never
 // reused for anything else in this file, since deleting the account behind
 // a token would otherwise silently recreate a *new* User row (a different
@@ -56,7 +70,7 @@ const DELETABLE_HISTORICAL_TOKEN = 'valid-events-deletable-historical-token';
 const DELETABLE_PUBLISHED_TOKEN = 'valid-events-deletable-published-token';
 const DELETABLE_STILL_OWNER_TOKEN = 'valid-events-deletable-still-owner-token';
 
-const OWNER_CLERK_ID = 'user_test_events_owner';
+const SOLO_ORGANIZER_CLERK_ID = 'user_test_events_owner';
 const ORGANIZER_CLERK_ID = 'user_test_events_organizer';
 const MODERATOR_CLERK_ID = 'user_test_events_moderator';
 const MEMBER_CLERK_ID = 'user_test_events_member';
@@ -66,11 +80,11 @@ const DELETABLE_PUBLISHED_CLERK_ID = 'user_test_events_deletable_published';
 const DELETABLE_STILL_OWNER_CLERK_ID = 'user_test_events_deletable_still_owner';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [OWNER_TOKEN]: {
-    userId: OWNER_CLERK_ID,
+  [SOLO_ORGANIZER_TOKEN]: {
+    userId: SOLO_ORGANIZER_CLERK_ID,
     sessionId: 'sess_events_owner',
     tokenType: 'session_token',
-    claims: { sub: OWNER_CLERK_ID, sid: 'sess_events_owner' },
+    claims: { sub: SOLO_ORGANIZER_CLERK_ID, sid: 'sess_events_owner' },
   },
   [ORGANIZER_TOKEN]: {
     userId: ORGANIZER_CLERK_ID,
@@ -129,7 +143,7 @@ const FIXTURE_CLERK_PROFILES: Record<
   string,
   { imageUrl: string; primaryEmailAddress: { emailAddress: string } | null }
 > = {
-  [OWNER_CLERK_ID]: {
+  [SOLO_ORGANIZER_CLERK_ID]: {
     imageUrl: 'https://img.clerk.com/events-owner.png',
     primaryEmailAddress: { emailAddress: 'events.owner@example.com' },
   },
@@ -168,8 +182,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     },
   },
 };
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -308,6 +320,12 @@ describe('Events (e2e)', () => {
         { id: { $in: createdGroupIds } },
         { parentGroup: null },
       );
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
       // Safety net, scoped directly by user id rather than through
       // Event/Group tracking - mirrors
@@ -324,8 +342,12 @@ describe('Events (e2e)', () => {
       await cleanup.nativeDelete(EventRoleAssignment, {
         user: { $in: [...localUserIdByToken.values()] },
       });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -352,18 +374,17 @@ describe('Events (e2e)', () => {
   }
 
   async function createGroup(
-    token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'events',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   // Group has no membership/MEMBER role at all (see the Membership/
@@ -399,11 +420,13 @@ describe('Events (e2e)', () => {
       .expect(201);
   }
 
-  async function createCommunityWithMembers(): Promise<GroupResponseDto> {
-    const community = await createGroup(OWNER_TOKEN);
-    await grantGroupRole(OWNER_TOKEN, community.id, ORGANIZER_TOKEN);
-    await grantGroupRole(OWNER_TOKEN, community.id, MODERATOR_TOKEN);
-    await grantGroupRole(OWNER_TOKEN, community.id, MEMBER_TOKEN);
+  async function createCommunityWithMembers(): Promise<
+    GroupResponseDto & { token: string; userId: string }
+  > {
+    const community = await createGroup();
+    await grantGroupRole(community.token, community.id, ORGANIZER_TOKEN);
+    await grantGroupRole(community.token, community.id, MODERATOR_TOKEN);
+    await grantGroupRole(community.token, community.id, MEMBER_TOKEN);
     return community;
   }
 
@@ -480,7 +503,7 @@ describe('Events (e2e)', () => {
     it('lets a Community Admin/Owner create an Event, auto-granting them OWNER', async () => {
       const community = await createCommunityWithMembers();
 
-      const created = await createEvent(OWNER_TOKEN, community.id);
+      const created = await createEvent(community.token, community.id);
 
       expect(created.status).toBe('DRAFT');
       expect(created.viewerRoles).toEqual(['OWNER']);
@@ -502,11 +525,11 @@ describe('Events (e2e)', () => {
     });
 
     it('rejects creation by a plain MEMBER - 403 INSUFFICIENT_GROUP_PERMISSIONS (a Group has no MEMBER tier at all, so this is exercised on a Section)', async () => {
-      const community = await createGroup(OWNER_TOKEN);
+      const community = await createGroup();
       const section = await bodyOf<{ id: string }>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${community.id}/sections`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({
             name: 'Plain Member Cannot Create Events Section',
             timezone: 'Europe/Warsaw',
@@ -519,7 +542,7 @@ describe('Events (e2e)', () => {
           .expect(201),
       );
       createdGroupIds.push(section.id);
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(community.token, section.id, MEMBER_TOKEN);
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
@@ -552,7 +575,7 @@ describe('Events (e2e)', () => {
       const section = await bodyOf<{ id: string }>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${community.id}/sections`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({
             name: 'Section Events Test',
             timezone: 'Europe/Warsaw',
@@ -574,7 +597,7 @@ describe('Events (e2e)', () => {
       const created = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/sections/${section.id}/events`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send(eventPayload({ name: 'Section-scoped Event' }))
           .expect(201),
       );
@@ -587,7 +610,7 @@ describe('Events (e2e)', () => {
       const list = await bodyOf<{ items: EventResponseDto[] }>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/events`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(200),
       );
       expect(list.items.some((event) => event.id === created.id)).toBe(true);
@@ -600,7 +623,7 @@ describe('Events (e2e)', () => {
     it('creates an Event with a per-day schedule, returned sorted ascending', async () => {
       const community = await createCommunityWithMembers();
 
-      const created = await createEvent(OWNER_TOKEN, community.id, {
+      const created = await createEvent(community.token, community.id, {
         startsAt: '2026-09-18T10:00:00.000Z',
         endsAt: '2026-09-20T20:00:00.000Z',
         scheduleDays: [
@@ -637,7 +660,7 @@ describe('Events (e2e)', () => {
       const fetched = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(200),
       );
       expect(fetched.scheduleDays).toHaveLength(3);
@@ -646,7 +669,7 @@ describe('Events (e2e)', () => {
     it('defaults to an empty array for the common single-day Event', async () => {
       const community = await createCommunityWithMembers();
 
-      const created = await createEvent(OWNER_TOKEN, community.id);
+      const created = await createEvent(community.token, community.id);
 
       expect(created.scheduleDays).toEqual([]);
     });
@@ -657,7 +680,7 @@ describe('Events (e2e)', () => {
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${community.id}/events`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send(
             eventPayload({
               startsAt: '2026-09-18T10:00:00.000Z',
@@ -677,7 +700,7 @@ describe('Events (e2e)', () => {
 
     it('fully replaces the schedule on update', async () => {
       const community = await createCommunityWithMembers();
-      const created = await createEvent(OWNER_TOKEN, community.id, {
+      const created = await createEvent(community.token, community.id, {
         startsAt: '2026-09-18T10:00:00.000Z',
         endsAt: '2026-09-20T20:00:00.000Z',
         scheduleDays: [
@@ -691,7 +714,7 @@ describe('Events (e2e)', () => {
       const updated = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/events/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({
             name: created.name,
             description: null,
@@ -736,7 +759,7 @@ describe('Events (e2e)', () => {
       async (type) => {
         const community = await createCommunityWithMembers();
 
-        const created = await createEvent(OWNER_TOKEN, community.id, {
+        const created = await createEvent(community.token, community.id, {
           type,
           customTypeLabel: null,
         });
@@ -749,7 +772,7 @@ describe('Events (e2e)', () => {
     it('creates an Event of type OTHER with a customTypeLabel', async () => {
       const community = await createCommunityWithMembers();
 
-      const created = await createEvent(OWNER_TOKEN, community.id, {
+      const created = await createEvent(community.token, community.id, {
         type: 'OTHER',
         customTypeLabel: 'Community Cookout',
       });
@@ -764,7 +787,7 @@ describe('Events (e2e)', () => {
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${community.id}/events`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send(eventPayload({ type: 'BATIZADO' }))
           .expect(400),
       );
@@ -777,7 +800,7 @@ describe('Events (e2e)', () => {
       const missingLabel = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${community.id}/events`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send(eventPayload({ type: 'OTHER', customTypeLabel: null }))
           .expect(400),
       );
@@ -786,7 +809,7 @@ describe('Events (e2e)', () => {
       const unexpectedLabel = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${community.id}/events`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send(
             eventPayload({ type: 'WORKSHOP', customTypeLabel: 'Not allowed' }),
           )
@@ -819,14 +842,14 @@ describe('Events (e2e)', () => {
 
     it('updates an Event without eventType/type in the body - other fields change, type is untouched', async () => {
       const community = await createCommunityWithMembers();
-      const created = await createEvent(OWNER_TOKEN, community.id, {
+      const created = await createEvent(community.token, community.id, {
         type: 'WORKSHOP',
       });
 
       const updated = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/events/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send(updatePayload({ name: 'Renamed Workshop' }))
           .expect(200),
       );
@@ -837,14 +860,14 @@ describe('Events (e2e)', () => {
 
     it('ignores a `type` smuggled into the update body - the Event keeps its original type', async () => {
       const community = await createCommunityWithMembers();
-      const created = await createEvent(OWNER_TOKEN, community.id, {
+      const created = await createEvent(community.token, community.id, {
         type: 'FESTIVAL',
       });
 
       const updated = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/events/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({ ...updatePayload(), type: 'WORKSHOP' })
           .expect(200),
       );
@@ -854,20 +877,20 @@ describe('Events (e2e)', () => {
 
     it('keeps type unchanged across multiple successive updates', async () => {
       const community = await createCommunityWithMembers();
-      const created = await createEvent(OWNER_TOKEN, community.id, {
+      const created = await createEvent(community.token, community.id, {
         type: 'OPEN_RODA',
       });
 
       await request(app.getHttpServer())
         .patch(`/api/v1/events/${created.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${community.token}`)
         .send(updatePayload({ name: 'First rename' }))
         .expect(200);
 
       const secondUpdate = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/events/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send(updatePayload({ name: 'Second rename' }))
           .expect(200),
       );
@@ -878,7 +901,7 @@ describe('Events (e2e)', () => {
       const fetched = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(200),
       );
       expect(fetched.type).toBe('OPEN_RODA');
@@ -888,12 +911,12 @@ describe('Events (e2e)', () => {
   describe('roles (Owner / Organizer / Moderator)', () => {
     it('lets the Owner grant Organizer, and the Organizer grant Moderator, but not vice versa', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id);
+      const event = await createEvent(community.token, community.id);
 
       const organizerGrant = await bodyOf<EventRoleAssignmentResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/roles`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({
             userId: localUserIdByToken.get(ORGANIZER_TOKEN),
             role: 'ORGANIZER',
@@ -928,7 +951,7 @@ describe('Events (e2e)', () => {
       const roles = await bodyOf<EventRoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${event.id}/roles`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(200),
       );
       expect(roles.map((r) => r.role).sort()).toEqual([
@@ -940,11 +963,11 @@ describe('Events (e2e)', () => {
 
     it('never allows revoking OWNER directly, and transfers ownership atomically', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id);
+      const event = await createEvent(community.token, community.id);
       const roles = await bodyOf<EventRoleAssignmentResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${event.id}/roles`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(200),
       );
       const ownerRow = roles.find((r) => r.role === EventRole.OWNER);
@@ -952,7 +975,7 @@ describe('Events (e2e)', () => {
       const removeOwnerResponse = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .delete(`/api/v1/events/${event.id}/roles/${ownerRow?.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(409),
       );
       expect(removeOwnerResponse.code).toBe('CANNOT_REMOVE_EVENT_OWNER');
@@ -960,7 +983,7 @@ describe('Events (e2e)', () => {
       const transfer = await bodyOf<EventRoleAssignmentResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/transfer-ownership`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({ toUserId: localUserIdByToken.get(ORGANIZER_TOKEN) })
           // No @HttpCode override - default POST status (201).
           .expect(201),
@@ -974,7 +997,7 @@ describe('Events (e2e)', () => {
       const formerOwnerResponse = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/transfer-ownership`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({ toUserId: localUserIdByToken.get(MEMBER_TOKEN) })
           .expect(404),
       );
@@ -985,7 +1008,7 @@ describe('Events (e2e)', () => {
   describe('visibility, publish/draft and status history', () => {
     it('hides a DRAFT event from everyone except its Event role holders', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id);
+      const event = await createEvent(community.token, community.id);
 
       const hidden = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
@@ -997,17 +1020,17 @@ describe('Events (e2e)', () => {
 
       await request(app.getHttpServer())
         .get(`/api/v1/events/${event.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${community.token}`)
         .expect(200);
     });
 
     it('makes a COMMUNITY_MEMBERS event visible to members only once published, and records status history', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id, {
+      const event = await createEvent(community.token, community.id, {
         visibility: EventVisibility.COMMUNITY_MEMBERS,
       });
 
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(community.token, event.id);
 
       await request(app.getHttpServer())
         .get(`/api/v1/events/${event.id}`)
@@ -1022,7 +1045,7 @@ describe('Events (e2e)', () => {
       const history = await bodyOf<EventStatusHistoryResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${event.id}/history`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(200),
       );
       expect(history.map((h) => h.toStatus)).toEqual(['DRAFT', 'PUBLISHED']);
@@ -1032,10 +1055,10 @@ describe('Events (e2e)', () => {
 
     it('makes a PUBLIC event visible even to non-members', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id, {
+      const event = await createEvent(community.token, community.id, {
         visibility: EventVisibility.PUBLIC,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(community.token, event.id);
 
       await request(app.getHttpServer())
         .get(`/api/v1/events/${event.id}`)
@@ -1045,13 +1068,13 @@ describe('Events (e2e)', () => {
 
     it('cancels an Event and blocks further registration', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id);
-      await publishEvent(OWNER_TOKEN, event.id);
+      const event = await createEvent(community.token, community.id);
+      await publishEvent(community.token, event.id);
 
       const cancelled = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/cancel`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({ reason: 'Venue unavailable' })
           // No @HttpCode override - default POST status (201).
           .expect(201),
@@ -1070,21 +1093,21 @@ describe('Events (e2e)', () => {
 
     it('lets a Community Admin/Owner cancel via EVENT_MODERATE even without any Event role', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id);
-      await publishEvent(OWNER_TOKEN, event.id);
+      const event = await createEvent(community.token, community.id);
+      await publishEvent(community.token, event.id);
       // Transfer Event ownership away from the Community Owner so they hold
       // no Event role at all, then verify they can still cancel via the
       // Community-level GroupPermission.EVENT_MODERATE override.
       await request(app.getHttpServer())
         .post(`/api/v1/events/${event.id}/transfer-ownership`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${community.token}`)
         .send({ toUserId: localUserIdByToken.get(ORGANIZER_TOKEN) })
         .expect(201);
 
       const cancelled = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/cancel`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({})
           // No @HttpCode override - default POST status (201).
           .expect(201),
@@ -1096,11 +1119,11 @@ describe('Events (e2e)', () => {
   describe('registration, RSVP and waitlist', () => {
     it('registers a member, fills capacity, waitlists further registrations, and auto-promotes on a freed seat', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id, {
+      const event = await createEvent(community.token, community.id, {
         capacity: 1,
         waitlistPolicy: EventWaitlistPolicy.AUTOMATIC,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(community.token, event.id);
 
       const first = await bodyOf<EventAttendeeResponseDto[]>(
         request(app.getHttpServer())
@@ -1131,7 +1154,7 @@ describe('Events (e2e)', () => {
       const participants = await bodyOf<EventAttendeeResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${event.id}/participants`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(200),
       );
       const promoted = participants.find((p) => p.id === second[0].id);
@@ -1141,11 +1164,11 @@ describe('Events (e2e)', () => {
 
     it('rejects registration with no waitlist once capacity is full', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id, {
+      const event = await createEvent(community.token, community.id, {
         capacity: 1,
         waitlistPolicy: EventWaitlistPolicy.NONE,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(community.token, event.id);
 
       await request(app.getHttpServer())
         .post(`/api/v1/events/${event.id}/register`)
@@ -1165,10 +1188,10 @@ describe('Events (e2e)', () => {
 
     it('rejects a non-member self-registering a COMMUNITY_MEMBERS event', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id, {
+      const event = await createEvent(community.token, community.id, {
         visibility: EventVisibility.COMMUNITY_MEMBERS,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(community.token, event.id);
 
       const notAllowed = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
@@ -1182,8 +1205,8 @@ describe('Events (e2e)', () => {
 
     it('registers a CHILD_DEPENDENT and auto-assigns the registering parent as guardian', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id);
-      await publishEvent(OWNER_TOKEN, event.id);
+      const event = await createEvent(community.token, community.id);
+      await publishEvent(community.token, event.id);
 
       const results = await bodyOf<EventAttendeeResponseDto[]>(
         request(app.getHttpServer())
@@ -1206,8 +1229,8 @@ describe('Events (e2e)', () => {
 
     it('lets only the registering user change their own RSVP', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id);
-      await publishEvent(OWNER_TOKEN, event.id);
+      const event = await createEvent(community.token, community.id);
+      await publishEvent(community.token, event.id);
 
       const [attendee] = await bodyOf<EventAttendeeResponseDto[]>(
         request(app.getHttpServer())
@@ -1220,7 +1243,7 @@ describe('Events (e2e)', () => {
       const forbiddenRsvp = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .patch(`/api/v1/events/${event.id}/rsvp/${attendee.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({ rsvpStatus: 'MAYBE' })
           .expect(403),
       );
@@ -1240,10 +1263,10 @@ describe('Events (e2e)', () => {
   describe('invitations (INVITE_ONLY)', () => {
     it('only allows a registered invitee to self-register, and the invitation becomes ACCEPTED implicitly', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id, {
+      const event = await createEvent(community.token, community.id, {
         visibility: EventVisibility.INVITE_ONLY,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(community.token, event.id);
 
       // Not invited: cannot see or register, even though they're a Community member.
       await request(app.getHttpServer())
@@ -1253,7 +1276,7 @@ describe('Events (e2e)', () => {
 
       await request(app.getHttpServer())
         .post(`/api/v1/events/${event.id}/invitations`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${community.token}`)
         .send({ userId: localUserIdByToken.get(MEMBER_TOKEN) })
         .expect(201);
 
@@ -1273,7 +1296,7 @@ describe('Events (e2e)', () => {
       >(
         request(app.getHttpServer())
           .get(`/api/v1/events/${event.id}/invitations`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(200),
       );
       expect(invitations[0].status).toBe('ACCEPTED');
@@ -1281,15 +1304,15 @@ describe('Events (e2e)', () => {
 
     it('lets an invitee decline without registering', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id, {
+      const event = await createEvent(community.token, community.id, {
         visibility: EventVisibility.INVITE_ONLY,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(community.token, event.id);
 
       const invitation = await bodyOf<{ id: string }>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/invitations`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({ userId: localUserIdByToken.get(OUTSIDER_TOKEN) })
           .expect(201),
       );
@@ -1310,21 +1333,21 @@ describe('Events (e2e)', () => {
   describe('status lifecycle guards', () => {
     it('blocks transfer-ownership, role grants, invitations, and manual promotion once CANCELLED', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id, {
+      const event = await createEvent(community.token, community.id, {
         capacity: 5,
         waitlistPolicy: EventWaitlistPolicy.MANUAL,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(community.token, event.id);
       await request(app.getHttpServer())
         .post(`/api/v1/events/${event.id}/cancel`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${community.token}`)
         .send({})
         .expect(201);
 
       const transferResponse = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/transfer-ownership`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({ toUserId: localUserIdByToken.get(ORGANIZER_TOKEN) })
           .expect(409),
       );
@@ -1333,7 +1356,7 @@ describe('Events (e2e)', () => {
       const grantRoleResponse = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/roles`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({
             userId: localUserIdByToken.get(ORGANIZER_TOKEN),
             role: 'ORGANIZER',
@@ -1345,7 +1368,7 @@ describe('Events (e2e)', () => {
       const invitationResponse = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/invitations`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({ userId: localUserIdByToken.get(MEMBER_TOKEN) })
           .expect(409),
       );
@@ -1358,7 +1381,7 @@ describe('Events (e2e)', () => {
           .post(
             `/api/v1/events/${event.id}/participants/00000000-0000-0000-0000-000000000000/promote`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(409),
       );
       expect(promoteResponse.code).toBe('EVENT_CANCELLED');
@@ -1375,7 +1398,7 @@ describe('Events (e2e)', () => {
       const checkInResponse = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/attendance/identify`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({ identity: '123456' })
           .expect(409),
       );
@@ -1384,11 +1407,11 @@ describe('Events (e2e)', () => {
 
     it('blocks transfer-ownership, role grants, invitations, guardians, and manual promotion once FINISHED, but still allows check-in', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id, {
+      const event = await createEvent(community.token, community.id, {
         capacity: 5,
         waitlistPolicy: EventWaitlistPolicy.MANUAL,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(community.token, event.id);
 
       // Register while still PUBLISHED (endsAt is still in the future at
       // this point), then push endsAt into the past directly in the
@@ -1422,7 +1445,7 @@ describe('Events (e2e)', () => {
       const afterFinish = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${event.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(200),
       );
       expect(afterFinish.status).toBe('FINISHED');
@@ -1430,7 +1453,7 @@ describe('Events (e2e)', () => {
       const transferResponse = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/transfer-ownership`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({ toUserId: localUserIdByToken.get(ORGANIZER_TOKEN) })
           .expect(409),
       );
@@ -1439,7 +1462,7 @@ describe('Events (e2e)', () => {
       const grantRoleResponse = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/roles`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({
             userId: localUserIdByToken.get(ORGANIZER_TOKEN),
             role: 'ORGANIZER',
@@ -1451,7 +1474,7 @@ describe('Events (e2e)', () => {
       const invitationResponse = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/invitations`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({ userId: localUserIdByToken.get(OUTSIDER_TOKEN) })
           .expect(409),
       );
@@ -1462,7 +1485,7 @@ describe('Events (e2e)', () => {
           .post(
             `/api/v1/events/${event.id}/attendees/${memberAttendee[0].id}/guardian`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({ guardianUserId: localUserIdByToken.get(MEMBER_TOKEN) })
           .expect(409),
       );
@@ -1473,7 +1496,7 @@ describe('Events (e2e)', () => {
           .post(
             `/api/v1/events/${event.id}/participants/${memberAttendee[0].id}/promote`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(409),
       );
       expect(promoteResponse.code).toBe('EVENT_FINISHED');
@@ -1490,14 +1513,14 @@ describe('Events (e2e)', () => {
       );
       await request(app.getHttpServer())
         .post(`/api/v1/events/${event.id}/check-in`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${community.token}`)
         .send({ identity: memberProfile.numericCode })
         .expect(201);
       await request(app.getHttpServer())
         .put(
           `/api/v1/events/${event.id}/attendance/${localUserIdByToken.get(MEMBER_TOKEN)}`,
         )
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${community.token}`)
         .send({ attended: false })
         .expect(200);
       expect(memberProfile.numericCode).toEqual(expect.any(String));
@@ -1507,15 +1530,15 @@ describe('Events (e2e)', () => {
   describe('concurrent registrations under a capacity limit', () => {
     it('never seats more attendees than capacity when many registrations race', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id, {
+      const event = await createEvent(community.token, community.id, {
         visibility: EventVisibility.PUBLIC,
         capacity: 1,
         waitlistPolicy: EventWaitlistPolicy.NONE,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(community.token, event.id);
 
       const contenders = [
-        OWNER_TOKEN,
+        community.token,
         ORGANIZER_TOKEN,
         MODERATOR_TOKEN,
         MEMBER_TOKEN,
@@ -1542,7 +1565,7 @@ describe('Events (e2e)', () => {
       const participants = await bodyOf<EventAttendeeResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${event.id}/participants`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(200),
       );
       const seated = participants.filter((p) => !p.isWaitlisted);
@@ -1551,15 +1574,15 @@ describe('Events (e2e)', () => {
 
     it('waitlists every registration beyond capacity under an AUTOMATIC policy, never seating more than capacity', async () => {
       const community = await createCommunityWithMembers();
-      const event = await createEvent(OWNER_TOKEN, community.id, {
+      const event = await createEvent(community.token, community.id, {
         visibility: EventVisibility.PUBLIC,
         capacity: 2,
         waitlistPolicy: EventWaitlistPolicy.AUTOMATIC,
       });
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(community.token, event.id);
 
       const contenders = [
-        OWNER_TOKEN,
+        community.token,
         ORGANIZER_TOKEN,
         MODERATOR_TOKEN,
         MEMBER_TOKEN,
@@ -1578,7 +1601,7 @@ describe('Events (e2e)', () => {
       const participants = await bodyOf<EventAttendeeResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${event.id}/participants`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .expect(200),
       );
       expect(participants).toHaveLength(contenders.length);
@@ -1627,7 +1650,7 @@ describe('Events (e2e)', () => {
       const publicEvent = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${community.id}/events`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send(
             globalFeedEvent({
               name: 'Global Feed Public Event',
@@ -1636,12 +1659,12 @@ describe('Events (e2e)', () => {
           )
           .expect(201),
       );
-      await publishEvent(OWNER_TOKEN, publicEvent.id);
+      await publishEvent(community.token, publicEvent.id);
 
       const membersOnlyEvent = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${community.id}/events`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send(
             globalFeedEvent({
               name: 'Global Feed Members-Only Event',
@@ -1650,7 +1673,7 @@ describe('Events (e2e)', () => {
           )
           .expect(201),
       );
-      await publishEvent(OWNER_TOKEN, membersOnlyEvent.id);
+      await publishEvent(community.token, membersOnlyEvent.id);
 
       const feed = await fetchGlobalFeed(OUTSIDER_TOKEN);
 
@@ -1663,7 +1686,7 @@ describe('Events (e2e)', () => {
       const event = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${community.id}/events`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send(
             globalFeedEvent({
               name: 'Global Feed Member-Visible Event',
@@ -1672,7 +1695,7 @@ describe('Events (e2e)', () => {
           )
           .expect(201),
       );
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(community.token, event.id);
 
       const feed = await fetchGlobalFeed(MEMBER_TOKEN);
 
@@ -1684,7 +1707,7 @@ describe('Events (e2e)', () => {
       const section = await bodyOf<{ id: string }>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${community.id}/sections`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({
             name: 'Global Feed Section',
             timezone: 'Europe/Warsaw',
@@ -1697,12 +1720,12 @@ describe('Events (e2e)', () => {
           .expect(201),
       );
       createdGroupIds.push(section.id);
-      await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
+      await addSectionMember(community.token, section.id, MEMBER_TOKEN);
 
       const event = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/sections/${section.id}/events`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send(
             globalFeedEvent({
               name: 'Global Feed Section Event',
@@ -1711,7 +1734,7 @@ describe('Events (e2e)', () => {
           )
           .expect(201),
       );
-      await publishEvent(OWNER_TOKEN, event.id);
+      await publishEvent(community.token, event.id);
 
       // MEMBER_TOKEN actually joined the Section - sees it.
       const feed = await fetchGlobalFeed(MEMBER_TOKEN);
@@ -1729,7 +1752,7 @@ describe('Events (e2e)', () => {
       const draft = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${community.id}/events`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send(globalFeedEvent({ name: 'Global Feed Draft Event' }))
           .expect(201),
       );
@@ -1737,23 +1760,25 @@ describe('Events (e2e)', () => {
       const outsiderFeed = await fetchGlobalFeed(OUTSIDER_TOKEN);
       expect(outsiderFeed.some((e) => e.id === draft.id)).toBe(false);
 
-      const ownerFeed = await fetchGlobalFeed(OWNER_TOKEN);
+      const ownerFeed = await fetchGlobalFeed(community.token);
       expect(ownerFeed.some((e) => e.id === draft.id)).toBe(true);
     });
   });
 
   describe('User-organized Events (POST /events)', () => {
     it('creates an Event organized by the caller themselves, with no community', async () => {
-      const created = await createPersonalEvent(OWNER_TOKEN, {
+      const created = await createPersonalEvent(SOLO_ORGANIZER_TOKEN, {
         name: 'Workshop Mestre Acordeon',
       });
 
       expect(created.status).toBe('DRAFT');
-      expect(created.createdByUserId).toBe(localUserIdByToken.get(OWNER_TOKEN));
+      expect(created.createdByUserId).toBe(
+        localUserIdByToken.get(SOLO_ORGANIZER_TOKEN),
+      );
       expect(created.community).toBeNull();
       expect(created.organizer).toEqual({
         type: 'USER',
-        id: localUserIdByToken.get(OWNER_TOKEN),
+        id: localUserIdByToken.get(SOLO_ORGANIZER_TOKEN),
         // Seeded from the Clerk fixture profile at first login (see
         // FIXTURE_CLERK_PROFILES/generateDisplayNameFromEmail).
         name: 'Events Owner',
@@ -1766,7 +1791,7 @@ describe('Events (e2e)', () => {
     });
 
     it('grants the creator EventRole.OWNER, with matching capabilities', async () => {
-      const created = await createPersonalEvent(OWNER_TOKEN);
+      const created = await createPersonalEvent(SOLO_ORGANIZER_TOKEN);
 
       expect(created.viewerRoles).toEqual(['OWNER']);
       expect(created.capabilities).toMatchObject({
@@ -1781,7 +1806,7 @@ describe('Events (e2e)', () => {
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .post('/api/v1/events')
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${SOLO_ORGANIZER_TOKEN}`)
           .send(eventPayload({ visibility: EventVisibility.COMMUNITY_MEMBERS }))
           .expect(400),
       );
@@ -1790,12 +1815,12 @@ describe('Events (e2e)', () => {
     });
 
     it('is reachable via direct GET /events/:eventId', async () => {
-      const created = await createPersonalEvent(OWNER_TOKEN);
+      const created = await createPersonalEvent(SOLO_ORGANIZER_TOKEN);
 
       const fetched = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/events/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${SOLO_ORGANIZER_TOKEN}`)
           .expect(200),
       );
 
@@ -1804,14 +1829,14 @@ describe('Events (e2e)', () => {
     });
 
     it('cannot change organizer identity via PATCH, and rejects switching to COMMUNITY_MEMBERS visibility', async () => {
-      const created = await createPersonalEvent(OWNER_TOKEN, {
+      const created = await createPersonalEvent(SOLO_ORGANIZER_TOKEN, {
         name: 'Immutable Organizer Event',
       });
 
       const response = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
           .patch(`/api/v1/events/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${SOLO_ORGANIZER_TOKEN}`)
           .send(
             eventPayload({
               name: 'Immutable Organizer Event',
@@ -1828,7 +1853,7 @@ describe('Events (e2e)', () => {
       const updated = await bodyOf<EventResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/events/${created.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${SOLO_ORGANIZER_TOKEN}`)
           .send(
             eventPayload({
               name: 'Renamed, Still Mine',
@@ -1842,7 +1867,7 @@ describe('Events (e2e)', () => {
     });
 
     it('transferring EventRole.OWNER moves administrative control but never the public organizer identity', async () => {
-      const created = await createPersonalEvent(OWNER_TOKEN, {
+      const created = await createPersonalEvent(SOLO_ORGANIZER_TOKEN, {
         name: 'Ownership Transfer Personal Event',
       });
       const originalOrganizer = created.organizer;
@@ -1853,7 +1878,7 @@ describe('Events (e2e)', () => {
       const transfer = await bodyOf<EventRoleAssignmentResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/events/${created.id}/transfer-ownership`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${SOLO_ORGANIZER_TOKEN}`)
           .send({ toUserId: localUserIdByToken.get(OUTSIDER_TOKEN) })
           .expect(201),
       );
@@ -1906,14 +1931,14 @@ describe('Events (e2e)', () => {
       it('does not appear under GET /groups/:id/events or GET /sections/:id/events - it belongs to no community', async () => {
         const community = await createCommunityWithMembers();
         const personal = await createPersonalEvent(
-          OWNER_TOKEN,
+          community.token,
           personalFeedEvent({ name: 'Personal Event Not In Group List' }),
         );
 
         const groupList = await bodyOf<{ items: EventResponseDto[] }>(
           request(app.getHttpServer())
             .get(`/api/v1/groups/${community.id}/events`)
-            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .set('Authorization', `Bearer ${community.token}`)
             .expect(200),
         );
         expect(groupList.items.some((e) => e.id === personal.id)).toBe(false);
@@ -1921,10 +1946,10 @@ describe('Events (e2e)', () => {
 
       it('is visible to any signed-in user via the global feed once PUBLISHED', async () => {
         const personal = await createPersonalEvent(
-          OWNER_TOKEN,
+          SOLO_ORGANIZER_TOKEN,
           personalFeedEvent({ name: 'Personal Event In Global Feed' }),
         );
-        await publishEvent(OWNER_TOKEN, personal.id);
+        await publishEvent(SOLO_ORGANIZER_TOKEN, personal.id);
 
         const feed = await fetchGlobalFeed(OUTSIDER_TOKEN);
         expect(feed.some((e) => e.id === personal.id)).toBe(true);
@@ -1932,11 +1957,11 @@ describe('Events (e2e)', () => {
 
       it("is included in the creator's own feed via My Events, even as a DRAFT", async () => {
         const personal = await createPersonalEvent(
-          OWNER_TOKEN,
+          SOLO_ORGANIZER_TOKEN,
           personalFeedEvent({ name: 'Personal Draft Event For Owner' }),
         );
 
-        const ownFeed = await fetchGlobalFeed(OWNER_TOKEN);
+        const ownFeed = await fetchGlobalFeed(SOLO_ORGANIZER_TOKEN);
         expect(ownFeed.some((e) => e.id === personal.id)).toBe(true);
 
         const strangerFeed = await fetchGlobalFeed(OUTSIDER_TOKEN);
@@ -1970,17 +1995,17 @@ describe('Events (e2e)', () => {
       }
 
       it('archives a FINISHED Event: it stays readable with history, but every operational capability is false and management/register are blocked', async () => {
-        const created = await createPersonalEvent(OWNER_TOKEN, {
+        const created = await createPersonalEvent(SOLO_ORGANIZER_TOKEN, {
           name: 'Archive Lifecycle Event',
         });
-        await publishEvent(OWNER_TOKEN, created.id);
-        const finished = await forceFinish(created.id, OWNER_TOKEN);
+        await publishEvent(SOLO_ORGANIZER_TOKEN, created.id);
+        const finished = await forceFinish(created.id, SOLO_ORGANIZER_TOKEN);
         expect(finished.status).toBe('FINISHED');
 
         const archived = await bodyOf<EventResponseDto>(
           request(app.getHttpServer())
             .post(`/api/v1/events/${created.id}/archive`)
-            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .set('Authorization', `Bearer ${SOLO_ORGANIZER_TOKEN}`)
             .expect(201),
         );
         expect(archived.status).toBe('ARCHIVED');
@@ -1989,7 +2014,7 @@ describe('Events (e2e)', () => {
         const details = await bodyOf<EventResponseDto>(
           request(app.getHttpServer())
             .get(`/api/v1/events/${created.id}`)
-            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .set('Authorization', `Bearer ${SOLO_ORGANIZER_TOKEN}`)
             .expect(200),
         );
         expect(details.status).toBe('ARCHIVED');
@@ -1998,7 +2023,7 @@ describe('Events (e2e)', () => {
         const history = await bodyOf<EventStatusHistoryResponseDto[]>(
           request(app.getHttpServer())
             .get(`/api/v1/events/${created.id}/history`)
-            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .set('Authorization', `Bearer ${SOLO_ORGANIZER_TOKEN}`)
             .expect(200),
         );
         expect(history.some((h) => h.toStatus === EventStatus.ARCHIVED)).toBe(
@@ -2025,7 +2050,7 @@ describe('Events (e2e)', () => {
         const patchResponse = await bodyOf<HttpErrorResponse>(
           request(app.getHttpServer())
             .patch(`/api/v1/events/${created.id}`)
-            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .set('Authorization', `Bearer ${SOLO_ORGANIZER_TOKEN}`)
             .send(
               eventPayload({
                 name: 'Should never apply',
@@ -2047,45 +2072,45 @@ describe('Events (e2e)', () => {
       });
 
       it('rejects archiving a DRAFT or PUBLISHED Event - only FINISHED/CANCELLED qualify', async () => {
-        const draft = await createPersonalEvent(OWNER_TOKEN, {
+        const draft = await createPersonalEvent(SOLO_ORGANIZER_TOKEN, {
           name: 'Draft Cannot Archive',
         });
         const draftResponse = await bodyOf<HttpErrorResponse>(
           request(app.getHttpServer())
             .post(`/api/v1/events/${draft.id}/archive`)
-            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .set('Authorization', `Bearer ${SOLO_ORGANIZER_TOKEN}`)
             .expect(409),
         );
         expect(draftResponse.code).toBe('EVENT_DRAFT');
 
-        const published = await createPersonalEvent(OWNER_TOKEN, {
+        const published = await createPersonalEvent(SOLO_ORGANIZER_TOKEN, {
           name: 'Published Cannot Archive Directly',
         });
-        await publishEvent(OWNER_TOKEN, published.id);
+        await publishEvent(SOLO_ORGANIZER_TOKEN, published.id);
         const publishedResponse = await bodyOf<HttpErrorResponse>(
           request(app.getHttpServer())
             .post(`/api/v1/events/${published.id}/archive`)
-            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .set('Authorization', `Bearer ${SOLO_ORGANIZER_TOKEN}`)
             .expect(409),
         );
         expect(publishedResponse.code).toBe('EVENT_PUBLISHED');
       });
 
       it('rejects re-archiving an already-ARCHIVED Event', async () => {
-        const created = await createPersonalEvent(OWNER_TOKEN, {
+        const created = await createPersonalEvent(SOLO_ORGANIZER_TOKEN, {
           name: 'Re-archive Rejected',
         });
-        await publishEvent(OWNER_TOKEN, created.id);
-        await forceFinish(created.id, OWNER_TOKEN);
+        await publishEvent(SOLO_ORGANIZER_TOKEN, created.id);
+        await forceFinish(created.id, SOLO_ORGANIZER_TOKEN);
         await request(app.getHttpServer())
           .post(`/api/v1/events/${created.id}/archive`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${SOLO_ORGANIZER_TOKEN}`)
           .expect(201);
 
         const reArchiveResponse = await bodyOf<HttpErrorResponse>(
           request(app.getHttpServer())
             .post(`/api/v1/events/${created.id}/archive`)
-            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .set('Authorization', `Bearer ${SOLO_ORGANIZER_TOKEN}`)
             .expect(409),
         );
         expect(reArchiveResponse.code).toBe('EVENT_ARCHIVED');
@@ -2093,18 +2118,18 @@ describe('Events (e2e)', () => {
 
       it('also archives a Group-organized Event - no regression from the USER-organized case', async () => {
         const community = await createCommunityWithMembers();
-        const event = await createEvent(OWNER_TOKEN, community.id);
-        await publishEvent(OWNER_TOKEN, event.id);
+        const event = await createEvent(community.token, community.id);
+        await publishEvent(community.token, event.id);
         await request(app.getHttpServer())
           .post(`/api/v1/events/${event.id}/cancel`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${community.token}`)
           .send({})
           .expect(201);
 
         const archived = await bodyOf<EventResponseDto>(
           request(app.getHttpServer())
             .post(`/api/v1/events/${event.id}/archive`)
-            .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+            .set('Authorization', `Bearer ${community.token}`)
             .expect(201),
         );
         expect(archived.status).toBe('ARCHIVED');

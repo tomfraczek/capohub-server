@@ -23,11 +23,13 @@ import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { User } from '../src/users/entities/user.entity';
 import { UserProfileResponseDto } from '../src/users/dto/user-profile-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
@@ -42,7 +44,10 @@ import { TrainingVisibility } from '../src/trainings/enums/training-visibility.e
 
 const CONFIGURED_WEB_BASE_URL = 'https://capohub.test';
 
-const OWNER_TOKEN = 'valid-training-checkin-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const ADMIN_TOKEN = 'valid-training-checkin-admin-token';
 const INSTRUCTOR_TOKEN = 'valid-training-checkin-instructor-token';
 const MEMBER_TOKEN = 'valid-training-checkin-member-token';
@@ -51,7 +56,6 @@ const EXTERNAL_TRAINER_TOKEN = 'valid-training-checkin-external-trainer-token';
 const EXTERNAL_RSVP_TOKEN = 'valid-training-checkin-external-rsvp-token';
 
 const CLERK_IDS: Record<string, string> = {
-  [OWNER_TOKEN]: 'user_test_trn_ci_owner',
   [ADMIN_TOKEN]: 'user_test_trn_ci_admin',
   [INSTRUCTOR_TOKEN]: 'user_test_trn_ci_instructor',
   [MEMBER_TOKEN]: 'user_test_trn_ci_member',
@@ -84,8 +88,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     },
   ]),
 );
-
-const TEST_CLERK_USER_IDS = Object.values(CLERK_IDS);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -197,9 +199,19 @@ describe('Training Check-In (e2e)', () => {
         { id: { $in: createdGroupIds } },
         { parentGroup: null },
       );
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // Must be read fresh here (not the TEST_CLERK_USER_IDS snapshot taken
+      // at module load) since createGroup (via createFreshGroupOwner)
+      // registers a fresh fixture user per call, mutating
+      // FIXTURE_CLERK_PROFILES in place.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -222,16 +234,18 @@ describe('Training Check-In (e2e)', () => {
     };
   }
 
-  async function createGroup(token: string): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload())
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  async function createGroup(): Promise<
+    GroupResponseDto & { token: string; userId: string }
+  > {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'train-ci',
+      groupOverrides: groupPayload(),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   function sectionPayload(
@@ -302,25 +316,27 @@ describe('Training Check-In (e2e)', () => {
   }
 
   /** OWNER (creator) + ADMIN + INSTRUCTOR + MEMBER, all active members. */
-  async function createSectionWithRoles(): Promise<SectionResponseDto> {
-    const group = await createGroup(OWNER_TOKEN);
-    const section = await createSection(OWNER_TOKEN, group.id);
-    await addSectionMember(OWNER_TOKEN, section.id, ADMIN_TOKEN);
+  async function createSectionWithRoles(): Promise<
+    SectionResponseDto & { token: string; userId: string }
+  > {
+    const group = await createGroup();
+    const section = await createSection(group.token, group.id);
+    await addSectionMember(group.token, section.id, ADMIN_TOKEN);
     await grantSectionRole(
-      OWNER_TOKEN,
+      group.token,
       section.id,
       ADMIN_TOKEN,
       GroupRole.ADMIN,
     );
-    await addSectionMember(OWNER_TOKEN, section.id, INSTRUCTOR_TOKEN);
+    await addSectionMember(group.token, section.id, INSTRUCTOR_TOKEN);
     await grantSectionRole(
-      OWNER_TOKEN,
+      group.token,
       section.id,
       INSTRUCTOR_TOKEN,
       GroupRole.INSTRUCTOR,
     );
-    await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
-    return section;
+    await addSectionMember(group.token, section.id, MEMBER_TOKEN);
+    return { ...section, token: group.token, userId: group.userId };
   }
 
   /** A Training that already started, so attendance may be recorded. */
@@ -338,7 +354,10 @@ describe('Training Check-In (e2e)', () => {
           endsAt: new Date(Date.now() + 60 * 60_000).toISOString(),
           locationName: null,
           locationAddress: null,
-          trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+          // Just needs to be some valid, always-registered user id - every
+          // call site below overrides this explicitly with its own fresh
+          // Section owner's id anyway.
+          trainerUserId: localUserIdByToken.get(MEMBER_TOKEN),
           description: null,
           visibility: TrainingVisibility.MEMBERS_ONLY,
           ...overrides,
@@ -370,13 +389,13 @@ describe('Training Check-In (e2e)', () => {
 
   it('lets the assigned trainer check in a member by numericCode', async () => {
     const section = await createSectionWithRoles();
-    const training = await createStartedTraining(OWNER_TOKEN, section.id, {
-      trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+    const training = await createStartedTraining(section.token, section.id, {
+      trainerUserId: section.userId,
     });
     const code = await getNumericCode(MEMBER_TOKEN);
 
     const result = await bodyOf<TrainingCheckInResultDto>(
-      checkIn(OWNER_TOKEN, training.id, code).expect(201),
+      checkIn(section.token, training.id, code).expect(201),
     );
     expect(result.attended).toBe(true);
     expect(result.alreadyCheckedIn).toBe(false);
@@ -386,7 +405,7 @@ describe('Training Check-In (e2e)', () => {
     'lets a Section %s check in a member',
     async (managerToken) => {
       const section = await createSectionWithRoles();
-      const training = await createStartedTraining(OWNER_TOKEN, section.id);
+      const training = await createStartedTraining(section.token, section.id);
       const code = await getNumericCode(MEMBER_TOKEN);
 
       await checkIn(managerToken, training.id, code).expect(201);
@@ -395,7 +414,7 @@ describe('Training Check-In (e2e)', () => {
 
   it('rejects an ordinary participant (plain MEMBER) trying to check someone in', async () => {
     const section = await createSectionWithRoles();
-    const training = await createStartedTraining(OWNER_TOKEN, section.id);
+    const training = await createStartedTraining(section.token, section.id);
     const code = await getNumericCode(ADMIN_TOKEN);
 
     const error = await bodyOf<HttpErrorResponse>(
@@ -406,7 +425,7 @@ describe('Training Check-In (e2e)', () => {
 
   it('rejects a total outsider trying to check someone in', async () => {
     const section = await createSectionWithRoles();
-    const training = await createStartedTraining(OWNER_TOKEN, section.id);
+    const training = await createStartedTraining(section.token, section.id);
     const code = await getNumericCode(MEMBER_TOKEN);
 
     await checkIn(OUTSIDER_TOKEN, training.id, code).expect(403);
@@ -423,13 +442,13 @@ describe('Training Check-In (e2e)', () => {
     const training = await bodyOf<TrainingResponseDto>(
       request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/trainings`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({
           startsAt: new Date(Date.now() + 60 * 60_000).toISOString(),
           endsAt: new Date(Date.now() + 120 * 60_000).toISOString(),
           locationName: null,
           locationAddress: null,
-          trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+          trainerUserId: section.userId,
           description: null,
           visibility: TrainingVisibility.PUBLIC,
         })
@@ -450,20 +469,20 @@ describe('Training Check-In (e2e)', () => {
 
     const code = await getNumericCode(EXTERNAL_RSVP_TOKEN);
     const result = await bodyOf<TrainingCheckInResultDto>(
-      checkIn(OWNER_TOKEN, training.id, code).expect(201),
+      checkIn(section.token, training.id, code).expect(201),
     );
     expect(result.attended).toBe(true);
   });
 
   it('rejects a non-eligible user (no membership, no external RSVP)', async () => {
     const section = await createSectionWithRoles();
-    const training = await createStartedTraining(OWNER_TOKEN, section.id, {
+    const training = await createStartedTraining(section.token, section.id, {
       visibility: TrainingVisibility.PUBLIC,
     });
     const code = await getNumericCode(EXTERNAL_TRAINER_TOKEN);
 
     const error = await bodyOf<HttpErrorResponse>(
-      checkIn(OWNER_TOKEN, training.id, code).expect(400),
+      checkIn(section.token, training.id, code).expect(400),
     );
     expect(error.code).toBe('TRAINING_ATTENDANCE_USER_NOT_ELIGIBLE');
   });
@@ -473,13 +492,13 @@ describe('Training Check-In (e2e)', () => {
     const training = await bodyOf<TrainingResponseDto>(
       request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/trainings`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({
           startsAt: new Date(Date.now() + 60 * 60_000).toISOString(),
           endsAt: new Date(Date.now() + 120 * 60_000).toISOString(),
           locationName: null,
           locationAddress: null,
-          trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+          trainerUserId: section.userId,
           description: null,
           visibility: TrainingVisibility.MEMBERS_ONLY,
         })
@@ -488,23 +507,23 @@ describe('Training Check-In (e2e)', () => {
     const code = await getNumericCode(MEMBER_TOKEN);
 
     const error = await bodyOf<HttpErrorResponse>(
-      checkIn(OWNER_TOKEN, training.id, code).expect(409),
+      checkIn(section.token, training.id, code).expect(409),
     );
     expect(error.code).toBe('TRAINING_NOT_STARTED');
   });
 
   it('is idempotent - a second identical scan changes nothing', async () => {
     const section = await createSectionWithRoles();
-    const training = await createStartedTraining(OWNER_TOKEN, section.id);
+    const training = await createStartedTraining(section.token, section.id);
     const code = await getNumericCode(MEMBER_TOKEN);
 
     const first = await bodyOf<TrainingCheckInResultDto>(
-      checkIn(OWNER_TOKEN, training.id, code).expect(201),
+      checkIn(section.token, training.id, code).expect(201),
     );
     expect(first.alreadyCheckedIn).toBe(false);
 
     const second = await bodyOf<TrainingCheckInResultDto>(
-      checkIn(OWNER_TOKEN, training.id, code).expect(201),
+      checkIn(section.token, training.id, code).expect(201),
     );
     expect(second.alreadyCheckedIn).toBe(true);
     expect(second.attended).toBe(true);
@@ -512,12 +531,12 @@ describe('Training Check-In (e2e)', () => {
 
   it('resolves a User QR payload the same way as a raw numeric code', async () => {
     const section = await createSectionWithRoles();
-    const training = await createStartedTraining(OWNER_TOKEN, section.id);
+    const training = await createStartedTraining(section.token, section.id);
     const code = await getNumericCode(MEMBER_TOKEN);
 
     const result = await bodyOf<TrainingCheckInResultDto>(
       checkIn(
-        OWNER_TOKEN,
+        section.token,
         training.id,
         `${CONFIGURED_WEB_BASE_URL}/u/${code}`,
       ).expect(201),
@@ -527,14 +546,14 @@ describe('Training Check-In (e2e)', () => {
 
   it('rejects malformed identity with 400, never 500', async () => {
     const section = await createSectionWithRoles();
-    const training = await createStartedTraining(OWNER_TOKEN, section.id);
+    const training = await createStartedTraining(section.token, section.id);
 
-    await checkIn(OWNER_TOKEN, training.id, 'garbage').expect(400);
+    await checkIn(section.token, training.id, 'garbage').expect(400);
   });
 
   it('returns 401 for an unauthenticated request', async () => {
     const section = await createSectionWithRoles();
-    const training = await createStartedTraining(OWNER_TOKEN, section.id);
+    const training = await createStartedTraining(section.token, section.id);
 
     await request(app.getHttpServer())
       .post(`/api/v1/trainings/${training.id}/check-in`)

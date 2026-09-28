@@ -24,10 +24,12 @@ import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { User } from '../src/users/entities/user.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { SectionMembership } from '../src/groups/entities/section-membership.entity';
@@ -44,7 +46,10 @@ import { TrainingSeries } from '../src/trainings/entities/training-series.entity
 import { TrainingStatus } from '../src/trainings/enums/training-status.enum';
 import { TrainingVisibility } from '../src/trainings/enums/training-visibility.enum';
 
-const OWNER_TOKEN = 'valid-trainings-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const ADMIN_TOKEN = 'valid-trainings-admin-token';
 const INSTRUCTOR_TOKEN = 'valid-trainings-instructor-token';
 const ASSISTANT_TOKEN = 'valid-trainings-assistant-token';
@@ -52,7 +57,6 @@ const MEMBER_TOKEN = 'valid-trainings-member-token';
 const OUTSIDER_TOKEN = 'valid-trainings-outsider-token';
 const EXTERNAL_TRAINER_TOKEN = 'valid-trainings-external-trainer-token';
 
-const OWNER_CLERK_ID = 'user_test_trainings_owner';
 const ADMIN_CLERK_ID = 'user_test_trainings_admin';
 const INSTRUCTOR_CLERK_ID = 'user_test_trainings_instructor';
 const ASSISTANT_CLERK_ID = 'user_test_trainings_assistant';
@@ -61,12 +65,6 @@ const OUTSIDER_CLERK_ID = 'user_test_trainings_outsider';
 const EXTERNAL_TRAINER_CLERK_ID = 'user_test_trainings_external_trainer';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [OWNER_TOKEN]: {
-    userId: OWNER_CLERK_ID,
-    sessionId: 'sess_trainings_owner',
-    tokenType: 'session_token',
-    claims: { sub: OWNER_CLERK_ID, sid: 'sess_trainings_owner' },
-  },
   [ADMIN_TOKEN]: {
     userId: ADMIN_CLERK_ID,
     sessionId: 'sess_trainings_admin',
@@ -123,8 +121,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     ];
   }),
 );
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -235,9 +231,18 @@ describe('Trainings (e2e)', () => {
         { id: { $in: createdGroupIds } },
         { parentGroup: null },
       );
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // Must be read fresh here (not a stale snapshot taken at module load)
+      // since createGroup (via createFreshGroupOwner) registers a fresh
+      // fixture user per call, mutating FIXTURE_CLERK_PROFILES in place.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -260,19 +265,18 @@ describe('Trainings (e2e)', () => {
     };
   }
 
-  async function createGroup(
-    token: string,
-    overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ ...groupPayload(), ...overrides })
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  async function createGroup(): Promise<
+    GroupResponseDto & { token: string; userId: string }
+  > {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'trainings',
+      groupOverrides: groupPayload(),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   function sectionPayload(
@@ -349,32 +353,34 @@ describe('Trainings (e2e)', () => {
    * members of one fresh Section - the standard fixture for permission
    * matrix tests below.
    */
-  async function createSectionWithRoles(): Promise<SectionResponseDto> {
-    const group = await createGroup(OWNER_TOKEN);
-    const section = await createSection(OWNER_TOKEN, group.id);
-    await addSectionMember(OWNER_TOKEN, section.id, ADMIN_TOKEN);
+  async function createSectionWithRoles(): Promise<
+    SectionResponseDto & { token: string; userId: string }
+  > {
+    const group = await createGroup();
+    const section = await createSection(group.token, group.id);
+    await addSectionMember(group.token, section.id, ADMIN_TOKEN);
     await grantSectionRole(
-      OWNER_TOKEN,
+      group.token,
       section.id,
       ADMIN_TOKEN,
       GroupRole.ADMIN,
     );
-    await addSectionMember(OWNER_TOKEN, section.id, INSTRUCTOR_TOKEN);
+    await addSectionMember(group.token, section.id, INSTRUCTOR_TOKEN);
     await grantSectionRole(
-      OWNER_TOKEN,
+      group.token,
       section.id,
       INSTRUCTOR_TOKEN,
       GroupRole.INSTRUCTOR,
     );
-    await addSectionMember(OWNER_TOKEN, section.id, ASSISTANT_TOKEN);
+    await addSectionMember(group.token, section.id, ASSISTANT_TOKEN);
     await grantSectionRole(
-      OWNER_TOKEN,
+      group.token,
       section.id,
       ASSISTANT_TOKEN,
       GroupRole.ASSISTANT,
     );
-    await addSectionMember(OWNER_TOKEN, section.id, MEMBER_TOKEN);
-    return section;
+    await addSectionMember(group.token, section.id, MEMBER_TOKEN);
+    return { ...section, token: group.token, userId: group.userId };
   }
 
   function trainingPayload(
@@ -385,7 +391,10 @@ describe('Trainings (e2e)', () => {
       endsAt: '2031-06-02T20:00:00.000Z',
       locationName: 'Dojo',
       locationAddress: null,
-      trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+      // Just needs to be some valid, always-registered user id - every call
+      // site below overrides this explicitly with its own fresh Section
+      // owner's id anyway.
+      trainerUserId: localUserIdByToken.get(MEMBER_TOKEN),
       description: 'Regular training',
       visibility: TrainingVisibility.MEMBERS_ONLY,
       ...overrides,
@@ -415,7 +424,9 @@ describe('Trainings (e2e)', () => {
       durationMinutes: 90,
       locationName: 'Dojo',
       locationAddress: null,
-      defaultTrainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+      // Just needs to be some valid, always-registered user id - the only
+      // call site that cares about this overrides it explicitly anyway.
+      defaultTrainerUserId: localUserIdByToken.get(MEMBER_TOKEN),
       defaultDescription: 'Weekly training',
       visibility: TrainingVisibility.MEMBERS_ONLY,
       startDate: '2031-07-01', // a Tuesday
@@ -444,7 +455,7 @@ describe('Trainings (e2e)', () => {
     it('OWNER can create a one-off training', async () => {
       const section = await createSectionWithRoles();
 
-      const training = await createTraining(OWNER_TOKEN, section.id);
+      const training = await createTraining(section.token, section.id);
 
       expect(training.seriesId).toBeNull();
       expect(training.status).toBe('SCHEDULED');
@@ -489,7 +500,7 @@ describe('Trainings (e2e)', () => {
 
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/trainings`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send(
           trainingPayload({
             startsAt: '2031-06-02T20:00:00.000Z',
@@ -502,7 +513,7 @@ describe('Trainings (e2e)', () => {
     it('an external (non-member) trainer may be assigned', async () => {
       const section = await createSectionWithRoles();
 
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const training = await createTraining(section.token, section.id, {
         trainerUserId: localUserIdByToken.get(EXTERNAL_TRAINER_TOKEN),
       });
 
@@ -518,7 +529,7 @@ describe('Trainings (e2e)', () => {
     it('creates a training with no trainer when trainerUserId is omitted', async () => {
       const section = await createSectionWithRoles();
 
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const training = await createTraining(section.token, section.id, {
         trainerUserId: undefined,
       });
 
@@ -533,7 +544,7 @@ describe('Trainings (e2e)', () => {
       const section = await createSectionWithRoles();
 
       // Wednesdays in July 2031: 2, 9, 16, 23, 30 = 5 occurrences.
-      const series = await createSeries(OWNER_TOKEN, section.id);
+      const series = await createSeries(section.token, section.id);
 
       expect(series.generatedTrainingsCount).toBe(5);
 
@@ -543,7 +554,7 @@ describe('Trainings (e2e)', () => {
       }>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/trainings?limit=100`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       const seriesTrainings = list.items.filter(
@@ -562,7 +573,7 @@ describe('Trainings (e2e)', () => {
     it('creates a series with no default trainer when defaultTrainerUserId is omitted, and every generated Training has none either', async () => {
       const section = await createSectionWithRoles();
 
-      const series = await createSeries(OWNER_TOKEN, section.id, {
+      const series = await createSeries(section.token, section.id, {
         defaultTrainerUserId: undefined,
       });
 
@@ -571,7 +582,7 @@ describe('Trainings (e2e)', () => {
       const list = await bodyOf<{ items: TrainingResponseDto[] }>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/trainings?limit=100`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       const seriesTrainings = list.items.filter(
@@ -588,7 +599,7 @@ describe('Trainings (e2e)', () => {
 
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/training-series`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send(seriesPayload({ startDate: '2031-01-01', endDate: '2034-06-01' }))
         .expect(400);
     });
@@ -598,7 +609,7 @@ describe('Trainings (e2e)', () => {
 
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/training-series`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send(seriesPayload({ startDate: '2031-01-01', endDate: '2033-12-31' }))
         .expect(201);
     });
@@ -619,11 +630,11 @@ describe('Trainings (e2e)', () => {
   describe('scoped edits (THIS / THIS_AND_FOLLOWING / ALL)', () => {
     it('THIS only changes the addressed Training, leaving its series siblings untouched', async () => {
       const section = await createSectionWithRoles();
-      const series = await createSeries(OWNER_TOKEN, section.id);
+      const series = await createSeries(section.token, section.id);
       const list = await bodyOf<{ items: TrainingResponseDto[] }>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/trainings?limit=100`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       const seriesTrainings = list.items
@@ -634,7 +645,7 @@ describe('Trainings (e2e)', () => {
       const updated = await bodyOf<TrainingResponseDto>(
         request(app.getHttpServer())
           .patch(`/api/v1/sections/${section.id}/trainings/${first.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .send({ scope: 'THIS', locationName: 'Special venue' })
           .expect(200),
       );
@@ -643,7 +654,7 @@ describe('Trainings (e2e)', () => {
       const untouched = await bodyOf<TrainingResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/trainings/${second.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       expect(untouched.locationName).toBe('Dojo');
@@ -651,11 +662,11 @@ describe('Trainings (e2e)', () => {
 
     it('THIS_AND_FOLLOWING changes the anchor and every later occurrence, never earlier ones', async () => {
       const section = await createSectionWithRoles();
-      const series = await createSeries(OWNER_TOKEN, section.id);
+      const series = await createSeries(section.token, section.id);
       const list = await bodyOf<{ items: TrainingResponseDto[] }>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/trainings?limit=100`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       const seriesTrainings = list.items
@@ -665,7 +676,7 @@ describe('Trainings (e2e)', () => {
 
       await request(app.getHttpServer())
         .patch(`/api/v1/sections/${section.id}/trainings/${second.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({ scope: 'THIS_AND_FOLLOWING', locationName: 'New venue' })
         .expect(200);
 
@@ -674,7 +685,7 @@ describe('Trainings (e2e)', () => {
           bodyOf<TrainingResponseDto>(
             request(app.getHttpServer())
               .get(`/api/v1/sections/${section.id}/trainings/${t.id}`)
-              .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+              .set('Authorization', `Bearer ${section.token}`)
               .expect(200),
           ),
         ),
@@ -692,7 +703,7 @@ describe('Trainings (e2e)', () => {
       past.setUTCDate(past.getUTCDate() - 21);
       const future = new Date();
       future.setUTCDate(future.getUTCDate() + 21);
-      const series = await createSeries(OWNER_TOKEN, section.id, {
+      const series = await createSeries(section.token, section.id, {
         dayOfWeek: past.getUTCDay(),
         startDate: past.toISOString().slice(0, 10),
         endDate: future.toISOString().slice(0, 10),
@@ -701,7 +712,7 @@ describe('Trainings (e2e)', () => {
       const before = await bodyOf<{ items: TrainingResponseDto[] }>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/trainings?limit=100`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       const seriesTrainingsBefore = before.items.filter(
@@ -715,7 +726,7 @@ describe('Trainings (e2e)', () => {
       const newDayOfWeek = (past.getUTCDay() + 2) % 7;
       await request(app.getHttpServer())
         .patch(`/api/v1/sections/${section.id}/training-series/${series.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({ dayOfWeek: newDayOfWeek })
         .expect(200);
 
@@ -724,7 +735,7 @@ describe('Trainings (e2e)', () => {
           .get(
             `/api/v1/sections/${section.id}/trainings/${historicalTraining.id}`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       expect(historicalAfter.startsAt).toBe(historicalTraining.startsAt);
@@ -732,7 +743,7 @@ describe('Trainings (e2e)', () => {
       const after = await bodyOf<{ items: TrainingResponseDto[] }>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/trainings?limit=100`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       const futureSeriesTrainings = after.items.filter(
@@ -753,7 +764,7 @@ describe('Trainings (e2e)', () => {
   describe('cancel', () => {
     it('scope THIS cancels only the addressed Training and preserves its RSVPs', async () => {
       const section = await createSectionWithRoles();
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const training = await createTraining(section.token, section.id, {
         startsAt: '2031-06-10T18:00:00.000Z',
         endsAt: '2031-06-10T20:00:00.000Z',
       });
@@ -768,7 +779,7 @@ describe('Trainings (e2e)', () => {
           .post(
             `/api/v1/sections/${section.id}/trainings/${training.id}/cancel`,
           )
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .send({ scope: 'THIS', reason: 'Holiday' })
           .expect(201),
       );
@@ -778,11 +789,11 @@ describe('Trainings (e2e)', () => {
 
     it('scope THIS_AND_FOLLOWING cancels this and later occurrences, leaving earlier ones scheduled', async () => {
       const section = await createSectionWithRoles();
-      const series = await createSeries(OWNER_TOKEN, section.id);
+      const series = await createSeries(section.token, section.id);
       const list = await bodyOf<{ items: TrainingResponseDto[] }>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/trainings?limit=100`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       const seriesTrainings = list.items
@@ -792,20 +803,20 @@ describe('Trainings (e2e)', () => {
 
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/trainings/${second.id}/cancel`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({ scope: 'THIS_AND_FOLLOWING', reason: null })
         .expect(201);
 
       const firstAfter = await bodyOf<TrainingResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/trainings/${first.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       const secondAfter = await bodyOf<TrainingResponseDto>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${section.id}/trainings/${second.id}`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       expect(firstAfter.status).toBe('SCHEDULED');
@@ -814,13 +825,13 @@ describe('Trainings (e2e)', () => {
 
     it('RSVP is rejected once a Training is cancelled', async () => {
       const section = await createSectionWithRoles();
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const training = await createTraining(section.token, section.id, {
         startsAt: '2031-06-11T18:00:00.000Z',
         endsAt: '2031-06-11T20:00:00.000Z',
       });
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/trainings/${training.id}/cancel`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${section.token}`)
         .send({ scope: 'THIS', reason: null })
         .expect(201);
 
@@ -840,7 +851,7 @@ describe('Trainings (e2e)', () => {
   describe('visibility', () => {
     it('a MEMBERS_ONLY training is invisible to an outsider', async () => {
       const section = await createSectionWithRoles();
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const training = await createTraining(section.token, section.id, {
         visibility: TrainingVisibility.MEMBERS_ONLY,
       });
 
@@ -852,7 +863,7 @@ describe('Trainings (e2e)', () => {
 
     it('a PUBLIC training is visible to an outsider', async () => {
       const section = await createSectionWithRoles();
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const training = await createTraining(section.token, section.id, {
         visibility: TrainingVisibility.PUBLIC,
       });
 
@@ -871,7 +882,7 @@ describe('Trainings (e2e)', () => {
   describe('RSVP', () => {
     it('a member can set, change and delete their RSVP', async () => {
       const section = await createSectionWithRoles();
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const training = await createTraining(section.token, section.id, {
         startsAt: '2031-06-12T18:00:00.000Z',
         endsAt: '2031-06-12T20:00:00.000Z',
       });
@@ -903,7 +914,7 @@ describe('Trainings (e2e)', () => {
       const rsvps = await bodyOf<TrainingRsvpResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/trainings/${training.id}/rsvps`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       expect(rsvps).toHaveLength(0);
@@ -911,7 +922,7 @@ describe('Trainings (e2e)', () => {
 
     it('RSVP is frozen once the training has started', async () => {
       const section = await createSectionWithRoles();
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const training = await createTraining(section.token, section.id, {
         startsAt: new Date(Date.now() - 60_000).toISOString(),
         endsAt: new Date(Date.now() + 60 * 60_000).toISOString(),
       });
@@ -928,7 +939,7 @@ describe('Trainings (e2e)', () => {
 
     it('MEMBERS_ONLY rejects an outsider RSVP', async () => {
       const section = await createSectionWithRoles();
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const training = await createTraining(section.token, section.id, {
         visibility: TrainingVisibility.MEMBERS_ONLY,
       });
 
@@ -943,7 +954,7 @@ describe('Trainings (e2e)', () => {
     // PUBLIC alone is sufficient, there is no separate opt-in to also set.
     it('PUBLIC allows an outsider RSVP', async () => {
       const section = await createSectionWithRoles();
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const training = await createTraining(section.token, section.id, {
         visibility: TrainingVisibility.PUBLIC,
       });
 
@@ -956,7 +967,7 @@ describe('Trainings (e2e)', () => {
 
     it('setting the same RSVP twice never creates a duplicate row', async () => {
       const section = await createSectionWithRoles();
-      const training = await createTraining(OWNER_TOKEN, section.id, {
+      const training = await createTraining(section.token, section.id, {
         startsAt: '2031-06-13T18:00:00.000Z',
         endsAt: '2031-06-13T20:00:00.000Z',
       });
@@ -975,7 +986,7 @@ describe('Trainings (e2e)', () => {
       const rsvps = await bodyOf<TrainingRsvpResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/trainings/${training.id}/rsvps`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${section.token}`)
           .expect(200),
       );
       expect(
@@ -990,19 +1001,19 @@ describe('Trainings (e2e)', () => {
     it('a Training cannot be edited through a mismatched sectionId (cross-Section IDOR)', async () => {
       const sectionA = await createSectionWithRoles();
       const sectionB = await createSectionWithRoles();
-      const training = await createTraining(OWNER_TOKEN, sectionA.id);
+      const training = await createTraining(sectionA.token, sectionA.id);
 
       await request(app.getHttpServer())
         .patch(`/api/v1/sections/${sectionB.id}/trainings/${training.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${sectionA.token}`)
         .send({ scope: 'THIS', locationName: 'Hijacked' })
         .expect(404);
     });
 
     it('an OWNER of a different Section has no TRAINING_MANAGE rights here (404, not 403)', async () => {
       const sectionA = await createSectionWithRoles();
-      await createSectionWithRoles(); // sectionB, owned by the same OWNER_TOKEN but a distinct target
-      const training = await createTraining(OWNER_TOKEN, sectionA.id);
+      await createSectionWithRoles(); // sectionB - a distinct target, owner irrelevant
+      const training = await createTraining(sectionA.token, sectionA.id);
 
       // OUTSIDER_TOKEN holds no role anywhere near sectionA.
       await request(app.getHttpServer())

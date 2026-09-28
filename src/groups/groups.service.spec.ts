@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
 import { CreateGroupInput } from './dto/create-group.schema';
@@ -6,6 +6,7 @@ import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
 import { SectionMembership } from './entities/section-membership.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
+import { FormalGroupAffiliation } from './entities/formal-group-affiliation.entity';
 import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
 import { ImageAssetService } from '../storage/image-asset.service';
@@ -65,6 +66,18 @@ function buildRoleAssignment(
   return Object.assign(assignment, overrides);
 }
 
+function buildFormalGroupAffiliation(
+  overrides: Partial<FormalGroupAffiliation> = {},
+): FormalGroupAffiliation {
+  const affiliation = new FormalGroupAffiliation();
+  affiliation.id = 'formal-group-affiliation-1';
+  affiliation.user = buildUser();
+  affiliation.group = buildGroup();
+  affiliation.startedOn = null;
+  affiliation.endedOn = null;
+  return Object.assign(affiliation, overrides);
+}
+
 interface MockRouting {
   groupResults?: (Group | null)[];
   roleAssignmentResults?: (RoleAssignment | null)[];
@@ -72,6 +85,7 @@ interface MockRouting {
   groupFindResults?: Group[];
   children?: Group[];
   sections?: Section[];
+  formalGroupAffiliationResult?: FormalGroupAffiliation | null;
 }
 
 function buildMockEm(routing: MockRouting = {}) {
@@ -110,6 +124,11 @@ function buildMockEm(routing: MockRouting = {}) {
     if (entity === SectionMembership) {
       return Promise.resolve(null);
     }
+    // create()'s USER_ALREADY_HAS_FORMAL_GROUP pre-check - defaults to "no
+    // active formal group" unless a test explicitly routes one.
+    if (entity === FormalGroupAffiliation) {
+      return Promise.resolve(routing.formalGroupAffiliationResult ?? null);
+    }
     throw new Error(
       `Unexpected findOne entity in test mock: ${String(entity)}`,
     );
@@ -145,7 +164,7 @@ function buildMockEm(routing: MockRouting = {}) {
       ),
   };
 
-  return { em: raw as unknown as EntityManager, persist, findOne, find };
+  return { em: raw as unknown as EntityManager, persist, findOne, find, flush };
 }
 
 function buildService(em: EntityManager) {
@@ -215,7 +234,7 @@ function buildService(em: EntityManager) {
 
 describe('GroupsService', () => {
   describe('create', () => {
-    it('creates a Root Group and grants the creator OWNER directly - no membership, no MEMBER role at all', async () => {
+    it('creates a Root Group, grants the creator OWNER, and sets the new Group as their active FormalGroupAffiliation', async () => {
       const { em, persist } = buildMockEm();
       const { service } = buildService(em);
       const user = buildUser();
@@ -227,13 +246,66 @@ describe('GroupsService', () => {
       expect(persistedGroup.name).toBe('Capoeira Angola SP');
       expect(persistedGroup.parentGroup).toBeNull();
 
-      // insertRoleAssignment is the only other persist() call - a single
-      // OWNER RoleAssignment, no membership, no MEMBER.
+      // insertRoleAssignment - a single OWNER RoleAssignment, no
+      // membership, no MEMBER.
       const persistedOwnerRole = persist.mock.calls[1][0] as RoleAssignment;
       expect(persistedOwnerRole.role).toBe(GroupRole.OWNER);
       expect(persistedOwnerRole.user).toBe(user);
       expect(persistedOwnerRole.group).toBe(persistedGroup);
-      expect(persist).toHaveBeenCalledTimes(2);
+
+      // The creator does not need a prior SectionMembership - the new
+      // Group becomes their formal Group directly off the back of OWNER.
+      const persistedAffiliation = persist.mock
+        .calls[2][0] as FormalGroupAffiliation;
+      expect(persistedAffiliation).toBeInstanceOf(FormalGroupAffiliation);
+      expect(persistedAffiliation.user).toBe(user);
+      expect(persistedAffiliation.group).toBe(persistedGroup);
+      expect(persistedAffiliation.endedOn).toBeNull();
+
+      expect(persist).toHaveBeenCalledTimes(3);
+    });
+
+    it('rejects with 409 USER_ALREADY_HAS_FORMAL_GROUP when the user already has an active formal Group, and creates nothing', async () => {
+      const existingAffiliation = buildFormalGroupAffiliation();
+      const { em, persist } = buildMockEm({
+        formalGroupAffiliationResult: existingAffiliation,
+      });
+      const { service } = buildService(em);
+      const user = buildUser();
+      const promise = service.create(user, buildCreateInput());
+
+      await expect(promise).rejects.toBeInstanceOf(ConflictException);
+      await expect(promise).rejects.toMatchObject({
+        response: { code: 'USER_ALREADY_HAS_FORMAL_GROUP' },
+      });
+
+      // Blocked before any Group/RoleAssignment/FormalGroupAffiliation is
+      // ever persisted - and the existing affiliation is left untouched.
+      expect(persist).not.toHaveBeenCalled();
+      expect(existingAffiliation.endedOn).toBeNull();
+    });
+
+    it('rolls back the whole transaction when creating the FormalGroupAffiliation fails', async () => {
+      const { em, flush } = buildMockEm();
+      const { service } = buildService(em);
+      const user = buildUser();
+
+      // Call #1 = insertRoleAssignment's flush (OWNER) succeeds; call #2 =
+      // the FormalGroupAffiliation flush fails.
+      flush
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('db unavailable'));
+
+      await expect(service.create(user, buildCreateInput())).rejects.toThrow(
+        'db unavailable',
+      );
+
+      // The mocked transactional() runs the callback inline (no real DB),
+      // so a thrown error here is exactly what propagates from a real
+      // transaction rollback - the caller never receives a Group, and no
+      // further writes (the final audit-log flush) happen after the
+      // failure.
+      expect(flush).toHaveBeenCalledTimes(2);
     });
   });
 

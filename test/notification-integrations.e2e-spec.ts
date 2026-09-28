@@ -27,7 +27,9 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { User } from '../src/users/entities/user.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { Section } from '../src/groups/entities/section.entity';
@@ -51,19 +53,15 @@ import { NotificationTargetType } from '../src/notifications/enums/notification-
 import { NotificationType } from '../src/notifications/enums/notification-type.enum';
 import { ExpoPushTransport } from '../src/notifications/expo-push.transport';
 
-const OWNER_TOKEN = 'valid-notif-integ-owner-token';
+// No fixed "OWNER_TOKEN" here - GroupsService.create now allows at most one
+// active FormalGroupAffiliation per user, and this file needs many
+// independent Groups, so createGroup() mints a fresh, throwaway owner per
+// call instead (see its own comment).
 const MEMBER_TOKEN = 'valid-notif-integ-member-token';
 
-const OWNER_CLERK_ID = 'user_test_notif_integ_owner';
 const MEMBER_CLERK_ID = 'user_test_notif_integ_member';
 
 const TOKEN_TO_AUTH: Record<string, AuthContext> = {
-  [OWNER_TOKEN]: {
-    userId: OWNER_CLERK_ID,
-    sessionId: 'sess_notif_integ_owner',
-    tokenType: 'session_token',
-    claims: { sub: OWNER_CLERK_ID, sid: 'sess_notif_integ_owner' },
-  },
   [MEMBER_TOKEN]: {
     userId: MEMBER_CLERK_ID,
     sessionId: 'sess_notif_integ_member',
@@ -87,8 +85,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     ];
   }),
 );
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -209,9 +205,19 @@ describe('Notification domain integrations (e2e)', () => {
       await cleanup.nativeDelete(Section, {
         parentGroup: { $in: createdGroupIds },
       });
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -266,27 +272,26 @@ describe('Notification domain integrations (e2e)', () => {
 
   async function createGroup(
     overrides: Record<string, unknown> = {},
-    actorToken: string = OWNER_TOKEN,
-  ): Promise<GroupResponseDto> {
-    const group = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${actorToken}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(group.id);
-    return group;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'notif-integ',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   async function createSection(
-    groupId: string,
+    group: { id: string; token: string },
     overrides: Record<string, unknown> = {},
   ): Promise<SectionResponseDto> {
     const section = await bodyOf<SectionResponseDto>(
       request(app.getHttpServer())
-        .post(`/api/v1/groups/${groupId}/sections`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .post(`/api/v1/groups/${group.id}/sections`)
+        .set('Authorization', `Bearer ${group.token}`)
         .send(sectionPayload(overrides))
         .expect(201),
     );
@@ -295,12 +300,13 @@ describe('Notification domain integrations (e2e)', () => {
   }
 
   async function addSectionMember(
+    ownerToken: string,
     sectionId: string,
     memberToken: string,
   ): Promise<void> {
     await request(app.getHttpServer())
       .post(`/api/v1/sections/${sectionId}/members`)
-      .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
       .send({ userId: localUserIdByToken.get(memberToken) })
       .expect(201);
   }
@@ -327,7 +333,11 @@ describe('Notification domain integrations (e2e)', () => {
         locationAddress: null,
         latitude: null,
         longitude: null,
-        trainerUserId: localUserIdByToken.get(OWNER_TOKEN),
+        // Just needs to be some valid, always-registered user id - no test
+        // in this file asserts on trainer identity, and the section's own
+        // owner is now a fresh, per-test throwaway user (see createGroup's
+        // own comment), not a fixed token this default could reach.
+        trainerUserId: localUserIdByToken.get(MEMBER_TOKEN),
         description: 'Regular training',
         visibility: TrainingVisibility.MEMBERS_ONLY,
         ...overrides,
@@ -336,20 +346,20 @@ describe('Notification domain integrations (e2e)', () => {
 
     it('cancelling a Training notifies the Section member with TRAINING_CANCELLED, not the actor-only default', async () => {
       const group = await createGroup();
-      const section = await createSection(group.id);
-      await addSectionMember(section.id, MEMBER_TOKEN);
+      const section = await createSection(group);
+      await addSectionMember(group.token, section.id, MEMBER_TOKEN);
 
       const training = await bodyOf<TrainingResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/sections/${section.id}/trainings`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .send(trainingPayload())
           .expect(201),
       );
 
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/trainings/${training.id}/cancel`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${group.token}`)
         .send({ scope: 'THIS', reason: null })
         .expect(201);
 
@@ -365,13 +375,13 @@ describe('Notification domain integrations (e2e)', () => {
 
     it('changing only the description never creates a Notification', async () => {
       const group = await createGroup();
-      const section = await createSection(group.id);
-      await addSectionMember(section.id, MEMBER_TOKEN);
+      const section = await createSection(group);
+      await addSectionMember(group.token, section.id, MEMBER_TOKEN);
 
       const training = await bodyOf<TrainingResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/sections/${section.id}/trainings`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .send(trainingPayload())
           .expect(201),
       );
@@ -380,7 +390,7 @@ describe('Notification domain integrations (e2e)', () => {
 
       await request(app.getHttpServer())
         .patch(`/api/v1/sections/${section.id}/trainings/${training.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${group.token}`)
         .send({ scope: 'THIS', description: 'A brand new description only' })
         .expect(200);
 
@@ -390,20 +400,20 @@ describe('Notification domain integrations (e2e)', () => {
 
     it('changing the time creates a TRAINING_TIME_CHANGED Notification', async () => {
       const group = await createGroup();
-      const section = await createSection(group.id);
-      await addSectionMember(section.id, MEMBER_TOKEN);
+      const section = await createSection(group);
+      await addSectionMember(group.token, section.id, MEMBER_TOKEN);
 
       const training = await bodyOf<TrainingResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/sections/${section.id}/trainings`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .send(trainingPayload())
           .expect(201),
       );
 
       await request(app.getHttpServer())
         .patch(`/api/v1/sections/${section.id}/trainings/${training.id}`)
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+        .set('Authorization', `Bearer ${group.token}`)
         .send({
           scope: 'THIS',
           startsAt: '2031-06-02T19:00:00.000Z',
@@ -425,13 +435,13 @@ describe('Notification domain integrations (e2e)', () => {
   describe('Announcements', () => {
     it('a normal Announcement notifies with ANNOUNCEMENT_PUBLISHED', async () => {
       const group = await createGroup();
-      const section = await createSection(group.id);
-      await addSectionMember(section.id, MEMBER_TOKEN);
+      const section = await createSection(group);
+      await addSectionMember(group.token, section.id, MEMBER_TOKEN);
 
       const announcement = await bodyOf<AnnouncementResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/sections/${section.id}/announcements`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .send({
             title: 'Regular update',
             body: 'Nothing urgent.',
@@ -451,13 +461,13 @@ describe('Notification domain integrations (e2e)', () => {
 
     it('an important Announcement notifies with IMPORTANT_ANNOUNCEMENT_PUBLISHED', async () => {
       const group = await createGroup();
-      const section = await createSection(group.id);
-      await addSectionMember(section.id, MEMBER_TOKEN);
+      const section = await createSection(group);
+      await addSectionMember(group.token, section.id, MEMBER_TOKEN);
 
       const announcement = await bodyOf<AnnouncementResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/sections/${section.id}/announcements`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .send({
             title: 'Urgent update',
             body: 'Please read.',
@@ -481,7 +491,7 @@ describe('Notification domain integrations (e2e)', () => {
   describe('Membership', () => {
     it('a private Section join request notifies the OWNER with SECTION_JOIN_REQUEST_RECEIVED and a resolvable deep link', async () => {
       const group = await createGroup();
-      const section = await createSection(group.id, { isPublic: false });
+      const section = await createSection(group, { isPublic: false });
 
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/join`)
@@ -489,7 +499,7 @@ describe('Notification domain integrations (e2e)', () => {
         .send({ targetType: MembershipRequestTarget.SECTION })
         .expect(200);
 
-      const ownerNotifications = await notificationsFor(OWNER_TOKEN);
+      const ownerNotifications = await notificationsFor(group.token);
       const found = ownerNotifications.items.find(
         (n) => n.type === NotificationType.SECTION_JOIN_REQUEST_RECEIVED,
       );
@@ -502,7 +512,7 @@ describe('Notification domain integrations (e2e)', () => {
       const pending = await bodyOf<MembershipRequestResponseDto[]>(
         request(app.getHttpServer())
           .get(`/api/v1/sections/${found!.contextSectionId}/join-requests`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(200),
       );
       expect(pending.some((r) => r.id === found!.targetId)).toBe(true);
@@ -512,20 +522,22 @@ describe('Notification domain integrations (e2e)', () => {
   describe('Hierarchy invitations', () => {
     it('inviting a Group as a child notifies the target Group OWNER with HIERARCHY_INVITATION and a resolvable deep link', async () => {
       const parent = await createGroup({ name: 'Notif Integ Parent Org' });
-      const target = await createGroup(
-        { name: 'Notif Integ Target Org' },
-        MEMBER_TOKEN,
-      );
+      // A genuinely different owner than `parent` - the point of this test
+      // is the cross-owner hierarchy-invitation flow, so `target` must be
+      // owned by someone else. createGroup() always mints a fresh,
+      // independent owner (see its own comment), which already guarantees
+      // that without needing a second fixed token here.
+      const target = await createGroup({ name: 'Notif Integ Target Org' });
 
       const invitation = await bodyOf<HierarchyInvitationResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${parent.id}/child-invitations`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${parent.token}`)
           .send({ targetType: 'GROUP', targetId: target.id })
           .expect(201),
       );
 
-      const targetOwnerNotifications = await notificationsFor(MEMBER_TOKEN);
+      const targetOwnerNotifications = await notificationsFor(target.token);
       const found = targetOwnerNotifications.items.find(
         (n) => n.type === NotificationType.HIERARCHY_INVITATION_RECEIVED,
       );
@@ -547,7 +559,7 @@ describe('Notification domain integrations (e2e)', () => {
           .get(
             `/api/v1/groups/${found!.contextGroupId}/hierarchy-invitations/received`,
           )
-          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+          .set('Authorization', `Bearer ${target.token}`)
           .expect(200),
       );
       expect(received.some((r) => r.id === found!.targetId)).toBe(true);

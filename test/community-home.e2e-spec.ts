@@ -45,10 +45,12 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { CommunityHomeResponseDto } from '../src/groups/dto/community-home-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { GroupFollow } from '../src/groups/entities/group-follow.entity';
 import { Section } from '../src/groups/entities/section.entity';
@@ -104,8 +106,6 @@ for (const name of TOKENS) {
 function tokenFor(name: (typeof TOKENS)[number]): string {
   return `valid-${name}-token`;
 }
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -211,9 +211,19 @@ describe('Community Home (e2e)', () => {
       // Sections must be removed before their parent Groups to satisfy the
       // parent_group_id foreign key (no cascade - see section.entity.ts).
       await cleanup.nativeDelete(Section, { id: { $in: createdSectionIds } });
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createRootGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
@@ -239,19 +249,28 @@ describe('Community Home (e2e)', () => {
     };
   }
 
+  // Every caller in this file passed tokenFor('ch-owner') here - the same,
+  // single fixed identity reused across the whole file. GroupsService.create
+  // now allows at most one active FormalGroupAffiliation per user (see
+  // USER_ALREADY_HAS_FORMAL_GROUP), so a fixed 'ch-owner' would 409 on every
+  // call after the first. None of these tests actually care who owns the
+  // org - only that it has a working OWNER able to create Sections/grant
+  // roles within that one test - so this now mints a fresh, throwaway owner
+  // per call instead, and returns it (merged onto the GroupResponseDto
+  // fields, so `org.id`/`.name`/... keep working exactly as before) for the
+  // caller to act as for the rest of that test, via `.token`/`.userId`.
   async function createRootGroup(
-    token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${token}`)
-        .send(groupPayload(overrides))
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  ): Promise<GroupResponseDto & { token: string; userId: string }> {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'ch-owner',
+      groupOverrides: groupPayload(overrides),
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   async function createSection(
@@ -444,20 +463,20 @@ describe('Community Home (e2e)', () => {
 
   describe('My Communities', () => {
     it('lists every Group the user holds ADMIN on (Group has no MEMBER role - it is administered only via OWNER/ADMIN)', async () => {
-      const orgOne = await createRootGroup(tokenFor('ch-owner'), {
+      const orgOne = await createRootGroup({
         name: 'Cordão de Ouro',
       });
-      const orgTwo = await createRootGroup(tokenFor('ch-owner'), {
+      const orgTwo = await createRootGroup({
         name: 'Abadá',
       });
       await grantGroupRole(
-        tokenFor('ch-owner'),
+        orgOne.token,
         orgOne.id,
         tokenFor('ch-member'),
         GroupRole.ADMIN,
       );
       await grantGroupRole(
-        tokenFor('ch-owner'),
+        orgTwo.token,
         orgTwo.id,
         tokenFor('ch-member'),
         GroupRole.ADMIN,
@@ -480,19 +499,15 @@ describe('Community Home (e2e)', () => {
     });
 
     it('preserves multiple Roles held on the same Section as an array, never collapsed to one `role`', async () => {
-      const org = await createRootGroup(tokenFor('ch-owner'), {
+      const org = await createRootGroup({
         name: 'Cordão de Ouro (multi-role Section test)',
       });
-      const section = await createSection(tokenFor('ch-owner'), org.id, {
+      const section = await createSection(org.token, org.id, {
         name: 'Multi-role Section',
       });
-      await addSectionMember(
-        tokenFor('ch-owner'),
-        section.id,
-        tokenFor('ch-member'),
-      );
+      await addSectionMember(org.token, section.id, tokenFor('ch-member'));
       await grantSectionRole(
-        tokenFor('ch-owner'),
+        org.token,
         section.id,
         tokenFor('ch-member'),
         GroupRole.INSTRUCTOR,
@@ -512,10 +527,10 @@ describe('Community Home (e2e)', () => {
     // effect on the Group above it (a Group has no membership to derive
     // anything from in the first place).
     it('joining only a Section never adds its parent Group to myCommunities at all', async () => {
-      const org = await createRootGroup(tokenFor('ch-owner'), {
+      const org = await createRootGroup({
         name: 'Cordão de Ouro (Section-only test)',
       });
-      const section = await createSection(tokenFor('ch-owner'), org.id, {
+      const section = await createSection(org.token, org.id, {
         name: 'Poznań',
       });
 
@@ -541,16 +556,16 @@ describe('Community Home (e2e)', () => {
 
   describe('Pending Invitations', () => {
     it("shows the caller's own pending invitation and never another user's - Section-scoped, Group has no invitation flow", async () => {
-      const org = await createRootGroup(tokenFor('ch-owner'), {
+      const org = await createRootGroup({
         name: 'Invitation Test Org',
       });
-      const section = await createSection(tokenFor('ch-owner'), org.id, {
+      const section = await createSection(org.token, org.id, {
         name: 'Invitation Test Section',
       });
 
       await request(app.getHttpServer())
         .post(`/api/v1/sections/${section.id}/invitations`)
-        .set('Authorization', `Bearer ${tokenFor('ch-owner')}`)
+        .set('Authorization', `Bearer ${org.token}`)
         .send({
           targetType: 'SECTION',
           invitedUserId: localUserIdByToken.get(tokenFor('ch-invitee')),
@@ -581,22 +596,19 @@ describe('Community Home (e2e)', () => {
 
   describe('Pending Join Requests', () => {
     it('are visible to a caller with GROUP_JOIN_REQUEST_REVIEW on a Section, and hidden from a plain MEMBER of the very same Section', async () => {
-      const org = await createRootGroup(tokenFor('ch-owner'), {
+      const org = await createRootGroup({
         name: 'Join Request Test Org',
       });
-      // The Section creator (ch-owner) automatically becomes its OWNER -
-      // no separate grant needed for the review-capability assertion below.
-      const section = await createSection(tokenFor('ch-owner'), org.id, {
+      // The Section creator (org's fresh owner) automatically becomes its
+      // OWNER - no separate grant needed for the review-capability
+      // assertion below.
+      const section = await createSection(org.token, org.id, {
         name: 'Join Request Test Section',
         isPublic: false,
       });
+      await addSectionMember(org.token, section.id, tokenFor('ch-member'));
       await addSectionMember(
-        tokenFor('ch-owner'),
-        section.id,
-        tokenFor('ch-member'),
-      );
-      await addSectionMember(
-        tokenFor('ch-owner'),
+        org.token,
         section.id,
         tokenFor('ch-admin'),
         GroupRole.ADMIN,
@@ -608,7 +620,7 @@ describe('Community Home (e2e)', () => {
         .send({ targetType: 'SECTION' })
         .expect(200);
 
-      const ownerHome = await getHome(tokenFor('ch-owner'));
+      const ownerHome = await getHome(org.token);
       expect(
         ownerHome.capabilities.canReviewJoinRequestsInSectionIds,
       ).toContain(section.id);
@@ -641,15 +653,15 @@ describe('Community Home (e2e)', () => {
 
   describe('Hidden communities', () => {
     it('a hidden Section is fully visible to its own member but leaks nothing to an unrelated outsider', async () => {
-      const org = await createRootGroup(tokenFor('ch-owner'), {
+      const org = await createRootGroup({
         name: 'Hidden Org',
       });
-      const hiddenSection = await createSection(tokenFor('ch-owner'), org.id, {
+      const hiddenSection = await createSection(org.token, org.id, {
         name: 'Hidden Section',
         isHidden: true,
       });
       await addSectionMember(
-        tokenFor('ch-owner'),
+        org.token,
         hiddenSection.id,
         tokenFor('ch-member'),
       );
@@ -678,22 +690,22 @@ describe('Community Home (e2e)', () => {
 
   describe('mySections / myGroups', () => {
     it('a user belonging to several Sections of the same Group: myGroups lists that Group exactly once', async () => {
-      const org = await createRootGroup(tokenFor('ch-owner'), {
+      const org = await createRootGroup({
         name: 'Overview Org',
       });
-      const sectionA = await createSection(tokenFor('ch-owner'), org.id, {
+      const sectionA = await createSection(org.token, org.id, {
         name: 'Overview Section A',
       });
-      const sectionB = await createSection(tokenFor('ch-owner'), org.id, {
+      const sectionB = await createSection(org.token, org.id, {
         name: 'Overview Section B',
       });
       await addSectionMember(
-        tokenFor('ch-owner'),
+        org.token,
         sectionA.id,
         tokenFor('ch-multi-section'),
       );
       await addSectionMember(
-        tokenFor('ch-owner'),
+        org.token,
         sectionB.id,
         tokenFor('ch-multi-section'),
       );
@@ -714,14 +726,14 @@ describe('Community Home (e2e)', () => {
     });
 
     it('a Group related through both Section membership AND an explicit follow appears exactly once, with both flags true', async () => {
-      const org = await createRootGroup(tokenFor('ch-owner'), {
+      const org = await createRootGroup({
         name: 'Both Relation Org',
       });
-      const section = await createSection(tokenFor('ch-owner'), org.id, {
+      const section = await createSection(org.token, org.id, {
         name: 'Both Relation Section',
       });
       await addSectionMember(
-        tokenFor('ch-owner'),
+        org.token,
         section.id,
         tokenFor('ch-both-relation'),
       );
@@ -744,7 +756,7 @@ describe('Community Home (e2e)', () => {
 
   describe('Group follow/unfollow', () => {
     it('follow/unfollow are idempotent and toggle isFollowing on GroupResponseDto without granting any membership', async () => {
-      const org = await createRootGroup(tokenFor('ch-owner'), {
+      const org = await createRootGroup({
         name: 'Follow Test Org',
       });
 
@@ -818,14 +830,14 @@ describe('Community Home (e2e)', () => {
       // The caller's own Group/Section - close to their own location (the
       // helper's own default city, Poznań), but must never appear in
       // nearbySections/nearbyGroups (it's already "mine").
-      const myOrg = await createRootGroup(tokenFor('ch-owner'), {
+      const myOrg = await createRootGroup({
         name: 'Nearby Mine Org',
       });
-      const mySection = await createSection(tokenFor('ch-owner'), myOrg.id, {
+      const mySection = await createSection(myOrg.token, myOrg.id, {
         name: 'Nearby Mine Section',
       });
       await addSectionMember(
-        tokenFor('ch-owner'),
+        myOrg.token,
         mySection.id,
         tokenFor('ch-nearby-user'),
       );
@@ -836,26 +848,22 @@ describe('Community Home (e2e)', () => {
       // actually produces a real, distinct distance here, not a raw
       // latitude/longitude override (no longer trusted from the request
       // body at all).
-      const nearOrg = await createRootGroup(tokenFor('ch-owner'), {
+      const nearOrg = await createRootGroup({
         name: 'Nearby Near Org',
       });
-      const nearSection = await createSection(
-        tokenFor('ch-owner'),
-        nearOrg.id,
-        {
-          name: 'Nearby Near Section',
-          city: 'Luboń',
-          region: 'Greater Poland',
-          geonameId: 3092856,
-        },
-      );
+      const nearSection = await createSection(nearOrg.token, nearOrg.id, {
+        name: 'Nearby Near Section',
+        city: 'Luboń',
+        region: 'Greater Poland',
+        geonameId: 3092856,
+      });
 
       // A farther, unrelated Section of a different Group (~20km away -
       // Murowana Goślina) - still within the default 50km radius.
-      const farOrg = await createRootGroup(tokenFor('ch-owner'), {
+      const farOrg = await createRootGroup({
         name: 'Nearby Far Org',
       });
-      const farSection = await createSection(tokenFor('ch-owner'), farOrg.id, {
+      const farSection = await createSection(farOrg.token, farOrg.id, {
         name: 'Nearby Far Section',
         city: 'Murowana Goślina',
         region: 'Greater Poland',
@@ -900,14 +908,14 @@ describe('Community Home (e2e)', () => {
 
   describe('Paginated "See all" endpoints', () => {
     it('GET /community/{sections,groups}/mine mirror the same mySections/myGroups data Home returns, fully paginated', async () => {
-      const org = await createRootGroup(tokenFor('ch-owner'), {
+      const org = await createRootGroup({
         name: 'See All Org',
       });
-      const section = await createSection(tokenFor('ch-owner'), org.id, {
+      const section = await createSection(org.token, org.id, {
         name: 'See All Section',
       });
       await addSectionMember(
-        tokenFor('ch-owner'),
+        org.token,
         section.id,
         tokenFor('ch-admin'),
         GroupRole.ADMIN,
@@ -941,10 +949,10 @@ describe('Community Home (e2e)', () => {
       // fixture Section ends up, so the request's own location query params
       // (below) must point at that same real place (not an arbitrary (0,0)
       // the Section could never actually be derived to).
-      const org = await createRootGroup(tokenFor('ch-owner'), {
+      const org = await createRootGroup({
         name: 'See All Nearby Org',
       });
-      const section = await createSection(tokenFor('ch-owner'), org.id, {
+      const section = await createSection(org.token, org.id, {
         name: 'See All Nearby Section',
       });
 

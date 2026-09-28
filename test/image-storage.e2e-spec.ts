@@ -30,11 +30,13 @@ import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { closeE2eApp } from './close-e2e-app.helper';
+import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { R2StorageService } from '../src/storage/r2-storage.service';
 import { User } from '../src/users/entities/user.entity';
 import { UserResponseDto } from '../src/users/dto/user-response.dto';
 import { AvatarType } from '../src/users/enums/avatar-type.enum';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
+import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
 import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
@@ -73,6 +75,13 @@ class FakeR2StorageService {
   }
 }
 
+// OWNER_TOKEN stays a fixed, valid identity here - GroupsService.create
+// allows at most one active FormalGroupAffiliation per user, but OWNER_TOKEN
+// itself no longer creates any Group (see createGroup's own comment below -
+// it mints a fresh, throwaway owner per call instead). OWNER_TOKEN is still
+// used throughout this file for things a one-per-user Group limit never
+// touches: its own User profile-image, standalone Sections
+// (createSection()), and personal Events (createPersonalEvent()).
 const OWNER_TOKEN = 'valid-image-storage-owner-token';
 const OUTSIDER_TOKEN = 'valid-image-storage-outsider-token';
 
@@ -109,8 +118,6 @@ const FIXTURE_CLERK_PROFILES: Record<
     },
   },
 };
-
-const TEST_CLERK_USER_IDS = Object.keys(FIXTURE_CLERK_PROFILES);
 
 const fixtureClerkAuthService = {
   verifySessionToken: (token: string) => {
@@ -231,37 +238,56 @@ describe('Image storage (R2) (e2e)', () => {
         ],
       });
       await cleanup.nativeDelete(Section, { id: { $in: createdSectionIds } });
+      // FormalGroupAffiliation.group has deleteRule 'no action' - must be
+      // cleared before the Groups themselves are deleted below (see
+      // user-profile.e2e-spec.ts's identical cleanup step).
+      await cleanup.nativeDelete(FormalGroupAffiliation, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(Group, { id: { $in: createdGroupIds } });
+      // FIXTURE_CLERK_PROFILES, not the old frozen TEST_CLERK_USER_IDS
+      // snapshot - createGroup (via createFreshGroupOwner) registers a
+      // fresh fixture user per call, mutating FIXTURE_CLERK_PROFILES in
+      // place, so it must be read fresh here to catch every one of them.
       await cleanup.nativeDelete(User, {
-        clerkUserId: { $in: TEST_CLERK_USER_IDS },
+        clerkUserId: { $in: Object.keys(FIXTURE_CLERK_PROFILES) },
       });
     });
   });
 
-  async function createGroup(): Promise<GroupResponseDto> {
-    const created = await bodyOf<GroupResponseDto>(
-      request(app.getHttpServer())
-        .post('/api/v1/groups')
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-        .send({
-          name: 'Image Storage Test Group',
-          description: null,
-          logoUrl: 'https://legacy.example.com/old-group-logo.png',
-          coverImageUrl: null,
-          contactEmail: null,
-          contactPhone: null,
-          websiteUrl: null,
-          facebookUrl: null,
-          instagramUrl: null,
-          youtubeUrl: null,
-          isPublic: true,
-          isHidden: false,
-          memberInvitesAllowed: false,
-        })
-        .expect(201),
-    );
-    createdGroupIds.push(created.id);
-    return created;
+  // No fixed "OWNER_TOKEN" as a Group creator - GroupsService.create now
+  // allows at most one active FormalGroupAffiliation per user, and this
+  // file needs several independent Groups, so this mints a fresh,
+  // throwaway owner per call instead. OWNER_TOKEN itself stays valid and
+  // fixed - createSection() below creates a *standalone* Section (no
+  // parent Group), which carries no such one-per-user limit, so reusing
+  // OWNER_TOKEN there is untouched by this constraint.
+  async function createGroup(): Promise<
+    GroupResponseDto & { token: string; userId: string }
+  > {
+    const owner = await createFreshGroupOwner({
+      app,
+      tokenToAuth: TOKEN_TO_AUTH,
+      clerkProfiles: FIXTURE_CLERK_PROFILES,
+      onGroupCreated: (id) => createdGroupIds.push(id),
+      namePrefix: 'img-storage',
+      groupOverrides: {
+        name: 'Image Storage Test Group',
+        description: null,
+        logoUrl: 'https://legacy.example.com/old-group-logo.png',
+        coverImageUrl: null,
+        contactEmail: null,
+        contactPhone: null,
+        websiteUrl: null,
+        facebookUrl: null,
+        instagramUrl: null,
+        youtubeUrl: null,
+        isPublic: true,
+        isHidden: false,
+        memberInvitesAllowed: false,
+      },
+    });
+    return { ...owner.group, token: owner.token, userId: owner.userId };
   }
 
   async function createSection(): Promise<SectionResponseDto> {
@@ -475,7 +501,7 @@ describe('Image storage (R2) (e2e)', () => {
       const dto = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .put(`/api/v1/groups/${group.id}/profile-image`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .attach('file', await buildJpeg(), 'logo.jpg')
           .expect(200),
       );
@@ -491,7 +517,7 @@ describe('Image storage (R2) (e2e)', () => {
       const first = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .put(`/api/v1/groups/${group.id}/profile-image`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .attach('file', await buildJpeg(), 'logo1.jpg')
           .expect(200),
       );
@@ -500,7 +526,7 @@ describe('Image storage (R2) (e2e)', () => {
       const second = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .put(`/api/v1/groups/${group.id}/profile-image`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .attach('file', await buildPng(), 'logo2.png')
           .expect(200),
       );
@@ -511,7 +537,7 @@ describe('Image storage (R2) (e2e)', () => {
       const deleted = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .delete(`/api/v1/groups/${group.id}/profile-image`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(200),
       );
 
@@ -543,7 +569,7 @@ describe('Image storage (R2) (e2e)', () => {
       const dto = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .put(`/api/v1/groups/${group.id}/cover-image`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .attach('file', await buildJpeg(), 'cover.jpg')
           .expect(200),
       );
@@ -559,7 +585,7 @@ describe('Image storage (R2) (e2e)', () => {
       const first = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .put(`/api/v1/groups/${group.id}/cover-image`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .attach('file', await buildJpeg(), 'cover1.jpg')
           .expect(200),
       );
@@ -571,7 +597,7 @@ describe('Image storage (R2) (e2e)', () => {
       const second = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .put(`/api/v1/groups/${group.id}/cover-image`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .attach('file', await buildPng(), 'cover2.png')
           .expect(200),
       );
@@ -585,7 +611,7 @@ describe('Image storage (R2) (e2e)', () => {
       const deleted = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
           .delete(`/api/v1/groups/${group.id}/cover-image`)
-          .set('Authorization', `Bearer ${OWNER_TOKEN}`)
+          .set('Authorization', `Bearer ${group.token}`)
           .expect(200),
       );
 
