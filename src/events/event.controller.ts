@@ -21,6 +21,7 @@ import {
 } from '../storage/multer-image.interceptor';
 import { CancelEventDto, cancelEventSchema } from './dto/cancel-event.schema';
 import { EventResponseDto } from './dto/event-response.dto';
+import { EventPublicAttendeeDto } from './dto/event-public-attendee.dto';
 import { EventStatusHistoryResponseDto } from './dto/event-status-history-response.dto';
 import { UpdateEventDto, updateEventSchema } from './dto/update-event.schema';
 import { EventPermissionsGuard } from './guards/event-permissions.guard';
@@ -49,6 +50,17 @@ export class EventController {
     @CurrentUser() user: User,
   ): Promise<EventResponseDto> {
     return this.eventsService.getById(eventId, user);
+  }
+
+  // Visibility/participants-visibility gated inside EventsService, same as
+  // getById above - not EventPermissionsGuard (a non-staff viewer may read
+  // a PUBLIC participant list).
+  @Get('attendees')
+  listAttendees(
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @CurrentUser() user: User,
+  ): Promise<EventPublicAttendeeDto[]> {
+    return this.eventsService.listPublicAttendees(eventId, user);
   }
 
   @Patch()

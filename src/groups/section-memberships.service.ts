@@ -8,6 +8,7 @@ import { LockMode } from '@mikro-orm/core';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
 import { User } from '../users/entities/user.entity';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { AuditLogService } from './audit-log.service';
 import { AddMemberInput } from './dto/add-member.schema';
 import { SectionMembershipResponseDto } from './dto/section-membership-response.dto';
@@ -55,6 +56,7 @@ export class SectionMembershipsService {
     private readonly groupHierarchyService: GroupHierarchyService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly auditLogService: AuditLogService,
+    private readonly r2StorageService: R2StorageService,
   ) {}
 
   async listMembers(
@@ -692,6 +694,7 @@ export class SectionMembershipsService {
       membership,
       roleAssignments.map((roleAssignment) => roleAssignment.role),
       cohorts.get(membership.id) ?? [],
+      this.r2StorageService,
     );
   }
 
@@ -715,6 +718,7 @@ export class SectionMembershipsService {
         membership,
         rolesByUser.get(membership.user.id) ?? [],
         cohortsByMembership.get(membership.id) ?? [],
+        this.r2StorageService,
       ),
     );
   }

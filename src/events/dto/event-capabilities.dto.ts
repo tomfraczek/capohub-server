@@ -20,6 +20,10 @@ export interface EventCapabilitiesDto {
   canManageInvitations: boolean;
   canManageParticipants: boolean;
   canCheckIn: boolean;
+  // May read the participant list (GET events/:eventId/attendees) -
+  // always true for staff/overseers, otherwise only when the Event's
+  // participantsVisibility is PUBLIC. See EventsService.canViewParticipants.
+  canViewParticipants: boolean;
   // Self-registration eligibility given visibility + Community membership
   // + invitation status - independent of holding any Event role.
   canRegister: boolean;

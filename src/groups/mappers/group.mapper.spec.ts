@@ -7,6 +7,7 @@ import { SectionMembershipStatus } from '../enums/section-membership-status.enum
 import { GroupRole } from '../enums/group-role.enum';
 import { GroupStatus } from '../enums/group-status.enum';
 import { MembershipEndReason } from '../enums/membership-end-reason.enum';
+import { AvatarType } from '../../users/enums/avatar-type.enum';
 import {
   toSectionMembershipResponseDto,
   toGroupResponseDto,
@@ -202,6 +203,10 @@ describe('group.mapper', () => {
       membership.user = {
         id: 'user-1',
         displayName: 'Mestre Bimba',
+        avatarType: AvatarType.UPLOAD,
+        avatarUrl: null,
+        avatarImageKey: 'users/user-1/profile/avatar.webp',
+        presetAvatarId: null,
       } as never;
       membership.status = SectionMembershipStatus.ACTIVE;
       membership.joinedAt = new Date('2026-01-01T00:00:00.000Z');
@@ -213,12 +218,21 @@ describe('group.mapper', () => {
         membership,
         [GroupRole.MEMBER, GroupRole.OWNER],
         [{ id: 'cohort-1', name: 'Kids' }],
+        buildUrlBuilder(),
       );
 
       expect(dto).toEqual({
         id: 'membership-1',
         sectionId: 'section-1',
-        user: { id: 'user-1', displayName: 'Mestre Bimba' },
+        user: {
+          id: 'user-1',
+          displayName: 'Mestre Bimba',
+          image: {
+            type: AvatarType.UPLOAD,
+            url: 'https://cdn.example.com/users/user-1/profile/avatar.webp',
+            presetAvatarId: null,
+          },
+        },
         roles: [GroupRole.MEMBER, GroupRole.OWNER],
         status: SectionMembershipStatus.ACTIVE,
         joinedAt: '2026-01-01T00:00:00.000Z',
@@ -247,6 +261,7 @@ describe('group.mapper', () => {
         membership,
         [GroupRole.MEMBER],
         [],
+        buildUrlBuilder(),
       );
 
       expect(dto.leftAt).toBe('2026-02-01T00:00:00.000Z');
@@ -268,7 +283,12 @@ describe('group.mapper', () => {
       membership.endReason = null;
       membership.endedBy = null;
 
-      const dto = toSectionMembershipResponseDto(membership, [], []);
+      const dto = toSectionMembershipResponseDto(
+        membership,
+        [],
+        [],
+        buildUrlBuilder(),
+      );
 
       expect(dto.roles).toEqual([]);
       expect(dto.endedBy).toBeNull();

@@ -14,6 +14,7 @@
 import { NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { User } from '../users/entities/user.entity';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { AuditLogService } from './audit-log.service';
 import { GroupFollow } from './entities/group-follow.entity';
 import { SectionBan } from './entities/section-ban.entity';
@@ -163,6 +164,9 @@ function buildService(
     groupHierarchyService,
     roleAssignmentsService,
     auditLogService,
+    {
+      buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
+    } as unknown as R2StorageService,
   );
 
   return {

@@ -76,6 +76,7 @@ function buildEvent(
     status: 'PUBLISHED' as never,
     capacity: null,
     waitlistPolicy: 'NONE' as never,
+    participantsVisibility: 'PRIVATE' as never,
     seatsTaken: 0,
     seatsAvailable: null,
     waitlistCount: 0,

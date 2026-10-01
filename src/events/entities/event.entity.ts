@@ -17,6 +17,7 @@ import { EventOrganizerType } from '../enums/event-organizer-type.enum';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
 import { EventVisibility } from '../enums/event-visibility.enum';
+import { EventParticipantsVisibility } from '../enums/event-participants-visibility.enum';
 import { EventWaitlistPolicy } from '../enums/event-waitlist-policy.enum';
 import { EventScheduleDay } from './event-schedule-day.entity';
 
@@ -245,6 +246,12 @@ export class Event extends BaseEntity {
   // DB).
   @Enum({ items: () => Object.values(EventWaitlistPolicy) })
   waitlistPolicy: EventWaitlistPolicy = EventWaitlistPolicy.NONE;
+
+  // Whether non-staff viewers may see the participant list - see
+  // event-participants-visibility.enum.ts.
+  @Enum({ items: () => Object.values(EventParticipantsVisibility) })
+  participantsVisibility: EventParticipantsVisibility =
+    EventParticipantsVisibility.PRIVATE;
 
   // Stable, immutable, non-guessable locator for sharing/invite links and a
   // future QR poster - the same mechanism as Group.publicCode/

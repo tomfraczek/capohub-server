@@ -216,6 +216,7 @@ Body (JSON):
 | `visibility` | enum (`PUBLIC`\|`COMMUNITY_MEMBERS`\|`INVITE_ONLY`) | Yes | |
 | `capacity` | integer ≥1 or `null` | No (default `null`) | `null` = no limit. |
 | `waitlistPolicy` | enum (`NONE`\|`AUTOMATIC`\|`MANUAL`) | No (default `NONE`) | Must be `NONE` when `capacity` is `null`. |
+| `participantsVisibility` | enum (`PUBLIC`\|`PRIVATE`) | No (default `PRIVATE`) | Who may see the participant list (see [20a](#20a-list-attendees-public)) besides the Event's staff — staff and Community event overseers always see it. |
 
 **Response** — `201 Created`, body: [`EventResponseDto`](#eventresponsedto).
 
@@ -754,6 +755,26 @@ check-in detail — the "Uczestnicy" management view.
 
 ---
 
+### 20a. List Attendees (public)
+
+**HTTP Method:** `GET`
+**URL:** `/events/:eventId/attendees`
+
+**Description:** The participant list shown on Event Details. Only adult
+`SELF` registrations holding a seat (non-waitlisted, `GOING`/`MAYBE`) —
+never children, personal data, check-in or waitlist detail.
+
+**Access:** the Event must be visible to the caller (same rule as
+[Get Event](#3-get-event), else `404 EVENT_NOT_FOUND`), and
+`capabilities.canViewParticipants` must be true, else
+`403 EVENT_PARTICIPANTS_HIDDEN`.
+
+**Response** — `200 OK`, body: array of
+`{ id, user: { id, displayName, image: { type, url, presetAvatarId } }, rsvpStatus }`,
+oldest registration first.
+
+---
+
 ### 21. Promote from Waitlist
 
 **HTTP Method:** `POST`
@@ -1070,6 +1091,7 @@ not silently redirected to a child).
 | `canManageInvitations` | `EVENT_MANAGE_INVITATIONS` |
 | `canManageParticipants` | `EVENT_MANAGE_PARTICIPANTS` |
 | `canCheckIn` | `EVENT_CHECKIN` |
+| `canViewParticipants` | Any Event role, Community `EVENT_VIEW_ALL`/`EVENT_MODERATE`, or `participantsVisibility === PUBLIC` |
 | `canRegister` | Self-registration eligibility (visibility/membership/invitation) — independent of any Event role |
 
 ### EventAttendeeResponseDto

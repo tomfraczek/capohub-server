@@ -3,11 +3,12 @@ import { GroupRole } from '../enums/group-role.enum';
 import { MembershipEndReason } from '../enums/membership-end-reason.enum';
 import { GroupUserRefDto } from './group-user-ref.dto';
 import { MembershipCohortRefDto } from './membership-cohort-ref.dto';
+import { SectionMemberUserRefDto } from './section-member-user-ref.dto';
 
 export interface SectionMembershipResponseDto {
   id: string;
   sectionId: string;
-  user: GroupUserRefDto;
+  user: SectionMemberUserRefDto;
   // Every active Role Assignment currently held for this Section, resolved
   // via a separate lookup (RoleAssignment has no relation to this entity -
   // see role-assignment.entity.ts). Always includes MEMBER for an

@@ -13,6 +13,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { EventAttendeeResponseDto } from './dto/event-attendee-response.dto';
+import { EventParticipantResponseDto } from './dto/event-participant-response.dto';
 import {
   RegisterForEventDto,
   registerForEventSchema,
@@ -65,7 +66,7 @@ export class EventRsvpController {
   @RequireEventPermission(EventPermission.EVENT_MANAGE_PARTICIPANTS)
   participants(
     @Param('eventId', ParseUUIDPipe) eventId: string,
-  ): Promise<EventAttendeeResponseDto[]> {
+  ): Promise<EventParticipantResponseDto[]> {
     return this.eventRsvpService.listParticipants(eventId);
   }
 

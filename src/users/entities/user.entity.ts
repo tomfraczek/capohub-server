@@ -192,10 +192,11 @@ export class User extends BaseEntity {
   @Property({ nullable: true, type: 'date' })
   capoeiraStartedAt: Date | null = null;
 
-  // Private contact/personal data - only ever returned on the owner's own
-  // profile (UserProfileResponseDto), never on PublicUserProfileResponseDto
-  // or any search/list DTO, and deliberately with no privacy toggle: there
-  // is no "show to others" option for either.
+  // Private contact/personal data - returned on the owner's own profile
+  // (UserProfileResponseDto) and to the staff of an Event this user is
+  // registered for (EventParticipantResponseDto, together with
+  // firstName/lastName). Never on PublicUserProfileResponseDto or any
+  // search/list DTO, and deliberately with no privacy toggle.
   @Property({ nullable: true, type: 'date' })
   birthDate: Date | null = null;
 

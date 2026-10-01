@@ -1,18 +1,22 @@
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { GroupPermissionService } from '../groups/permissions/group-permission.service';
 import { RoleAssignmentsService } from '../groups/role-assignments.service';
 import { GroupHierarchyService } from '../groups/group-hierarchy.service';
 import { Group } from '../groups/entities/group.entity';
+import { GroupRole } from '../groups/enums/group-role.enum';
+import { AvatarType } from '../users/enums/avatar-type.enum';
 import { Section } from '../groups/entities/section.entity';
 import { EventAccessService } from './event-access.service';
 import { EventAttendee } from './entities/event-attendee.entity';
 import { Event } from './entities/event.entity';
 import { EventOrganizerType } from './enums/event-organizer-type.enum';
 import { EventRole } from './enums/event-role.enum';
+import { EventRsvpStatus } from './enums/event-rsvp-status.enum';
 import { EventStatus } from './enums/event-status.enum';
 import { EventVisibility } from './enums/event-visibility.enum';
 import { EventWaitlistPolicy } from './enums/event-waitlist-policy.enum';
+import { EventParticipantsVisibility } from './enums/event-participants-visibility.enum';
 import { EventRolesService } from './event-roles.service';
 import { eventCommunity } from './event-community.util';
 import { EventNotificationsService } from './event-notifications.service';
@@ -85,6 +89,7 @@ function buildCreateInput(
     visibility: EventVisibility.COMMUNITY_MEMBERS,
     capacity: null,
     waitlistPolicy: EventWaitlistPolicy.NONE,
+    participantsVisibility: EventParticipantsVisibility.PRIVATE,
     ...overrides,
   };
 }
@@ -107,6 +112,7 @@ function buildUpdateInput(
     visibility: EventVisibility.COMMUNITY_MEMBERS,
     capacity: null,
     waitlistPolicy: EventWaitlistPolicy.NONE,
+    participantsVisibility: EventParticipantsVisibility.PRIVATE,
     ...overrides,
   };
 }
@@ -116,6 +122,7 @@ interface MockRouting {
   community?: Group | null;
   seatsTaken?: number;
   waitlistCount?: number;
+  attendees?: EventAttendee[];
 }
 
 function buildMockEm(routing: MockRouting = {}) {
@@ -143,8 +150,16 @@ function buildMockEm(routing: MockRouting = {}) {
     throw new Error(`Unexpected count entity: ${String(entity)}`);
   });
 
+  const find = jest.fn((entity: unknown) => {
+    if (entity === EventAttendee) {
+      return Promise.resolve(routing.attendees ?? []);
+    }
+    throw new Error(`Unexpected find entity: ${String(entity)}`);
+  });
+
   const raw = {
     findOne,
+    find,
     count,
     persist,
     flush,
@@ -155,7 +170,13 @@ function buildMockEm(routing: MockRouting = {}) {
       ),
   };
 
-  return { em: raw as unknown as EntityManager, persist, findOne, count };
+  return {
+    em: raw as unknown as EntityManager,
+    persist,
+    findOne,
+    find,
+    count,
+  };
 }
 
 function buildService(
@@ -697,6 +718,9 @@ describe('EventsService', () => {
         canManageInvitations: false,
         canManageParticipants: false,
         canCheckIn: false,
+        // Read access, not a write - stays true for staff on an ARCHIVED
+        // Event, same as canViewManagement.
+        canViewParticipants: true,
         canRegister: false,
       });
     });
@@ -919,6 +943,113 @@ describe('EventsService', () => {
     });
   });
 
+  describe('listPublicAttendees', () => {
+    function buildAttendee(): EventAttendee {
+      const attendee = new EventAttendee();
+      attendee.id = 'attendee-1';
+      attendee.rsvpStatus = EventRsvpStatus.GOING;
+      attendee.subjectUser = {
+        id: 'user-2',
+        displayName: 'Mestre Bimba',
+        avatarType: AvatarType.UPLOAD,
+        avatarUrl: null,
+        avatarImageKey: 'users/user-2/profile/a.webp',
+        presetAvatarId: null,
+      } as never;
+      return attendee;
+    }
+
+    it('lists attendees with public identity only when participantsVisibility is PUBLIC', async () => {
+      const { em, find } = buildMockEm({ attendees: [buildAttendee()] });
+      const event = buildEvent({
+        status: EventStatus.PUBLISHED,
+        participantsVisibility: EventParticipantsVisibility.PUBLIC,
+      });
+      const service = buildService(em, { event, viewerRoles: [] });
+
+      const result = await service.listPublicAttendees('event-1', ACTOR);
+
+      expect(result).toEqual([
+        {
+          id: 'attendee-1',
+          user: {
+            id: 'user-2',
+            displayName: 'Mestre Bimba',
+            image: {
+              type: AvatarType.UPLOAD,
+              url: 'https://cdn.example.com/users/user-2/profile/a.webp',
+              presetAvatarId: null,
+            },
+          },
+          rsvpStatus: EventRsvpStatus.GOING,
+        },
+      ]);
+      expect(find).toHaveBeenCalledWith(
+        EventAttendee,
+        expect.objectContaining({
+          subjectType: 'SELF',
+          isWaitlisted: false,
+          rsvpStatus: { $in: [EventRsvpStatus.GOING, EventRsvpStatus.MAYBE] },
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('rejects a non-staff viewer with EVENT_PARTICIPANTS_HIDDEN when the list is PRIVATE', async () => {
+      const { em } = buildMockEm();
+      const event = buildEvent({ status: EventStatus.PUBLISHED });
+      const service = buildService(em, { event, viewerRoles: [] });
+
+      await expect(
+        service.listPublicAttendees('event-1', ACTOR),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('always lets an Event role holder see a PRIVATE list', async () => {
+      const { em } = buildMockEm({ attendees: [buildAttendee()] });
+      const event = buildEvent({ status: EventStatus.PUBLISHED });
+      const service = buildService(em, {
+        event,
+        viewerRoles: [EventRole.MODERATOR],
+      });
+
+      await expect(
+        service.listPublicAttendees('event-1', ACTOR),
+      ).resolves.toHaveLength(1);
+    });
+
+    it('always lets a Community event overseer see a PRIVATE list without an Event role', async () => {
+      const { em } = buildMockEm({ attendees: [buildAttendee()] });
+      const event = buildEvent({ status: EventStatus.PUBLISHED });
+      const service = buildService(em, {
+        event,
+        viewerRoles: [],
+        communityRoles: [GroupRole.OWNER] as never,
+      });
+
+      await expect(
+        service.listPublicAttendees('event-1', ACTOR),
+      ).resolves.toHaveLength(1);
+    });
+
+    it('throws EVENT_NOT_FOUND, not a 403, for an Event the viewer cannot see at all', async () => {
+      const { em } = buildMockEm();
+      const event = buildEvent({
+        status: EventStatus.PUBLISHED,
+        participantsVisibility: EventParticipantsVisibility.PUBLIC,
+      });
+      const service = buildService(em, {
+        event,
+        viewerRoles: [],
+        visible: false,
+      });
+
+      await expect(
+        service.listPublicAttendees('event-1', ACTOR),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
   describe('getById', () => {
     it('throws EVENT_NOT_FOUND for a DRAFT event when the viewer holds no role', async () => {
       const { em } = buildMockEm();
@@ -973,6 +1104,35 @@ describe('EventsService', () => {
       // Community role resolution mock returns [] (no roles) by default here,
       // so no override - canCancel should be false without any role.
       expect(result.capabilities.canCancel).toBe(false);
+    });
+
+    it('exposes canViewParticipants only to staff while the list is PRIVATE, and to everyone once PUBLIC', async () => {
+      const { em } = buildMockEm();
+      const privateEvent = buildEvent({ status: EventStatus.PUBLISHED });
+      const publicEvent = buildEvent({
+        status: EventStatus.PUBLISHED,
+        participantsVisibility: EventParticipantsVisibility.PUBLIC,
+      });
+
+      const viewer = await buildService(em, {
+        event: privateEvent,
+        viewerRoles: [],
+      }).getById('event-1', ACTOR);
+      const staff = await buildService(em, {
+        event: privateEvent,
+        viewerRoles: [EventRole.ORGANIZER],
+      }).getById('event-1', ACTOR);
+      const publicViewer = await buildService(em, {
+        event: publicEvent,
+        viewerRoles: [],
+      }).getById('event-1', ACTOR);
+
+      expect(viewer.capabilities.canViewParticipants).toBe(false);
+      expect(staff.capabilities.canViewParticipants).toBe(true);
+      expect(publicViewer.capabilities.canViewParticipants).toBe(true);
+      expect(publicViewer.participantsVisibility).toBe(
+        EventParticipantsVisibility.PUBLIC,
+      );
     });
 
     it('computes seatsAvailable relative to capacity', async () => {

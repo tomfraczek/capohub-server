@@ -90,6 +90,7 @@ export function toEventResponseDto(
     status: event.status,
     capacity: event.capacity,
     waitlistPolicy: event.waitlistPolicy,
+    participantsVisibility: event.participantsVisibility,
     seatsTaken: context.seatsTaken,
     seatsAvailable: context.seatsAvailable,
     waitlistCount: context.waitlistCount,

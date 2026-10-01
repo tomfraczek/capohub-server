@@ -3,6 +3,7 @@ import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
 import { EventVisibility } from '../enums/event-visibility.enum';
 import { EventWaitlistPolicy } from '../enums/event-waitlist-policy.enum';
+import { EventParticipantsVisibility } from '../enums/event-participants-visibility.enum';
 import { EventCapabilitiesDto } from './event-capabilities.dto';
 import { EventCommunityRefDto } from './event-community-ref.dto';
 import { EventOrganizerRefDto } from './event-organizer-ref.dto';
@@ -50,6 +51,7 @@ export interface EventResponseDto {
   status: EventStatus;
   capacity: number | null;
   waitlistPolicy: EventWaitlistPolicy;
+  participantsVisibility: EventParticipantsVisibility;
   // Non-waitlisted attendees with rsvpStatus GOING or MAYBE - i.e. seats
   // currently claimed against `capacity`.
   seatsTaken: number;

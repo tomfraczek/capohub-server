@@ -27,6 +27,7 @@ import { GroupRole } from '../src/groups/enums/group-role.enum';
 import { Section } from '../src/groups/entities/section.entity';
 import { EventResponseDto } from '../src/events/dto/event-response.dto';
 import { EventAttendeeResponseDto } from '../src/events/dto/event-attendee-response.dto';
+import { EventParticipantResponseDto } from '../src/events/dto/event-participant-response.dto';
 import { EventRoleAssignmentResponseDto } from '../src/events/dto/event-role-assignment-response.dto';
 import { EventStatusHistoryResponseDto } from '../src/events/dto/event-status-history-response.dto';
 import { EventGuardianAssignment } from '../src/events/entities/event-guardian-assignment.entity';
@@ -1162,6 +1163,57 @@ describe('Events (e2e)', () => {
       expect(promoted?.promotedAt).not.toBeNull();
     });
 
+    it("exposes a participant's name, birth date and phone number to event staff only", async () => {
+      const community = await createCommunityWithMembers();
+      const event = await createEvent(community.token, community.id);
+      await publishEvent(community.token, event.id);
+
+      await request(app.getHttpServer())
+        .patch('/api/v1/users/me/profile')
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .send({
+          firstName: 'Ana',
+          lastName: 'Silva',
+          birthDate: '1995-07-01',
+          phoneNumber: '+48 600 100 200',
+          showFullName: false,
+        })
+        .expect(200);
+
+      const registered = await bodyOf<EventAttendeeResponseDto[]>(
+        request(app.getHttpServer())
+          .post(`/api/v1/events/${event.id}/register`)
+          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+          .send({ attendSelf: true, children: [] })
+          .expect(201),
+      );
+      expect(registered[0]).not.toHaveProperty('personalData');
+
+      const participants = await bodyOf<EventParticipantResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/events/${event.id}/participants`)
+          .set('Authorization', `Bearer ${community.token}`)
+          .expect(200),
+      );
+      const member = participants.find((p) => p.id === registered[0].id);
+      // Shown to staff even with showFullName off - privacy toggles only
+      // govern the public profile.
+      expect(member?.personalData).toEqual({
+        firstName: 'Ana',
+        lastName: 'Silva',
+        birthDate: '1995-07-01',
+        phoneNumber: '+48 600 100 200',
+      });
+
+      const own = await bodyOf<EventAttendeeResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/events/${event.id}/my-registrations`)
+          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+          .expect(200),
+      );
+      expect(own[0]).not.toHaveProperty('personalData');
+    });
+
     it('rejects registration with no waitlist once capacity is full', async () => {
       const community = await createCommunityWithMembers();
       const event = await createEvent(community.token, community.id, {
@@ -2031,7 +2083,8 @@ describe('Events (e2e)', () => {
         );
 
         // Every operational capability is false - read access
-        // (canViewManagement) is the only one still true for a role holder.
+        // (canViewManagement, canViewParticipants) is all that stays true
+        // for a role holder.
         expect(details.capabilities).toEqual({
           canViewManagement: true,
           canEdit: false,
@@ -2044,6 +2097,7 @@ describe('Events (e2e)', () => {
           canManageInvitations: false,
           canManageParticipants: false,
           canCheckIn: false,
+          canViewParticipants: true,
           canRegister: false,
         });
 

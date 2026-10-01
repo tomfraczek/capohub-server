@@ -1,6 +1,7 @@
 import {
   PublicUrlBuilder,
   resolveImageUrl,
+  resolveUserAvatarUrl,
 } from '../../storage/image-url.util';
 import { SectionMembership } from '../entities/section-membership.entity';
 import { Group } from '../entities/group.entity';
@@ -79,13 +80,23 @@ export function toSectionMembershipResponseDto(
   membership: SectionMembership,
   roles: GroupRole[],
   cohorts: MembershipCohortRefDto[],
+  urlBuilder: PublicUrlBuilder,
 ): SectionMembershipResponseDto {
+  const user = membership.user;
   return {
     id: membership.id,
     sectionId: membership.section.id,
     user: {
-      id: membership.user.id,
-      displayName: membership.user.displayName,
+      id: user.id,
+      displayName: user.displayName,
+      image: {
+        type: user.avatarType,
+        // Prefers the R2 public URL derived from avatarImageKey over the
+        // legacy avatarUrl column once an UPLOAD avatar exists - see
+        // storage/image-url.util.ts's resolveUserAvatarUrl.
+        url: resolveUserAvatarUrl(user, urlBuilder),
+        presetAvatarId: user.presetAvatarId,
+      },
     },
     roles,
     status: membership.status,

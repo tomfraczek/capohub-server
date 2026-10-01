@@ -11,6 +11,7 @@ import { CHILDREN_DIRECTORY_PORT } from './integration/children-directory.port';
 import type { ChildrenDirectoryPort } from './integration/children-directory.port';
 import { EventAccessService } from './event-access.service';
 import { EventAttendeeResponseDto } from './dto/event-attendee-response.dto';
+import { EventParticipantResponseDto } from './dto/event-participant-response.dto';
 import { RegisterForEventInput } from './dto/register-for-event.schema';
 import { UpdateRsvpInput } from './dto/update-rsvp.schema';
 import { EventAttendee } from './entities/event-attendee.entity';
@@ -26,7 +27,10 @@ import {
   ADMIN_OPERATION_STATUSES,
   assertEventStatusAllowed,
 } from './event-write-policy';
-import { toEventAttendeeResponseDto } from './mappers/event-attendee.mapper';
+import {
+  toEventAttendeeResponseDto,
+  toEventParticipantResponseDto,
+} from './mappers/event-attendee.mapper';
 
 /**
  * Self-service registration (spec: "Uczestnicy zapisują się sami lub są
@@ -224,7 +228,12 @@ export class EventRsvpService {
     return this.toResponseDtos(this.em, attendees);
   }
 
-  async listParticipants(eventId: string): Promise<EventAttendeeResponseDto[]> {
+  // Staff view - includes each attendee's personal data (see
+  // EventParticipantResponseDto). Only reachable through the
+  // EVENT_MANAGE_PARTICIPANTS-guarded participants endpoint.
+  async listParticipants(
+    eventId: string,
+  ): Promise<EventParticipantResponseDto[]> {
     const attendees = await this.em.find(
       EventAttendee,
       { event: eventId },
@@ -233,7 +242,16 @@ export class EventRsvpService {
         orderBy: { registeredAt: 'asc' },
       },
     );
-    return this.toResponseDtos(this.em, attendees);
+    const guardianByAttendee = await this.loadActiveGuardians(
+      this.em,
+      attendees,
+    );
+    return attendees.map((attendee) =>
+      toEventParticipantResponseDto(
+        attendee,
+        guardianByAttendee.get(attendee.id) ?? null,
+      ),
+    );
   }
 
   /**
@@ -477,24 +495,32 @@ export class EventRsvpService {
     em: EntityManager,
     attendees: EventAttendee[],
   ): Promise<EventAttendeeResponseDto[]> {
-    if (attendees.length === 0) {
-      return [];
-    }
-    const guardianAssignments = await em.find(EventGuardianAssignment, {
-      attendee: { $in: attendees.map((a) => a.id) },
-      revokedAt: null,
-    });
-    const guardianByAttendee = new Map(
-      guardianAssignments.map((assignment) => [
-        assignment.attendee.id,
-        assignment.guardian.id,
-      ]),
-    );
+    const guardianByAttendee = await this.loadActiveGuardians(em, attendees);
     return attendees.map((attendee) =>
       toEventAttendeeResponseDto(
         attendee,
         guardianByAttendee.get(attendee.id) ?? null,
       ),
+    );
+  }
+
+  // attendeeId -> active guardian's userId.
+  private async loadActiveGuardians(
+    em: EntityManager,
+    attendees: EventAttendee[],
+  ): Promise<Map<string, string>> {
+    if (attendees.length === 0) {
+      return new Map();
+    }
+    const guardianAssignments = await em.find(EventGuardianAssignment, {
+      attendee: { $in: attendees.map((a) => a.id) },
+      revokedAt: null,
+    });
+    return new Map(
+      guardianAssignments.map((assignment) => [
+        assignment.attendee.id,
+        assignment.guardian.id,
+      ]),
     );
   }
 

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -27,6 +28,7 @@ import { CreateEventInput } from './dto/create-event.schema';
 import { EventCapabilitiesDto } from './dto/event-capabilities.dto';
 import { EventListQueryInput } from './dto/event-list-query.schema';
 import { EventResponseDto } from './dto/event-response.dto';
+import { EventPublicAttendeeDto } from './dto/event-public-attendee.dto';
 import { UpdateEventInput } from './dto/update-event.schema';
 import { EventAccessService } from './event-access.service';
 import {
@@ -50,6 +52,8 @@ import { EventStatus } from './enums/event-status.enum';
 import { EventType, isEventType } from './enums/event-type.enum';
 import { EventWaitlistPolicy } from './enums/event-waitlist-policy.enum';
 import { EventVisibility } from './enums/event-visibility.enum';
+import { EventParticipantsVisibility } from './enums/event-participants-visibility.enum';
+import { EventAttendeeSubjectType } from './enums/event-attendee-subject-type.enum';
 import { EventNotificationsService } from './event-notifications.service';
 import { EventRolesService } from './event-roles.service';
 import { EventRsvpService } from './event-rsvp.service';
@@ -60,6 +64,7 @@ import {
   reconcileEventFinished,
 } from './event-write-policy';
 import { toEventResponseDto } from './mappers/event.mapper';
+import { toEventPublicAttendeeDto } from './mappers/event-attendee.mapper';
 import { EventPermission } from './permissions/event-permission.enum';
 import { EventPermissionService } from './permissions/event-permission.service';
 
@@ -645,6 +650,22 @@ export class EventsService {
     event: Event,
     viewer: User,
   ): Promise<EventResponseDto> {
+    const roles = await this.resolveRolesOfViewerWhoCanSee(em, event, viewer);
+    return this.buildResponse(em, event, viewer, roles);
+  }
+
+  /**
+   * The viewer's Event roles, once it is confirmed they may see `event` at
+   * all - any Event role grants that regardless of visibility; otherwise a
+   * DRAFT is never visible and the Event's own visibility rule decides
+   * (EventAccessService.isVisibleToViewer). An invisible Event is a 404,
+   * never a 403 - its existence is not leaked.
+   */
+  private async resolveRolesOfViewerWhoCanSee(
+    em: EntityManager,
+    event: Event,
+    viewer: User,
+  ): Promise<EventRole[]> {
     const roles = await this.eventRolesService.getRolesForUser(
       em,
       event.id,
@@ -666,7 +687,65 @@ export class EventsService {
       }
     }
 
-    return this.buildResponse(em, event, viewer, roles);
+    return roles;
+  }
+
+  /**
+   * GET events/:eventId/attendees - the participant list on Event Details.
+   * Same visibility gate as getById first (404 for an Event the viewer
+   * cannot see at all), then canViewParticipants (403
+   * EVENT_PARTICIPANTS_HIDDEN when the Event is visible but its list is
+   * PRIVATE to this viewer). Lists only seat-holding (non-waitlisted,
+   * GOING/MAYBE) SELF registrations - see EventPublicAttendeeDto.
+   */
+  async listPublicAttendees(
+    eventId: string,
+    viewer: User,
+  ): Promise<EventPublicAttendeeDto[]> {
+    const em = this.em;
+    const event = await this.eventAccessService.loadOrFail(em, eventId);
+    const roles = await this.resolveRolesOfViewerWhoCanSee(em, event, viewer);
+    const community = eventCommunity(event);
+    const oversight = community
+      ? await this.resolveCommunityOversight(em, community.id, viewer.id)
+      : { viewAll: false, moderate: false };
+    if (!this.canViewParticipants(event, roles, oversight)) {
+      throw new ForbiddenException({
+        code: 'EVENT_PARTICIPANTS_HIDDEN',
+        message: "This Event's participant list is not public",
+      });
+    }
+
+    const attendees = await em.find(
+      EventAttendee,
+      {
+        event: event.id,
+        subjectType: EventAttendeeSubjectType.SELF,
+        subjectUser: { $ne: null },
+        isWaitlisted: false,
+        rsvpStatus: { $in: [EventRsvpStatus.GOING, EventRsvpStatus.MAYBE] },
+      },
+      { populate: ['subjectUser'], orderBy: { registeredAt: 'asc' } },
+    );
+    return attendees.map((attendee) =>
+      toEventPublicAttendeeDto(attendee, this.r2StorageService),
+    );
+  }
+
+  // Staff (any Event role) and the Community's event overseers always see
+  // the participant list; everyone else only when the organizer made it
+  // PUBLIC (see event-participants-visibility.enum.ts).
+  private canViewParticipants(
+    event: Event,
+    roles: EventRole[],
+    oversight: { viewAll: boolean; moderate: boolean },
+  ): boolean {
+    return (
+      event.participantsVisibility === EventParticipantsVisibility.PUBLIC ||
+      roles.length > 0 ||
+      oversight.viewAll ||
+      oversight.moderate
+    );
   }
 
   async list(
@@ -1132,6 +1211,7 @@ export class EventsService {
     event.capacity = input.capacity;
     event.waitlistPolicy =
       input.capacity == null ? EventWaitlistPolicy.NONE : input.waitlistPolicy;
+    event.participantsVisibility = input.participantsVisibility;
   }
 
   private async transitionStatus(
@@ -1241,6 +1321,7 @@ export class EventsService {
       oversight.moderate,
       canRegister,
       event.status,
+      this.canViewParticipants(event, viewerRoles, oversight),
     );
 
     return toEventResponseDto(
@@ -1283,6 +1364,7 @@ export class EventsService {
     hasModerateOverride: boolean,
     canRegister: boolean,
     status: EventStatus,
+    canViewParticipants: boolean,
   ): EventCapabilitiesDto {
     const has = (permission: EventPermission): boolean =>
       this.eventPermissionService.hasAllPermissionsForRoles(roles, [
@@ -1321,6 +1403,7 @@ export class EventsService {
         !isArchived && has(EventPermission.EVENT_MANAGE_PARTICIPANTS),
       canCheckIn: !isArchived && has(EventPermission.EVENT_CHECKIN),
       canRegister,
+      canViewParticipants,
     };
   }
 

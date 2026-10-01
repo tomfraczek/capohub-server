@@ -7,6 +7,7 @@ import {
 } from '../../songs/dto/song-validation.helpers';
 import { EventType } from '../enums/event-type.enum';
 import { EventVisibility } from '../enums/event-visibility.enum';
+import { EventParticipantsVisibility } from '../enums/event-participants-visibility.enum';
 import { EventWaitlistPolicy } from '../enums/event-waitlist-policy.enum';
 import {
   CUSTOM_TYPE_LABEL_MAX_LENGTH,
@@ -55,6 +56,11 @@ export const eventBaseSchema = z.object({
   waitlistPolicy: enumValuesSchema(Object.values(EventWaitlistPolicy)).default(
     EventWaitlistPolicy.NONE,
   ),
+  // Defaulted (not required) so a client predating this field keeps
+  // working - PRIVATE is the pre-existing, staff-only behavior.
+  participantsVisibility: enumValuesSchema(
+    Object.values(EventParticipantsVisibility),
+  ).default(EventParticipantsVisibility.PRIVATE),
 });
 
 // Shared between create and update - date range and waitlist/capacity
