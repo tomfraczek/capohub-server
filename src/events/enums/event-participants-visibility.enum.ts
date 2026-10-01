@@ -4,9 +4,10 @@
 // Community's event overseers (EVENT_VIEW_ALL/EVENT_MODERATE) always see
 // the list regardless - see EventsService.canViewParticipants.
 export enum EventParticipantsVisibility {
-  // Anyone who can see the Event can also see who is going.
+  // Anyone who can see the Event can also see who is going - the default
+  // for a new Event.
   PUBLIC = 'PUBLIC',
-  // Only the Event's staff/overseers - the default, and the behavior every
-  // Event had before this setting existed.
+  // Only the Event's staff/overseers - the behavior every Event had before
+  // this setting existed (see the migration's backfill).
   PRIVATE = 'PRIVATE',
 }

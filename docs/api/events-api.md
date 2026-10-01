@@ -216,7 +216,7 @@ Body (JSON):
 | `visibility` | enum (`PUBLIC`\|`COMMUNITY_MEMBERS`\|`INVITE_ONLY`) | Yes | |
 | `capacity` | integer ≥1 or `null` | No (default `null`) | `null` = no limit. |
 | `waitlistPolicy` | enum (`NONE`\|`AUTOMATIC`\|`MANUAL`) | No (default `NONE`) | Must be `NONE` when `capacity` is `null`. |
-| `participantsVisibility` | enum (`PUBLIC`\|`PRIVATE`) | No (default `PRIVATE`) | Who may see the participant list (see [20a](#20a-list-attendees-public)) besides the Event's staff — staff and Community event overseers always see it. |
+| `participantsVisibility` | enum (`PUBLIC`\|`PRIVATE`) | No (default `PUBLIC`) | Who may see the participant list (see [20a](#20a-list-attendees-public)) besides the Event's staff — staff and Community event overseers always see it. |
 
 **Response** — `201 Created`, body: [`EventResponseDto`](#eventresponsedto).
 

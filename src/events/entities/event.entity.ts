@@ -251,7 +251,7 @@ export class Event extends BaseEntity {
   // event-participants-visibility.enum.ts.
   @Enum({ items: () => Object.values(EventParticipantsVisibility) })
   participantsVisibility: EventParticipantsVisibility =
-    EventParticipantsVisibility.PRIVATE;
+    EventParticipantsVisibility.PUBLIC;
 
   // Stable, immutable, non-guessable locator for sharing/invite links and a
   // future QR poster - the same mechanism as Group.publicCode/

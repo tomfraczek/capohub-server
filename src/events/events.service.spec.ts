@@ -997,7 +997,10 @@ describe('EventsService', () => {
 
     it('rejects a non-staff viewer with EVENT_PARTICIPANTS_HIDDEN when the list is PRIVATE', async () => {
       const { em } = buildMockEm();
-      const event = buildEvent({ status: EventStatus.PUBLISHED });
+      const event = buildEvent({
+        status: EventStatus.PUBLISHED,
+        participantsVisibility: EventParticipantsVisibility.PRIVATE,
+      });
       const service = buildService(em, { event, viewerRoles: [] });
 
       await expect(
@@ -1007,7 +1010,10 @@ describe('EventsService', () => {
 
     it('always lets an Event role holder see a PRIVATE list', async () => {
       const { em } = buildMockEm({ attendees: [buildAttendee()] });
-      const event = buildEvent({ status: EventStatus.PUBLISHED });
+      const event = buildEvent({
+        status: EventStatus.PUBLISHED,
+        participantsVisibility: EventParticipantsVisibility.PRIVATE,
+      });
       const service = buildService(em, {
         event,
         viewerRoles: [EventRole.MODERATOR],
@@ -1020,7 +1026,10 @@ describe('EventsService', () => {
 
     it('always lets a Community event overseer see a PRIVATE list without an Event role', async () => {
       const { em } = buildMockEm({ attendees: [buildAttendee()] });
-      const event = buildEvent({ status: EventStatus.PUBLISHED });
+      const event = buildEvent({
+        status: EventStatus.PUBLISHED,
+        participantsVisibility: EventParticipantsVisibility.PRIVATE,
+      });
       const service = buildService(em, {
         event,
         viewerRoles: [],
@@ -1108,7 +1117,10 @@ describe('EventsService', () => {
 
     it('exposes canViewParticipants only to staff while the list is PRIVATE, and to everyone once PUBLIC', async () => {
       const { em } = buildMockEm();
-      const privateEvent = buildEvent({ status: EventStatus.PUBLISHED });
+      const privateEvent = buildEvent({
+        status: EventStatus.PUBLISHED,
+        participantsVisibility: EventParticipantsVisibility.PRIVATE,
+      });
       const publicEvent = buildEvent({
         status: EventStatus.PUBLISHED,
         participantsVisibility: EventParticipantsVisibility.PUBLIC,

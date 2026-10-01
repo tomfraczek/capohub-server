@@ -57,10 +57,10 @@ export const eventBaseSchema = z.object({
     EventWaitlistPolicy.NONE,
   ),
   // Defaulted (not required) so a client predating this field keeps
-  // working - PRIVATE is the pre-existing, staff-only behavior.
+  // working - PUBLIC, same default as a new Event entity.
   participantsVisibility: enumValuesSchema(
     Object.values(EventParticipantsVisibility),
-  ).default(EventParticipantsVisibility.PRIVATE),
+  ).default(EventParticipantsVisibility.PUBLIC),
 });
 
 // Shared between create and update - date range and waitlist/capacity
