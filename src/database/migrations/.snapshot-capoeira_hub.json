@@ -297,7 +297,7 @@
       "checks": [
         {
           "name": "academies_group_or_section_check",
-          "columnName": "section_id",
+          "columnName": "group_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))))",
           "expression": "((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))"
         }
@@ -4892,6 +4892,25 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "string"
+        },
+        "participants_visibility": {
+          "name": "participants_visibility",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'PUBLIC'",
+          "comment": null,
+          "enumItems": [
+            "PUBLIC",
+            "PRIVATE"
+          ],
+          "mappedType": "enum"
         }
       },
       "name": "events",
@@ -5695,7 +5714,7 @@
       "checks": [
         {
           "name": "formal_rank_assignments_ended_on_after_started_on_check",
-          "columnName": "ended_on",
+          "columnName": "started_on",
           "definition": "CHECK (((started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)))",
           "expression": "(started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)"
         }
@@ -6239,22 +6258,6 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "uuid"
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(150)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 150,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
         },
         "is_active": {
           "name": "is_active",
@@ -7192,7 +7195,7 @@
         },
         {
           "name": "hierarchy_invitations_target_group_or_section_check",
-          "columnName": "target_section_id",
+          "columnName": "target_group_id",
           "definition": "CHECK ((((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))))",
           "expression": "((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))"
         }

@@ -17,7 +17,9 @@ export const GRADUATION_SYSTEMS_GROUP_ACTIVE_UNIQUE_INDEX =
 // simply has no catalog yet). Multiple systems *could* exist historically
 // (isActive = false) if this module ever grows a "replace the system"
 // flow, but no such flow exists yet - today there is effectively exactly
-// one, created once and edited in place (name only).
+// one, created once. It carries no name of its own (dropped in
+// Migration20261001120000_DropGraduationSystemName) - a Group has a single
+// catalog, so a separate system name only duplicated the Group's identity.
 @Entity({ tableName: 'graduation_systems' })
 @Unique({
   name: GRADUATION_SYSTEMS_GROUP_ACTIVE_UNIQUE_INDEX,
@@ -31,9 +33,6 @@ export class GraduationSystem extends BaseEntity {
   @Index()
   @ManyToOne(() => Group, { deleteRule: 'no action' })
   group!: Group;
-
-  @Property({ length: 150 })
-  name!: string;
 
   @Property()
   isActive: boolean = true;

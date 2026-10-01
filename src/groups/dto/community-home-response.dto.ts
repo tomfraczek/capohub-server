@@ -165,6 +165,11 @@ export interface CommunityHomeCapabilitiesDto {
   // TRAINING_STATS_VIEW - deliberately withheld from INSTRUCTOR, see the
   // permission enum's own comment.
   canViewTrainingStatsInSectionIds: string[];
+  // GRADUATION_SYSTEM_MANAGE - Group-only (a Section never defines its own
+  // graduation catalog, see GraduationSystemController's @RequireGroupKind
+  // (ROOT)), ACTIVE-only like every write endpoint there. No
+  // ...InSectionIds counterpart, same as the Training lists' reverse.
+  canManageGraduationSystemInGroupIds: string[];
   // True iff canCreateSectionIn{Group,Section}Ids is non-empty - i.e. the
   // user holds GROUP_EDIT (Admin/Owner) in at least one community. A
   // convenience aggregate, not an independent business rule.

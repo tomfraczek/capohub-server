@@ -537,7 +537,6 @@ describe('User Profile (e2e)', () => {
       request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/graduation-system`)
         .set('Authorization', `Bearer ${group.token}`)
-        .send({ name: 'System' })
         .expect(201),
     );
     const rank = await bodyOf<RankResponseDto>(

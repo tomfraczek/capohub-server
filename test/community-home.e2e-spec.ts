@@ -457,6 +457,7 @@ describe('Community Home (e2e)', () => {
       canCreateTrainingSeriesInSectionIds: [],
       canManageTrainingSeriesInSectionIds: [],
       canViewTrainingStatsInSectionIds: [],
+      canManageGraduationSystemInGroupIds: [],
       canManageAnyCommunity: false,
     });
   });

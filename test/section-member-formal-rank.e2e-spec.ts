@@ -375,7 +375,6 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
       request(app.getHttpServer())
         .post(`/api/v1/groups/${groupId}/graduation-system`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ name: 'System' })
         .expect(201),
     );
   }

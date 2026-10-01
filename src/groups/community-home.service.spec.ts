@@ -405,6 +405,40 @@ describe('CommunityHomeService', () => {
     ).toBeUndefined();
   });
 
+  it('Group OWNER/ADMIN: canManageGraduationSystemInGroupIds lists the Group', async () => {
+    for (const role of [GroupRole.OWNER, GroupRole.ADMIN]) {
+      const group = buildGroup({ id: 'group-1' });
+      const { service } = buildService({
+        participation: [
+          { userId: 'user-1', groupId: 'group-1', roles: [role] },
+        ],
+        groups: [group],
+      });
+
+      const home = await service.getHome(buildUser(), null);
+
+      expect(home.capabilities.canManageGraduationSystemInGroupIds).toEqual([
+        'group-1',
+      ]);
+    }
+  });
+
+  it('canManageGraduationSystemInGroupIds is never populated for a Section (graduation catalog is Group-only)', async () => {
+    const section = buildSection({ id: 'section-1' });
+    const membership = buildMembership({ section, user: buildUser() });
+    const { service } = buildService({
+      participation: [
+        { userId: 'user-1', groupId: 'section-1', roles: [GroupRole.OWNER] },
+      ],
+      sections: [section],
+      sectionMemberships: [membership],
+    });
+
+    const home = await service.getHome(buildUser(), null);
+
+    expect(home.capabilities.canManageGraduationSystemInGroupIds).toEqual([]);
+  });
+
   it('returns an empty dashboard when the user participates in nothing', async () => {
     const { service } = buildService({ participation: [] });
 

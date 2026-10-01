@@ -1,15 +1,12 @@
 import {
-  Body,
   Controller,
   Get,
   HttpCode,
   Param,
-  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { AllowGroupStatuses } from '../groups/decorators/allow-group-statuses.decorator';
 import {
   RequireGroupKind,
@@ -20,15 +17,7 @@ import { GroupStatus } from '../groups/enums/group-status.enum';
 import { GroupPermissionsGuard } from '../groups/guards/group-permissions.guard';
 import { GroupPermission } from '../groups/permissions/group-permission.enum';
 import { User } from '../users/entities/user.entity';
-import {
-  CreateGraduationSystemDto,
-  createGraduationSystemSchema,
-} from './dto/create-graduation-system.schema';
 import { GraduationSystemResponseDto } from './dto/graduation-system-response.dto';
-import {
-  UpdateGraduationSystemDto,
-  updateGraduationSystemSchema,
-} from './dto/update-graduation-system.schema';
 import { GraduationSystemService } from './graduation-system.service';
 
 const ANY_STATUS = [
@@ -60,28 +49,17 @@ export class GraduationSystemController {
     return this.graduationSystemService.getByGroup(groupId);
   }
 
+  // No body - the system has no settings of its own (see
+  // graduation-system.entity.ts). There is deliberately no PATCH any more:
+  // its only writable field was the since-dropped `name`.
   @Post()
   @HttpCode(201)
   @RequireGroupPermission(GroupPermission.GRADUATION_SYSTEM_MANAGE)
   @RequireGroupKind(GroupKind.ROOT)
   create(
     @Param('groupId') groupId: string,
-    @Body(new ZodValidationPipe(createGraduationSystemSchema))
-    dto: CreateGraduationSystemDto,
     @CurrentUser() user: User,
   ): Promise<GraduationSystemResponseDto> {
-    return this.graduationSystemService.create(groupId, dto, user);
-  }
-
-  @Patch()
-  @RequireGroupPermission(GroupPermission.GRADUATION_SYSTEM_MANAGE)
-  @RequireGroupKind(GroupKind.ROOT)
-  update(
-    @Param('groupId') groupId: string,
-    @Body(new ZodValidationPipe(updateGraduationSystemSchema))
-    dto: UpdateGraduationSystemDto,
-    @CurrentUser() user: User,
-  ): Promise<GraduationSystemResponseDto> {
-    return this.graduationSystemService.update(groupId, dto, user);
+    return this.graduationSystemService.create(groupId, user);
   }
 }

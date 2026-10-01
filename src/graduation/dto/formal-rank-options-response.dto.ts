@@ -31,6 +31,6 @@ export interface FormalRankOptionsByTrackDto {
 // - the selector simply has nothing to offer yet.
 export interface FormalRankOptionsResponseDto {
   formalGroup: { id: string; name: string } | null;
-  graduationSystem: { id: string; name: string } | null;
+  graduationSystem: { id: string } | null;
   ranks: FormalRankOptionsByTrackDto;
 }

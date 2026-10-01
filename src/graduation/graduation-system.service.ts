@@ -9,9 +9,7 @@ import { AuditAction } from '../groups/enums/audit-action.enum';
 import { AuditTargetType } from '../groups/enums/audit-target-type.enum';
 import { Group } from '../groups/entities/group.entity';
 import { User } from '../users/entities/user.entity';
-import { CreateGraduationSystemInput } from './dto/create-graduation-system.schema';
 import { GraduationSystemResponseDto } from './dto/graduation-system-response.dto';
-import { UpdateGraduationSystemInput } from './dto/update-graduation-system.schema';
 import { GraduationSystem } from './entities/graduation-system.entity';
 import { toGraduationSystemResponseDto } from './mappers/graduation-system.mapper';
 
@@ -44,9 +42,10 @@ export class GraduationSystemService {
     return toGraduationSystemResponseDto(system);
   }
 
+  // No input - a Group has exactly one catalog and the system carries no
+  // settings of its own (no name - see graduation-system.entity.ts).
   async create(
     groupId: string,
-    input: CreateGraduationSystemInput,
     actor: User,
   ): Promise<GraduationSystemResponseDto> {
     const existing = await this.loadActive(groupId);
@@ -60,7 +59,6 @@ export class GraduationSystemService {
     const group = this.em.getReference(Group, groupId);
     const system = new GraduationSystem();
     system.group = group;
-    system.name = input.name;
 
     this.auditLogService.record(this.em, {
       community: group,
@@ -71,30 +69,6 @@ export class GraduationSystemService {
     });
 
     await this.em.persist(system).flush();
-    return toGraduationSystemResponseDto(system);
-  }
-
-  async update(
-    groupId: string,
-    input: UpdateGraduationSystemInput,
-    actor: User,
-  ): Promise<GraduationSystemResponseDto> {
-    const system = await this.loadActive(groupId);
-    if (!system) {
-      throw this.notFound();
-    }
-
-    system.name = input.name;
-
-    this.auditLogService.record(this.em, {
-      community: system.group,
-      action: AuditAction.UPDATE_GRADUATION_SYSTEM,
-      actor,
-      targetType: AuditTargetType.GRADUATION_SYSTEM,
-      targetId: system.id,
-    });
-
-    await this.em.flush();
     return toGraduationSystemResponseDto(system);
   }
 

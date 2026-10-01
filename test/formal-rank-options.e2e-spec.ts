@@ -311,7 +311,6 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
       request(app.getHttpServer())
         .post(`/api/v1/groups/${groupId}/graduation-system`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ name: 'System' })
         .expect(201),
     );
   }
@@ -405,7 +404,7 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
     const options = await getOptions(MEMBER_TOKEN);
 
     expect(options.formalGroup).toEqual({ id: group.id, name: group.name });
-    expect(options.graduationSystem?.name).toBe('System');
+    expect(typeof options.graduationSystem?.id).toBe('string');
     expect(options.ranks[RankTrack.ADULT].map((r) => r.id)).toEqual([
       adultA.id,
       adultB.id,

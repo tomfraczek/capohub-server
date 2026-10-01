@@ -118,7 +118,7 @@ export class RanksService {
 
     return {
       formalGroup: formalGroupRef,
-      graduationSystem: { id: system.id, name: system.name },
+      graduationSystem: { id: system.id },
       ranks: {
         [RankTrack.CHILD]: this.toFormalRankOptions(byTrack[RankTrack.CHILD]),
         [RankTrack.ADULT]: this.toFormalRankOptions(byTrack[RankTrack.ADULT]),

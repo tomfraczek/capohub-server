@@ -327,14 +327,12 @@ describe('Graduation Catalog (e2e)', () => {
   async function createSystem(
     token: string,
     groupId: string,
-    name = 'Cordão System',
     expectStatus = 201,
   ): Promise<GraduationSystemResponseDto | HttpErrorResponse> {
     return bodyOf(
       request(app.getHttpServer())
         .post(`/api/v1/groups/${groupId}/graduation-system`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ name })
         .expect(expectStatus),
     );
   }
@@ -409,7 +407,6 @@ describe('Graduation Catalog (e2e)', () => {
       const conflict = (await createSystem(
         group.token,
         group.id,
-        'Second System',
         409,
       )) as HttpErrorResponse;
       expect(conflict.statusCode).toBe(409);
@@ -426,18 +423,25 @@ describe('Graduation Catalog (e2e)', () => {
       expect(error.statusCode).toBe(404);
     });
 
-    it('lets OWNER/ADMIN edit the system name', async () => {
+    it('no longer exposes a PATCH - the system has nothing editable', async () => {
+      const group = await createGroupWithSystem();
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/groups/${group.id}/graduation-system`)
+        .set('Authorization', `Bearer ${group.token}`)
+        .send({ name: 'Renamed System' })
+        .expect(404);
+    });
+
+    it('lets a Group ADMIN (not only OWNER) manage the catalog', async () => {
       const group = await createGroupWithSystem();
       await grantGroupAdmin(group.token, group.id, ADMIN_TOKEN);
 
-      const updated = await bodyOf<GraduationSystemResponseDto>(
-        request(app.getHttpServer())
-          .patch(`/api/v1/groups/${group.id}/graduation-system`)
-          .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
-          .send({ name: 'Renamed System' })
-          .expect(200),
-      );
-      expect(updated.name).toBe('Renamed System');
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${group.id}/ranks`)
+        .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+        .send(rankPayload({ name: 'Admin rank' }))
+        .expect(201);
     });
 
     it('rejects a Section OWNER/ADMIN managing the catalog - no inheritance through membership', async () => {
@@ -458,9 +462,9 @@ describe('Graduation Catalog (e2e)', () => {
       // guard's own "404 not 403" documentation).
       const error = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
-          .patch(`/api/v1/groups/${group.id}/graduation-system`)
+          .post(`/api/v1/groups/${group.id}/ranks`)
           .set('Authorization', `Bearer ${SECTION_ADMIN_TOKEN}`)
-          .send({ name: 'Hijacked' })
+          .send(rankPayload({ name: 'Hijacked' }))
           .expect(404),
       );
       expect(error.statusCode).toBe(404);

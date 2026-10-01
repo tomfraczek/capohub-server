@@ -81,12 +81,7 @@ const ADMIN2_TOKEN = 'valid-frc-admin2-token';
 const TARGET_TOKEN = 'valid-frc-target-token';
 const OUTSIDER_TOKEN = 'valid-frc-outsider-token';
 
-const TOKENS = [
-  ADMIN1_TOKEN,
-  ADMIN2_TOKEN,
-  TARGET_TOKEN,
-  OUTSIDER_TOKEN,
-];
+const TOKENS = [ADMIN1_TOKEN, ADMIN2_TOKEN, TARGET_TOKEN, OUTSIDER_TOKEN];
 
 function clerkIdFor(token: string): string {
   return `user_test_${token.replace(/-/g, '_')}`;
@@ -432,7 +427,6 @@ describe('Formal Rank Correction (e2e)', () => {
       request(app.getHttpServer())
         .post(`/api/v1/groups/${group.id}/graduation-system`)
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-        .send({ name: 'System' })
         .expect(201),
     );
     const rankA = await createRank(group.id, {
@@ -648,7 +642,6 @@ describe('Formal Rank Correction (e2e)', () => {
         request(app.getHttpServer())
           .post(`/api/v1/groups/${otherGroup.id}/graduation-system`)
           .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-          .send({ name: 'Other system' })
           .expect(201),
       );
       const foreignRank = await createRank(otherGroup.id, {

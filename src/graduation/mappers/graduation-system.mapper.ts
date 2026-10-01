@@ -7,7 +7,6 @@ export function toGraduationSystemResponseDto(
   return {
     id: system.id,
     groupId: system.group.id,
-    name: system.name,
     isActive: system.isActive,
     createdAt: system.createdAt.toISOString(),
     updatedAt: system.updatedAt.toISOString(),

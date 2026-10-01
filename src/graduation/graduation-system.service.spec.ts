@@ -56,14 +56,9 @@ describe('GraduationSystemService', () => {
       const { em, persist } = buildMockEm({ existingSystem: null });
       const service = new GraduationSystemService(em, buildAuditLogService());
 
-      const result = await service.create(
-        'group-1',
-        { name: 'Cordão System' },
-        buildActor(),
-      );
+      const result = await service.create('group-1', buildActor());
 
       expect(persist).toHaveBeenCalled();
-      expect(result.name).toBe('Cordão System');
       expect(result.groupId).toBe('group-1');
       expect(result.isActive).toBe(true);
     });
@@ -71,7 +66,6 @@ describe('GraduationSystemService', () => {
     it('rejects creating a second active system for the same group', async () => {
       const existing = new GraduationSystem();
       existing.id = 'system-1';
-      existing.name = 'Existing';
       const group = new Group();
       group.id = 'group-1';
       existing.group = group;
@@ -79,54 +73,12 @@ describe('GraduationSystemService', () => {
       const { em } = buildMockEm({ existingSystem: existing });
       const service = new GraduationSystemService(em, buildAuditLogService());
 
-      const promise = service.create(
-        'group-1',
-        { name: 'New system' },
-        buildActor(),
-      );
+      const promise = service.create('group-1', buildActor());
 
       await expect(promise).rejects.toBeInstanceOf(ConflictException);
       await expect(promise).rejects.toMatchObject({
         response: { code: 'GRADUATION_SYSTEM_ALREADY_EXISTS' },
       });
-    });
-  });
-
-  describe('update', () => {
-    it('throws GRADUATION_SYSTEM_NOT_FOUND when there is no active system', async () => {
-      const { em } = buildMockEm({ existingSystem: null });
-      const service = new GraduationSystemService(em, buildAuditLogService());
-
-      const promise = service.update(
-        'group-1',
-        { name: 'New name' },
-        buildActor(),
-      );
-
-      await expect(promise).rejects.toBeInstanceOf(NotFoundException);
-      await expect(promise).rejects.toMatchObject({
-        response: { code: 'GRADUATION_SYSTEM_NOT_FOUND' },
-      });
-    });
-
-    it('updates the name of the existing active system', async () => {
-      const existing = new GraduationSystem();
-      existing.id = 'system-1';
-      existing.name = 'Old name';
-      const group = new Group();
-      group.id = 'group-1';
-      existing.group = group;
-
-      const { em } = buildMockEm({ existingSystem: existing });
-      const service = new GraduationSystemService(em, buildAuditLogService());
-
-      const result = await service.update(
-        'group-1',
-        { name: 'New name' },
-        buildActor(),
-      );
-
-      expect(result.name).toBe('New name');
     });
   });
 });
