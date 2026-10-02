@@ -62,6 +62,7 @@ function toPersonalDataDto(
     lastName: user.lastName,
     birthDate: toDateOnly(user.birthDate),
     phoneNumber: user.phoneNumber,
+    gender: user.gender,
   };
 }
 

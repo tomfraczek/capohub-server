@@ -1,3 +1,4 @@
+import { TrainingUserRefDto } from './dto/training-user-ref.dto';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Section } from '../groups/entities/section.entity';
@@ -66,7 +67,7 @@ export class TrainingStatsService {
 
     const byUser = new Map<
       string,
-      { user: { id: string; displayName: string }; attendedCount: number }
+      { user: TrainingUserRefDto; attendedCount: number }
     >();
     for (const attendance of attendances) {
       const existing = byUser.get(attendance.user.id);
@@ -77,6 +78,7 @@ export class TrainingStatsService {
           user: {
             id: attendance.user.id,
             displayName: attendance.user.displayName,
+            gender: attendance.user.gender,
           },
           attendedCount: 1,
         });

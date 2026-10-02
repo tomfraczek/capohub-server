@@ -113,7 +113,7 @@ function buildTraining(
     endsAt: '2026-01-12T20:00:00.000Z',
     locationName: null,
     locationAddress: null,
-    trainer: { id: 'trainer-1', displayName: 'Mestre Ada' },
+    trainer: { id: 'trainer-1', displayName: 'Mestre Ada', gender: null },
     description: null,
     visibility: TrainingVisibility.MEMBERS_ONLY,
     status: TrainingStatus.SCHEDULED,

@@ -1,3 +1,4 @@
+import { UserGender } from '../../users/enums/user-gender.enum';
 // Safe user reference - same minimal shape as RoleAssignmentResponseDto's
 // user ref (see groups/dto/role-assignment-response.dto.ts): never exposes
 // anything beyond what the existing User Profile privacy model already
@@ -6,6 +7,8 @@
 export interface TrainingUserRefDto {
   id: string;
   displayName: string;
+  // For inflecting Polish wording about this user - see UserGender.
+  gender: UserGender | null;
 }
 
 // Minimal Section reference embedded in Training/TrainingSeries responses -

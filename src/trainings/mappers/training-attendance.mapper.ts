@@ -7,12 +7,17 @@ export function toTrainingAttendanceResponseDto(
   return {
     id: attendance.id,
     trainingId: attendance.training.id,
-    user: { id: attendance.user.id, displayName: attendance.user.displayName },
+    user: {
+      id: attendance.user.id,
+      displayName: attendance.user.displayName,
+      gender: attendance.user.gender,
+    },
     attended: attendance.attended,
     recordedBy: attendance.recordedBy
       ? {
           id: attendance.recordedBy.id,
           displayName: attendance.recordedBy.displayName,
+          gender: attendance.recordedBy.gender,
         }
       : null,
     recordedAt: attendance.recordedAt.toISOString(),

@@ -23,7 +23,11 @@ function buildProposalResponse(
   return {
     id: 'proposal-uuid-1',
     songId: 'song-uuid-1',
-    proposedBy: { id: 'user-uuid-1', displayName: 'Ada Lovelace' },
+    proposedBy: {
+      id: 'user-uuid-1',
+      displayName: 'Ada Lovelace',
+      gender: null,
+    },
     status: SongEditProposalStatus.PENDING,
     payload: {
       title: 'Paranauê',

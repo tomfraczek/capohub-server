@@ -105,7 +105,11 @@ export class TrainingAttendanceService {
     }
 
     return {
-      user: { id: resolved.user.id, displayName: resolved.user.displayName },
+      user: {
+        id: resolved.user.id,
+        displayName: resolved.user.displayName,
+        gender: resolved.user.gender,
+      },
       attended: true,
       recordedAt: attendance.recordedAt,
       alreadyCheckedIn,
@@ -232,13 +236,18 @@ export class TrainingAttendanceService {
       const attendance = attendanceByUser.get(userId);
       entries.push({
         user: rsvp
-          ? { id: rsvp.user.id, displayName: rsvp.user.displayName }
+          ? {
+              id: rsvp.user.id,
+              displayName: rsvp.user.displayName,
+              gender: rsvp.user.gender,
+            }
           : attendance
             ? {
                 id: attendance.user.id,
                 displayName: attendance.user.displayName,
+                gender: attendance.user.gender,
               }
-            : { id: userId, displayName: '' },
+            : { id: userId, displayName: '', gender: null },
         rsvpStatus: rsvp?.status ?? null,
         attendance: attendance
           ? toTrainingAttendanceResponseDto(attendance)

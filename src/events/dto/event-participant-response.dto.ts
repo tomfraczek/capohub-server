@@ -1,3 +1,4 @@
+import { UserGender } from '../../users/enums/user-gender.enum';
 import { EventAttendeeResponseDto } from './event-attendee-response.dto';
 
 // The subject User's own personal data, shown to the Event's staff so they
@@ -11,6 +12,8 @@ export interface EventParticipantPersonalDataDto {
   // 'YYYY-MM-DD'.
   birthDate: string | null;
   phoneNumber: string | null;
+  // For inflecting Polish wording about this user - see UserGender.
+  gender: UserGender | null;
 }
 
 // GET events/:eventId/participants only (EVENT_MANAGE_PARTICIPANTS - every

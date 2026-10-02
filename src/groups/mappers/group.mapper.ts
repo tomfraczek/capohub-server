@@ -90,6 +90,7 @@ export function toSectionMembershipResponseDto(
     user: {
       id: user.id,
       displayName: user.displayName,
+      gender: user.gender,
       image: {
         type: user.avatarType,
         // Prefers the R2 public URL derived from avatarImageKey over the

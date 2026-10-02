@@ -41,7 +41,11 @@ export function toTrainingResponseDto(
     locationName: training.locationName,
     locationAddress: training.locationAddress,
     trainer: training.trainer
-      ? { id: training.trainer.id, displayName: training.trainer.displayName }
+      ? {
+          id: training.trainer.id,
+          displayName: training.trainer.displayName,
+          gender: training.trainer.gender,
+        }
       : null,
     description: training.description,
     visibility: training.visibility,

@@ -1,3 +1,5 @@
+import { UserGender } from '../enums/user-gender.enum';
+
 // No identity toggles: firstName/lastName/apelido are always visible.
 export interface UserProfilePrivacyDto {
   showCapoeiraStartedAt: boolean;
@@ -29,6 +31,7 @@ export interface UserProfileResponseDto {
   // User.birthDate/phoneNumber).
   birthDate: string | null;
   phoneNumber: string | null;
+  gender: UserGender | null;
   // true only once both firstName and lastName have been set - never
   // reverts to false afterwards, since UpdateUserProfileDto never allows
   // clearing either back to null. Backend-only signal: no endpoint in this

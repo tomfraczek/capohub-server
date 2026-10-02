@@ -55,7 +55,7 @@ export function toSongUserRefDto(user: User | null): SongUserRefDto | null {
     return null;
   }
 
-  return { id: user.id, displayName: user.displayName };
+  return { id: user.id, displayName: user.displayName, gender: user.gender };
 }
 
 /**

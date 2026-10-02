@@ -113,6 +113,9 @@ export class UserProfileService {
     if (changes.phoneNumber !== undefined) {
       user.phoneNumber = changes.phoneNumber;
     }
+    if (changes.gender !== undefined) {
+      user.gender = changes.gender;
+    }
     if (changes.showCapoeiraStartedAt !== undefined) {
       user.showCapoeiraStartedAt = changes.showCapoeiraStartedAt;
     }

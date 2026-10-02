@@ -11,6 +11,7 @@ import { RankTrack } from '../graduation/enums/rank-track.enum';
 import { GroupRole } from '../groups/enums/group-role.enum';
 import { PublicUrlBuilder } from '../storage/image-url.util';
 import { User } from './entities/user.entity';
+import { UserGender } from './enums/user-gender.enum';
 import {
   toPublicUserProfileResponseDto,
   toUserProfileResponseDto,
@@ -182,6 +183,14 @@ describe('toUserProfileResponseDto', () => {
       showCareerTimeline: false,
       showEventParticipation: false,
     });
+  });
+
+  it('returns the self-declared gender, null when never set', () => {
+    expect(toUserProfileResponseDto(buildUser(), null).gender).toBeNull();
+    expect(
+      toUserProfileResponseDto(buildUser({ gender: UserGender.FEMALE }), null)
+        .gender,
+    ).toBe(UserGender.FEMALE);
   });
 
   it('maps the active formal group with its real-world dates, null when none', () => {

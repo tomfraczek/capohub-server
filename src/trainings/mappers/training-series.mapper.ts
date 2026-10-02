@@ -33,6 +33,7 @@ export function toTrainingSeriesResponseDto(
       ? {
           id: series.defaultTrainer.id,
           displayName: series.defaultTrainer.displayName,
+          gender: series.defaultTrainer.gender,
         }
       : null,
     defaultDescription: series.defaultDescription,

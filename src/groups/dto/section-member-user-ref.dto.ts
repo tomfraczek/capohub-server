@@ -1,3 +1,4 @@
+import { UserGender } from '../../users/enums/user-gender.enum';
 import { AvatarType } from '../../users/enums/avatar-type.enum';
 import { GroupUserRefDto } from './group-user-ref.dto';
 
@@ -18,4 +19,6 @@ export interface SectionMemberUserImageDto {
 // carries email, clerkUserId or globalRole.
 export interface SectionMemberUserRefDto extends GroupUserRefDto {
   image: SectionMemberUserImageDto;
+  // For inflecting Polish wording about this user - see UserGender.
+  gender: UserGender | null;
 }

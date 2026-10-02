@@ -25,6 +25,7 @@ export function toEventAttendanceEntryDto(
     user: {
       id: attendee.subjectUser?.id ?? null,
       displayName: resolveAttendeeDisplayName(attendee),
+      gender: attendee.subjectUser?.gender ?? null,
     },
     rsvpStatus: attendee.rsvpStatus,
     attended: attendee.checkedIn,
@@ -40,6 +41,7 @@ export function toEventCheckInResultDto(
     user: {
       id: attendee.subjectUser?.id ?? null,
       displayName: resolveAttendeeDisplayName(attendee),
+      gender: attendee.subjectUser?.gender ?? null,
     },
     attended: true,
     // Set unconditionally by EventAttendanceService before this mapper

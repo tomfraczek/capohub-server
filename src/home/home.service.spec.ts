@@ -102,7 +102,7 @@ function buildTraining(
     endsAt: '2026-08-01T20:00:00.000Z',
     locationName: null,
     locationAddress: null,
-    trainer: { id: 'user-2', displayName: 'Trainer' },
+    trainer: { id: 'user-2', displayName: 'Trainer', gender: null },
     description: null,
     visibility: TrainingVisibility.MEMBERS_ONLY,
     status: TrainingStatus.SCHEDULED,

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createZodDto } from '../../common/dto/create-zod-dto';
+import { UserGender } from '../enums/user-gender.enum';
 
 const MAX_NAME_LENGTH = 100;
 
@@ -79,6 +80,8 @@ export const updateUserProfileSchema = z.object({
   capoeiraStartedAt: capoeiraStartedAtSchema,
   birthDate: birthDateSchema,
   phoneNumber: phoneNumberSchema,
+  // null clears it back to "not set".
+  gender: z.nativeEnum(UserGender).nullable().optional(),
   showCapoeiraStartedAt: privacyToggleSchema,
   showSections: privacyToggleSchema,
   showFormalGroup: privacyToggleSchema,

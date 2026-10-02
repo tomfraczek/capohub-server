@@ -7,7 +7,11 @@ export function toTrainingRsvpResponseDto(
   return {
     id: rsvp.id,
     trainingId: rsvp.training.id,
-    user: { id: rsvp.user.id, displayName: rsvp.user.displayName },
+    user: {
+      id: rsvp.user.id,
+      displayName: rsvp.user.displayName,
+      gender: rsvp.user.gender,
+    },
     status: rsvp.status,
     respondedAt: rsvp.respondedAt.toISOString(),
   };

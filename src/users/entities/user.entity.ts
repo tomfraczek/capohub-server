@@ -2,6 +2,7 @@ import { Check, Entity, Enum, Index, Property, Unique } from '@mikro-orm/core';
 import { GlobalRole } from '../../auth/permissions/global-role.enum';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { AvatarType } from '../enums/avatar-type.enum';
+import { UserGender } from '../enums/user-gender.enum';
 
 export const THEMES = ['system', 'light', 'dark'] as const;
 
@@ -192,6 +193,13 @@ export class User extends BaseEntity {
 
   @Property({ nullable: true, type: 'date' })
   capoeiraStartedAt: Date | null = null;
+
+  // Self-declared, optional - only ever used to inflect Polish wording
+  // about this user ("Dołączył"/"Dołączyła"), so it travels with the user
+  // references on the screens that need it. null = not set yet (rendered
+  // like UNDISCLOSED: the neutral "Dołączył(a)").
+  @Enum({ items: () => Object.values(UserGender), nullable: true })
+  gender: UserGender | null = null;
 
   // Private contact/personal data - returned on the owner's own profile
   // (UserProfileResponseDto) and to the staff of an Event this user is

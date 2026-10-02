@@ -11,7 +11,9 @@ import { Rank } from '../entities/rank.entity';
 function toCorrectionUserRefDto(
   user: User | null,
 ): CorrectionUserRefDto | null {
-  return user ? { id: user.id, displayName: user.displayName } : null;
+  return user
+    ? { id: user.id, displayName: user.displayName, gender: user.gender }
+    : null;
 }
 
 function toCorrectionRankRefDto(rank: Rank): CorrectionRankRefDto {
@@ -34,6 +36,7 @@ export function toFormalRankCorrectionResponseDto(
     targetUser: {
       id: request.targetUser.id,
       displayName: request.targetUser.displayName,
+      gender: request.targetUser.gender,
     },
     formalRankAssignmentId: request.formalRankAssignment.id,
     currentRank: toCorrectionRankRefDto(currentRank),

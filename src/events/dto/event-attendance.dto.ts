@@ -1,3 +1,4 @@
+import { UserGender } from '../../users/enums/user-gender.enum';
 import { EventRsvpStatus } from '../enums/event-rsvp-status.enum';
 
 // Safe, minimal User reference for the attendance roster - `id` is null
@@ -8,6 +9,8 @@ import { EventRsvpStatus } from '../enums/event-rsvp-status.enum';
 export interface EventAttendanceUserRefDto {
   id: string | null;
   displayName: string;
+  // null for a CHILD_DEPENDENT attendee (no account) - see UserGender.
+  gender: UserGender | null;
 }
 
 // One EventAttendee's attendance state - RSVP (declared intent) and

@@ -1,3 +1,4 @@
+import { UserGender } from '../../users/enums/user-gender.enum';
 import { RankTrack } from '../enums/rank-track.enum';
 import { FormalRankCorrectionStatus } from '../enums/formal-rank-correction-status.enum';
 
@@ -6,6 +7,8 @@ import { FormalRankCorrectionStatus } from '../enums/formal-rank-correction-stat
 export interface CorrectionUserRefDto {
   id: string;
   displayName: string;
+  // For inflecting Polish wording about this user - see UserGender.
+  gender: UserGender | null;
 }
 
 // Deliberately smaller than FormalRankRefDto (used by
