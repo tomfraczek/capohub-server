@@ -9,11 +9,14 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { PaginatedResponse } from '../common/pagination/pagination.types';
+import { createPaginationMeta } from '../common/pagination/pagination.utils';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import {
   assertImageFilePresent,
@@ -25,6 +28,15 @@ import {
   CreateHierarchyInvitationDto,
   createHierarchyInvitationSchema,
 } from './dto/create-hierarchy-invitation.schema';
+import { GroupAudienceMemberDto } from './dto/group-audience-member-response.dto';
+import {
+  GroupFollowersQueryDto,
+  groupFollowersQuerySchema,
+} from './dto/group-followers-query.schema';
+import {
+  RemoveFollowerQueryDto,
+  removeFollowerQuerySchema,
+} from './dto/remove-follower-query.schema';
 import { GroupResponseDto } from './dto/group-response.dto';
 import { GroupSummaryResponseDto } from './dto/group-summary-response.dto';
 import { HierarchyInvitationResponseDto } from './dto/hierarchy-invitation-response.dto';
@@ -47,6 +59,8 @@ import {
 } from './decorators/require-group-kind.decorator';
 import { GroupStatus } from './enums/group-status.enum';
 import { GroupPermissionsGuard } from './guards/group-permissions.guard';
+import { GroupAudienceService } from './group-audience.service';
+import { GroupFollowService } from './group-follow.service';
 import { HierarchyManagementService } from './hierarchy-management.service';
 import { GroupPermission } from './permissions/group-permission.enum';
 import { GroupsService } from './groups.service';
@@ -81,6 +95,8 @@ export class GroupsController {
     private readonly groupsService: GroupsService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly hierarchyManagementService: HierarchyManagementService,
+    private readonly groupAudienceService: GroupAudienceService,
+    private readonly groupFollowService: GroupFollowService,
   ) {}
 
   @Post()
@@ -134,6 +150,73 @@ export class GroupsController {
     @CurrentUser() user: User,
   ): Promise<GroupResponseDto> {
     return this.groupsService.unfollow(id, user);
+  }
+
+  // GET :id/followers - everyone tied to this Group: members of its direct
+  // Sections and its followers, each flagged with how (see
+  // GroupAudienceService). OWNER/ADMIN only (GROUP_FOLLOWERS_VIEW) - a
+  // follower list is never public. Readable in every status, like getById.
+  @Get(':id/followers')
+  @RequireGroupPermission(GroupPermission.GROUP_FOLLOWERS_VIEW)
+  @RequireGroupKind(GroupKind.ROOT)
+  @AllowGroupStatuses(...ANY_STATUS)
+  async listFollowers(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query(new ZodValidationPipe(groupFollowersQuerySchema))
+    query: GroupFollowersQueryDto,
+  ): Promise<PaginatedResponse<GroupAudienceMemberDto>> {
+    const result = await this.groupAudienceService.list(id, {
+      limit: query.limit,
+      offset: (query.page - 1) * query.limit,
+    });
+    return {
+      data: result.items,
+      meta: createPaginationMeta({
+        page: query.page,
+        limit: query.limit,
+        totalItems: result.total,
+      }),
+    };
+  }
+
+  // DELETE :id/followers/:userId[?block=true] - remove a follower,
+  // optionally also blocking them from following again. Idempotent.
+  @Delete(':id/followers/:userId')
+  @HttpCode(204)
+  @RequireGroupPermission(GroupPermission.GROUP_FOLLOWERS_MANAGE)
+  @RequireGroupKind(GroupKind.ROOT)
+  removeFollower(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Query(new ZodValidationPipe(removeFollowerQuerySchema))
+    query: RemoveFollowerQueryDto,
+  ): Promise<void> {
+    return this.groupFollowService.removeFollower(id, userId, query.block);
+  }
+
+  // POST :id/followers/:userId/block - block following (removes any
+  // current follow too). Works for a non-follower as well, so a Section
+  // member can be pre-emptively blocked as part of a full block.
+  @Post(':id/followers/:userId/block')
+  @HttpCode(204)
+  @RequireGroupPermission(GroupPermission.GROUP_FOLLOWERS_MANAGE)
+  @RequireGroupKind(GroupKind.ROOT)
+  blockFollowing(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ): Promise<void> {
+    return this.groupFollowService.blockFollowing(id, userId);
+  }
+
+  @Delete(':id/follow-blocks/:userId')
+  @HttpCode(204)
+  @RequireGroupPermission(GroupPermission.GROUP_FOLLOWERS_MANAGE)
+  @RequireGroupKind(GroupKind.ROOT)
+  unblockFollowing(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ): Promise<void> {
+    return this.groupFollowService.unblockFollowing(id, userId);
   }
 
   @Patch(':id')

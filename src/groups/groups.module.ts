@@ -13,6 +13,7 @@ import { CommunityOverviewController } from './community-overview.controller';
 import { CommunityOverviewService } from './community-overview.service';
 import { CommunityNotificationSettingsController } from './community-notification-settings.controller';
 import { CommunityNotificationSettingsService } from './community-notification-settings.service';
+import { GroupAudienceService } from './group-audience.service';
 import { GroupFollowService } from './group-follow.service';
 import { GroupsController } from './groups.controller';
 import { GroupsService } from './groups.service';
@@ -82,6 +83,7 @@ import { StandaloneSectionsController } from './standalone-sections.controller';
     CommunityNotificationSettingsService,
     RecipientGroupsService,
     GroupFollowService,
+    GroupAudienceService,
     CommunityOverviewService,
   ],
   // RoleAssignmentsService is exported for UsersModule - DELETE /users/me

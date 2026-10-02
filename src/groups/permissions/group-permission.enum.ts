@@ -184,6 +184,16 @@ export enum GroupPermission {
   GRADUATION_SYSTEM_VIEW = 'GRADUATION_SYSTEM_VIEW',
   GRADUATION_SYSTEM_MANAGE = 'GRADUATION_SYSTEM_MANAGE',
 
+  // Read-only list of the people tied to a Group - members of its direct
+  // Sections plus its GroupFollow followers (see GroupAudienceService).
+  // Group-only (a Section has its own MEMBERSHIP_VIEW members list),
+  // OWNER and ADMIN alike.
+  GROUP_FOLLOWERS_VIEW = 'GROUP_FOLLOWERS_VIEW',
+  // Remove a follower and block/unblock following (GroupFollowBlock) -
+  // Group-only, OWNER and ADMIN alike. Section members are managed with
+  // the Section's own MEMBERSHIP_REMOVE/MEMBERSHIP_BAN, never this.
+  GROUP_FOLLOWERS_MANAGE = 'GROUP_FOLLOWERS_MANAGE',
+
   // Formal rank correction workflow (see FormalRankCorrectionRequest) -
   // exact-Section-only, deliberately absent from GROUP_TARGET_ROLE_PERMISSIONS:
   // a formal rank is corrected in the context of the exact Section the

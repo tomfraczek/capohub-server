@@ -458,6 +458,8 @@ describe('Community Home (e2e)', () => {
       canManageTrainingSeriesInSectionIds: [],
       canViewTrainingStatsInSectionIds: [],
       canManageGraduationSystemInGroupIds: [],
+      canViewFollowersInGroupIds: [],
+      canManageFollowersInGroupIds: [],
       canManageAnyCommunity: false,
     });
   });

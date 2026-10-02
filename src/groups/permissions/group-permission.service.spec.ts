@@ -307,6 +307,8 @@ describe('GroupPermissionService', () => {
         GroupPermission.HIERARCHY_INVITE,
         GroupPermission.GRADUATION_SYSTEM_VIEW,
         GroupPermission.GRADUATION_SYSTEM_MANAGE,
+        GroupPermission.GROUP_FOLLOWERS_VIEW,
+        GroupPermission.GROUP_FOLLOWERS_MANAGE,
       ];
       const everyPermissionExceptGroupOnly = Object.values(
         GroupPermission,

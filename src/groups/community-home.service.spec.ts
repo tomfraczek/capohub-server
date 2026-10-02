@@ -420,6 +420,10 @@ describe('CommunityHomeService', () => {
       expect(home.capabilities.canManageGraduationSystemInGroupIds).toEqual([
         'group-1',
       ]);
+      expect(home.capabilities.canViewFollowersInGroupIds).toEqual(['group-1']);
+      expect(home.capabilities.canManageFollowersInGroupIds).toEqual([
+        'group-1',
+      ]);
     }
   });
 
@@ -437,6 +441,8 @@ describe('CommunityHomeService', () => {
     const home = await service.getHome(buildUser(), null);
 
     expect(home.capabilities.canManageGraduationSystemInGroupIds).toEqual([]);
+    expect(home.capabilities.canViewFollowersInGroupIds).toEqual([]);
+    expect(home.capabilities.canManageFollowersInGroupIds).toEqual([]);
   });
 
   it('returns an empty dashboard when the user participates in nothing', async () => {

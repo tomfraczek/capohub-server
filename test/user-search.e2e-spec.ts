@@ -161,20 +161,16 @@ describe('User Search (e2e)', () => {
     await patchProfile(TOKENS.publicName, {
       firstName: PUBLIC_FIRST,
       lastName: PUBLIC_LAST,
-      showFullName: true,
     });
     await patchProfile(TOKENS.publicApelido, {
       apelido: PUBLIC_APELIDO,
-      showApelido: true,
     });
     await patchProfile(TOKENS.hiddenName, {
       firstName: HIDDEN_FIRST,
       lastName: HIDDEN_LAST,
-      showFullName: false,
     });
     await patchProfile(TOKENS.hiddenApelido, {
       apelido: HIDDEN_APELIDO,
-      showApelido: false,
     });
     for (const [token, suffix] of [
       [TOKENS.pageA, 'A'],
@@ -183,7 +179,6 @@ describe('User Search (e2e)', () => {
     ] as const) {
       await patchProfile(token, {
         apelido: `${PAGE_APELIDO_PREFIX}${suffix}`,
-        showApelido: true,
       });
     }
   });
@@ -257,21 +252,41 @@ describe('User Search (e2e)', () => {
     expect(match?.displayName).toBe(PUBLIC_APELIDO);
   });
 
-  it('never finds a user by their hidden full name (showFullName=false)', async () => {
+  // Identity has no privacy toggle any more - every user is findable by
+  // (and labelled with) their real name/apelido.
+  it('finds any user by full name and labels them with it, never with their code', async () => {
     const target = await getMe(TOKENS.hiddenName);
     const result = await search(HIDDEN_FIRST);
 
-    expect(result.items.map((item) => item.id)).not.toContain(target.id);
+    const match = result.items.find((item) => item.id === target.id);
+    expect(match?.displayName).toBe(`${HIDDEN_FIRST} ${HIDDEN_LAST}`);
   });
 
-  it('never finds a user by their hidden apelido (showApelido=false)', async () => {
+  it('finds any user by apelido', async () => {
     const target = await getMe(TOKENS.hiddenApelido);
     const result = await search(HIDDEN_APELIDO);
 
-    expect(result.items.map((item) => item.id)).not.toContain(target.id);
+    const match = result.items.find((item) => item.id === target.id);
+    expect(match?.displayName).toBe(HIDDEN_APELIDO);
   });
 
-  it('falls back to publicCode as displayName when name and apelido are both private', async () => {
+  it('rejects the removed privacy fields - PATCH never stores showFullName/showApelido', async () => {
+    const profile = await bodyOf<Record<string, unknown>>(
+      request(app.getHttpServer())
+        .patch('/api/v1/users/me/profile')
+        .set('Authorization', `Bearer ${TOKENS.hiddenName}`)
+        .send({ showFullName: false, showApelido: false })
+        .expect(200),
+    );
+    expect(profile.privacy).not.toHaveProperty('showFullName');
+    expect(profile.privacy).not.toHaveProperty('showApelido');
+
+    const target = await getMe(TOKENS.hiddenName);
+    const result = await search(HIDDEN_FIRST);
+    expect(result.items.map((item) => item.id)).toContain(target.id);
+  });
+
+  it('falls back to publicCode as displayName only for a user with no name or apelido at all', async () => {
     const target = await getMe(TOKENS.fallback);
     expect(target.publicCode).toBeTruthy();
 

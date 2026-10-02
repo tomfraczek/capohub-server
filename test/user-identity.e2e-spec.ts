@@ -241,12 +241,12 @@ describe('User Identity (e2e)', () => {
       expect(found.userId).toBe(owner.userId);
     });
 
-    it('returns the same privacy-filtered shape as GET /users/:userId/profile - firstName/lastName hidden until showFullName is on', async () => {
+    it('returns the same shape as GET /users/:userId/profile - first/last name always included, never privacy-gated', async () => {
       const owner = await getOwnProfile(OWNER_TOKEN);
       await request(app.getHttpServer())
         .patch('/api/v1/users/me/profile')
         .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-        .send({ firstName: 'Hidden', lastName: 'Name', showFullName: false })
+        .send({ firstName: 'Visible', lastName: 'Name' })
         .expect(200);
 
       const byCode = await bodyOf<PublicUserProfileResponseDto>(
@@ -255,23 +255,9 @@ describe('User Identity (e2e)', () => {
           .set('Authorization', `Bearer ${VIEWER_TOKEN}`)
           .expect(200),
       );
-      expect(byCode.firstName).toBeNull();
-      expect(byCode.lastName).toBeNull();
-
-      await request(app.getHttpServer())
-        .patch('/api/v1/users/me/profile')
-        .set('Authorization', `Bearer ${OWNER_TOKEN}`)
-        .send({ showFullName: true })
-        .expect(200);
-
-      const byCodeVisible = await bodyOf<PublicUserProfileResponseDto>(
-        request(app.getHttpServer())
-          .get(`/api/v1/users/by-code/${owner.numericCode}`)
-          .set('Authorization', `Bearer ${VIEWER_TOKEN}`)
-          .expect(200),
-      );
-      expect(byCodeVisible.firstName).toBe('Hidden');
-      expect(byCodeVisible.lastName).toBe('Name');
+      expect(byCode.firstName).toBe('Visible');
+      expect(byCode.lastName).toBe('Name');
+      expect(byCode.displayName).toBe('Visible Name');
     });
 
     it('never exposes email, clerkUserId, or roles - only the public profile shape', async () => {

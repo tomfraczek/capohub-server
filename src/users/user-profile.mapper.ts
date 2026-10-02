@@ -22,6 +22,7 @@ import {
   PublicUserProfileResponseDto,
 } from './dto/public-user-profile-response.dto';
 import { UserSearchResultDto } from './dto/user-search-result.dto';
+import { resolveDisplayName } from './display-name.util';
 import { User } from './entities/user.entity';
 import { Section } from '../groups/entities/section.entity';
 
@@ -68,8 +69,6 @@ export function toUserProfileResponseDto(
     phoneNumber: user.phoneNumber,
     profileComplete: user.firstName !== null && user.lastName !== null,
     privacy: {
-      showFullName: user.showFullName,
-      showApelido: user.showApelido,
       showCapoeiraStartedAt: user.showCapoeiraStartedAt,
       showSections: user.showSections,
       showFormalGroup: user.showFormalGroup,
@@ -109,10 +108,9 @@ export function toFormalGroupResponseDto(
 
 // Params are the already-computed visibility decisions (see
 // UserProfileService.getPublicProfile) - this function only assembles the
-// DTO, it never decides what is visible.
+// DTO, it never decides what is visible. First name, last name and apelido
+// are not among them: basic identity is never privacy-gated.
 export interface PublicProfileViewerContext {
-  canSeeFullName: boolean;
-  canSeeApelido: boolean;
   canSeeCapoeiraStartedAt: boolean;
   sections: Section[] | null;
   // The target's Role(s) per Section id, already scoped to `sections` -
@@ -131,19 +129,15 @@ export function toPublicUserProfileResponseDto(
   target: User,
   ctx: PublicProfileViewerContext,
 ): PublicUserProfileResponseDto {
-  const fullNameKnown =
-    ctx.canSeeFullName && target.firstName !== null && target.lastName !== null;
-  const apelidoKnown = ctx.canSeeApelido && target.apelido !== null;
-
   return {
     userId: target.id,
-    displayName: resolveDisplayName(target, fullNameKnown, apelidoKnown),
+    displayName: resolveDisplayName(target),
     avatarType: target.avatarType,
     avatarUrl: resolveUserAvatarUrl(target, ctx.urlBuilder),
     presetAvatarId: target.presetAvatarId,
-    firstName: fullNameKnown ? target.firstName : null,
-    lastName: fullNameKnown ? target.lastName : null,
-    apelido: apelidoKnown ? target.apelido : null,
+    firstName: target.firstName,
+    lastName: target.lastName,
+    apelido: target.apelido,
     capoeiraStartedAt: ctx.canSeeCapoeiraStartedAt
       ? toDateOnly(target.capoeiraStartedAt)
       : null,
@@ -166,29 +160,6 @@ export function toPublicUserProfileResponseDto(
       ? toPublicIndependentRankRefDto(ctx.independentRank)
       : null,
   };
-}
-
-// Never `User.displayName` - that field can already hold a real name today
-// (nothing stops a user from setting it to one), so reusing it here could
-// silently bypass showFullName=false. Falls through: full name (if
-// visible) -> apelido (if visible) -> the raw publicCode, with no
-// localized/templated wrapper text (that's a frontend concern). Exported so
-// UserProfileService.searchUsers (GET /users/search) can reuse the exact
-// same fallback rule instead of re-deriving it - that caller passes plain
-// `target.showFullName`/`target.showApelido` as the two booleans, never the
-// Section-admin/Event-organizer-extended `canSeeFullName`.
-export function resolveDisplayName(
-  target: User,
-  fullNameKnown: boolean,
-  apelidoKnown: boolean,
-): string {
-  if (fullNameKnown) {
-    return `${target.firstName} ${target.lastName}`;
-  }
-  if (apelidoKnown && target.apelido) {
-    return target.apelido;
-  }
-  return target.publicCode;
 }
 
 function toPublicSectionRefDto(
@@ -260,21 +231,12 @@ function toPublicIndependentRankRefDto(
   };
 }
 
-// GET /users/search result row - unconditional public visibility rules only
-// (no isOwner or Section-admin/Event-organizer exception, unlike
-// toPublicUserProfileResponseDto above), since the picker has no
-// target/viewer relationship yet. `numericCode` is always included - it's a
+// GET /users/search result row. `numericCode` is always included - it's a
 // public identifier by design (see numeric-code.ts), not privacy-gated.
 export function toUserSearchResultDto(target: User): UserSearchResultDto {
-  const fullNameKnown =
-    target.showFullName &&
-    target.firstName !== null &&
-    target.lastName !== null;
-  const apelidoKnown = target.showApelido && target.apelido !== null;
-
   return {
     id: target.id,
-    displayName: resolveDisplayName(target, fullNameKnown, apelidoKnown),
+    displayName: resolveDisplayName(target),
     numericCode: target.numericCode,
   };
 }

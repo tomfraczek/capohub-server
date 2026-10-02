@@ -38,8 +38,6 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.capoeiraStartedAt = null;
   user.birthDate = null;
   user.phoneNumber = null;
-  user.showFullName = false;
-  user.showApelido = false;
   user.showCapoeiraStartedAt = false;
   user.showSections = false;
   user.showFormalGroup = false;
@@ -171,14 +169,12 @@ describe('toUserProfileResponseDto', () => {
     expect(empty.phoneNumber).toBeNull();
   });
 
-  it('reflects every privacy toggle verbatim, unfiltered for the owner', () => {
+  it('reflects every privacy toggle verbatim - and has none for name/apelido', () => {
     const dto = toUserProfileResponseDto(
-      buildUser({ showFullName: true, showSections: true }),
+      buildUser({ showSections: true }),
       null,
     );
     expect(dto.privacy).toEqual({
-      showFullName: true,
-      showApelido: false,
       showCapoeiraStartedAt: false,
       showSections: true,
       showFormalGroup: false,
@@ -206,8 +202,6 @@ describe('toUserProfileResponseDto', () => {
 
 describe('toPublicUserProfileResponseDto', () => {
   const baseCtx = {
-    canSeeFullName: false,
-    canSeeApelido: false,
     canSeeCapoeiraStartedAt: false,
     sections: null,
     sectionRoles: new Map<string, GroupRole[]>(),
@@ -231,56 +225,41 @@ describe('toPublicUserProfileResponseDto', () => {
     expect(dto.presetAvatarId).toBe('avatar-01');
   });
 
-  it('shows the full name only when visible and both parts are set', () => {
-    const user = buildUser({ firstName: 'Ada', lastName: 'Lovelace' });
-
-    const visible = toPublicUserProfileResponseDto(user, {
-      ...baseCtx,
-      canSeeFullName: true,
-    });
-    expect(visible.displayName).toBe('Ada Lovelace');
-    expect(visible.firstName).toBe('Ada');
-    expect(visible.lastName).toBe('Lovelace');
-
-    const hidden = toPublicUserProfileResponseDto(user, baseCtx);
-    expect(hidden.displayName).not.toBe('Ada Lovelace');
-    expect(hidden.firstName).toBeNull();
-    expect(hidden.lastName).toBeNull();
-  });
-
-  it('does not treat the name as known when visible but never actually filled in', () => {
-    const user = buildUser({ firstName: 'Ada', lastName: null });
-    const dto = toPublicUserProfileResponseDto(user, {
-      ...baseCtx,
-      canSeeFullName: true,
-    });
-    expect(dto.firstName).toBeNull();
-    expect(dto.lastName).toBeNull();
-  });
-
-  it('falls back to apelido when the name is hidden but apelido is visible', () => {
+  it('always shows first name, last name and apelido - identity has no privacy toggle', () => {
     const user = buildUser({
       firstName: 'Ada',
       lastName: 'Lovelace',
       apelido: 'Formiga',
     });
-    const dto = toPublicUserProfileResponseDto(user, {
-      ...baseCtx,
-      canSeeApelido: true,
-    });
-    expect(dto.displayName).toBe('Formiga');
+
+    const dto = toPublicUserProfileResponseDto(user, baseCtx);
+
+    expect(dto.displayName).toBe('Ada Lovelace');
+    expect(dto.firstName).toBe('Ada');
+    expect(dto.lastName).toBe('Lovelace');
     expect(dto.apelido).toBe('Formiga');
   });
 
-  it('falls back to the raw publicCode, with no localized prefix, when both are hidden', () => {
-    const user = buildUser({
-      firstName: 'Ada',
-      lastName: 'Lovelace',
-      apelido: 'Formiga',
-    });
-    const dto = toPublicUserProfileResponseDto(user, baseCtx);
+  it('returns each name part as stored even when the other one is missing', () => {
+    const dto = toPublicUserProfileResponseDto(
+      buildUser({ firstName: 'Ada', lastName: null }),
+      baseCtx,
+    );
+    expect(dto.firstName).toBe('Ada');
+    expect(dto.lastName).toBeNull();
+  });
+
+  it('labels with apelido when no full name is set', () => {
+    const dto = toPublicUserProfileResponseDto(
+      buildUser({ apelido: 'Formiga' }),
+      baseCtx,
+    );
+    expect(dto.displayName).toBe('Formiga');
+  });
+
+  it('falls back to the raw publicCode only when no name or apelido exists at all', () => {
+    const dto = toPublicUserProfileResponseDto(buildUser(), baseCtx);
     expect(dto.displayName).toBe('ADA00001');
-    expect(dto.apelido).toBeNull();
   });
 
   it('maps sections to id/name/logoUrl/roles, and formalGroup to id+name', () => {
@@ -381,30 +360,14 @@ describe('toUserSearchResultDto', () => {
     expect(dto.displayName).toBe('ADA00001');
   });
 
-  it('shows the full name only when showFullName is true and both parts are set', () => {
-    const user = buildUser({
-      firstName: 'Ada',
-      lastName: 'Lovelace',
-      showFullName: true,
-    });
+  it('shows the full name whenever both parts are set - never the code instead', () => {
+    const user = buildUser({ firstName: 'Ada', lastName: 'Lovelace' });
     expect(toUserSearchResultDto(user).displayName).toBe('Ada Lovelace');
-
-    const hidden = buildUser({ firstName: 'Ada', lastName: 'Lovelace' });
-    expect(toUserSearchResultDto(hidden).displayName).not.toBe('Ada Lovelace');
   });
 
-  it('falls back to apelido when full name is hidden but apelido is public', () => {
-    const user = buildUser({ apelido: 'Formiga', showApelido: true });
+  it('falls back to apelido when no full name is set', () => {
+    const user = buildUser({ apelido: 'Formiga' });
     expect(toUserSearchResultDto(user).displayName).toBe('Formiga');
-  });
-
-  it('falls back to publicCode when both name and apelido are private', () => {
-    const user = buildUser({
-      firstName: 'Ada',
-      lastName: 'Lovelace',
-      apelido: 'Formiga',
-    });
-    expect(toUserSearchResultDto(user).displayName).toBe('ADA00001');
   });
 
   it('always includes id and numericCode, and never private fields', () => {

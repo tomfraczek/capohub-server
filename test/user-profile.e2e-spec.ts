@@ -35,17 +35,12 @@ import { Group } from '../src/groups/entities/group.entity';
 import { Section } from '../src/groups/entities/section.entity';
 import { RoleAssignment } from '../src/groups/entities/role-assignment.entity';
 import { GroupRole } from '../src/groups/enums/group-role.enum';
-import { EventResponseDto } from '../src/events/dto/event-response.dto';
-import { EventAttendeeResponseDto } from '../src/events/dto/event-attendee-response.dto';
 import { EventGuardianAssignment } from '../src/events/entities/event-guardian-assignment.entity';
 import { EventAttendee } from '../src/events/entities/event-attendee.entity';
 import { EventInvitation } from '../src/events/entities/event-invitation.entity';
 import { EventRoleAssignment } from '../src/events/entities/event-role-assignment.entity';
 import { EventStatusHistory } from '../src/events/entities/event-status-history.entity';
 import { Event } from '../src/events/entities/event.entity';
-import { EventRole } from '../src/events/enums/event-role.enum';
-import { EventVisibility } from '../src/events/enums/event-visibility.enum';
-import { EventWaitlistPolicy } from '../src/events/enums/event-waitlist-policy.enum';
 
 // No fixed "ADMIN_TOKEN" here - GroupsService.create now allows at most one
 // active FormalGroupAffiliation per user (see USER_ALREADY_HAS_FORMAL_GROUP),
@@ -398,72 +393,6 @@ describe('User Profile (e2e)', () => {
       .expect(201);
   }
 
-  function eventPayload(
-    overrides: Record<string, unknown> = {},
-  ): Record<string, unknown> {
-    return {
-      type: 'WORKSHOP',
-      customTypeLabel: null,
-      name: 'Roda de Teste',
-      description: 'A profile-visibility test event',
-      coverImageUrl: null,
-      startsAt: '2027-01-10T10:00:00.000Z',
-      endsAt: '2027-01-10T18:00:00.000Z',
-      locationName: 'Main hall',
-      locationAddress: null,
-      visibility: EventVisibility.COMMUNITY_MEMBERS,
-      capacity: null,
-      waitlistPolicy: EventWaitlistPolicy.NONE,
-      ...overrides,
-    };
-  }
-
-  async function createEvent(
-    token: string,
-    groupId: string,
-  ): Promise<EventResponseDto> {
-    return bodyOf<EventResponseDto>(
-      request(app.getHttpServer())
-        .post(`/api/v1/groups/${groupId}/events`)
-        .set('Authorization', `Bearer ${token}`)
-        .send(eventPayload())
-        .expect(201),
-    );
-  }
-
-  async function publishEvent(token: string, eventId: string): Promise<void> {
-    await request(app.getHttpServer())
-      .post(`/api/v1/events/${eventId}/publish`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(201);
-  }
-
-  async function grantEventRole(
-    ownerToken: string,
-    eventId: string,
-    memberToken: string,
-    role: EventRole,
-  ): Promise<void> {
-    await request(app.getHttpServer())
-      .post(`/api/v1/events/${eventId}/roles`)
-      .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ userId: localUserIdByToken.get(memberToken), role })
-      .expect(201);
-  }
-
-  async function registerForEvent(
-    token: string,
-    eventId: string,
-  ): Promise<EventAttendeeResponseDto[]> {
-    return bodyOf<EventAttendeeResponseDto[]>(
-      request(app.getHttpServer())
-        .post(`/api/v1/events/${eventId}/register`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({ attendSelf: true, children: [] })
-        .expect(201),
-    );
-  }
-
   async function getOwnProfile(token: string): Promise<UserProfileResponseDto> {
     return bodyOf<UserProfileResponseDto>(
       request(app.getHttpServer())
@@ -692,50 +621,47 @@ describe('User Profile (e2e)', () => {
 
   // ─── Public profile visibility ──────────────────────────────────────────
 
-  describe('GET /users/:userId/profile - name/apelido visibility', () => {
-    it('shows apelido instead of the hidden full name, then falls back to publicCode when apelido is also hidden', async () => {
+  describe('GET /users/:userId/profile - basic identity is never privacy-gated', () => {
+    it('always returns first name, last name and apelido to any viewer', async () => {
       await patchOwnProfile(TARGET_TOKEN, {
         firstName: 'Camila',
         lastName: 'Silva',
         apelido: 'Cobrinha',
-        showFullName: false,
-        showApelido: true,
       });
       const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
 
-      const withApelido = await getPublicProfile(VIEWER_TOKEN, targetId);
-      expect(withApelido.displayName).toBe('Cobrinha');
-      expect(withApelido.apelido).toBe('Cobrinha');
-      expect(withApelido.firstName).toBeNull();
-      expect(withApelido.lastName).toBeNull();
+      const profile = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(profile.displayName).toBe('Camila Silva');
+      expect(profile.firstName).toBe('Camila');
+      expect(profile.lastName).toBe('Silva');
+      expect(profile.apelido).toBe('Cobrinha');
+    });
 
-      await patchOwnProfile(TARGET_TOKEN, { showApelido: false });
-      const withoutApelido = await getPublicProfile(VIEWER_TOKEN, targetId);
-      expect(withoutApelido.apelido).toBeNull();
+    it('ignores the removed showFullName/showApelido fields - they can neither hide identity nor come back in the response', async () => {
+      const own = (await patchOwnProfile(TARGET_TOKEN, {
+        showFullName: false,
+        showApelido: false,
+      })) as UserProfileResponseDto;
+      expect(own.privacy).not.toHaveProperty('showFullName');
+      expect(own.privacy).not.toHaveProperty('showApelido');
 
-      const own = await bodyOf<UserResponseDto>(
+      const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
+      const profile = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(profile.firstName).toBe('Camila');
+      expect(profile.apelido).toBe('Cobrinha');
+    });
+
+    it('never uses the publicCode or the account displayName in place of an existing name', async () => {
+      const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
+      const profile = await getPublicProfile(VIEWER_TOKEN, targetId);
+      const me = await bodyOf<UserResponseDto>(
         request(app.getHttpServer())
           .get('/api/v1/users/me')
           .set('Authorization', `Bearer ${TARGET_TOKEN}`)
           .expect(200),
       );
-      expect(withoutApelido.displayName).toBe(own.publicCode);
-      // Never the pre-existing account displayName, even though it could
-      // already contain a real name.
-      expect(withoutApelido.displayName).not.toBe(own.displayName);
-    });
-
-    it('shows the full name once showFullName is enabled', async () => {
-      await patchOwnProfile(TARGET_TOKEN, { showFullName: true });
-      const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
-
-      const visible = await getPublicProfile(VIEWER_TOKEN, targetId);
-      expect(visible.displayName).toBe('Camila Silva');
-      expect(visible.firstName).toBe('Camila');
-      expect(visible.lastName).toBe('Silva');
-
-      // Reset for later tests in this file that rely on showFullName=false.
-      await patchOwnProfile(TARGET_TOKEN, { showFullName: false });
+      expect(profile.displayName).not.toBe(me.publicCode);
+      expect(profile.displayName).toBe('Camila Silva');
     });
 
     it('never leaks email, phone, or account fields on the public DTO', async () => {
@@ -759,152 +685,6 @@ describe('User Profile (e2e)', () => {
       expect(profile).not.toHaveProperty('latitude');
       expect(profile).not.toHaveProperty('longitude');
       expect(profile).not.toHaveProperty('savedLocations');
-    });
-  });
-
-  describe('GET /users/:userId/profile - exact-Section admin access to full name', () => {
-    let group: Awaited<ReturnType<typeof createGroup>>;
-    let section: SectionResponseDto;
-    let otherGroup: Awaited<ReturnType<typeof createGroup>>;
-    let otherSection: SectionResponseDto;
-    let targetId: string;
-
-    beforeAll(async () => {
-      group = await createGroup({
-        name: 'Full Name Access Group',
-      });
-      section = await createSection(group.token, group.id, {
-        name: 'Full Name Access Section',
-      });
-      otherGroup = await createGroup({
-        name: 'Unrelated Group',
-      });
-      otherSection = await createSection(otherGroup.token, otherGroup.id, {
-        name: 'Unrelated Section',
-      });
-
-      targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
-      await patchOwnProfile(TARGET_TOKEN, {
-        firstName: 'Camila',
-        lastName: 'Silva',
-        showFullName: false,
-      });
-
-      await joinSection(group.token, section.id, TARGET_TOKEN);
-      await joinSection(group.token, section.id, SECTION_ADMIN_TOKEN);
-      await grantSectionRole(
-        group.token,
-        section.id,
-        SECTION_ADMIN_TOKEN,
-        GroupRole.ADMIN,
-      );
-
-      await joinSection(otherGroup.token, otherSection.id, OTHER_ADMIN_TOKEN);
-      await grantSectionRole(
-        otherGroup.token,
-        otherSection.id,
-        OTHER_ADMIN_TOKEN,
-        GroupRole.ADMIN,
-      );
-    });
-
-    it('lets OWNER/ADMIN of the exact section (with their own active membership) see the full name', async () => {
-      const profile = await getPublicProfile(SECTION_ADMIN_TOKEN, targetId);
-      expect(profile.firstName).toBe('Camila');
-      expect(profile.lastName).toBe('Silva');
-      expect(profile.displayName).toBe('Camila Silva');
-    });
-
-    it('does not let an admin of a different section see the full name', async () => {
-      const profile = await getPublicProfile(OTHER_ADMIN_TOKEN, targetId);
-      expect(profile.firstName).toBeNull();
-      expect(profile.lastName).toBeNull();
-    });
-
-    it('does not let an ordinary viewer with no relationship see the full name', async () => {
-      const profile = await getPublicProfile(VIEWER_TOKEN, targetId);
-      expect(profile.firstName).toBeNull();
-      expect(profile.lastName).toBeNull();
-    });
-  });
-
-  describe('GET /users/:userId/profile - Event organizer access to full name', () => {
-    let group: Awaited<ReturnType<typeof createGroup>>;
-    let event: EventResponseDto;
-    let targetId: string;
-
-    beforeAll(async () => {
-      group = await createGroup({
-        name: 'Event Access Group',
-      });
-      // Group-level ADMIN is this codebase's stand-in for "community
-      // member" at the Group level (Group has no membership at all - see
-      // RoleAssignmentsService.isCommunityMember) - sufficient for
-      // COMMUNITY_MEMBERS event visibility/registration.
-      await request(app.getHttpServer())
-        .post(`/api/v1/groups/${group.id}/role-assignments`)
-        .set('Authorization', `Bearer ${group.token}`)
-        .send({
-          userId: localUserIdByToken.get(TARGET_TOKEN),
-          role: GroupRole.ADMIN,
-        })
-        .expect(201);
-      for (const token of [
-        EVENT_ORGANIZER_TOKEN,
-        EVENT_MODERATOR_TOKEN,
-        EVENT_ATTENDEE_TOKEN,
-      ]) {
-        await request(app.getHttpServer())
-          .post(`/api/v1/groups/${group.id}/role-assignments`)
-          .set('Authorization', `Bearer ${group.token}`)
-          .send({
-            userId: localUserIdByToken.get(token),
-            role: GroupRole.ADMIN,
-          })
-          .expect(201);
-      }
-
-      event = await createEvent(group.token, group.id);
-      await publishEvent(group.token, event.id);
-      await grantEventRole(
-        group.token,
-        event.id,
-        EVENT_ORGANIZER_TOKEN,
-        EventRole.ORGANIZER,
-      );
-      await grantEventRole(
-        group.token,
-        event.id,
-        EVENT_MODERATOR_TOKEN,
-        EventRole.MODERATOR,
-      );
-
-      targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
-      await patchOwnProfile(TARGET_TOKEN, {
-        firstName: 'Camila',
-        lastName: 'Silva',
-        showFullName: false,
-      });
-      await registerForEvent(TARGET_TOKEN, event.id);
-      await registerForEvent(EVENT_ATTENDEE_TOKEN, event.id);
-    });
-
-    it('lets the Event OWNER/ORGANIZER see the full name of an attending participant', async () => {
-      const profile = await getPublicProfile(EVENT_ORGANIZER_TOKEN, targetId);
-      expect(profile.firstName).toBe('Camila');
-      expect(profile.lastName).toBe('Silva');
-    });
-
-    it('does not let a MODERATOR see the full name', async () => {
-      const profile = await getPublicProfile(EVENT_MODERATOR_TOKEN, targetId);
-      expect(profile.firstName).toBeNull();
-      expect(profile.lastName).toBeNull();
-    });
-
-    it('does not let a plain attendee see the full name', async () => {
-      const profile = await getPublicProfile(EVENT_ATTENDEE_TOKEN, targetId);
-      expect(profile.firstName).toBeNull();
-      expect(profile.lastName).toBeNull();
     });
   });
 
@@ -1145,13 +925,11 @@ describe('User Profile (e2e)', () => {
       expect(after).toEqual(before);
     });
 
-    it('GET /users/:userId/profile never returns a privacy-gated field regardless of who asks', async () => {
-      const targetId = localUserIdByToken.get(SECTION_ADMIN_TOKEN) as string;
-      // SECTION_ADMIN_TOKEN's profile was completed earlier in this file
-      // with showFullName left at its default (false).
-      const profile = await getPublicProfile(EVENT_ATTENDEE_TOKEN, targetId);
-      expect(profile.firstName).toBeNull();
-      expect(profile.lastName).toBeNull();
+    it('GET /users/:userId/profile never returns private contact data regardless of who asks', async () => {
+      const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
+      const profile = await getPublicProfile(OTHER_ADMIN_TOKEN, targetId);
+      expect(profile).not.toHaveProperty('birthDate');
+      expect(profile).not.toHaveProperty('phoneNumber');
     });
   });
 

@@ -1,6 +1,5 @@
+// No identity toggles: firstName/lastName/apelido are always visible.
 export interface UserProfilePrivacyDto {
-  showFullName: boolean;
-  showApelido: boolean;
   showCapoeiraStartedAt: boolean;
   showSections: boolean;
   showFormalGroup: boolean;

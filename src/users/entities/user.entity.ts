@@ -183,9 +183,10 @@ export class User extends BaseEntity {
   lastName: string | null = null;
 
   // Nickname - distinct from displayName (see that field's own comment):
-  // apelido is part of the structured profile and subject to its own
-  // privacy toggle, while displayName is the pre-existing, always-shown
-  // account label with no privacy control of its own.
+  // apelido is part of the structured profile. Like firstName/lastName it
+  // is basic identity and always visible - there is no privacy toggle for
+  // any of the three (show_full_name/show_apelido were dropped in
+  // Migration20261002100000_DropIdentityPrivacyToggles).
   @Property({ nullable: true, length: 100 })
   apelido: string | null = null;
 
@@ -210,13 +211,8 @@ export class User extends BaseEntity {
   // field below (see PublicUserProfileResponseDto) until the owner
   // explicitly opts a field out. Plain booleans, not a general ACL: each
   // one gates exactly one profile field/list, described on
-  // PublicUserProfileResponseDto.
-  @Property()
-  showFullName: boolean = true;
-
-  @Property()
-  showApelido: boolean = true;
-
+  // PublicUserProfileResponseDto. Basic identity (firstName/lastName/
+  // apelido) is deliberately NOT among them - it is always visible.
   @Property()
   showCapoeiraStartedAt: boolean = true;
 

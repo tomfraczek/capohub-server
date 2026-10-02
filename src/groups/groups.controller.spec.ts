@@ -6,6 +6,8 @@ import { GroupStatus } from './enums/group-status.enum';
 import { GroupsController } from './groups.controller';
 import { GroupPermissionsGuard } from './guards/group-permissions.guard';
 import { HierarchyManagementService } from './hierarchy-management.service';
+import { GroupAudienceService } from './group-audience.service';
+import { GroupFollowService } from './group-follow.service';
 import { GroupPermission } from './permissions/group-permission.enum';
 import { GroupsService } from './groups.service';
 import { RoleAssignmentsService } from './role-assignments.service';
@@ -19,11 +21,15 @@ function buildController(
   groupsService: Partial<GroupsService> = {},
   roleAssignmentsService: Partial<RoleAssignmentsService> = {},
   hierarchyManagementService: Partial<HierarchyManagementService> = {},
+  groupAudienceService: Partial<GroupAudienceService> = {},
+  groupFollowService: Partial<GroupFollowService> = {},
 ): GroupsController {
   return new GroupsController(
     groupsService as GroupsService,
     roleAssignmentsService as RoleAssignmentsService,
     hierarchyManagementService as HierarchyManagementService,
+    groupAudienceService as GroupAudienceService,
+    groupFollowService as GroupFollowService,
   );
 }
 
@@ -49,6 +55,10 @@ describe('GroupsController', () => {
     ['getById', [GroupPermission.GROUP_VIEW], ANY_STATUS],
     ['follow', [GroupPermission.GROUP_VIEW], undefined],
     ['unfollow', [GroupPermission.GROUP_VIEW], undefined],
+    ['listFollowers', [GroupPermission.GROUP_FOLLOWERS_VIEW], ANY_STATUS],
+    ['removeFollower', [GroupPermission.GROUP_FOLLOWERS_MANAGE], undefined],
+    ['blockFollowing', [GroupPermission.GROUP_FOLLOWERS_MANAGE], undefined],
+    ['unblockFollowing', [GroupPermission.GROUP_FOLLOWERS_MANAGE], undefined],
     ['update', [GroupPermission.GROUP_EDIT], undefined],
     [
       'archive',

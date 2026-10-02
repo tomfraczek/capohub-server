@@ -1176,7 +1176,6 @@ describe('Events (e2e)', () => {
           lastName: 'Silva',
           birthDate: '1995-07-01',
           phoneNumber: '+48 600 100 200',
-          showFullName: false,
         })
         .expect(200);
 
@@ -1196,8 +1195,8 @@ describe('Events (e2e)', () => {
           .expect(200),
       );
       const member = participants.find((p) => p.id === registered[0].id);
-      // Shown to staff even with showFullName off - privacy toggles only
-      // govern the public profile.
+      // Event staff get the registrant's personal data (birthDate/phone
+      // are not on the public profile at all).
       expect(member?.personalData).toEqual({
         firstName: 'Ana',
         lastName: 'Silva',

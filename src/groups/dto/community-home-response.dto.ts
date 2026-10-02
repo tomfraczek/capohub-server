@@ -170,6 +170,13 @@ export interface CommunityHomeCapabilitiesDto {
   // (ROOT)), ACTIVE-only like every write endpoint there. No
   // ...InSectionIds counterpart, same as the Training lists' reverse.
   canManageGraduationSystemInGroupIds: string[];
+  // GROUP_FOLLOWERS_VIEW - GET /groups/:id/followers (Section members +
+  // followers). Group-only, any status (mirrors the endpoint's
+  // @AllowGroupStatuses).
+  canViewFollowersInGroupIds: string[];
+  // GROUP_FOLLOWERS_MANAGE - remove a follower / block following.
+  // Group-only, ACTIVE Groups only (the write endpoints' default).
+  canManageFollowersInGroupIds: string[];
   // True iff canCreateSectionIn{Group,Section}Ids is non-empty - i.e. the
   // user holds GROUP_EDIT (Admin/Owner) in at least one community. A
   // convenience aggregate, not an independent business rule.

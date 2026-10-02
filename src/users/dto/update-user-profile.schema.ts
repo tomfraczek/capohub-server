@@ -79,8 +79,6 @@ export const updateUserProfileSchema = z.object({
   capoeiraStartedAt: capoeiraStartedAtSchema,
   birthDate: birthDateSchema,
   phoneNumber: phoneNumberSchema,
-  showFullName: privacyToggleSchema,
-  showApelido: privacyToggleSchema,
   showCapoeiraStartedAt: privacyToggleSchema,
   showSections: privacyToggleSchema,
   showFormalGroup: privacyToggleSchema,

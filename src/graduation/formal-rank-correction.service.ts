@@ -264,9 +264,7 @@ export class FormalRankCorrectionService {
    * Deliberately bypasses isPubliclyVisible()'s hide-while-correction-
    * pending rule - that rule protects a non-owner *public* viewer; a
    * Section OWNER/ADMIN reviewing this exact administrative workflow is
-   * always allowed to see the raw current rank and its correction state,
-   * the same "admin exception" precedent as
-   * UserProfileService.viewerHasSectionAdminAccess for full name.
+   * always allowed to see the raw current rank and its correction state.
    */
   async getMemberFormalRank(
     sectionId: string,

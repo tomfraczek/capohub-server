@@ -54,10 +54,12 @@ export interface PublicIndependentRankRefDto {
 }
 
 // GET /users/:userId/profile - filtered per-viewer according to the
-// target's privacy toggles and, for firstName/lastName only, the extra
-// exact-Section-admin/Event-organizer rule (see UserProfileService). Every
-// field below is `null` exactly when it is not visible to the requesting
-// viewer - the client never receives a value it isn't allowed to see.
+// target's privacy toggles (see UserProfileService). Basic identity -
+// firstName/lastName/apelido and the displayName built from them - has no
+// toggle and is always returned as stored (`null` only when not set).
+// Every other field is `null` exactly when it is not visible to the
+// requesting viewer - the client never receives a value it isn't allowed
+// to see.
 //
 // No `groups` field - a Group has no membership, so the only thing such a
 // list could show is which Groups this user administers (OWNER/ADMIN
@@ -65,7 +67,7 @@ export interface PublicIndependentRankRefDto {
 // fact through a field that reads as ordinary membership.
 export interface PublicUserProfileResponseDto {
   userId: string;
-  // Safe, privacy-respecting label - see UserProfileMapper.resolveDisplayName.
+  // Full name, else apelido, else publicCode - see display-name.util.ts.
   displayName: string;
   // Unconditionally public, never privacy-gated - same precedent as
   // EventOrganizerUserImageDto (an Event's organizer avatar, shown to any

@@ -1,5 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
+import { GroupFollowBlock } from './entities/group-follow-block.entity';
 import { GroupFollow } from './entities/group-follow.entity';
 import { Group } from './entities/group.entity';
 import { User } from '../users/entities/user.entity';
@@ -25,6 +30,13 @@ export class GroupFollowService {
    * the race, just a graceful catch of the resulting unique violation.
    */
   async follow(user: User, group: Group): Promise<void> {
+    if (await this.isBlocked(user.id, group.id)) {
+      throw new ForbiddenException({
+        code: 'GROUP_FOLLOW_BLOCKED',
+        message: 'You have been blocked from following this group',
+      });
+    }
+
     const existing = await this.em.findOne(GroupFollow, {
       user: user.id,
       group: group.id,
@@ -47,6 +59,79 @@ export class GroupFollowService {
         throw error;
       }
     }
+  }
+
+  /**
+   * DELETE /groups/:id/followers/:userId - a Group OWNER/ADMIN removing
+   * someone from its followers (optionally also blocking them from
+   * following again). Idempotent: removing a non-follower is a no-op, so a
+   * retried request or a stale list never errors.
+   */
+  async removeFollower(
+    groupId: string,
+    userId: string,
+    block: boolean,
+  ): Promise<void> {
+    if (block) {
+      await this.blockFollowing(groupId, userId);
+      return;
+    }
+    await this.unfollow(userId, groupId);
+  }
+
+  /**
+   * POST /groups/:id/followers/:userId/block - removes any current follow
+   * and records a GroupFollowBlock, atomically. Idempotent: blocking an
+   * already-blocked user is a success.
+   */
+  async blockFollowing(groupId: string, userId: string): Promise<void> {
+    await this.em.transactional(async (em) => {
+      const user = await em.findOne(User, { id: userId });
+      if (!user) {
+        throw new NotFoundException({
+          code: 'USER_NOT_FOUND',
+          message: 'User not found',
+        });
+      }
+      const follow = await em.findOne(GroupFollow, {
+        user: userId,
+        group: groupId,
+      });
+      if (follow) {
+        em.remove(follow);
+      }
+      const existingBlock = await em.findOne(GroupFollowBlock, {
+        user: userId,
+        group: groupId,
+      });
+      if (!existingBlock) {
+        const block = new GroupFollowBlock();
+        block.user = user;
+        block.group = em.getReference(Group, groupId);
+        em.persist(block);
+      }
+      await em.flush();
+    });
+  }
+
+  /** DELETE /groups/:id/follow-blocks/:userId - idempotent unblock. */
+  async unblockFollowing(groupId: string, userId: string): Promise<void> {
+    const existing = await this.em.findOne(GroupFollowBlock, {
+      user: userId,
+      group: groupId,
+    });
+    if (existing) {
+      await this.em.removeAndFlush(existing);
+    }
+  }
+
+  async isBlocked(userId: string, groupId: string): Promise<boolean> {
+    return (
+      (await this.em.count(GroupFollowBlock, {
+        user: userId,
+        group: groupId,
+      })) > 0
+    );
   }
 
   /** Idempotent - unfollowing an already-not-followed Group is a no-op. */

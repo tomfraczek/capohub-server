@@ -445,6 +445,8 @@ export class CommunityHomeService {
       canManageTrainingSeriesInSectionIds: [],
       canViewTrainingStatsInSectionIds: [],
       canManageGraduationSystemInGroupIds: [],
+      canViewFollowersInGroupIds: [],
+      canManageFollowersInGroupIds: [],
     };
 
     const rootGroupIdCache = new Map<string, string>();
@@ -676,6 +678,16 @@ export class CommunityHomeService {
         has(GroupPermission.GRADUATION_SYSTEM_MANAGE)
       ) {
         push('canManageGraduationSystemInGroupIds');
+      }
+      if (isGroup && has(GroupPermission.GROUP_FOLLOWERS_VIEW)) {
+        push('canViewFollowersInGroupIds');
+      }
+      if (
+        isGroup &&
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.GROUP_FOLLOWERS_MANAGE)
+      ) {
+        push('canManageFollowersInGroupIds');
       }
     }
 

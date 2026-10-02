@@ -6,6 +6,8 @@
  */
 
 import type { EntityManager } from '@mikro-orm/postgresql';
+import { User } from '../users/entities/user.entity';
+import { GroupFollowBlock } from './entities/group-follow-block.entity';
 import { GroupFollow } from './entities/group-follow.entity';
 import { GroupFollowService } from './group-follow.service';
 
@@ -16,9 +18,11 @@ function buildEm(existing: GroupFollow | null) {
   const removeAndFlush = jest.fn().mockResolvedValue(undefined);
   const findOne = jest.fn().mockResolvedValue(existing);
   const find = jest.fn().mockResolvedValue([]);
+  const count = jest.fn().mockResolvedValue(0);
   return {
     findOne,
     find,
+    count,
     persist,
     removeAndFlush,
   } as unknown as EntityManager;
@@ -50,6 +54,106 @@ describe('GroupFollowService', () => {
 
       expect(
         (em as unknown as { persist: jest.Mock }).persist,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('follow - blocked', () => {
+    it('rejects with GROUP_FOLLOW_BLOCKED while a GroupFollowBlock exists, writing nothing', async () => {
+      const em = buildEm(null);
+      (em as unknown as { count: jest.Mock }).count.mockResolvedValue(1);
+      const service = new GroupFollowService(em);
+
+      await expect(
+        service.follow({ id: 'user-1' } as never, { id: 'group-1' } as never),
+      ).rejects.toMatchObject({ response: { code: 'GROUP_FOLLOW_BLOCKED' } });
+      expect(
+        (em as unknown as { persist: jest.Mock }).persist,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('blockFollowing / removeFollower', () => {
+    function buildTxEm(rows: {
+      user: unknown;
+      follow: unknown;
+      block: unknown;
+    }) {
+      const remove = jest.fn();
+      const persist = jest.fn();
+      const flush = jest.fn().mockResolvedValue(undefined);
+      const findOne = jest.fn((entity: { name: string }) => {
+        if (entity === User) return Promise.resolve(rows.user);
+        if (entity === GroupFollow) return Promise.resolve(rows.follow);
+        if (entity === GroupFollowBlock) return Promise.resolve(rows.block);
+        return Promise.resolve(null);
+      });
+      const tx = {
+        findOne,
+        remove,
+        persist,
+        flush,
+        getReference: jest.fn((_entity: unknown, id: string) => ({ id })),
+      };
+      const em = {
+        ...tx,
+        removeAndFlush: jest.fn().mockResolvedValue(undefined),
+        transactional: jest.fn((cb: (inner: typeof tx) => Promise<void>) =>
+          cb(tx),
+        ),
+      } as unknown as EntityManager;
+      return { em, remove, persist, flush };
+    }
+
+    it('blocking removes the current follow and records a block', async () => {
+      const follow = { id: 'follow-1' };
+      const { em, remove, persist } = buildTxEm({
+        user: { id: 'user-1' },
+        follow,
+        block: null,
+      });
+
+      await new GroupFollowService(em).blockFollowing('group-1', 'user-1');
+
+      expect(remove).toHaveBeenCalledWith(follow);
+      expect(persist).toHaveBeenCalledWith(expect.any(GroupFollowBlock));
+    });
+
+    it('blocking is idempotent - an existing block is not duplicated', async () => {
+      const { em, persist } = buildTxEm({
+        user: { id: 'user-1' },
+        follow: null,
+        block: { id: 'block-1' },
+      });
+
+      await new GroupFollowService(em).blockFollowing('group-1', 'user-1');
+
+      expect(persist).not.toHaveBeenCalled();
+    });
+
+    it('blocking an unknown user 404s with USER_NOT_FOUND', async () => {
+      const { em } = buildTxEm({ user: null, follow: null, block: null });
+
+      await expect(
+        new GroupFollowService(em).blockFollowing('group-1', 'missing'),
+      ).rejects.toMatchObject({ response: { code: 'USER_NOT_FOUND' } });
+    });
+
+    it('removeFollower without block only unfollows', async () => {
+      const follow = { id: 'follow-1' };
+      const { em } = buildTxEm({ user: null, follow, block: null });
+
+      await new GroupFollowService(em).removeFollower(
+        'group-1',
+        'user-1',
+        false,
+      );
+
+      expect(
+        (em as unknown as { removeAndFlush: jest.Mock }).removeAndFlush,
+      ).toHaveBeenCalledWith(follow);
+      expect(
+        (em as unknown as { transactional: jest.Mock }).transactional,
       ).not.toHaveBeenCalled();
     });
   });

@@ -14,16 +14,12 @@ import {
   FORMAL_GROUP_AFFILIATIONS_ACTIVE_UNIQUE_INDEX,
   FormalGroupAffiliation,
 } from '../groups/entities/formal-group-affiliation.entity';
-import { RoleAssignment } from '../groups/entities/role-assignment.entity';
 import { SectionMembership } from '../groups/entities/section-membership.entity';
 import { GroupHierarchyService } from '../groups/group-hierarchy.service';
 import { GroupRole } from '../groups/enums/group-role.enum';
 import { GroupStatus } from '../groups/enums/group-status.enum';
 import { SectionMembershipStatus } from '../groups/enums/section-membership-status.enum';
 import { RoleAssignmentsService } from '../groups/role-assignments.service';
-import { EventRoleAssignment } from '../events/entities/event-role-assignment.entity';
-import { EventRole } from '../events/enums/event-role.enum';
-import { EventRsvpStatus } from '../events/enums/event-rsvp-status.enum';
 import { CustomUserRankService } from '../graduation/custom-user-rank.service';
 import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignment.entity';
 import { FormalRankService } from '../graduation/formal-rank.service';
@@ -117,12 +113,6 @@ export class UserProfileService {
     if (changes.phoneNumber !== undefined) {
       user.phoneNumber = changes.phoneNumber;
     }
-    if (changes.showFullName !== undefined) {
-      user.showFullName = changes.showFullName;
-    }
-    if (changes.showApelido !== undefined) {
-      user.showApelido = changes.showApelido;
-    }
     if (changes.showCapoeiraStartedAt !== undefined) {
       user.showCapoeiraStartedAt = changes.showCapoeiraStartedAt;
     }
@@ -147,10 +137,10 @@ export class UserProfileService {
   }
 
   /**
-   * Every field is `null` unless the viewer is allowed to see it - either
-   * because they own the profile, the corresponding privacy toggle is on,
-   * or (firstName/lastName only) they hold exact-Section-admin or
-   * Event-organizer access to the target - see canSeeFullName.
+   * Basic identity (firstName/lastName/apelido, and the displayName built
+   * from them) is always returned as stored - it has no privacy toggle.
+   * Every other field is `null` unless the viewer owns the profile or the
+   * corresponding privacy toggle is on.
    */
   async getPublicProfile(
     viewer: User,
@@ -166,9 +156,6 @@ export class UserProfileService {
     // Sequential, not concurrent - concurrent queries on the same
     // EntityManager corrupt the underlying pg connection (see
     // SectionMembershipsService for the same constraint).
-    const canSeeFullName =
-      isOwner || (await this.canSeeFullName(viewer.id, target));
-    const canSeeApelido = isOwner || target.showApelido;
     const canSeeCapoeiraStartedAt = isOwner || target.showCapoeiraStartedAt;
     const canSeeSections = isOwner || target.showSections;
     const canSeeFormalGroup = isOwner || target.showFormalGroup;
@@ -199,8 +186,6 @@ export class UserProfileService {
       : null;
 
     return toPublicUserProfileResponseDto(target, {
-      canSeeFullName,
-      canSeeApelido,
       canSeeCapoeiraStartedAt,
       sections,
       sectionRoles,
@@ -244,13 +229,10 @@ export class UserProfileService {
   /**
    * GET /users/search - a minimal, global (not Section-scoped) user picker,
    * currently only needed to pick a Training's external trainer. Matches
-   * against exactly four public fields, each independently gated:
-   * numericCode (exact), publicCode (prefix), firstName/lastName (only when
-   * `showFullName` is true), apelido (only when `showApelido` is true).
-   * Deliberately uses the *plain* toggle values, not `canSeeFullName`'s
-   * Section-admin/Event-organizer exception above - this endpoint has no
-   * target/viewer relationship to extend that exception from. Never touches
-   * `User.displayName` (see resolveDisplayName's own comment). A single
+   * against exactly four public fields: numericCode (exact), publicCode
+   * (prefix), firstName/lastName and apelido (substring) - basic identity
+   * has no privacy toggle, so all of them are always searchable. Never
+   * touches `User.displayName` (see resolveDisplayName). A single
    * `em.findAndCount` - no fetch-all-then-filter-in-JS.
    */
   async searchUsers(
@@ -274,17 +256,9 @@ export class UserProfileService {
     }
     if (trimmed.length >= SEARCH_TEXT_MIN_LENGTH) {
       orConditions.push({ publicCode: { $ilike: `${trimmed}%` } });
-      orConditions.push({
-        showFullName: true,
-        $or: [
-          { firstName: { $ilike: `%${trimmed}%` } },
-          { lastName: { $ilike: `%${trimmed}%` } },
-        ],
-      });
-      orConditions.push({
-        showApelido: true,
-        apelido: { $ilike: `%${trimmed}%` },
-      });
+      orConditions.push({ firstName: { $ilike: `%${trimmed}%` } });
+      orConditions.push({ lastName: { $ilike: `%${trimmed}%` } });
+      orConditions.push({ apelido: { $ilike: `%${trimmed}%` } });
     }
 
     const [users, total] = await this.em.findAndCount(
@@ -476,83 +450,6 @@ export class UserProfileService {
       }
     }
     return roles;
-  }
-
-  /**
-   * Full name is visible beyond the owner's own showFullName toggle to:
-   *  - a viewer holding an active OWNER/ADMIN RoleAssignment on a Section,
-   *    who *also* currently has their own active SectionMembership on that
-   *    exact Section, where the target *also* currently has an active
-   *    SectionMembership on that exact Section - the same full shape
-   *    RoleAssignmentsService.resolveAuthorization already requires for
-   *    "current Section authorization" (role alone is not enough), reused
-   *    here rather than re-derived as "role only". No inheritance from a
-   *    parent Group.
-   *  - a viewer holding EventRole.OWNER/ORGANIZER on an Event the target
-   *    currently attends (EventAttendee.subjectUser = target, rsvpStatus
-   *    GOING/MAYBE). MODERATOR and plain attendees never qualify.
-   *    EventRoleAssignment has no revokedAt/status field - the row's mere
-   *    existence is "currently holds" (see that entity).
-   * Two bounded queries total, each a single EXISTS-backed QueryBuilder
-   * query - never per-Section/per-Event iteration.
-   */
-  private async canSeeFullName(
-    viewerId: string,
-    target: User,
-  ): Promise<boolean> {
-    if (target.showFullName) {
-      return true;
-    }
-    if (await this.viewerHasSectionAdminAccess(viewerId, target.id)) {
-      return true;
-    }
-    return this.viewerHasEventOrganizerAccess(viewerId, target.id);
-  }
-
-  private async viewerHasSectionAdminAccess(
-    viewerId: string,
-    targetId: string,
-  ): Promise<boolean> {
-    const rows = await this.em
-      .createQueryBuilder(RoleAssignment, 'ra')
-      .select('ra.id')
-      .andWhere({
-        user: viewerId,
-        role: { $in: [GroupRole.OWNER, GroupRole.ADMIN] },
-        revokedAt: null,
-        section: { $ne: null },
-      })
-      .andWhere(
-        `exists (select 1 from section_memberships vsm where vsm.section_id = ra.section_id and vsm.user_id = ? and vsm.status in (?, ?))`,
-        [viewerId, ...ACTIVE_MEMBERSHIP_STATUSES],
-      )
-      .andWhere(
-        `exists (select 1 from section_memberships tsm where tsm.section_id = ra.section_id and tsm.user_id = ? and tsm.status in (?, ?))`,
-        [targetId, ...ACTIVE_MEMBERSHIP_STATUSES],
-      )
-      .limit(1)
-      .execute<{ id: string }[]>('all');
-    return rows.length > 0;
-  }
-
-  private async viewerHasEventOrganizerAccess(
-    viewerId: string,
-    targetId: string,
-  ): Promise<boolean> {
-    const rows = await this.em
-      .createQueryBuilder(EventRoleAssignment, 'era')
-      .select('era.id')
-      .andWhere({
-        user: viewerId,
-        role: { $in: [EventRole.OWNER, EventRole.ORGANIZER] },
-      })
-      .andWhere(
-        `exists (select 1 from event_attendees ea where ea.event_id = era.event_id and ea.subject_user_id = ? and ea.rsvp_status in (?, ?))`,
-        [targetId, EventRsvpStatus.GOING, EventRsvpStatus.MAYBE],
-      )
-      .limit(1)
-      .execute<{ id: string }[]>('all');
-    return rows.length > 0;
   }
 
   private userNotFound(): NotFoundException {
