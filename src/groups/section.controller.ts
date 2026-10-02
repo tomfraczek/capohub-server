@@ -246,8 +246,9 @@ export class SectionController {
   @AllowGroupStatuses(...ANY_STATUS)
   listMembers(
     @Param('sectionId', ParseUUIDPipe) sectionId: string,
+    @CurrentUser() user: User,
   ): Promise<SectionMembershipResponseDto[]> {
-    return this.sectionMembershipsService.listMembers(sectionId);
+    return this.sectionMembershipsService.listMembers(sectionId, user.id);
   }
 
   @Post('members')
@@ -272,10 +273,12 @@ export class SectionController {
   getMembership(
     @Param('sectionId', ParseUUIDPipe) sectionId: string,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @CurrentUser() user: User,
   ): Promise<SectionMembershipResponseDto> {
     return this.sectionMembershipsService.getMembership(
       sectionId,
       membershipId,
+      user.id,
     );
   }
 

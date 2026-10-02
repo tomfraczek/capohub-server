@@ -125,9 +125,15 @@ export class CommunityOverviewService {
     if (sectionIds.length === 0) {
       return { items: [], total: 0, hasMore: false };
     }
+    // An ARCHIVED Section is "deleted" from the user's point of view (the
+    // app's "Usuń sekcję" archives it) - never listed as "mine" any more,
+    // even though the membership row survives as history.
     const [sections, total] = await this.em.findAndCount(
       Section,
-      { id: { $in: sectionIds } },
+      {
+        id: { $in: sectionIds },
+        status: { $nin: [GroupStatus.ARCHIVED, GroupStatus.DELETED] },
+      },
       {
         orderBy: { name: 'asc', id: 'asc' },
         limit: page.limit,
@@ -158,7 +164,11 @@ export class CommunityOverviewService {
       return { items: [], total: 0, hasMore: false };
     }
 
-    const groups = await this.em.find(Group, { id: { $in: groupIds } });
+    // Same "archived = deleted for users" rule as getMySections.
+    const groups = await this.em.find(Group, {
+      id: { $in: groupIds },
+      status: { $nin: [GroupStatus.ARCHIVED, GroupStatus.DELETED] },
+    });
     groups.sort(
       (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
     );

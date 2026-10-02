@@ -1,3 +1,4 @@
+import { CommunityListVisibility } from '../enums/community-list-visibility.enum';
 import { GroupStatus } from '../enums/group-status.enum';
 
 // Group is a physically distinct entity type (see the Group/Section
@@ -21,6 +22,7 @@ export interface GroupResponseDto {
   isPublic: boolean;
   isHidden: boolean;
   memberInvitesAllowed: boolean;
+  followersVisibility: CommunityListVisibility;
   publicCode: string | null;
   status: GroupStatus;
   // Direct child Groups only (one level down) - not recursive.

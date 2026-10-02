@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -34,6 +35,7 @@ import {
 } from './entities/membership-suspension.entity';
 import { Cohort } from './entities/cohort.entity';
 import { GroupHierarchyService } from './group-hierarchy.service';
+import { canSeeSectionMembers } from './section-members-visibility';
 import { loadActiveSectionMembership } from './section-membership.query';
 import {
   toSectionMembershipResponseDto,
@@ -59,9 +61,15 @@ export class SectionMembershipsService {
     private readonly r2StorageService: R2StorageService,
   ) {}
 
+  // `viewerId` already passed GroupPermissionsGuard's MEMBERSHIP_VIEW -
+  // this only adds Section.membersVisibility on top (see
+  // section-members-visibility.ts): with PRIVATE, only the Section's staff
+  // may list its members.
   async listMembers(
     sectionId: string,
+    viewerId: string,
   ): Promise<SectionMembershipResponseDto[]> {
+    await this.assertCanSeeMembers(sectionId, viewerId);
     const memberships = await this.em.find(
       SectionMembership,
       { section: sectionId, status: SectionMembershipStatus.ACTIVE },
@@ -73,16 +81,45 @@ export class SectionMembershipsService {
 
   // A membership that has ended remains available by id as history - unlike
   // listMembers, this is not filtered to ACTIVE.
+  // Same membersVisibility rule as listMembers, except a member may always
+  // read their own membership.
   async getMembership(
     sectionId: string,
     membershipId: string,
+    viewerId: string,
   ): Promise<SectionMembershipResponseDto> {
     const membership = await this.loadMembershipByIdOrFail(
       this.em,
       sectionId,
       membershipId,
     );
+    if (membership.user.id !== viewerId) {
+      await this.assertCanSeeMembers(sectionId, viewerId);
+    }
     return this.toResponseDto(sectionId, membership);
+  }
+
+  private async assertCanSeeMembers(
+    sectionId: string,
+    viewerId: string,
+  ): Promise<void> {
+    const section = await this.em.findOne(Section, { id: sectionId });
+    if (!section) {
+      throw this.sectionNotFound();
+    }
+    const roles =
+      (
+        await this.roleAssignmentsService.getRoleAssignmentsForTarget(
+          [viewerId],
+          sectionId,
+        )
+      ).get(viewerId) ?? [];
+    if (!canSeeSectionMembers(section, roles)) {
+      throw new ForbiddenException({
+        code: 'SECTION_MEMBERS_PRIVATE',
+        message: "This section's members list is visible to its staff only",
+      });
+    }
   }
 
   // "Technical" add only - no invitation/acceptance flow (join/invite go

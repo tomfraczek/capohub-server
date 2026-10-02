@@ -36,7 +36,8 @@ export interface GroupAudienceMemberDto {
   // Every active (ACTIVE/READ_ONLY) membership behind isMemberThroughSection,
   // one per direct Section, sorted by Section name - what the app needs to
   // act on them through the Section's own member endpoints (remove/ban/
-  // roles). Empty for a follower-only row.
+  // roles). Empty for a follower-only row, and always empty for a non-admin
+  // viewer (see GroupAudienceAccess).
   memberships: {
     membershipId: string;
     sectionId: string;

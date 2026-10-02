@@ -41,6 +41,7 @@ import { userOwnsGroup } from './user-owns-group';
 import { GroupPermission } from './permissions/group-permission.enum';
 import { GroupPermissionService } from './permissions/group-permission.service';
 import { RoleAssignmentsService } from './role-assignments.service';
+import { canSeeSectionMembers } from './section-members-visibility';
 import { R2StorageService } from '../storage/r2-storage.service';
 
 // Dashboard sections are capped, not paginated (Community Home is not a
@@ -534,7 +535,13 @@ export class CommunityHomeService {
       ) {
         push('canReviewJoinRequestsInSectionIds');
       }
-      if (!isGroup && has(GroupPermission.MEMBERSHIP_VIEW)) {
+      // Mirrors SectionMembershipsService.listMembers exactly: MEMBERSHIP_VIEW
+      // plus Section.membersVisibility (PRIVATE = staff only).
+      if (
+        community instanceof Section &&
+        has(GroupPermission.MEMBERSHIP_VIEW) &&
+        canSeeSectionMembers(community, row.roles)
+      ) {
         push('canViewMembersInSectionIds');
       }
       if (

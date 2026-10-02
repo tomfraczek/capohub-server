@@ -17,6 +17,11 @@ import { RoleAssignment } from './entities/role-assignment.entity';
 import { GroupRole } from './enums/group-role.enum';
 import { SectionMembership } from './entities/section-membership.entity';
 import { GroupAudienceService } from './group-audience.service';
+import type { Group } from './entities/group.entity';
+import { CommunityListVisibility } from './enums/community-list-visibility.enum';
+import { GroupStatus } from './enums/group-status.enum';
+import { GroupPermissionService } from './permissions/group-permission.service';
+import type { RoleAssignmentsService } from './role-assignments.service';
 
 type Rows = Partial<Record<string, unknown[]>>;
 
@@ -40,16 +45,133 @@ function segments(colorHex: string) {
   return { getItems: () => [{ position: 1, colorHex, proportion: 100 }] };
 }
 
-function buildService(rows: Rows) {
+function buildService(
+  rows: Rows,
+  access: {
+    group?: Partial<Group> | null;
+    roles?: GroupRole[] | null;
+    counts?: Partial<Record<string, number>>;
+  } = {},
+) {
   const find = jest.fn((entity: { name: string }) =>
     Promise.resolve(rows[entity.name] ?? []),
   );
-  const em = { find } as unknown as EntityManager;
+  const findOne = jest.fn(() =>
+    Promise.resolve(
+      access.group === undefined ? { id: 'group-1' } : access.group,
+    ),
+  );
+  const count = jest.fn((entity: { name: string }) =>
+    Promise.resolve(access.counts?.[entity.name] ?? 0),
+  );
+  const em = { find, findOne, count } as unknown as EntityManager;
   const r2 = {
     buildPublicUrl: jest.fn(() => 'https://cdn/avatar'),
   } as unknown as R2StorageService;
-  return { service: new GroupAudienceService(em, r2), find };
+  const roleAssignmentsService = {
+    resolveAuthorization: jest.fn(() =>
+      Promise.resolve(
+        access.roles
+          ? { roleAssignments: access.roles.map((role) => ({ role })) }
+          : null,
+      ),
+    ),
+  } as unknown as RoleAssignmentsService;
+  const groupPermissionService = new GroupPermissionService();
+  return {
+    service: new GroupAudienceService(
+      em,
+      r2,
+      roleAssignmentsService,
+      groupPermissionService,
+    ),
+    find,
+  };
 }
+
+describe('GroupAudienceService.resolveAccess', () => {
+  const publicGroup = {
+    id: 'group-1',
+    status: GroupStatus.ACTIVE,
+    followersVisibility: CommunityListVisibility.PUBLIC,
+  };
+
+  it('gives a Group OWNER/ADMIN the full list regardless of the visibility setting', async () => {
+    for (const role of [GroupRole.OWNER, GroupRole.ADMIN]) {
+      const { service } = buildService(
+        {},
+        {
+          group: {
+            ...publicGroup,
+            followersVisibility: CommunityListVisibility.PRIVATE,
+          },
+          roles: [role],
+        },
+      );
+      await expect(service.resolveAccess('group-1', 'viewer')).resolves.toBe(
+        'FULL',
+      );
+    }
+  });
+
+  it('lets a Section member or a follower see a PUBLIC list (without membership ids)', async () => {
+    const member = buildService(
+      {},
+      { group: publicGroup, counts: { [SectionMembership.name]: 1 } },
+    );
+    await expect(
+      member.service.resolveAccess('group-1', 'viewer'),
+    ).resolves.toBe('PUBLIC');
+
+    const follower = buildService(
+      {},
+      { group: publicGroup, counts: { [GroupFollow.name]: 1 } },
+    );
+    await expect(
+      follower.service.resolveAccess('group-1', 'viewer'),
+    ).resolves.toBe('PUBLIC');
+  });
+
+  it('404s a member when the list is PRIVATE, and anyone not tied to the Group', async () => {
+    const privateList = buildService(
+      {},
+      {
+        group: {
+          ...publicGroup,
+          followersVisibility: CommunityListVisibility.PRIVATE,
+        },
+        counts: { [SectionMembership.name]: 1 },
+      },
+    );
+    await expect(
+      privateList.service.resolveAccess('group-1', 'viewer'),
+    ).rejects.toMatchObject({
+      response: { code: 'GROUP_NOT_FOUND' },
+    });
+
+    const stranger = buildService({}, { group: publicGroup });
+    await expect(
+      stranger.service.resolveAccess('group-1', 'viewer'),
+    ).rejects.toMatchObject({
+      response: { code: 'GROUP_NOT_FOUND' },
+    });
+  });
+
+  it('404s a non-admin once the Group is archived (deleted for users)', async () => {
+    const { service } = buildService(
+      {},
+      {
+        group: { ...publicGroup, status: GroupStatus.ARCHIVED },
+        counts: { [GroupFollow.name]: 1 },
+      },
+    );
+    await expect(
+      service.resolveAccess('group-1', 'viewer'),
+    ).rejects.toMatchObject({
+      response: { code: 'GROUP_NOT_FOUND' },
+    });
+  });
+});
 
 describe('GroupAudienceService', () => {
   it('returns an empty page without loading users when nobody is tied to the Group', async () => {

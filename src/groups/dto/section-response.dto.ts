@@ -1,3 +1,4 @@
+import { CommunityListVisibility } from '../enums/community-list-visibility.enum';
 import { GroupStatus } from '../enums/group-status.enum';
 
 // Section is a physically distinct entity type (see the Group/Section
@@ -20,6 +21,7 @@ export interface SectionResponseDto {
   isPublic: boolean;
   isHidden: boolean;
   memberInvitesAllowed: boolean;
+  membersVisibility: CommunityListVisibility;
   publicCode: string | null;
   status: GroupStatus;
   timezone: string;

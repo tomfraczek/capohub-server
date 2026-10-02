@@ -10,6 +10,7 @@ import {
 } from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
+import { CommunityListVisibility } from '../enums/community-list-visibility.enum';
 import { GroupStatus } from '../enums/group-status.enum';
 import { Section } from './section.entity';
 
@@ -117,6 +118,11 @@ export class Group extends BaseEntity {
   // of the Group. When false, only ADMIN and OWNER may invite.
   @Property()
   memberInvitesAllowed: boolean = false;
+
+  // Who besides the Group's OWNER/ADMIN may see its followers list - see
+  // community-list-visibility.enum.ts.
+  @Enum({ items: () => Object.values(CommunityListVisibility) })
+  followersVisibility: CommunityListVisibility = CommunityListVisibility.PUBLIC;
 
   // Globally-unique, immutable, human-readable code for locating this Group
   // without knowing its UUID. Generated once at creation (see

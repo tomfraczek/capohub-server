@@ -13,6 +13,7 @@ import { ImageAssetService } from '../storage/image-asset.service';
 import { ImageProcessingService } from '../storage/image-processing.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { AuditLogService } from './audit-log.service';
+import { CommunityListVisibility } from './enums/community-list-visibility.enum';
 import { GroupFollowService } from './group-follow.service';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { GroupsService } from './groups.service';
@@ -35,6 +36,7 @@ function buildCreateInput(
     isPublic: true,
     isHidden: false,
     memberInvitesAllowed: false,
+    followersVisibility: CommunityListVisibility.PUBLIC,
     ...overrides,
   };
 }
@@ -626,6 +628,33 @@ describe('GroupsService', () => {
       await service.archive('group-1', buildUser());
 
       expect(existing.status).toBe(GroupStatus.ARCHIVED);
+    });
+
+    it('detaches every child Group and Section, making them standalone instead of archiving them', async () => {
+      const existing = buildGroup({ status: GroupStatus.ACTIVE });
+      const childGroup = buildGroup({
+        id: 'child-1',
+        status: GroupStatus.ACTIVE,
+        parentGroup: existing,
+      });
+      const section = Object.assign(new Section(), {
+        id: 'section-1',
+        status: GroupStatus.ACTIVE,
+        parentGroup: existing,
+      });
+      const { em } = buildMockEm({
+        groupResults: [existing],
+        children: [childGroup],
+        sections: [section],
+      });
+      const { service } = buildService(em);
+
+      await service.archive('group-1', buildUser());
+
+      expect(childGroup.parentGroup).toBeNull();
+      expect(childGroup.status).toBe(GroupStatus.ACTIVE);
+      expect(section.parentGroup).toBeNull();
+      expect(section.status).toBe(GroupStatus.ACTIVE);
     });
 
     it('throws NotFoundException when the group does not exist', async () => {

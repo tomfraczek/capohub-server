@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createZodDto } from '../../common/dto/create-zod-dto';
+import { CommunityListVisibility } from '../enums/community-list-visibility.enum';
 import { optionalNullableText } from '../../songs/dto/song-validation.helpers';
 import {
   optionalNullableSocialUrl,
@@ -55,6 +56,12 @@ export const createGroupObjectSchema = z.object({
   // Whether ordinary MEMBERs may send Invitations on behalf of this Group.
   // Defaults to false (only ADMIN/OWNER may invite).
   memberInvitesAllowed: z.boolean().default(false),
+  // Who besides OWNER/ADMIN sees the followers list - see
+  // community-list-visibility.enum.ts. Full-replace on update like every
+  // field here.
+  followersVisibility: z
+    .nativeEnum(CommunityListVisibility)
+    .default(CommunityListVisibility.PUBLIC),
 });
 
 export const createGroupSchema = createGroupObjectSchema;

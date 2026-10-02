@@ -9,6 +9,7 @@ import {
 } from '@mikro-orm/core';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
+import { CommunityListVisibility } from '../enums/community-list-visibility.enum';
 import { GroupStatus } from '../enums/group-status.enum';
 import { Group } from './group.entity';
 
@@ -151,6 +152,11 @@ export class Section extends BaseEntity {
 
   @Property()
   memberInvitesAllowed: boolean = false;
+
+  // Who may see this Section's members list - see
+  // community-list-visibility.enum.ts / section-members-visibility.ts.
+  @Enum({ items: () => Object.values(CommunityListVisibility) })
+  membersVisibility: CommunityListVisibility = CommunityListVisibility.PUBLIC;
 
   @Unique()
   @Property({ nullable: true, length: 15 })

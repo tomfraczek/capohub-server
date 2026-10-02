@@ -151,9 +151,11 @@ describe('SectionController', () => {
       const listMembers = jest.fn().mockResolvedValue(dto);
       const controller = buildController({}, { listMembers });
 
-      const response = await controller.listMembers('section-1');
+      const response = await controller.listMembers('section-1', {
+        id: 'user-1',
+      } as never);
 
-      expect(listMembers).toHaveBeenCalledWith('section-1');
+      expect(listMembers).toHaveBeenCalledWith('section-1', 'user-1');
       expect(response).toBe(dto);
     });
   });
@@ -182,9 +184,14 @@ describe('SectionController', () => {
       const response = await controller.getMembership(
         'section-1',
         'membership-1',
+        { id: 'user-1' } as never,
       );
 
-      expect(getMembership).toHaveBeenCalledWith('section-1', 'membership-1');
+      expect(getMembership).toHaveBeenCalledWith(
+        'section-1',
+        'membership-1',
+        'user-1',
+      );
       expect(response).toBe(dto);
     });
   });

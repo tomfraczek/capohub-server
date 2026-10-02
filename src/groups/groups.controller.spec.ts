@@ -55,7 +55,6 @@ describe('GroupsController', () => {
     ['getById', [GroupPermission.GROUP_VIEW], ANY_STATUS],
     ['follow', [GroupPermission.GROUP_VIEW], undefined],
     ['unfollow', [GroupPermission.GROUP_VIEW], undefined],
-    ['listFollowers', [GroupPermission.GROUP_FOLLOWERS_VIEW], ANY_STATUS],
     ['removeFollower', [GroupPermission.GROUP_FOLLOWERS_MANAGE], undefined],
     ['blockFollowing', [GroupPermission.GROUP_FOLLOWERS_MANAGE], undefined],
     ['unblockFollowing', [GroupPermission.GROUP_FOLLOWERS_MANAGE], undefined],

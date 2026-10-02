@@ -331,13 +331,39 @@ export class GroupsService {
   // (groups.controller.ts), so there is nothing left to validate here beyond
   // applying the new status. Memberships and Role Assignments are never
   // touched by any of these transitions (Delete included - see ADR-029).
+  //
+  // Archive is what the app presents as "Usuń grupę": the Group disappears
+  // for users but stays as a historical row (joins, Events, Career
+  // Timeline entries referencing it keep resolving). Its child Groups and
+  // Sections are never archived along with it - each is detached and
+  // becomes standalone again, exactly as before it joined (same
+  // DETACH_CHILD audit as HierarchyManagementService.detachGroup/
+  // detachSection), all in one transaction with the status change. Only
+  // DELETED children (already gone for good) are left alone.
   async archive(groupId: string, actor: User): Promise<GroupResponseDto> {
-    return this.transitionStatus(
-      groupId,
-      GroupStatus.ARCHIVED,
-      actor,
-      AuditAction.ARCHIVE,
-    );
+    return this.em.transactional(async (em) => {
+      const group = await this.loadGroupOrFail(groupId, em);
+
+      const childGroups = await em.find(Group, { parentGroup: groupId });
+      const sections = await em.find(Section, { parentGroup: groupId });
+      for (const child of [...childGroups, ...sections]) {
+        if (child.status === GroupStatus.DELETED) continue;
+        child.parentGroup = null;
+        this.auditLogService.record(em, {
+          community: group,
+          action: AuditAction.DETACH_CHILD,
+          actor,
+          targetType: AuditTargetType.COMMUNITY,
+          targetId: child.id,
+          metadata: { previousParentId: group.id, newParentId: null },
+        });
+      }
+
+      group.status = GroupStatus.ARCHIVED;
+      this.recordCommunityAudit(em, group, AuditAction.ARCHIVE, actor);
+      await em.flush();
+      return this.toResponseDto(em, group, actor.id);
+    });
   }
 
   // "Restore" in product/audit terms - see AuditAction.RESTORE.
@@ -454,6 +480,7 @@ export class GroupsService {
     group.isPublic = input.isPublic;
     group.isHidden = input.isHidden;
     group.memberInvitesAllowed = input.memberInvitesAllowed;
+    group.followersVisibility = input.followersVisibility;
   }
 
   // childGroupsCount/directSectionsCount are direct-children counts only

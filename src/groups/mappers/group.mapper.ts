@@ -48,6 +48,7 @@ export function toGroupResponseDto(
     isPublic: group.isPublic,
     isHidden: group.isHidden,
     memberInvitesAllowed: group.memberInvitesAllowed,
+    followersVisibility: group.followersVisibility,
     publicCode: group.publicCode,
     status: group.status,
     childGroupsCount: counts.childGroupsCount,

@@ -440,6 +440,7 @@ export class SectionsService {
     section.isPublic = input.isPublic;
     section.isHidden = input.isHidden;
     section.memberInvitesAllowed = input.memberInvitesAllowed;
+    section.membersVisibility = input.membersVisibility;
     section.country = input.country;
     section.city = input.city;
     section.region = input.region;

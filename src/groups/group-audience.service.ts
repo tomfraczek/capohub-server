@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { CustomUserRank } from '../graduation/entities/custom-user-rank.entity';
 import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignment.entity';
@@ -12,7 +12,13 @@ import { GroupFollow } from './entities/group-follow.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
 import { SectionMembership } from './entities/section-membership.entity';
 import { GroupRole } from './enums/group-role.enum';
+import { CommunityListVisibility } from './enums/community-list-visibility.enum';
+import { GroupStatus } from './enums/group-status.enum';
 import { SectionMembershipStatus } from './enums/section-membership-status.enum';
+import { Group } from './entities/group.entity';
+import { GroupPermission } from './permissions/group-permission.enum';
+import { GroupPermissionService } from './permissions/group-permission.service';
+import { RoleAssignmentsService } from './role-assignments.service';
 
 const ACTIVE_MEMBERSHIP_STATUSES = [
   SectionMembershipStatus.ACTIVE,
@@ -20,6 +26,12 @@ const ACTIVE_MEMBERSHIP_STATUSES = [
 ];
 
 type RankRef = NonNullable<GroupAudienceMemberDto['rank']>;
+
+// FULL - OWNER/ADMIN (GROUP_FOLLOWERS_VIEW): every row with its
+// memberships, for the admin actions. PUBLIC - a Section member/follower
+// of a Group with followersVisibility=PUBLIC: the same people, without
+// the membership ids only the admin actions need.
+export type GroupAudienceAccess = 'FULL' | 'PUBLIC';
 
 // GET /groups/:id/followers - everyone tied to a Group: active members of
 // its *direct* Sections (the same "no inheritance" rule as
@@ -35,11 +47,57 @@ export class GroupAudienceService {
   constructor(
     private readonly em: EntityManager,
     private readonly r2StorageService: R2StorageService,
+    private readonly roleAssignmentsService: RoleAssignmentsService,
+    private readonly groupPermissionService: GroupPermissionService,
   ) {}
+
+  /**
+   * Who may read GET /groups/:id/followers: OWNER/ADMIN always (any Group
+   * status, like getById); otherwise only while the Group is ACTIVE/
+   * READ_ONLY with followersVisibility=PUBLIC, and only for someone tied
+   * to it - an active member of one of its direct Sections or a follower.
+   * Everyone else gets the same 404 as for a Group they can't see at all.
+   */
+  async resolveAccess(
+    groupId: string,
+    viewerId: string,
+  ): Promise<GroupAudienceAccess> {
+    const group = await this.em.findOne(Group, { id: groupId });
+    if (!group) {
+      throw this.notFound();
+    }
+
+    const authorization =
+      await this.roleAssignmentsService.resolveAuthorization(groupId, viewerId);
+    if (
+      authorization &&
+      this.groupPermissionService.hasAllPermissionsForRoles(
+        'GROUP',
+        authorization.roleAssignments.map((assignment) => assignment.role),
+        [GroupPermission.GROUP_FOLLOWERS_VIEW],
+        null,
+      )
+    ) {
+      return 'FULL';
+    }
+
+    const isLive =
+      group.status === GroupStatus.ACTIVE ||
+      group.status === GroupStatus.READ_ONLY;
+    if (
+      isLive &&
+      group.followersVisibility === CommunityListVisibility.PUBLIC &&
+      (await this.isTiedToGroup(groupId, viewerId))
+    ) {
+      return 'PUBLIC';
+    }
+    throw this.notFound();
+  }
 
   async list(
     groupId: string,
     page: { limit: number; offset: number },
+    access: GroupAudienceAccess = 'FULL',
   ): Promise<{ items: GroupAudienceMemberDto[]; total: number }> {
     // Sequential, not Promise.all - concurrent queries on the same
     // EntityManager corrupt the underlying pg connection.
@@ -110,11 +168,39 @@ export class GroupAudienceService {
         isOwner: ownerIds.has(user.id),
         isMemberThroughSection: memberIds.has(user.id),
         isFollowing: followerIds.has(user.id),
-        memberships: (membershipsByUser.get(user.id) ?? []).sort((a, b) =>
-          a.sectionName.localeCompare(b.sectionName, 'pl'),
-        ),
+        memberships:
+          access === 'FULL'
+            ? (membershipsByUser.get(user.id) ?? []).sort((a, b) =>
+                a.sectionName.localeCompare(b.sectionName, 'pl'),
+              )
+            : [],
       })),
     };
+  }
+
+  private async isTiedToGroup(
+    groupId: string,
+    userId: string,
+  ): Promise<boolean> {
+    // Sequential, not Promise.all - see list() above.
+    const memberships = await this.em.count(SectionMembership, {
+      user: userId,
+      section: { parentGroup: groupId },
+      status: { $in: ACTIVE_MEMBERSHIP_STATUSES },
+    });
+    if (memberships > 0) {
+      return true;
+    }
+    return (
+      (await this.em.count(GroupFollow, { user: userId, group: groupId })) > 0
+    );
+  }
+
+  private notFound(): NotFoundException {
+    return new NotFoundException({
+      code: 'GROUP_NOT_FOUND',
+      message: 'Group not found',
+    });
   }
 
   /**

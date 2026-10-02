@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createZodDto } from '../../common/dto/create-zod-dto';
+import { CommunityListVisibility } from '../enums/community-list-visibility.enum';
 import { optionalNullableText } from '../../songs/dto/song-validation.helpers';
 import {
   citySchema,
@@ -64,6 +65,10 @@ export const createSectionObjectSchema = z.object({
   isPublic: z.boolean().default(true),
   isHidden: z.boolean().default(false),
   memberInvitesAllowed: z.boolean().default(false),
+  // Who sees the members list - see community-list-visibility.enum.ts.
+  membersVisibility: z
+    .nativeEnum(CommunityListVisibility)
+    .default(CommunityListVisibility.PUBLIC),
   country: countryCodeSchema,
   city: citySchema,
   region: regionSchema,

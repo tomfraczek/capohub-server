@@ -4252,7 +4252,7 @@
       "checks": [
         {
           "name": "event_schedule_days_ends_at_after_starts_at_check",
-          "columnName": "starts_at",
+          "columnName": "ends_at",
           "definition": "CHECK ((ends_at >= starts_at))",
           "expression": "ends_at >= starts_at"
         }
@@ -5069,7 +5069,7 @@
         },
         {
           "name": "events_organizer_identity_check",
-          "columnName": "organizer_user_display_name",
+          "columnName": "community_section_id",
           "definition": "CHECK ((((organizer_type = 'GROUP'::text) AND (community_group_id IS NOT NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'SECTION'::text) AND (community_section_id IS NOT NULL) AND (community_group_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'USER'::text) AND (community_group_id IS NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NOT NULL))))",
           "expression": "((organizer_type = 'GROUP'::text) AND (community_group_id IS NOT NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'SECTION'::text) AND (community_section_id IS NOT NULL) AND (community_group_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'USER'::text) AND (community_group_id IS NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NOT NULL))"
         }
@@ -5714,7 +5714,7 @@
       "checks": [
         {
           "name": "formal_rank_assignments_ended_on_after_started_on_check",
-          "columnName": "started_on",
+          "columnName": "ended_on",
           "definition": "CHECK (((started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)))",
           "expression": "(started_on IS NULL) OR (ended_on IS NULL) OR (ended_on >= started_on)"
         }
@@ -7024,6 +7024,25 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "string"
+        },
+        "followers_visibility": {
+          "name": "followers_visibility",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'PUBLIC'",
+          "comment": null,
+          "enumItems": [
+            "PUBLIC",
+            "PRIVATE"
+          ],
+          "mappedType": "enum"
         }
       },
       "name": "groups",
@@ -12837,6 +12856,25 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "string"
+        },
+        "members_visibility": {
+          "name": "members_visibility",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'PUBLIC'",
+          "comment": null,
+          "enumItems": [
+            "PUBLIC",
+            "PRIVATE"
+          ],
+          "mappedType": "enum"
         }
       },
       "name": "sections",

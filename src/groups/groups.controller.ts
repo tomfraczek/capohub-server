@@ -154,21 +154,24 @@ export class GroupsController {
 
   // GET :id/followers - everyone tied to this Group: members of its direct
   // Sections and its followers, each flagged with how (see
-  // GroupAudienceService). OWNER/ADMIN only (GROUP_FOLLOWERS_VIEW) - a
-  // follower list is never public. Readable in every status, like getById.
+  // GroupAudienceService). Deliberately NOT behind @RequireGroupPermission:
+  // besides OWNER/ADMIN (GROUP_FOLLOWERS_VIEW), Group.followersVisibility
+  // PUBLIC also lets members of its direct Sections and its followers in -
+  // neither holds any Group-level role the guard could check, so access is
+  // resolved in GroupAudienceService.resolveAccess (404 otherwise).
   @Get(':id/followers')
-  @RequireGroupPermission(GroupPermission.GROUP_FOLLOWERS_VIEW)
-  @RequireGroupKind(GroupKind.ROOT)
-  @AllowGroupStatuses(...ANY_STATUS)
   async listFollowers(
     @Param('id', ParseUUIDPipe) id: string,
     @Query(new ZodValidationPipe(groupFollowersQuerySchema))
     query: GroupFollowersQueryDto,
+    @CurrentUser() user: User,
   ): Promise<PaginatedResponse<GroupAudienceMemberDto>> {
-    const result = await this.groupAudienceService.list(id, {
-      limit: query.limit,
-      offset: (query.page - 1) * query.limit,
-    });
+    const access = await this.groupAudienceService.resolveAccess(id, user.id);
+    const result = await this.groupAudienceService.list(
+      id,
+      { limit: query.limit, offset: (query.page - 1) * query.limit },
+      access,
+    );
     return {
       data: result.items,
       meta: createPaginationMeta({

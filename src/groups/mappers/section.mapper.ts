@@ -33,6 +33,7 @@ export function toSectionResponseDto(
     isPublic: section.isPublic,
     isHidden: section.isHidden,
     memberInvitesAllowed: section.memberInvitesAllowed,
+    membersVisibility: section.membersVisibility,
     publicCode: section.publicCode,
     status: section.status,
     timezone: section.timezone,
