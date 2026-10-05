@@ -17,6 +17,10 @@ import {
   FormalRankOptionsResponseDto,
 } from './dto/formal-rank-options-response.dto';
 import {
+  PublicGraduationSystemResponseDto,
+  PublicRankDto,
+} from './dto/public-graduation-system-response.dto';
+import {
   RankResponseDto,
   RanksByTrackResponseDto,
 } from './dto/rank-response.dto';
@@ -55,6 +59,34 @@ export class RanksService {
       { populate: ['previousRank', 'cordSegments'] },
     );
     return toRanksByTrackResponseDto(ranks);
+  }
+
+  /**
+   * GET /groups/:groupId/graduation-system/public - the read-only catalog
+   * shown on the Group's public profile. Same "filter archived ranks out
+   * *after* ordering" rule as getFormalRankOptionsForUser (the chain walk
+   * needs every node present), reusing `list()` so gradation order is never
+   * re-derived here.
+   */
+  async listPublic(
+    groupId: string,
+  ): Promise<PublicGraduationSystemResponseDto> {
+    const byTrack = await this.list(groupId);
+    return {
+      [RankTrack.CHILD]: this.toPublicRanks(byTrack[RankTrack.CHILD]),
+      [RankTrack.ADULT]: this.toPublicRanks(byTrack[RankTrack.ADULT]),
+    };
+  }
+
+  private toPublicRanks(ranks: RankResponseDto[]): PublicRankDto[] {
+    return ranks
+      .filter((rank) => !rank.isArchived)
+      .map((rank) => ({
+        id: rank.id,
+        name: rank.name,
+        description: rank.description,
+        cordSegments: rank.cordSegments,
+      }));
   }
 
   async getById(groupId: string, rankId: string): Promise<RankResponseDto> {

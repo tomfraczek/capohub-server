@@ -14,6 +14,7 @@
  *  6. Cord segments: 1/2/many colors, matching/differing tips, wrong sum,
  *     bad hex
  *  7. Archive/restore
+ *  8. Public read (GROUP_VIEW) - active ranks only, mutations stay closed
  */
 import {
   INestApplication,
@@ -48,6 +49,7 @@ import {
   RankResponseDto,
   RanksByTrackResponseDto,
 } from '../src/graduation/dto/rank-response.dto';
+import { PublicGraduationSystemResponseDto } from '../src/graduation/dto/public-graduation-system-response.dto';
 import { GraduationSystem } from '../src/graduation/entities/graduation-system.entity';
 import { Rank } from '../src/graduation/entities/rank.entity';
 import { RankTrack } from '../src/graduation/enums/rank-track.enum';
@@ -805,6 +807,131 @@ describe('Graduation Catalog (e2e)', () => {
       expect(list[RankTrack.ADULT].map((r) => r.name)).toEqual(['A', 'B']);
       expect(list[RankTrack.ADULT][0].isArchived).toBe(true);
       void b;
+    });
+  });
+
+  // ─── Public read (Group profile) ─────────────────────────────────────────
+
+  describe('Public catalog read', () => {
+    function getPublic(token: string, groupId: string, expectStatus = 200) {
+      return request(app.getHttpServer())
+        .get(`/api/v1/groups/${groupId}/graduation-system/public`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(expectStatus);
+    }
+
+    it('lets an outsider read a public Group catalog - active ranks only, in gradation order, presentation fields only', async () => {
+      const group = await createGroupWithSystem();
+      const first = (await createRank(
+        group.token,
+        group.id,
+        rankPayload({ name: 'Z first', description: 'Opis' }),
+      )) as RankResponseDto;
+      const archived = (await createRank(
+        group.token,
+        group.id,
+        rankPayload({ name: 'A archived', previousRankId: first.id }),
+      )) as RankResponseDto;
+      await createRank(
+        group.token,
+        group.id,
+        rankPayload({
+          name: 'M third',
+          previousRankId: archived.id,
+          cordSegments: [
+            { position: 1, colorHex: '#00FF00', proportion: 30 },
+            { position: 2, colorHex: '#0000FF', proportion: 70 },
+          ],
+        }),
+      );
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${group.id}/ranks/${archived.id}/archive`)
+        .set('Authorization', `Bearer ${group.token}`)
+        .expect(201);
+
+      const body = await bodyOf<PublicGraduationSystemResponseDto>(
+        getPublic(OUTSIDER_TOKEN, group.id),
+      );
+
+      expect(body[RankTrack.ADULT].map((r) => r.name)).toEqual([
+        'Z first',
+        'M third',
+      ]);
+      expect(body[RankTrack.CHILD]).toEqual([]);
+      expect(Object.keys(body[RankTrack.ADULT][0]).sort()).toEqual([
+        'cordSegments',
+        'description',
+        'id',
+        'name',
+      ]);
+      expect(body[RankTrack.ADULT][0].description).toBe('Opis');
+      expect(body[RankTrack.ADULT][1].cordSegments).toEqual([
+        { position: 1, colorHex: '#00FF00', proportion: 30 },
+        { position: 2, colorHex: '#0000FF', proportion: 70 },
+      ]);
+    });
+
+    it('returns two empty tracks (never 404) for a Group without a system', async () => {
+      const group = await createFreshGroup({ name: 'Public No System Group' });
+      const body = await bodyOf<PublicGraduationSystemResponseDto>(
+        getPublic(OUTSIDER_TOKEN, group.id),
+      );
+      expect(body).toEqual({ [RankTrack.CHILD]: [], [RankTrack.ADULT]: [] });
+    });
+
+    it('404s for an outsider on a private Group - same as its profile', async () => {
+      const group = await createFreshGroup({
+        name: `Private Grad Group ${Date.now()}`,
+        isPublic: false,
+      });
+      await createSystem(group.token, group.id);
+      await getPublic(OUTSIDER_TOKEN, group.id, 404);
+    });
+
+    it('follows exactly the Group profile visibility on a private Group - owner, ADMIN, Section member, outsider', async () => {
+      const group = await createFreshGroup({
+        name: `Private Parity Group ${Date.now()}`,
+        isPublic: false,
+      });
+      await createSystem(group.token, group.id);
+      await grantGroupAdmin(group.token, group.id, ADMIN_TOKEN);
+      const section = await createSection(group.token, group.id);
+      await grantSectionAdmin(
+        group.token,
+        group.id,
+        section.id,
+        SECTION_ADMIN_TOKEN,
+      );
+
+      for (const token of [
+        group.token,
+        ADMIN_TOKEN,
+        SECTION_ADMIN_TOKEN,
+        OUTSIDER_TOKEN,
+      ]) {
+        const profile = await request(app.getHttpServer())
+          .get(`/api/v1/groups/${group.id}`)
+          .set('Authorization', `Bearer ${token}`);
+        const graduation = await request(app.getHttpServer())
+          .get(`/api/v1/groups/${group.id}/graduation-system/public`)
+          .set('Authorization', `Bearer ${token}`);
+        expect({ token, status: graduation.status }).toEqual({
+          token,
+          status: profile.status,
+        });
+      }
+
+      await getPublic(group.token, group.id, 200);
+      await getPublic(ADMIN_TOKEN, group.id, 200);
+    });
+
+    it('never opens the catalog mutations or the admin read to an outsider', async () => {
+      const group = await createGroupWithSystem();
+      await request(app.getHttpServer())
+        .get(`/api/v1/groups/${group.id}/ranks`)
+        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+        .expect(404);
+      await createRank(OUTSIDER_TOKEN, group.id, rankPayload(), 404);
     });
   });
 });

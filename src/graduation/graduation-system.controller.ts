@@ -18,7 +18,9 @@ import { GroupPermissionsGuard } from '../groups/guards/group-permissions.guard'
 import { GroupPermission } from '../groups/permissions/group-permission.enum';
 import { User } from '../users/entities/user.entity';
 import { GraduationSystemResponseDto } from './dto/graduation-system-response.dto';
+import { PublicGraduationSystemResponseDto } from './dto/public-graduation-system-response.dto';
 import { GraduationSystemService } from './graduation-system.service';
+import { RanksService } from './ranks.service';
 
 const ANY_STATUS = [
   GroupStatus.ACTIVE,
@@ -37,6 +39,7 @@ const ANY_STATUS = [
 export class GraduationSystemController {
   constructor(
     private readonly graduationSystemService: GraduationSystemService,
+    private readonly ranksService: RanksService,
   ) {}
 
   @Get()
@@ -47,6 +50,23 @@ export class GraduationSystemController {
     @Param('groupId') groupId: string,
   ): Promise<GraduationSystemResponseDto> {
     return this.graduationSystemService.getByGroup(groupId);
+  }
+
+  // The public read of the catalog for the Group's profile - deliberately
+  // gated by GROUP_VIEW (the same permission as GET /groups/:id, so it
+  // works for a public Group's stranger too, via PUBLIC_VIEW_SAFE_PERMISSIONS),
+  // never by GRADUATION_SYSTEM_VIEW: reading the gradation is public
+  // information about the Group, managing it stays OWNER/ADMIN-only above/
+  // below and in RanksController. Returns two empty tracks (never 404) for
+  // a Group without a system - see PublicGraduationSystemResponseDto.
+  @Get('public')
+  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupKind(GroupKind.ROOT)
+  @AllowGroupStatuses(...ANY_STATUS)
+  getPublic(
+    @Param('groupId') groupId: string,
+  ): Promise<PublicGraduationSystemResponseDto> {
+    return this.ranksService.listPublic(groupId);
   }
 
   // No body - the system has no settings of its own (see
