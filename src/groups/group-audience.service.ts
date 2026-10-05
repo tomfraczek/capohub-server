@@ -137,7 +137,10 @@ export class GroupAudienceService {
     }
     const memberIds = new Set(membershipsByUser.keys());
     const followerIds = new Set(follows.map((f) => f.user.id));
-    const allIds = [...new Set([...memberIds, ...followerIds])];
+    // The OWNER is always listed - they are the Group's formal member by
+    // definition (see owner-formal-group.ts), even with no Section
+    // membership and no follow of their own.
+    const allIds = [...new Set([...memberIds, ...followerIds, ...ownerIds])];
     if (allIds.length === 0) {
       return { items: [], total: 0 };
     }

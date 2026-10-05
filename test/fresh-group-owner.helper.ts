@@ -136,3 +136,39 @@ export async function createFreshGroupOwner({
 
   return { token, clerkUserId, userId: user.id, group };
 }
+
+/**
+ * Test-fixture ONLY: makes `newOwnerUserId` the OWNER of `groupId` straight
+ * in the database, bypassing POST .../transfer-ownership.
+ *
+ * The real transfer now enforces "one owned Group / one formal Group per
+ * user" (see owner-formal-group.ts), so a single actor can no longer come
+ * to own several Groups through the API. A few hierarchy tests still need
+ * exactly that shape - direct attach/move/detach require OWNER
+ * (HIERARCHY_MANAGE) on both ends - to exercise hierarchy rules that have
+ * nothing to do with ownership. This reproduces the legacy multi-owner
+ * state those tests need (the same state Migration20261002160000_
+ * BackfillOwnerFormalGroup deliberately leaves alone) without weakening
+ * the production rule. Never use it to test ownership itself.
+ */
+export async function forceGroupOwnerForFixture(
+  app: INestApplication<App>,
+  groupId: string,
+  newOwnerUserId: string,
+): Promise<void> {
+  const em = app.get(EntityManager).fork();
+  const now = new Date();
+  // Revoke first, in its own statement - ROLE_ASSIGNMENTS_OWNER_UNIQUE_INDEX
+  // allows exactly one active OWNER per Group.
+  await em
+    .getConnection()
+    .execute(
+      `update "role_assignments" set "revoked_at" = ? where "group_id" = ? and "role" = 'OWNER' and "revoked_at" is null`,
+      [now, groupId],
+    );
+  await em.getConnection().execute(
+    `insert into "role_assignments" ("id", "created_at", "updated_at", "user_id", "group_id", "role", "granted_at")
+     values (?, ?, ?, ?, ?, 'OWNER', ?)`,
+    [randomUUID(), now, now, newOwnerUserId, groupId, now],
+  );
+}

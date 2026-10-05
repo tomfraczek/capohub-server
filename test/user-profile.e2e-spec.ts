@@ -14,7 +14,10 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
-import { createFreshGroupOwner } from './fresh-group-owner.helper';
+import {
+  createFreshGroupOwner,
+  forceGroupOwnerForFixture,
+} from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { UserResponseDto } from '../src/users/dto/user-response.dto';
@@ -959,9 +962,8 @@ describe('User Profile (e2e)', () => {
       // attachGroupParent requires HIERARCHY_MANAGE (OWNER only) on *both*
       // nodes (see hierarchy-management.service.ts's assertHierarchyManage)
       // - root and child are two independent fresh owners here, so grant
-      // root's owner ADMIN on child, then transfer child's ownership to
-      // them (never touches FormalGroupAffiliation - see
-      // role-assignments.service.ts) so a single actor can perform the
+      // root's owner ADMIN on child, then make them child's OWNER directly
+      // in the DB (forceGroupOwnerForFixture) so a single actor can perform the
       // attach, same reasoning as hierarchy.e2e-spec.ts's
       // createGroupOwnedByA.
       await request(app.getHttpServer())
@@ -969,11 +971,9 @@ describe('User Profile (e2e)', () => {
         .set('Authorization', `Bearer ${child.token}`)
         .send({ userId: root.userId, role: 'ADMIN' })
         .expect(201);
-      await request(app.getHttpServer())
-        .post(`/api/v1/groups/${child.id}/transfer-ownership`)
-        .set('Authorization', `Bearer ${child.token}`)
-        .send({ newOwnerUserId: root.userId })
-        .expect(201);
+      // Directly in the DB - root's owner already owns a Group, which the
+      // real transfer refuses (see forceGroupOwnerForFixture).
+      await forceGroupOwnerForFixture(app, child.id, root.userId);
 
       await attachGroupParent(root.token, child.id, root.id);
       const nestedSection = await createSection(root.token, child.id, {
@@ -1132,6 +1132,52 @@ describe('User Profile (e2e)', () => {
           .expect(404),
       );
       expect(repeat.statusCode).toBe(404);
+    });
+
+    it("makes the creator's new Group their formal Group immediately - no extra join step", async () => {
+      const group = await createGroup({ name: 'Owner Formal Group' });
+
+      const profile = await getOwnProfile(group.token);
+      expect(profile.formalGroup?.groupId).toBe(group.id);
+    });
+
+    it('refuses to let an OWNER end their formal membership (OWNER_MUST_STAY_IN_FORMAL_GROUP)', async () => {
+      const group = await createGroup({ name: 'Owner Cannot Leave' });
+
+      const error = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .delete('/api/v1/users/me/formal-group')
+          .set('Authorization', `Bearer ${group.token}`)
+          .expect(409),
+      );
+      expect((error as unknown as { code: string }).code).toBe(
+        'OWNER_MUST_STAY_IN_FORMAL_GROUP',
+      );
+      const profile = await getOwnProfile(group.token);
+      expect(profile.formalGroup?.groupId).toBe(group.id);
+    });
+
+    it('refuses to let an OWNER switch their formal Group to another Group', async () => {
+      const owned = await createGroup({ name: 'Owner Cannot Switch' });
+      const other = await createGroup({ name: 'Owner Switch Target' });
+      const otherSection = await createSection(other.token, other.id, {
+        name: 'Owner Switch Target Section',
+      });
+      await request(app.getHttpServer())
+        .post(`/api/v1/sections/${otherSection.id}/members`)
+        .set('Authorization', `Bearer ${other.token}`)
+        .send({ userId: owned.userId })
+        .expect(201);
+
+      const error = (await setFormalGroup(
+        owned.token,
+        other.id,
+        undefined,
+        409,
+      )) as HttpErrorResponse;
+      expect((error as unknown as { code: string }).code).toBe(
+        'OWNER_MUST_STAY_IN_FORMAL_GROUP',
+      );
     });
 
     it('does not end the formal Group affiliation when the user leaves their last qualifying section', async () => {

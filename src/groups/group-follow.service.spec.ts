@@ -97,6 +97,7 @@ describe('GroupFollowService', () => {
       };
       const em = {
         ...tx,
+        count: jest.fn().mockResolvedValue(0),
         removeAndFlush: jest.fn().mockResolvedValue(undefined),
         transactional: jest.fn((cb: (inner: typeof tx) => Promise<void>) =>
           cb(tx),
@@ -104,6 +105,27 @@ describe('GroupFollowService', () => {
       } as unknown as EntityManager;
       return { em, remove, persist, flush };
     }
+
+    it('refuses to remove or block the Group OWNER (CANNOT_REMOVE_GROUP_OWNER)', async () => {
+      const { em } = buildTxEm({
+        user: { id: 'owner' },
+        follow: null,
+        block: null,
+      });
+      (em as unknown as { count: jest.Mock }).count.mockResolvedValue(1);
+      const service = new GroupFollowService(em);
+
+      await expect(
+        service.blockFollowing('group-1', 'owner'),
+      ).rejects.toMatchObject({
+        response: { code: 'CANNOT_REMOVE_GROUP_OWNER' },
+      });
+      await expect(
+        service.removeFollower('group-1', 'owner', false),
+      ).rejects.toMatchObject({
+        response: { code: 'CANNOT_REMOVE_GROUP_OWNER' },
+      });
+    });
 
     it('blocking removes the current follow and records a block', async () => {
       const follow = { id: 'follow-1' };

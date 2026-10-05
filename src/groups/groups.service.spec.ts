@@ -12,6 +12,8 @@ import { GroupStatus } from './enums/group-status.enum';
 import { ImageAssetService } from '../storage/image-asset.service';
 import { ImageProcessingService } from '../storage/image-processing.service';
 import { R2StorageService } from '../storage/r2-storage.service';
+import { CustomUserRank } from '../graduation/entities/custom-user-rank.entity';
+import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignment.entity';
 import { AuditLogService } from './audit-log.service';
 import { CommunityListVisibility } from './enums/community-list-visibility.enum';
 import { GroupFollowService } from './group-follow.service';
@@ -139,7 +141,14 @@ function buildMockEm(routing: MockRouting = {}) {
 
   const find = jest.fn((entity: unknown) => {
     if (entity === RoleAssignment) {
-      return Promise.resolve(routing.roleAssignmentFindResults ?? []);
+      // userOwnsGroup/findOwnedLiveGroupIds read the live OWNER rows -
+      // `ownedGroupCount` fakes that many owned Groups.
+      return Promise.resolve(
+        routing.roleAssignmentFindResults ??
+          Array.from({ length: routing.ownedGroupCount ?? 0 }, (_, i) => ({
+            group: { id: `owned-${i}` },
+          })),
+      );
     }
     if (entity === Group) {
       return Promise.resolve(
@@ -272,6 +281,26 @@ describe('GroupsService', () => {
       expect(persistedAffiliation.endedOn).toBeNull();
 
       expect(persist).toHaveBeenCalledTimes(3);
+    });
+
+    it("never touches the creator's rank - an independent (custom) rank survives creating a Group", async () => {
+      const { em, findOne, find, persist } = buildMockEm();
+      const { service } = buildService(em);
+
+      await service.create(buildUser(), buildCreateInput());
+
+      const touched = [...findOne.mock.calls, ...find.mock.calls].map(
+        (call) => call[0],
+      );
+      expect(touched).not.toContain(CustomUserRank);
+      expect(touched).not.toContain(FormalRankAssignment);
+      expect(
+        persist.mock.calls.some(
+          ([entity]) =>
+            entity instanceof CustomUserRank ||
+            entity instanceof FormalRankAssignment,
+        ),
+      ).toBe(false);
     });
 
     it('rejects with 409 USER_ALREADY_HAS_FORMAL_GROUP when the user already has an active formal Group, and creates nothing', async () => {

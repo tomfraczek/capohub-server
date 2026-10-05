@@ -83,6 +83,12 @@ function buildService(setup: Setup) {
       if (entity === SectionMembership) {
         return Promise.resolve(setup.sectionMemberships ?? []);
       }
+      // userOwnsGroup's live OWNER rows - opt-in, like hasActiveFormalGroup.
+      if (entity === RoleAssignment) {
+        return Promise.resolve(
+          setup.ownsGroup ? [{ group: { id: 'owned-group' } }] : [],
+        );
+      }
       return Promise.resolve([]);
     }),
     // Backs canCreateGroup's hasActiveFormalGroup check - defaults to "no
@@ -90,10 +96,6 @@ function buildService(setup: Setup) {
     count: jest.fn((entity: unknown) => {
       if (entity === FormalGroupAffiliation) {
         return Promise.resolve(setup.hasActiveFormalGroup ? 1 : 0);
-      }
-      // userOwnsGroup's OWNER RoleAssignment count - same opt-in default.
-      if (entity === RoleAssignment) {
-        return Promise.resolve(setup.ownsGroup ? 1 : 0);
       }
       return Promise.resolve(0);
     }),

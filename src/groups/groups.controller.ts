@@ -45,6 +45,7 @@ import {
   SetHierarchyParentDto,
   setHierarchyParentSchema,
 } from './dto/set-hierarchy-parent.schema';
+import { OwnershipTransferCandidateDto } from './dto/ownership-transfer-candidate.dto';
 import { TransferOwnershipResponseDto } from './dto/transfer-ownership-response.dto';
 import {
   TransferOwnershipDto,
@@ -349,6 +350,21 @@ export class GroupsController {
     @CurrentUser() user: User,
   ): Promise<GroupResponseDto> {
     return this.groupsService.delete(id, user);
+  }
+
+  // Who the OWNER may hand the Group to - see
+  // RoleAssignmentsService.listGroupOwnershipTransferCandidates.
+  @Get(':id/ownership-transfer-candidates')
+  @RequireGroupPermission(GroupPermission.GROUP_OWNERSHIP_TRANSFER)
+  @RequireGroupKind(GroupKind.ROOT)
+  listOwnershipTransferCandidates(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<OwnershipTransferCandidateDto[]> {
+    return this.roleAssignmentsService.listGroupOwnershipTransferCandidates(
+      id,
+      user.id,
+    );
   }
 
   @Post(':id/transfer-ownership')

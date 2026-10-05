@@ -297,7 +297,7 @@
       "checks": [
         {
           "name": "academies_group_or_section_check",
-          "columnName": "group_id",
+          "columnName": "section_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))))",
           "expression": "((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))"
         }
@@ -7374,7 +7374,7 @@
         },
         {
           "name": "hierarchy_invitations_target_group_or_section_check",
-          "columnName": "target_group_id",
+          "columnName": "target_section_id",
           "definition": "CHECK ((((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))))",
           "expression": "((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))"
         }
@@ -11509,13 +11509,13 @@
       "checks": [
         {
           "name": "role_assignments_group_or_section_check",
-          "columnName": "section_id",
+          "columnName": "group_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))))",
           "expression": "((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))"
         },
         {
           "name": "role_assignments_role_matches_target_check",
-          "columnName": "role",
+          "columnName": "section_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text))) OR ((section_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text) OR (role = 'INSTRUCTOR'::text) OR (role = 'ASSISTANT'::text) OR (role = 'MEMBER'::text)))))",
           "expression": "((group_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text))) OR ((section_id IS NOT NULL) AND ((role = 'OWNER'::text) OR (role = 'ADMIN'::text) OR (role = 'INSTRUCTOR'::text) OR (role = 'ASSISTANT'::text) OR (role = 'MEMBER'::text)))"
         }

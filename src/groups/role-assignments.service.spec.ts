@@ -21,6 +21,7 @@ import { AuditLogService } from './audit-log.service';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
 import { SectionMembership } from './entities/section-membership.entity';
+import { FormalGroupAffiliation } from './entities/formal-group-affiliation.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
 import { GroupRole } from './enums/group-role.enum';
 import { SectionMembershipStatus } from './enums/section-membership-status.enum';
@@ -79,6 +80,7 @@ interface MockRouting {
   roleAssignmentFindOneResults?: (RoleAssignment | null)[];
   userResult?: User | null;
   suspensionResult?: null;
+  affiliationResult?: FormalGroupAffiliation | null;
 }
 
 function buildMockEm(routing: MockRouting = {}) {
@@ -96,6 +98,9 @@ function buildMockEm(routing: MockRouting = {}) {
       return Promise.resolve(raFindOneQueue.shift() ?? null);
     }
     if (entity === User) return Promise.resolve(routing.userResult ?? null);
+    if (entity === FormalGroupAffiliation) {
+      return Promise.resolve(routing.affiliationResult ?? null);
+    }
     return Promise.resolve(null);
   });
 
@@ -465,6 +470,79 @@ describe('RoleAssignmentsService', () => {
       expect(insertedAssignment.group).toBe(group);
       expect(result.previousOwner.revokedAt).not.toBeNull();
       expect(result.newOwner.revokedAt).toBeNull();
+    });
+
+    function eligibleGroupTransfer(routing: Partial<MockRouting> = {}) {
+      const group = buildGroup();
+      const newOwnerUser = buildUser({ id: 'user-2' });
+      const { em, persist } = buildMockEm({
+        userResult: newOwnerUser,
+        roleAssignmentFindOneResults: [
+          buildRoleAssignment({
+            role: GroupRole.ADMIN,
+            group,
+            user: newOwnerUser,
+          }),
+          buildRoleAssignment({
+            id: 'ra-owner',
+            role: GroupRole.OWNER,
+            group,
+            user: buildUser({ id: 'user-1' }),
+          }),
+        ],
+        ...routing,
+      });
+      const { service } = buildService(em, { communityResult: group });
+      return { service, persist, group, newOwnerUser };
+    }
+
+    it('Group: makes the new owner a formal member of the Group in the same transaction (OWNER -> formal membership)', async () => {
+      const { service, persist, group, newOwnerUser } = eligibleGroupTransfer();
+
+      await service.transferOwnership(
+        'group-1',
+        'user-1',
+        'user-2',
+        buildUser(),
+      );
+
+      const affiliation = persist.mock.calls
+        .map((call) => call[0])
+        .find(
+          (entity) => entity instanceof FormalGroupAffiliation,
+        ) as FormalGroupAffiliation;
+      expect(affiliation.user).toBe(newOwnerUser);
+      expect(affiliation.group).toBe(group);
+    });
+
+    it('Group: rejects TARGET_HAS_OTHER_FORMAL_GROUP - a formal member of another Group must leave it first', async () => {
+      const other = Object.assign(new FormalGroupAffiliation(), {
+        group: buildGroup({ id: 'other-group' }),
+      });
+      const { service } = eligibleGroupTransfer({ affiliationResult: other });
+
+      await expect(
+        service.transferOwnership('group-1', 'user-1', 'user-2', buildUser()),
+      ).rejects.toMatchObject({
+        response: { code: 'TARGET_HAS_OTHER_FORMAL_GROUP' },
+      });
+    });
+
+    it('Group: rejects TARGET_ALREADY_OWNS_GROUP - one owned Group per user', async () => {
+      const { service } = eligibleGroupTransfer({
+        roleAssignmentFindResults: [
+          buildRoleAssignment({
+            role: GroupRole.OWNER,
+            group: buildGroup({ id: 'own-group' }),
+          }),
+        ],
+      });
+
+      await expect(
+        service.transferOwnership('group-1', 'user-1', 'user-2', buildUser()),
+      ).rejects.toMatchObject({
+        response: { code: 'TARGET_ALREADY_OWNS_GROUP' },
+      });
     });
   });
 });

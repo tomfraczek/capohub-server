@@ -23,7 +23,10 @@ import { AuthContext } from '../src/auth/types/auth-context.type';
 import { AppConfigService } from '../src/config/app.config';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { closeE2eApp } from './close-e2e-app.helper';
-import { createFreshGroupOwner } from './fresh-group-owner.helper';
+import {
+  createFreshGroupOwner,
+  forceGroupOwnerForFixture,
+} from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { User } from '../src/users/entities/user.entity';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
@@ -269,8 +272,9 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
   //
   // Fix: a throwaway fixture user creates the Group for real (their own,
   // genuine FormalGroupAffiliation - never TOKEN_A's), grants TOKEN_A
-  // ADMIN, then transfers OWNERship to TOKEN_A (transferOwnership never
-  // touches FormalGroupAffiliation - see role-assignments.service.ts) -
+  // ADMIN, then makes TOKEN_A the OWNER directly in the DB
+  // (forceGroupOwnerForFixture - the API transfer refuses a target that
+  // already owns a Group) -
   // TOKEN_A ends up the real OWNER (and thus HIERARCHY_MANAGE holder) of
   // as many Groups as a test needs, without ever spending its own
   // one-per-user formal-group slot on any of them. `founderUser` stays the
@@ -295,11 +299,10 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
       .send({ userId: actorAUserId, role: 'ADMIN' })
       .expect(201);
 
-    await request(app.getHttpServer())
-      .post(`/api/v1/groups/${fresh.group.id}/transfer-ownership`)
-      .set('Authorization', `Bearer ${fresh.token}`)
-      .send({ newOwnerUserId: actorAUserId })
-      .expect(201);
+    // Not POST .../transfer-ownership: TOKEN_A owning several Groups is
+    // exactly what the real transfer now refuses (TARGET_ALREADY_OWNS_GROUP)
+    // - see forceGroupOwnerForFixture.
+    await forceGroupOwnerForFixture(app, fresh.group.id, actorAUserId!);
 
     return fresh.group;
   }

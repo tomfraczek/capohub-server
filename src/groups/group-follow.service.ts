@@ -1,10 +1,13 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { GroupFollowBlock } from './entities/group-follow-block.entity';
+import { RoleAssignment } from './entities/role-assignment.entity';
+import { GroupRole } from './enums/group-role.enum';
 import { GroupFollow } from './entities/group-follow.entity';
 import { Group } from './entities/group.entity';
 import { User } from '../users/entities/user.entity';
@@ -72,6 +75,7 @@ export class GroupFollowService {
     userId: string,
     block: boolean,
   ): Promise<void> {
+    await this.assertNotOwner(groupId, userId);
     if (block) {
       await this.blockFollowing(groupId, userId);
       return;
@@ -85,6 +89,7 @@ export class GroupFollowService {
    * already-blocked user is a success.
    */
   async blockFollowing(groupId: string, userId: string): Promise<void> {
+    await this.assertNotOwner(groupId, userId);
     await this.em.transactional(async (em) => {
       const user = await em.findOne(User, { id: userId });
       if (!user) {
@@ -112,6 +117,25 @@ export class GroupFollowService {
       }
       await em.flush();
     });
+  }
+
+  // The Group's OWNER is its formal member by definition (see
+  // owner-formal-group.ts) - never something to remove or block from the
+  // Group's own audience.
+  private async assertNotOwner(groupId: string, userId: string): Promise<void> {
+    const isOwner =
+      (await this.em.count(RoleAssignment, {
+        user: userId,
+        group: groupId,
+        role: GroupRole.OWNER,
+        revokedAt: null,
+      })) > 0;
+    if (isOwner) {
+      throw new ConflictException({
+        code: 'CANNOT_REMOVE_GROUP_OWNER',
+        message: 'The group owner cannot be removed or blocked from the group',
+      });
+    }
   }
 
   /** DELETE /groups/:id/follow-blocks/:userId - idempotent unblock. */

@@ -10,12 +10,14 @@ import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
 import { CreateRoleAssignmentInput } from './dto/create-role-assignment.schema';
 import { RoleAssignmentResponseDto } from './dto/role-assignment-response.dto';
+import { OwnershipTransferCandidateDto } from './dto/ownership-transfer-candidate.dto';
 import { TransferOwnershipResponseDto } from './dto/transfer-ownership-response.dto';
 import { AuditAction } from './enums/audit-action.enum';
 import { AuditTargetType } from './enums/audit-target-type.enum';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
 import { SectionMembership } from './entities/section-membership.entity';
+import { FormalGroupAffiliation } from './entities/formal-group-affiliation.entity';
 import { MembershipSuspension } from './entities/membership-suspension.entity';
 import {
   ROLE_ASSIGNMENTS_UNIQUE_INDEX,
@@ -30,6 +32,7 @@ import {
   GroupHierarchyService,
 } from './group-hierarchy.service';
 import { toRoleAssignmentResponseDto } from './mappers/group.mapper';
+import { getOwnershipTransferBlocker } from './owner-formal-group';
 
 export interface ResolvedGroupAuthorization {
   community: Community;
@@ -783,6 +786,40 @@ export class RoleAssignmentsService {
             message: 'newOwnerUserId must already be an ADMIN of this group',
           });
         }
+
+        // OWNER -> formal membership invariant (see owner-formal-group.ts):
+        // the new owner becomes a formal member of this Group in the same
+        // transaction - unless that would break "one formal Group per
+        // user" / "one owned Group per user", which is refused instead.
+        const blocker = await getOwnershipTransferBlocker(
+          em,
+          newOwnerUserId,
+          community.id,
+        );
+        if (blocker === 'OWNS_ANOTHER_GROUP') {
+          throw new ConflictException({
+            code: 'TARGET_ALREADY_OWNS_GROUP',
+            message: 'newOwnerUserId already owns another group',
+          });
+        }
+        if (blocker === 'OTHER_FORMAL_GROUP') {
+          throw new ConflictException({
+            code: 'TARGET_HAS_OTHER_FORMAL_GROUP',
+            message:
+              'newOwnerUserId is a formal member of another group - they must leave it first',
+          });
+        }
+        const targetAffiliation = await em.findOne(FormalGroupAffiliation, {
+          user: newOwnerUserId,
+          endedOn: null,
+        });
+        if (!targetAffiliation) {
+          const affiliation = new FormalGroupAffiliation();
+          affiliation.user = newOwnerUser;
+          affiliation.group = community;
+          affiliation.startedOn = null;
+          em.persist(affiliation);
+        }
       }
 
       const previousOwnerAssignment = await em.findOne(
@@ -834,6 +871,42 @@ export class RoleAssignmentsService {
         newOwner: toRoleAssignmentResponseDto(newOwnerAssignment),
       };
     });
+  }
+
+  /**
+   * GET /groups/:id/ownership-transfer-candidates - every active ADMIN of
+   * the Group (the only valid transfer targets, see transferOwnership),
+   * each with whether ownership may go to them and, if not, why - so the
+   * app can grey out a blocked admin and explain it instead of failing on
+   * submit. Uses the exact same getOwnershipTransferBlocker the transfer
+   * itself enforces. Excludes the current OWNER.
+   */
+  async listGroupOwnershipTransferCandidates(
+    groupId: string,
+    currentOwnerUserId: string,
+  ): Promise<OwnershipTransferCandidateDto[]> {
+    const admins = await this.em.find(
+      RoleAssignment,
+      { group: groupId, role: GroupRole.ADMIN, revokedAt: null },
+      { populate: ['user'] },
+    );
+    const candidates: OwnershipTransferCandidateDto[] = [];
+    // Sequential, not Promise.all - concurrent queries on the same
+    // EntityManager corrupt the underlying pg connection.
+    for (const admin of admins) {
+      if (admin.user.id === currentOwnerUserId) continue;
+      const blocker = await getOwnershipTransferBlocker(
+        this.em,
+        admin.user.id,
+        groupId,
+      );
+      candidates.push({
+        user: { id: admin.user.id, displayName: admin.user.displayName },
+        eligible: blocker === null,
+        blocker,
+      });
+    }
+    return candidates;
   }
 
   /**

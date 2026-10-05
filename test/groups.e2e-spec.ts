@@ -542,6 +542,39 @@ describe('Groups (e2e)', () => {
   });
 
   describe('transferOwnership', () => {
+    it('refuses to transfer to an ADMIN who already owns a Group, and the candidates list explains why', async () => {
+      const created = await createGroup({ name: 'Transfer Blocked Group' });
+      const otherOwner = await createGroup({ name: 'Already Owned Group' });
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${created.id}/role-assignments`)
+        .set('Authorization', `Bearer ${created.token}`)
+        .send({ userId: otherOwner.userId, role: GroupRole.ADMIN })
+        .expect(201);
+
+      const candidates = await bodyOf<
+        { user: { id: string }; eligible: boolean; blocker: string | null }[]
+      >(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${created.id}/ownership-transfer-candidates`)
+          .set('Authorization', `Bearer ${created.token}`)
+          .expect(200),
+      );
+      expect(
+        candidates.find((c) => c.user.id === otherOwner.userId),
+      ).toMatchObject({ eligible: false, blocker: 'OWNS_ANOTHER_GROUP' });
+
+      const error = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${created.id}/transfer-ownership`)
+          .set('Authorization', `Bearer ${created.token}`)
+          .send({ newOwnerUserId: otherOwner.userId })
+          .expect(409),
+      );
+      expect((error as unknown as { code: string }).code).toBe(
+        'TARGET_ALREADY_OWNS_GROUP',
+      );
+    });
+
     it('transfers ownership atomically: the target must already hold ADMIN, and becomes the sole OWNER', async () => {
       const created = await createGroup();
       await grantGroupRole(created.token, created.id, SECOND_TOKEN);
@@ -572,6 +605,17 @@ describe('Groups (e2e)', () => {
       expect(activeOwners[0].user.id).toBe(
         localUserIdByToken.get(SECOND_TOKEN),
       );
+      // OWNER -> formal membership: the new owner's formal Group is now
+      // this one (they had none before).
+      const newOwnerAffiliation = await app
+        .get(EntityManager)
+        .fork()
+        .findOne(FormalGroupAffiliation, {
+          user: localUserIdByToken.get(SECOND_TOKEN),
+          endedOn: null,
+        });
+      expect(newOwnerAffiliation?.group.id).toBe(created.id);
+
       // SECOND_TOKEN's original ADMIN grant is untouched by the transfer.
       expect(
         roleAssignments.some(

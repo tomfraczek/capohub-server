@@ -16,6 +16,8 @@ import {
 } from '../groups/entities/formal-group-affiliation.entity';
 import { SectionMembership } from '../groups/entities/section-membership.entity';
 import { GroupHierarchyService } from '../groups/group-hierarchy.service';
+import { assertNotLeavingOwnedGroup } from '../groups/owner-formal-group';
+import { findOwnedLiveGroupIds } from '../groups/user-owns-group';
 import { GroupRole } from '../groups/enums/group-role.enum';
 import { GroupStatus } from '../groups/enums/group-status.enum';
 import { SectionMembershipStatus } from '../groups/enums/section-membership-status.enum';
@@ -313,6 +315,12 @@ export class UserProfileService {
         });
       }
 
+      // The Group's own OWNER is its formal member by definition (see
+      // owner-formal-group.ts) - no Section membership required.
+      const ownsThisGroup = (await findOwnedLiveGroupIds(em, user.id)).includes(
+        groupId,
+      );
+
       const descendantSections =
         await this.groupHierarchyService.getDescendantSections(groupId, em);
       const activeSectionIds = descendantSections
@@ -327,7 +335,7 @@ export class UserProfileService {
           status: { $in: ACTIVE_MEMBERSHIP_STATUSES },
         })) > 0;
 
-      if (!hasQualifyingMembership) {
+      if (!hasQualifyingMembership && !ownsThisGroup) {
         throw new ConflictException({
           code: 'FORMAL_GROUP_REQUIRES_ACTIVE_SECTION_MEMBERSHIP',
           message:
@@ -339,6 +347,13 @@ export class UserProfileService {
         FormalGroupAffiliation,
         { user: user.id, endedOn: null },
         { populate: ['group'] },
+      );
+
+      await assertNotLeavingOwnedGroup(
+        em,
+        user.id,
+        current?.group.id ?? null,
+        groupId,
       );
 
       if (current && current.group.id === groupId) {
@@ -401,6 +416,9 @@ export class UserProfileService {
         message: 'No active formal group affiliation to end',
       });
     }
+    // An OWNER can't leave their own Group's formal membership - ownership
+    // has to be transferred first (OWNER_MUST_STAY_IN_FORMAL_GROUP).
+    await assertNotLeavingOwnedGroup(this.em, user.id, current.group.id, null);
     current.endedOn = startOfTodayUtc();
     await this.em.flush();
   }

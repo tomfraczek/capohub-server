@@ -224,6 +224,31 @@ describe('GroupAudienceService', () => {
     expect(result.items[2].memberships).toEqual([]);
   });
 
+  it("always lists the OWNER - the Group's formal member - even with no Section membership or follow", async () => {
+    const { service } = buildService({
+      [GroupFollow.name]: [{ user: { id: 'f1' } }],
+      [RoleAssignment.name]: [{ user: { id: 'owner' } }],
+      [User.name]: [
+        buildUser({ id: 'owner', publicCode: 'A' }),
+        buildUser({ id: 'f1', publicCode: 'B' }),
+      ],
+    });
+
+    const result = await service.list('group-1', { limit: 20, offset: 0 });
+
+    expect(
+      result.items.map((item) => [
+        item.user.id,
+        item.isOwner,
+        item.isMemberThroughSection,
+        item.isFollowing,
+      ]),
+    ).toEqual([
+      ['owner', true, false, false],
+      ['f1', false, false, true],
+    ]);
+  });
+
   it('flags the Group OWNER with isOwner, alongside their Section memberships', async () => {
     const { service, find } = buildService({
       [SectionMembership.name]: [
