@@ -17,6 +17,7 @@ import {
   NearbyGroupCardDto,
   NearbySectionCardDto,
 } from './dto/community-overview-response.dto';
+import { FormalGroupAffiliation } from './entities/formal-group-affiliation.entity';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
 import { SectionMembership } from './entities/section-membership.entity';
@@ -39,9 +40,21 @@ export interface NearbyPageParams extends PageParams {
   radiusKm?: number;
 }
 
-interface SectionRelationEntry {
+interface GroupRelationEntry {
+  isFormalGroup: boolean;
   isMemberThroughSection: boolean;
   isFollowing: boolean;
+}
+
+// myGroups' display tier - lower sorts first: the caller's formal Group,
+// then every other Group they belong to through a Section, then Groups
+// they only follow. A Group matching several relations takes its best
+// (lowest) tier.
+function myGroupTier(relation: GroupRelationEntry): number {
+  if (relation.isFormalGroup) {
+    return 0;
+  }
+  return relation.isMemberThroughSection ? 1 : 2;
 }
 
 interface SectionDistanceCandidate {
@@ -150,9 +163,19 @@ export class CommunityOverviewService {
   }
 
   /**
-   * myGroups - every Group the caller is related to through a direct
-   * Section membership and/or an explicit GroupFollow, deduplicated to one
-   * row per Group id (module: "Grupa występuje tylko raz").
+   * myGroups - every Group the caller is related to through their active
+   * formal affiliation, a direct Section membership and/or an explicit
+   * GroupFollow, deduplicated to one row per Group id (module: "Grupa
+   * występuje tylko raz"). Ordered formal Group first, then the remaining
+   * member-through-Section Groups, then follow-only Groups - alphabetical
+   * within each tier - and sorted *before* slicing the page, so Home's
+   * capped carousel and GET /community/groups/mine always agree on order.
+   *
+   * OWNER/ADMIN are deliberately not a reason to list a Group here: an
+   * OWNER's own Group is always their formal Group (GroupsService.create
+   * creates both atomically and refuses a second active affiliation), and
+   * an ADMIN is only ever granted within a Group the user already belongs
+   * to.
    */
   async getMyGroups(
     userId: string,
@@ -170,7 +193,11 @@ export class CommunityOverviewService {
       status: { $nin: [GroupStatus.ARCHIVED, GroupStatus.DELETED] },
     });
     groups.sort(
-      (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
+      (a, b) =>
+        myGroupTier(relationByGroupId.get(a.id)!) -
+          myGroupTier(relationByGroupId.get(b.id)!) ||
+        a.name.localeCompare(b.name) ||
+        a.id.localeCompare(b.id),
     );
     const total = groups.length;
     const pageItems = groups.slice(page.offset, page.offset + page.limit);
@@ -550,15 +577,25 @@ export class CommunityOverviewService {
   }
 
   /**
-   * Every Group id the caller is related to (member-through-Section and/or
-   * follower), each mapped to its own independent relation flags - the
+   * Every Group id the caller is related to (formal affiliation, member-
+   * through-Section and/or follower), each mapped to its own independent
+   * relation flags - the
    * single shared resolution both getMyGroups() and getNearbyGroups()
    * (for its "never already in myGroups" exclusion) build on, so the two
    * can never disagree about what "mine" means.
    */
   private async resolveMyGroupRelations(userId: string): Promise<{
-    relationByGroupId: Map<string, SectionRelationEntry>;
+    relationByGroupId: Map<string, GroupRelationEntry>;
   }> {
+    // At most one active row per user (FORMAL_GROUP_AFFILIATIONS_ACTIVE_
+    // UNIQUE_INDEX).
+    const formalAffiliation = await this.em.findOne(
+      FormalGroupAffiliation,
+      { user: userId, endedOn: null },
+      { fields: ['group'] },
+    );
+    const formalGroupId = formalAffiliation?.group.id ?? null;
+
     const mySectionIds = await this.listMySectionIds(userId);
     const memberGroupIds = new Set<string>();
     if (mySectionIds.length > 0) {
@@ -578,20 +615,18 @@ export class CommunityOverviewService {
       await this.groupFollowService.listFollowedGroupIds(userId),
     );
 
-    const relationByGroupId = new Map<string, SectionRelationEntry>();
-    for (const groupId of memberGroupIds) {
+    const relationByGroupId = new Map<string, GroupRelationEntry>();
+    const relatedGroupIds = new Set<string>([
+      ...(formalGroupId ? [formalGroupId] : []),
+      ...memberGroupIds,
+      ...followedGroupIds,
+    ]);
+    for (const groupId of relatedGroupIds) {
       relationByGroupId.set(groupId, {
-        isMemberThroughSection: true,
+        isFormalGroup: groupId === formalGroupId,
+        isMemberThroughSection: memberGroupIds.has(groupId),
         isFollowing: followedGroupIds.has(groupId),
       });
-    }
-    for (const groupId of followedGroupIds) {
-      if (!relationByGroupId.has(groupId)) {
-        relationByGroupId.set(groupId, {
-          isMemberThroughSection: false,
-          isFollowing: true,
-        });
-      }
     }
 
     return { relationByGroupId };

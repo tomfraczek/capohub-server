@@ -723,6 +723,7 @@ describe('Community Home (e2e)', () => {
       );
       const groupCard = home.myGroups.items.find((g) => g.id === org.id);
       expect(groupCard).toMatchObject({
+        isFormalGroup: false,
         isMemberThroughSection: true,
         isFollowing: false,
       });
@@ -751,9 +752,97 @@ describe('Community Home (e2e)', () => {
         1,
       );
       expect(home.myGroups.items.find((g) => g.id === org.id)).toMatchObject({
+        isFormalGroup: false,
         isMemberThroughSection: true,
         isFollowing: true,
       });
+    });
+
+    it('a freshly created Group (no Sections, no follow) is its OWNER formal Group and is listed first, then member-through-Section, then follow-only - same order on Home and GET /community/groups/mine', async () => {
+      // Named so plain alphabetical order would put the formal Group last.
+      const owned = await createRootGroup({ name: 'Zz Formal Owned Org' });
+      const memberOrg = await createRootGroup({ name: 'Bb Member Org' });
+      const memberSection = await createSection(memberOrg.token, memberOrg.id, {
+        name: 'Bb Member Section',
+      });
+      await request(app.getHttpServer())
+        .post(`/api/v1/sections/${memberSection.id}/members`)
+        .set('Authorization', `Bearer ${memberOrg.token}`)
+        .send({ userId: owned.userId })
+        .expect(201);
+      const followOrg = await createRootGroup({ name: 'Aa Follow Org' });
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${followOrg.id}/follow`)
+        .set('Authorization', `Bearer ${owned.token}`)
+        .expect(201);
+
+      const home = await getHome(owned.token);
+
+      expect(home.myGroups.items.map((g) => g.id)).toEqual([
+        owned.id,
+        memberOrg.id,
+        followOrg.id,
+      ]);
+      expect(home.myGroups.items[0]).toMatchObject({
+        isFormalGroup: true,
+        isMemberThroughSection: false,
+        isFollowing: false,
+      });
+      expect(home.myGroups.items[1]).toMatchObject({
+        isFormalGroup: false,
+        isMemberThroughSection: true,
+        isFollowing: false,
+      });
+      expect(home.myGroups.items[2]).toMatchObject({
+        isFormalGroup: false,
+        isMemberThroughSection: false,
+        isFollowing: true,
+      });
+
+      const groupsPage = await bodyOf<PaginatedResponse<CommunityGroupCardDto>>(
+        request(app.getHttpServer())
+          .get('/api/v1/community/groups/mine')
+          .set('Authorization', `Bearer ${owned.token}`)
+          .expect(200),
+      );
+      expect(groupsPage.data.map((g) => g.id)).toEqual([
+        owned.id,
+        memberOrg.id,
+        followOrg.id,
+      ]);
+    });
+
+    it('a formal Group the caller also belongs to through a Section AND follows appears exactly once, first, with every flag true', async () => {
+      const owned = await createRootGroup({ name: 'Zz Formal Both Org' });
+      // SectionsService.create makes its creator an active member.
+      await createSection(owned.token, owned.id, {
+        name: 'Zz Formal Both Section',
+      });
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${owned.id}/follow`)
+        .set('Authorization', `Bearer ${owned.token}`)
+        .expect(201);
+      const followOrg = await createRootGroup({
+        name: 'Aa Formal Both Follow',
+      });
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${followOrg.id}/follow`)
+        .set('Authorization', `Bearer ${owned.token}`)
+        .expect(201);
+
+      const home = await getHome(owned.token);
+
+      expect(home.myGroups.items.filter((g) => g.id === owned.id)).toHaveLength(
+        1,
+      );
+      expect(home.myGroups.total).toBe(2);
+      expect(home.myGroups.items[0]).toMatchObject({
+        id: owned.id,
+        isFormalGroup: true,
+        isMemberThroughSection: true,
+        isFollowing: true,
+      });
+      expect(home.myGroups.items[1].id).toBe(followOrg.id);
     });
   });
 
@@ -783,8 +872,12 @@ describe('Community Home (e2e)', () => {
 
       const homeWhileFollowing = await getHome(tokenFor('ch-follower'));
       expect(
-        homeWhileFollowing.myGroups.items.some((g) => g.id === org.id),
-      ).toBe(true);
+        homeWhileFollowing.myGroups.items.find((g) => g.id === org.id),
+      ).toMatchObject({
+        isFormalGroup: false,
+        isMemberThroughSection: false,
+        isFollowing: true,
+      });
 
       const unfollow1 = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())

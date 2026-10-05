@@ -98,7 +98,11 @@ function buildEm(routing: Routing) {
     throw new Error(`Unexpected find entity: ${String(entity)}`);
   });
 
-  return { find } as unknown as EntityManager;
+  // resolveMyGroupRelations' active FormalGroupAffiliation lookup - this
+  // suite never exercises a formal Group.
+  const findOne = jest.fn(() => Promise.resolve(null));
+
+  return { find, findOne } as unknown as EntityManager;
 }
 
 function buildService(routing: Routing) {

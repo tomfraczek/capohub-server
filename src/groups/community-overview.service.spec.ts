@@ -17,9 +17,20 @@
  *  9. nearbyGroups uses each Group's *nearest* qualifying Section
  * 10. no discovery location configured -> nearbySections/nearbyGroups are
  *     empty, but mySections/myGroups still work normally
+ * 11. the caller's formal Group is listed first, ahead of alphabetically
+ *     earlier member/follow Groups
+ * 12. a formal Group the caller also OWNs (no Section membership, no
+ *     follow) is still listed - via the affiliation, never the Role
+ * 13. a formal Group the caller also belongs to through a Section and
+ *     follows -> exactly one row, every flag true, still first
+ * 14. ordering: formal, then member-through-Section, then follow-only,
+ *     alphabetical within each tier - before pagination, so every page
+ *     slices the same order
+ * 15. nearbyGroups also excludes the caller's formal Group
  */
 
 import type { EntityManager } from '@mikro-orm/postgresql';
+import { FormalGroupAffiliation } from './entities/formal-group-affiliation.entity';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
 import { SectionMembership } from './entities/section-membership.entity';
@@ -86,6 +97,8 @@ interface Routing {
   nearbyCandidates?: Section[];
   groups?: Group[];
   followedGroupIds?: string[];
+  // The caller's active FormalGroupAffiliation's Group id, if any.
+  formalGroupId?: string | null;
 }
 
 function buildEm(routing: Routing) {
@@ -112,7 +125,16 @@ function buildEm(routing: Routing) {
     throw new Error(`Unexpected findAndCount entity: ${String(entity)}`);
   });
 
-  return { find, findAndCount } as unknown as EntityManager;
+  const findOne = jest.fn((entity: unknown) => {
+    if (entity === FormalGroupAffiliation) {
+      return Promise.resolve(
+        routing.formalGroupId ? { group: { id: routing.formalGroupId } } : null,
+      );
+    }
+    throw new Error(`Unexpected findOne entity: ${String(entity)}`);
+  });
+
+  return { find, findAndCount, findOne } as unknown as EntityManager;
 }
 
 function buildService(routing: Routing) {
@@ -162,6 +184,7 @@ describe('CommunityOverviewService', () => {
     expect(myGroups.items).toEqual([
       expect.objectContaining({
         id: 'group-1',
+        isFormalGroup: false,
         isMemberThroughSection: true,
         isFollowing: false,
       }),
@@ -221,6 +244,7 @@ describe('CommunityOverviewService', () => {
     for (const item of myGroups.items) {
       expect(item.isFollowing).toBe(true);
       expect(item.isMemberThroughSection).toBe(false);
+      expect(item.isFormalGroup).toBe(false);
     }
   });
 
@@ -370,5 +394,172 @@ describe('CommunityOverviewService', () => {
 
     const myGroups = await service.getMyGroups('user-1', PAGE);
     expect(myGroups.total).toBe(1);
+  });
+
+  it('11. the caller formal Group is listed first, ahead of alphabetically earlier member/follow Groups', async () => {
+    const formal = buildGroup({ id: 'group-formal', name: 'Zumbi' });
+    const member = buildGroup({ id: 'group-member', name: 'Abadá' });
+    const followed = buildGroup({ id: 'group-followed', name: 'Axé' });
+    const memberSection = buildSection({
+      id: 'section-member',
+      parentGroup: member,
+    });
+    const service = buildService({
+      memberships: [buildMembership('section-member')],
+      sectionsByIds: [memberSection],
+      groups: [followed, member, formal],
+      followedGroupIds: ['group-followed'],
+      formalGroupId: 'group-formal',
+    });
+
+    const myGroups = await service.getMyGroups('user-1', PAGE);
+
+    expect(myGroups.items[0]).toMatchObject({
+      id: 'group-formal',
+      isFormalGroup: true,
+      isMemberThroughSection: false,
+      isFollowing: false,
+    });
+    expect(myGroups.items.map((g) => g.id)).toEqual([
+      'group-formal',
+      'group-member',
+      'group-followed',
+    ]);
+  });
+
+  it('12. a formal Group the caller also OWNs, with no Section membership or follow, is listed exactly once, first - via the affiliation, not the Role', async () => {
+    // GroupsService.create makes the founder's OWNER RoleAssignment and
+    // FormalGroupAffiliation together - the affiliation alone is what
+    // lists it here, so a freshly created Group with no Sections shows up.
+    const owned = buildGroup({ id: 'group-owned', name: 'Grupa capoeira' });
+    const other = buildGroup({ id: 'group-other', name: 'A Magia' });
+    const otherSection = buildSection({
+      id: 'section-other',
+      parentGroup: other,
+    });
+    const service = buildService({
+      memberships: [buildMembership('section-other')],
+      sectionsByIds: [otherSection],
+      groups: [other, owned],
+      followedGroupIds: [],
+      formalGroupId: 'group-owned',
+    });
+
+    const myGroups = await service.getMyGroups('user-1', PAGE);
+
+    expect(myGroups.total).toBe(2);
+    expect(myGroups.items.map((g) => g.id)).toEqual([
+      'group-owned',
+      'group-other',
+    ]);
+    expect(myGroups.items[0].isFormalGroup).toBe(true);
+  });
+
+  it('13. a formal Group the caller also belongs to through a Section AND follows: exactly one row, every flag true, still first', async () => {
+    const formal = buildGroup({ id: 'group-formal', name: 'Zumbi' });
+    const other = buildGroup({ id: 'group-other', name: 'Abadá' });
+    const formalSectionA = buildSection({
+      id: 'section-formal-a',
+      parentGroup: formal,
+    });
+    const formalSectionB = buildSection({
+      id: 'section-formal-b',
+      parentGroup: formal,
+    });
+    const service = buildService({
+      memberships: [
+        buildMembership('section-formal-a'),
+        buildMembership('section-formal-b'),
+      ],
+      sectionsByIds: [formalSectionA, formalSectionB],
+      groups: [other, formal],
+      followedGroupIds: ['group-formal', 'group-other'],
+      formalGroupId: 'group-formal',
+    });
+
+    const myGroups = await service.getMyGroups('user-1', PAGE);
+
+    expect(myGroups.total).toBe(2);
+    expect(myGroups.items.filter((g) => g.id === 'group-formal')).toHaveLength(
+      1,
+    );
+    expect(myGroups.items[0]).toMatchObject({
+      id: 'group-formal',
+      isFormalGroup: true,
+      isMemberThroughSection: true,
+      isFollowing: true,
+    });
+  });
+
+  it('14. ordering: formal, then member-through-Section, then follow-only, alphabetical within each tier - sorted before pagination', async () => {
+    const formal = buildGroup({ id: 'g-formal', name: 'Zumbi' });
+    const memberB = buildGroup({ id: 'g-member-b', name: 'Muzenza' });
+    const memberA = buildGroup({ id: 'g-member-a', name: 'Cordão' });
+    // Member AND follower - still the membership tier, never follow-only.
+    const memberFollowed = buildGroup({ id: 'g-member-f', name: 'Ginga' });
+    const followB = buildGroup({ id: 'g-follow-b', name: 'Senzala' });
+    const followA = buildGroup({ id: 'g-follow-a', name: 'Abadá' });
+    const sections = [memberA, memberB, memberFollowed].map((group) =>
+      buildSection({ id: `section-${group.id}`, parentGroup: group }),
+    );
+    const routing: Routing = {
+      memberships: sections.map((section) => buildMembership(section.id)),
+      sectionsByIds: sections,
+      groups: [followA, followB, memberFollowed, memberA, memberB, formal],
+      followedGroupIds: ['g-follow-b', 'g-follow-a', 'g-member-f'],
+      formalGroupId: 'g-formal',
+    };
+    const expectedOrder = [
+      'g-formal',
+      'g-member-a',
+      'g-member-f',
+      'g-member-b',
+      'g-follow-a',
+      'g-follow-b',
+    ];
+
+    const all = await buildService(routing).getMyGroups('user-1', PAGE);
+    expect(all.items.map((g) => g.id)).toEqual(expectedOrder);
+
+    const service = buildService(routing);
+    const page1 = await service.getMyGroups('user-1', { limit: 4, offset: 0 });
+    const page2 = await service.getMyGroups('user-1', { limit: 4, offset: 4 });
+    expect(page1).toMatchObject({ total: 6, hasMore: true });
+    expect(page2).toMatchObject({ total: 6, hasMore: false });
+    expect([...page1.items, ...page2.items].map((g) => g.id)).toEqual(
+      expectedOrder,
+    );
+  });
+
+  it('15. nearbyGroups excludes the caller formal Group, even with no Section membership or follow', async () => {
+    const formal = buildGroup({ id: 'group-formal' });
+    const formalSection = buildSection({
+      id: 'section-formal',
+      parentGroup: formal,
+      latitude: 52.4064,
+      longitude: 16.9252,
+    });
+    const otherGroup = buildGroup({ id: 'group-other' });
+    const otherSection = buildSection({
+      id: 'section-other',
+      parentGroup: otherGroup,
+      latitude: 52.41,
+      longitude: 16.93,
+    });
+    const location = buildLocation();
+    const service = buildService({
+      location,
+      memberships: [],
+      nearbyCandidates: [formalSection, otherSection],
+      followedGroupIds: [],
+      formalGroupId: 'group-formal',
+    });
+
+    const nearbyGroups = await service.getNearbyGroups('user-1', location, {
+      ...PAGE,
+      radiusKm: 300,
+    });
+
+    expect(nearbyGroups.items.map((g) => g.id)).toEqual(['group-other']);
   });
 });

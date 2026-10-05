@@ -26,10 +26,12 @@ export interface NearbySectionCardDto extends CommunitySectionCardDto {
 }
 
 // Row shape for "my Groups" (myGroups on Home, and GET
-// /community/groups/mine) - every Group the caller is related to either
-// through a direct Section membership or an explicit GroupFollow (see
-// group-follow.entity.ts), deduplicated to one row per Group id even when
-// both are true at once.
+// /community/groups/mine) - every Group the caller is related to through
+// their active formal affiliation, a direct Section membership or an
+// explicit GroupFollow (see group-follow.entity.ts), deduplicated to one row
+// per Group id even when several are true at once. Ordered formal Group
+// first, then member-through-Section, then follow-only (see
+// CommunityOverviewService.getMyGroups).
 export interface CommunityGroupCardDto {
   id: string;
   name: string;
@@ -37,6 +39,7 @@ export interface CommunityGroupCardDto {
   isPublic: boolean;
   isHidden: boolean;
   status: GroupStatus;
+  isFormalGroup: boolean;
   isMemberThroughSection: boolean;
   isFollowing: boolean;
 }

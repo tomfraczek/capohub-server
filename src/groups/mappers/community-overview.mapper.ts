@@ -54,7 +54,11 @@ export function toNearbySectionCardDto(
 
 export function toCommunityGroupCardDto(
   group: Group,
-  relation: { isMemberThroughSection: boolean; isFollowing: boolean },
+  relation: {
+    isFormalGroup: boolean;
+    isMemberThroughSection: boolean;
+    isFollowing: boolean;
+  },
   urlBuilder: PublicUrlBuilder,
 ): CommunityGroupCardDto {
   return {
@@ -64,6 +68,7 @@ export function toCommunityGroupCardDto(
     isPublic: group.isPublic,
     isHidden: group.isHidden,
     status: group.status,
+    isFormalGroup: relation.isFormalGroup,
     isMemberThroughSection: relation.isMemberThroughSection,
     isFollowing: relation.isFollowing,
   };
