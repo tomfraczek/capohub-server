@@ -12,6 +12,9 @@ import { NotificationCategory } from '../notifications/enums/notification-catego
 import { NotificationTargetType } from '../notifications/enums/notification-target-type.enum';
 import { NotificationType } from '../notifications/enums/notification-type.enum';
 import {
+  groupJoinRequestApprovedText,
+  groupJoinRequestReceivedText,
+  groupJoinRequestRejectedText,
   sectionInvitationAcceptedText,
   sectionInvitationReceivedText,
   sectionInvitationRejectedText,
@@ -23,12 +26,18 @@ import {
   CreateNotificationParams,
   NotificationsService,
 } from '../notifications/notifications.service';
+import {
+  PublicUrlBuilder,
+  resolveUserAvatarUrl,
+} from '../storage/image-url.util';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
 import { CreateInvitationInput } from './dto/create-invitation.schema';
 import { MembershipRequestResponseDto } from './dto/membership-request-response.dto';
 import { AuditAction } from './enums/audit-action.enum';
 import { AuditTargetType } from './enums/audit-target-type.enum';
+import { Group } from './entities/group.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
 import { SectionBan } from './entities/section-ban.entity';
 import { Section } from './entities/section.entity';
@@ -47,6 +56,10 @@ import { MembershipRequestStatus } from './enums/membership-request-status.enum'
 import { MembershipRequestTarget } from './enums/membership-request-target.enum';
 import { MembershipRequestType } from './enums/membership-request-type.enum';
 import { Community, communityIdFilter } from './group-hierarchy.service';
+import {
+  cancelPendingGroupJoinRequests,
+  switchFormalGroup,
+} from './formal-group-switch';
 import { loadActiveSectionMembership } from './section-membership.query';
 import { RoleAssignmentsService } from './role-assignments.service';
 
@@ -75,15 +88,16 @@ function groupHasNoMembership(): UnprocessableEntityException {
 }
 
 /**
- * Handles the full lifecycle of invitations and join requests for Sections
- * only - a Group has no membership at all, so GROUP-targeted requests are
- * rejected outright here (see groupHasNoMembership()); the only way to
- * obtain a Role on a Group is a direct RoleAssignmentsController grant
- * (ADMIN) or RoleAssignmentsService.transferOwnership (OWNER) - never
- * through this invitation/join-request mechanism, which would conflate
- * "membership" with "administrative role", and would collide with the
- * separate, not-yet-built "invite a Group/Section into the hierarchy"
- * mechanism planned for a later stage.
+ * Handles the full lifecycle of invitations and join requests for Sections,
+ * plus one Group-targeted kind: a Group join request (targetType GROUP),
+ * which asks to make that Group one's *formal* Group while its
+ * joinRequiresApproval is on. It is only ever created through
+ * PUT /users/me/formal-group (see createGroupJoinRequest) - POST .../join
+ * and invitations still reject a GROUP target (groupHasNoMembership()), and
+ * approving one never creates a Membership or Role, only the
+ * FormalGroupAffiliation (see approveJoinRequest). Roles on a Group still
+ * only come from RoleAssignmentsController (ADMIN) or
+ * RoleAssignmentsService.transferOwnership (OWNER).
  *
  * Key domain invariants enforced here:
  *  - Accepting a request creates a SectionMembership AND grants MEMBER in
@@ -99,7 +113,80 @@ export class MembershipRequestsService {
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly auditLogService: AuditLogService,
     private readonly notificationsService: NotificationsService,
+    private readonly r2StorageService: R2StorageService,
   ) {}
+
+  private toDto(request: MembershipRequest): MembershipRequestResponseDto {
+    return toMembershipRequestResponseDto(request, this.r2StorageService);
+  }
+
+  // ─── GROUP JOIN REQUEST (formal Group, joinRequiresApproval) ─────────────
+
+  /**
+   * Creates a PENDING Group join request inside the caller's transaction -
+   * only ever called by UserProfileService.setFormalGroup once it has
+   * decided the Group requires approval for this user. Any other PENDING
+   * Group join request of the same user is cancelled (one formal Group, so
+   * one request at a time - see cancelPendingGroupJoinRequests); a second
+   * one to this same Group is refused (JOIN_REQUEST_ALREADY_PENDING), never
+   * duplicated. Every OWNER/ADMIN of the Group is notified.
+   */
+  async createGroupJoinRequest(
+    em: EntityManager,
+    group: Group,
+    user: User,
+  ): Promise<MembershipRequestResponseDto> {
+    const alreadyPending = await em.count(MembershipRequest, {
+      targetGroup: group.id,
+      initiatedBy: user.id,
+      type: MembershipRequestType.JOIN_REQUEST,
+      status: MembershipRequestStatus.PENDING,
+    });
+    if (alreadyPending > 0) {
+      throw this.joinRequestAlreadyPending();
+    }
+    await cancelPendingGroupJoinRequests(em, user, null);
+
+    const request = new MembershipRequest();
+    request.type = MembershipRequestType.JOIN_REQUEST;
+    request.targetType = MembershipRequestTarget.GROUP;
+    assignTarget(request, group);
+    request.initiatedBy = user;
+
+    try {
+      em.persist(request);
+      await em.flush();
+    } catch (error) {
+      if (isUniqueViolationOn(error, MEMBERSHIP_REQUEST_PENDING_JOIN_IDX)) {
+        throw this.joinRequestAlreadyPending();
+      }
+      throw error;
+    }
+
+    this.auditLogService.record(em, {
+      community: group,
+      action: AuditAction.JOIN_REQUEST,
+      actor: user,
+      targetType: AuditTargetType.MEMBERSHIP_REQUEST,
+      targetId: request.id,
+      metadata: {
+        targetType: MembershipRequestTarget.GROUP,
+        autoApproved: false,
+      },
+    });
+    await em.flush();
+
+    await this.notifyCommunityAdmins(
+      em,
+      group,
+      NotificationType.GROUP_JOIN_REQUEST_RECEIVED,
+      groupJoinRequestReceivedText(user.displayName, group.name),
+      request.id,
+      user,
+    );
+
+    return this.toDto(request);
+  }
 
   // ─── JOIN (auto-join or join request based on isPublic) ──────────────────
 
@@ -159,11 +246,7 @@ export class MembershipRequestsService {
           await em.flush();
         } catch (error) {
           if (isUniqueViolationOn(error, MEMBERSHIP_REQUEST_PENDING_JOIN_IDX)) {
-            throw new ConflictException({
-              code: 'JOIN_REQUEST_ALREADY_PENDING',
-              message:
-                'You already have a pending join request for this section',
-            });
+            throw this.joinRequestAlreadyPending();
           }
           throw error;
         }
@@ -178,7 +261,7 @@ export class MembershipRequestsService {
         });
         await em.flush();
 
-        await this.notifySectionAdmins(
+        await this.notifyCommunityAdmins(
           em,
           targetSection,
           NotificationType.SECTION_JOIN_REQUEST_RECEIVED,
@@ -187,7 +270,7 @@ export class MembershipRequestsService {
           requestingUser,
         );
 
-        return toMembershipRequestResponseDto(request);
+        return this.toDto(request);
       }
     });
   }
@@ -388,7 +471,7 @@ export class MembershipRequestsService {
         ]);
       }
 
-      return toMembershipRequestResponseDto(request);
+      return this.toDto(request);
     });
   }
 
@@ -494,7 +577,7 @@ export class MembershipRequestsService {
       em.persist(fresh);
       await em.flush();
 
-      return toMembershipRequestResponseDto(fresh);
+      return this.toDto(fresh);
     });
   }
 
@@ -648,9 +731,21 @@ export class MembershipRequestsService {
 
   /**
    * Approve a PENDING JOIN_REQUEST.  Authorization guard already confirmed
-   * the actor has GROUP_JOIN_REQUEST_REVIEW / MEMBERSHIP_REQUEST_REVIEW.
+   * the actor has GROUP_JOIN_REQUEST_REVIEW on `communityId` (the route's
+   * :groupId/:sectionId) - the request must target exactly that community,
+   * or a reviewer of one community could process another's requests.
+   *
+   * Section target: SectionMembership + MEMBER (fulfillJoin). Group target
+   * (formal Group): only now does the requester's FormalGroupAffiliation
+   * switch to this Group - the old one ends and the new one starts in this
+   * same transaction (switchFormalGroup), and their other pending Group
+   * join requests are cancelled.
    */
-  async approveJoinRequest(requestId: string, actor: User): Promise<void> {
+  async approveJoinRequest(
+    requestId: string,
+    communityId: string,
+    actor: User,
+  ): Promise<void> {
     await this.em.transactional(async (em) => {
       const request = await em.findOne(
         MembershipRequest,
@@ -668,13 +763,26 @@ export class MembershipRequestsService {
           message: 'This request is not a join request',
         });
       }
+      this.assertRequestTargets(request, communityId);
       this.assertPending(request);
 
       const target = requestTarget(request);
-      if (!(target instanceof Section)) {
-        throw groupHasNoMembership();
+      if (target instanceof Group) {
+        if (target.status !== GroupStatus.ACTIVE) {
+          throw new ConflictException({
+            code: 'FORMAL_GROUP_NOT_ACTIVE',
+            message: 'This group is not currently active',
+          });
+        }
+        await switchFormalGroup(em, request.initiatedBy, target, null);
+        await cancelPendingGroupJoinRequests(
+          em,
+          request.initiatedBy,
+          request.id,
+        );
+      } else {
+        await this.fulfillJoin(em, target, request.initiatedBy);
       }
-      await this.fulfillJoin(em, target, request.initiatedBy);
 
       request.status = MembershipRequestStatus.ACCEPTED;
       request.processedAt = new Date();
@@ -691,8 +799,12 @@ export class MembershipRequestsService {
       await this.notificationsService.createMany(em, [
         this.buildMembershipNotificationParams(
           request.initiatedBy,
-          NotificationType.SECTION_JOIN_REQUEST_APPROVED,
-          sectionJoinRequestApprovedText(),
+          target instanceof Group
+            ? NotificationType.GROUP_JOIN_REQUEST_APPROVED
+            : NotificationType.SECTION_JOIN_REQUEST_APPROVED,
+          target instanceof Group
+            ? groupJoinRequestApprovedText(target.name)
+            : sectionJoinRequestApprovedText(),
           target,
           request.id,
           actor,
@@ -702,9 +814,16 @@ export class MembershipRequestsService {
   }
 
   /**
-   * Reject a PENDING JOIN_REQUEST.
+   * Reject a PENDING JOIN_REQUEST (same `communityId` check as approve).
+   * Nothing else changes - for a Group target the requester's formal Group
+   * stays as it was, and they may send a new request later (the REJECTED
+   * row stays as history; the pending-unique index only covers PENDING).
    */
-  async rejectJoinRequest(requestId: string, actor: User): Promise<void> {
+  async rejectJoinRequest(
+    requestId: string,
+    communityId: string,
+    actor: User,
+  ): Promise<void> {
     await this.em.transactional(async (em) => {
       const request = await em.findOne(
         MembershipRequest,
@@ -719,6 +838,7 @@ export class MembershipRequestsService {
           message: 'This request is not a join request',
         });
       }
+      this.assertRequestTargets(request, communityId);
       this.assertPending(request);
 
       request.status = MembershipRequestStatus.REJECTED;
@@ -733,12 +853,17 @@ export class MembershipRequestsService {
       );
       await em.flush();
 
+      const target = requestTarget(request);
       await this.notificationsService.createMany(em, [
         this.buildMembershipNotificationParams(
           request.initiatedBy,
-          NotificationType.SECTION_JOIN_REQUEST_REJECTED,
-          sectionJoinRequestRejectedText(),
-          requestTarget(request),
+          target instanceof Group
+            ? NotificationType.GROUP_JOIN_REQUEST_REJECTED
+            : NotificationType.SECTION_JOIN_REQUEST_REJECTED,
+          target instanceof Group
+            ? groupJoinRequestRejectedText(target.name)
+            : sectionJoinRequestRejectedText(),
+          target,
           request.id,
           actor,
         ),
@@ -769,7 +894,7 @@ export class MembershipRequestsService {
         ],
       },
     );
-    return requests.map(toMembershipRequestResponseDto);
+    return requests.map((request) => this.toDto(request));
   }
 
   /** All invitations sent for a specific target group (managed view). */
@@ -793,7 +918,7 @@ export class MembershipRequestsService {
         ],
       },
     );
-    return requests.map(toMembershipRequestResponseDto);
+    return requests.map((request) => this.toDto(request));
   }
 
   /** All PENDING join requests for a target group (admin view). */
@@ -816,7 +941,7 @@ export class MembershipRequestsService {
         ],
       },
     );
-    return requests.map(toMembershipRequestResponseDto);
+    return requests.map((request) => this.toDto(request));
   }
 
   /**
@@ -851,7 +976,7 @@ export class MembershipRequestsService {
         ],
       },
     );
-    return requests.map(toMembershipRequestResponseDto);
+    return requests.map((request) => this.toDto(request));
   }
 
   // ─── Private helpers ──────────────────────────────────────────────────────
@@ -994,26 +1119,28 @@ export class MembershipRequestsService {
       body: text.body,
       targetType: NotificationTargetType.MEMBERSHIP_REQUEST,
       targetId: membershipRequestId,
+      contextGroup: community instanceof Group ? community : null,
       contextSection: community instanceof Section ? community : null,
       actor,
     };
   }
 
   /**
-   * Recipients: every currently active ADMIN/OWNER of `section` (module
-   * spec: newJoinRequests is "admin-facing" - see
-   * CommunityNotificationSettings' own field comment).
+   * Recipients: every currently active ADMIN/OWNER of exactly `community`
+   * (module spec: newJoinRequests is "admin-facing" - see
+   * CommunityNotificationSettings' own field comment). Never inherited from
+   * or to a parent/child.
    */
-  private async notifySectionAdmins(
+  private async notifyCommunityAdmins(
     em: EntityManager,
-    section: Section,
+    community: Community,
     type: NotificationType,
     text: { title: string; body: string },
     membershipRequestId: string,
     actor: User,
   ): Promise<void> {
     const assignments = await em.find(RoleAssignment, {
-      ...communityIdFilter(section.id),
+      ...communityIdFilter(community.id),
       role: { $in: [GroupRole.ADMIN, GroupRole.OWNER] },
       revokedAt: null,
     });
@@ -1026,7 +1153,7 @@ export class MembershipRequestsService {
         em.getReference(User, userId),
         type,
         text,
-        section,
+        community,
         membershipRequestId,
         actor,
       ),
@@ -1059,6 +1186,22 @@ export class MembershipRequestsService {
         message: 'Only active members may send invitations',
       });
     }
+  }
+
+  private assertRequestTargets(
+    request: MembershipRequest,
+    communityId: string,
+  ): void {
+    if (requestTarget(request).id !== communityId) {
+      throw this.requestNotFound();
+    }
+  }
+
+  private joinRequestAlreadyPending(): ConflictException {
+    return new ConflictException({
+      code: 'JOIN_REQUEST_ALREADY_PENDING',
+      message: 'You already have a pending join request for this community',
+    });
   }
 
   private assertPending(request: MembershipRequest): void {
@@ -1124,6 +1267,7 @@ export class MembershipRequestsService {
 
 export function toMembershipRequestResponseDto(
   request: MembershipRequest,
+  urlBuilder: PublicUrlBuilder,
 ): MembershipRequestResponseDto {
   return {
     id: request.id,
@@ -1134,6 +1278,12 @@ export function toMembershipRequestResponseDto(
     initiatedBy: {
       id: request.initiatedBy.id,
       displayName: request.initiatedBy.displayName,
+      apelido: request.initiatedBy.apelido,
+      image: {
+        type: request.initiatedBy.avatarType,
+        url: resolveUserAvatarUrl(request.initiatedBy, urlBuilder),
+        presetAvatarId: request.initiatedBy.presetAvatarId,
+      },
     },
     invitedUser: request.invitedUser
       ? {

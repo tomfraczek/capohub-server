@@ -20,7 +20,11 @@ import {
 export function toGroupResponseDto(
   group: Group,
   counts: { childGroupsCount: number; directSectionsCount: number },
-  relation: { isMemberThroughSection: boolean; isFollowing: boolean },
+  relation: {
+    isMemberThroughSection: boolean;
+    isFollowing: boolean;
+    hasPendingJoinRequest: boolean;
+  },
   urlBuilder: PublicUrlBuilder,
 ): GroupResponseDto {
   return {
@@ -46,6 +50,7 @@ export function toGroupResponseDto(
     instagramUrl: group.instagramUrl,
     youtubeUrl: group.youtubeUrl,
     isPublic: group.isPublic,
+    joinRequiresApproval: group.joinRequiresApproval,
     isHidden: group.isHidden,
     memberInvitesAllowed: group.memberInvitesAllowed,
     followersVisibility: group.followersVisibility,
@@ -55,6 +60,7 @@ export function toGroupResponseDto(
     directSectionsCount: counts.directSectionsCount,
     isMemberThroughSection: relation.isMemberThroughSection,
     isFollowing: relation.isFollowing,
+    hasPendingJoinRequest: relation.hasPendingJoinRequest,
     createdAt: group.createdAt.toISOString(),
     updatedAt: group.updatedAt.toISOString(),
   };

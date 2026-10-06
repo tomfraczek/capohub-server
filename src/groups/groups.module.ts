@@ -117,6 +117,9 @@ import { StandaloneSectionsController } from './standalone-sections.controller';
     // this exact service rather than EventsModule re-querying GroupFollow
     // itself.
     GroupFollowService,
+    // UserProfileService.setFormalGroup creates a Group join request
+    // through it when the Group's joinRequiresApproval is on.
+    MembershipRequestsService,
   ],
 })
 export class GroupsModule {}

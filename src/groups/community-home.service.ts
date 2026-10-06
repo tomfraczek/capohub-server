@@ -89,8 +89,10 @@ export class CommunityHomeService {
     const invitations =
       await this.membershipRequestsService.listReceivedInvitations(user);
     const { communities, communityMap, capabilityLists } = participation;
-    const joinRequestReviewableIds =
-      capabilityLists.canReviewJoinRequestsInSectionIds;
+    const joinRequestReviewableIds = [
+      ...capabilityLists.canReviewJoinRequestsInSectionIds,
+      ...capabilityLists.canReviewJoinRequestsInGroupIds,
+    ];
 
     const allJoinRequests =
       joinRequestReviewableIds.length > 0
@@ -414,6 +416,7 @@ export class CommunityHomeService {
       canCreateEventInGroupIds: [],
       canCreateEventInSectionIds: [],
       canReviewJoinRequestsInSectionIds: [],
+      canReviewJoinRequestsInGroupIds: [],
       canViewMembersInSectionIds: [],
       canManageMembersInSectionIds: [],
       canInviteMembersInSectionIds: [],
@@ -529,11 +532,14 @@ export class CommunityHomeService {
         );
       }
       if (
-        !isGroup &&
         community.status === GroupStatus.ACTIVE &&
         has(GroupPermission.GROUP_JOIN_REQUEST_REVIEW)
       ) {
-        push('canReviewJoinRequestsInSectionIds');
+        push(
+          isGroup
+            ? 'canReviewJoinRequestsInGroupIds'
+            : 'canReviewJoinRequestsInSectionIds',
+        );
       }
       // Mirrors SectionMembershipsService.listMembers exactly: MEMBERSHIP_VIEW
       // plus Section.membersVisibility (PRIVATE = staff only).

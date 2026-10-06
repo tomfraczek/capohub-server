@@ -115,8 +115,11 @@ export interface CommunityHomeCapabilitiesDto {
   canCreateSectionInSectionIds: string[];
   canCreateEventInGroupIds: string[];
   canCreateEventInSectionIds: string[];
-  // Section-only (Group has no membership/join-request flow at all).
+  // Section join requests (membership).
   canReviewJoinRequestsInSectionIds: string[];
+  // Groups whose join requests (formal Group, joinRequiresApproval) the
+  // caller may approve/reject - GROUP_JOIN_REQUEST_REVIEW, ACTIVE only.
+  canReviewJoinRequestsInGroupIds: string[];
   canViewMembersInSectionIds: string[];
   canManageMembersInSectionIds: string[];
   canInviteMembersInSectionIds: string[];

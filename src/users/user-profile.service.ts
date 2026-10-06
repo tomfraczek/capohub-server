@@ -6,16 +6,19 @@ import {
 } from '@nestjs/common';
 import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
 import { AppConfigService } from '../config/app.config';
-import { isUniqueViolationOn } from '../common/utils/db-errors';
 import { normalizeNumericCodeInput } from '../common/utils/numeric-code';
 import { Group } from '../groups/entities/group.entity';
 import { Section } from '../groups/entities/section.entity';
-import {
-  FORMAL_GROUP_AFFILIATIONS_ACTIVE_UNIQUE_INDEX,
-  FormalGroupAffiliation,
-} from '../groups/entities/formal-group-affiliation.entity';
+import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
+import { RoleAssignment } from '../groups/entities/role-assignment.entity';
 import { SectionMembership } from '../groups/entities/section-membership.entity';
 import { GroupHierarchyService } from '../groups/group-hierarchy.service';
+import {
+  cancelPendingGroupJoinRequests,
+  startOfTodayUtc,
+  switchFormalGroup,
+} from '../groups/formal-group-switch';
+import { MembershipRequestsService } from '../groups/membership-requests.service';
 import { assertNotLeavingOwnedGroup } from '../groups/owner-formal-group';
 import { findOwnedLiveGroupIds } from '../groups/user-owns-group';
 import { GroupRole } from '../groups/enums/group-role.enum';
@@ -26,7 +29,10 @@ import { CustomUserRankService } from '../graduation/custom-user-rank.service';
 import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignment.entity';
 import { FormalRankService } from '../graduation/formal-rank.service';
 import { R2StorageService } from '../storage/r2-storage.service';
-import { FormalGroupResponseDto } from './dto/formal-group-response.dto';
+import {
+  FormalGroupResponseDto,
+  PendingFormalGroupRequestResponseDto,
+} from './dto/formal-group-response.dto';
 import { PublicUserProfileResponseDto } from './dto/public-user-profile-response.dto';
 import { UpdateUserProfileInput } from './dto/update-user-profile.schema';
 import { UserProfileResponseDto } from './dto/user-profile-response.dto';
@@ -45,13 +51,6 @@ const ACTIVE_MEMBERSHIP_STATUSES = [
   SectionMembershipStatus.ACTIVE,
   SectionMembershipStatus.READ_ONLY,
 ];
-
-function startOfTodayUtc(): Date {
-  const now = new Date();
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
-}
 
 function parseDateOnly(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
@@ -78,6 +77,7 @@ export class UserProfileService {
     private readonly customUserRankService: CustomUserRankService,
     private readonly r2StorageService: R2StorageService,
     private readonly appConfigService: AppConfigService,
+    private readonly membershipRequestsService: MembershipRequestsService,
   ) {}
 
   async getOwnProfile(user: User): Promise<UserProfileResponseDto> {
@@ -280,21 +280,35 @@ export class UserProfileService {
   }
 
   /**
-   * Sets/changes the caller's single formal Group affiliation, atomically
-   * ending the current one (if any) and inserting a fresh row - see
-   * formal-group-affiliation.entity.ts. Validated at set/change time only:
-   * the Group itself must be ACTIVE, and the user must hold an
-   * ACTIVE/READ_ONLY SectionMembership in at least one ACTIVE Section
-   * anywhere in the Group's hierarchy (direct or under a nested child
-   * Group - see GroupHierarchyService.getDescendantSections). None of this
-   * is re-checked later - see the entity's own comment on why an
-   * affiliation never ends itself automatically.
+   * Sets/changes the caller's single formal Group affiliation - see
+   * formal-group-affiliation.entity.ts. The Group itself must be ACTIVE.
+   * Then one of two paths, decided here (never by the client):
+   *
+   *  - Immediate (Group.joinRequiresApproval off, or the caller is the
+   *    Group's own OWNER/ADMIN): the current affiliation ends and a fresh
+   *    row starts atomically (switchFormalGroup). Requires an ACTIVE/
+   *    READ_ONLY SectionMembership in at least one ACTIVE Section anywhere
+   *    in the Group's hierarchy (direct or under a nested child Group - see
+   *    GroupHierarchyService.getDescendantSections), unless the caller is
+   *    the Group's OWNER/ADMIN. Any pending Group join request elsewhere
+   *    becomes moot and is cancelled.
+   *  - Approval (joinRequiresApproval on): nothing about the current
+   *    affiliation changes yet - a PENDING Group join request is created
+   *    instead (MembershipRequestsService.createGroupJoinRequest) and the
+   *    switch only happens on approval. No Section membership is required:
+   *    the reviewer's decision replaces it. startedOn is not carried over
+   *    (the affiliation then starts with startedOn = null).
+   *
+   * Either path refuses to move an OWNER off their own Group
+   * (OWNER_MUST_STAY_IN_FORMAL_GROUP). Validated at set/request time only -
+   * see the entity's own comment on why an affiliation never ends itself
+   * automatically.
    */
   async setFormalGroup(
     user: User,
     groupId: string,
     startedOnInput?: string,
-  ): Promise<FormalGroupResponseDto> {
+  ): Promise<FormalGroupResponseDto | PendingFormalGroupRequestResponseDto> {
     const startedOn = startedOnInput ? parseDateOnly(startedOnInput) : null;
     if (startedOn && startedOn.getTime() > startOfTodayUtc().getTime()) {
       throw new BadRequestException({
@@ -316,91 +330,74 @@ export class UserProfileService {
       }
 
       // The Group's own OWNER is its formal member by definition (see
-      // owner-formal-group.ts) - no Section membership required.
+      // owner-formal-group.ts); its ADMIN already holds the very
+      // permission that approves Group join requests. Neither needs a
+      // Section membership nor anyone's approval.
       const ownsThisGroup = (await findOwnedLiveGroupIds(em, user.id)).includes(
         groupId,
       );
-
-      const descendantSections =
-        await this.groupHierarchyService.getDescendantSections(groupId, em);
-      const activeSectionIds = descendantSections
-        .filter((section) => section.status === GroupStatus.ACTIVE)
-        .map((section) => section.id);
-
-      const hasQualifyingMembership =
-        activeSectionIds.length > 0 &&
-        (await em.count(SectionMembership, {
+      const administersThisGroup =
+        ownsThisGroup ||
+        (await em.count(RoleAssignment, {
           user: user.id,
-          section: { $in: activeSectionIds },
-          status: { $in: ACTIVE_MEMBERSHIP_STATUSES },
+          group: groupId,
+          role: GroupRole.ADMIN,
+          revokedAt: null,
         })) > 0;
 
-      if (!hasQualifyingMembership && !ownsThisGroup) {
-        throw new ConflictException({
-          code: 'FORMAL_GROUP_REQUIRES_ACTIVE_SECTION_MEMBERSHIP',
-          message:
-            'You must have an active section membership within this group (or one of its active sections) to set it as your formal group',
-        });
+      const current = await em.findOne(FormalGroupAffiliation, {
+        user: user.id,
+        endedOn: null,
+      });
+      const isAlreadyThisGroup = current?.group.id === groupId;
+
+      if (
+        group.joinRequiresApproval &&
+        !administersThisGroup &&
+        !isAlreadyThisGroup
+      ) {
+        // Fails early what approval would refuse anyway.
+        await assertNotLeavingOwnedGroup(
+          em,
+          user.id,
+          current?.group.id ?? null,
+          groupId,
+        );
+        const pendingRequest =
+          await this.membershipRequestsService.createGroupJoinRequest(
+            em,
+            group,
+            user,
+          );
+        return { pendingRequest };
       }
 
-      const current = await em.findOne(
-        FormalGroupAffiliation,
-        { user: user.id, endedOn: null },
-        { populate: ['group'] },
-      );
+      if (!administersThisGroup && !isAlreadyThisGroup) {
+        const descendantSections =
+          await this.groupHierarchyService.getDescendantSections(groupId, em);
+        const activeSectionIds = descendantSections
+          .filter((section) => section.status === GroupStatus.ACTIVE)
+          .map((section) => section.id);
 
-      await assertNotLeavingOwnedGroup(
-        em,
-        user.id,
-        current?.group.id ?? null,
-        groupId,
-      );
+        const hasQualifyingMembership =
+          activeSectionIds.length > 0 &&
+          (await em.count(SectionMembership, {
+            user: user.id,
+            section: { $in: activeSectionIds },
+            status: { $in: ACTIVE_MEMBERSHIP_STATUSES },
+          })) > 0;
 
-      if (current && current.group.id === groupId) {
-        if (startedOn) {
-          current.startedOn = startedOn;
-          await em.flush();
-        }
-        return toFormalGroupResponseDto(current);
-      }
-
-      if (current) {
-        current.endedOn = startOfTodayUtc();
-        // Flushed before the new row is inserted below - MikroORM's
-        // UnitOfWork applies inserts before updates within a single flush,
-        // which would otherwise insert the new active row while the
-        // previous one is still active, transiently violating
-        // FORMAL_GROUP_AFFILIATIONS_ACTIVE_UNIQUE_INDEX (same reasoning as
-        // RoleAssignmentsService.transferOwnership's revoke-before-insert
-        // ordering).
-        await em.flush();
-      }
-
-      const affiliation = new FormalGroupAffiliation();
-      affiliation.user = user;
-      affiliation.group = group;
-      affiliation.startedOn = startedOn;
-
-      try {
-        em.persist(affiliation);
-        await em.flush();
-      } catch (error) {
-        // Race backstop - see the equivalent comment in
-        // SectionMembershipsService.addMember().
-        if (
-          isUniqueViolationOn(
-            error,
-            FORMAL_GROUP_AFFILIATIONS_ACTIVE_UNIQUE_INDEX,
-          )
-        ) {
+        if (!hasQualifyingMembership) {
           throw new ConflictException({
-            code: 'FORMAL_GROUP_ALREADY_SET',
-            message: 'A concurrent change already set an active formal group',
+            code: 'FORMAL_GROUP_REQUIRES_ACTIVE_SECTION_MEMBERSHIP',
+            message:
+              'You must have an active section membership within this group (or one of its active sections) to set it as your formal group',
           });
         }
-        throw error;
       }
 
+      const affiliation = await switchFormalGroup(em, user, group, startedOn);
+      await cancelPendingGroupJoinRequests(em, user, null);
       return toFormalGroupResponseDto(affiliation);
     });
   }

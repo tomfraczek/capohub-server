@@ -241,10 +241,16 @@ export class MembershipRequestsController {
   @HttpCode(204)
   @RequireGroupPermission(GroupPermission.GROUP_JOIN_REQUEST_REVIEW)
   async approveJoinRequest(
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
     @Param('requestId', ParseUUIDPipe) requestId: string,
     @CurrentUser() user: User,
   ): Promise<void> {
-    await this.membershipRequestsService.approveJoinRequest(requestId, user);
+    await this.membershipRequestsService.approveJoinRequest(
+      requestId,
+      groupId ?? sectionId,
+      user,
+    );
   }
 
   /**
@@ -254,10 +260,16 @@ export class MembershipRequestsController {
   @HttpCode(204)
   @RequireGroupPermission(GroupPermission.GROUP_JOIN_REQUEST_REVIEW)
   async rejectJoinRequest(
+    @Param('groupId') groupId: string,
+    @Param('sectionId') sectionId: string,
     @Param('requestId', ParseUUIDPipe) requestId: string,
     @CurrentUser() user: User,
   ): Promise<void> {
-    await this.membershipRequestsService.rejectJoinRequest(requestId, user);
+    await this.membershipRequestsService.rejectJoinRequest(
+      requestId,
+      groupId ?? sectionId,
+      user,
+    );
   }
 
   // ─── Private helpers ────────────────────────────────────────────────────────

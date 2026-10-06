@@ -185,7 +185,6 @@ describe('GroupPermissionService', () => {
         GroupPermission.MEMBERSHIP_INVITE,
         GroupPermission.MEMBERSHIP_REQUEST_REVIEW,
         GroupPermission.GROUP_INVITE,
-        GroupPermission.GROUP_JOIN_REQUEST_REVIEW,
       ];
       for (const permission of membershipLifecyclePermissions) {
         expect(
@@ -195,6 +194,25 @@ describe('GroupPermissionService', () => {
           service.hasPermission('GROUP', GroupRole.OWNER, permission),
         ).toBe(false);
       }
+    });
+
+    // Group join requests (formal Group, joinRequiresApproval) are reviewed
+    // by the Group's own OWNER/ADMIN - see MembershipRequestsService.
+    it('grants GROUP_JOIN_REQUEST_REVIEW to Group ADMIN and OWNER', () => {
+      expect(
+        service.hasPermission(
+          'GROUP',
+          GroupRole.ADMIN,
+          GroupPermission.GROUP_JOIN_REQUEST_REVIEW,
+        ),
+      ).toBe(true);
+      expect(
+        service.hasPermission(
+          'GROUP',
+          GroupRole.OWNER,
+          GroupPermission.GROUP_JOIN_REQUEST_REVIEW,
+        ),
+      ).toBe(true);
     });
 
     it('still grants ADMIN/OWNER the administrative capabilities that do apply to a Group', () => {

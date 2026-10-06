@@ -26,6 +26,9 @@ import { GroupStatus } from './enums/group-status.enum';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
 import { SectionMembership } from './entities/section-membership.entity';
+import { MembershipRequest } from './entities/membership-request.entity';
+import { MembershipRequestStatus } from './enums/membership-request-status.enum';
+import { MembershipRequestType } from './enums/membership-request-type.enum';
 import { SectionMembershipStatus } from './enums/section-membership-status.enum';
 import {
   FORMAL_GROUP_AFFILIATIONS_ACTIVE_UNIQUE_INDEX,
@@ -478,6 +481,7 @@ export class GroupsService {
     group.instagramUrl = input.instagramUrl;
     group.youtubeUrl = input.youtubeUrl;
     group.isPublic = input.isPublic;
+    group.joinRequiresApproval = input.joinRequiresApproval;
     group.isHidden = input.isHidden;
     group.memberInvitesAllowed = input.memberInvitesAllowed;
     group.followersVisibility = input.followersVisibility;
@@ -510,7 +514,11 @@ export class GroupsService {
     });
     const relation = viewerId
       ? await this.resolveViewerRelation(em, group.id, viewerId)
-      : { isMemberThroughSection: false, isFollowing: false };
+      : {
+          isMemberThroughSection: false,
+          isFollowing: false,
+          hasPendingJoinRequest: false,
+        };
     return toGroupResponseDto(
       group,
       { childGroupsCount, directSectionsCount },
@@ -535,7 +543,11 @@ export class GroupsService {
     em: EntityManager,
     groupId: string,
     viewerId: string,
-  ): Promise<{ isMemberThroughSection: boolean; isFollowing: boolean }> {
+  ): Promise<{
+    isMemberThroughSection: boolean;
+    isFollowing: boolean;
+    hasPendingJoinRequest: boolean;
+  }> {
     // Sequential, not Promise.all - see this file's other queries' own
     // comment on why concurrent queries against the same
     // EntityManager/connection are never issued together here.
@@ -553,7 +565,18 @@ export class GroupsService {
       viewerId,
       groupId,
     );
-    return { isMemberThroughSection: membership !== null, isFollowing };
+    const hasPendingJoinRequest =
+      (await em.count(MembershipRequest, {
+        targetGroup: groupId,
+        initiatedBy: viewerId,
+        type: MembershipRequestType.JOIN_REQUEST,
+        status: MembershipRequestStatus.PENDING,
+      })) > 0;
+    return {
+      isMemberThroughSection: membership !== null,
+      isFollowing,
+      hasPendingJoinRequest,
+    };
   }
 
   private async loadGroupOrFail(

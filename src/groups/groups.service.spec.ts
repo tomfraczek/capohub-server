@@ -36,6 +36,7 @@ function buildCreateInput(
     instagramUrl: null,
     youtubeUrl: null,
     isPublic: true,
+    joinRequiresApproval: false,
     isHidden: false,
     memberInvitesAllowed: false,
     followersVisibility: CommunityListVisibility.PUBLIC,

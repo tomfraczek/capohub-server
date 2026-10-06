@@ -53,7 +53,11 @@ describe('group.mapper', () => {
       const dto = toGroupResponseDto(
         group,
         { childGroupsCount: 2, directSectionsCount: 3 },
-        { isMemberThroughSection: false, isFollowing: false },
+        {
+          isMemberThroughSection: false,
+          isFollowing: false,
+          hasPendingJoinRequest: false,
+        },
         buildUrlBuilder(),
       );
 
@@ -79,7 +83,11 @@ describe('group.mapper', () => {
       const both = toGroupResponseDto(
         group,
         { childGroupsCount: 0, directSectionsCount: 0 },
-        { isMemberThroughSection: true, isFollowing: true },
+        {
+          isMemberThroughSection: true,
+          isFollowing: true,
+          hasPendingJoinRequest: false,
+        },
         buildUrlBuilder(),
       );
       expect(both.isMemberThroughSection).toBe(true);
@@ -88,7 +96,11 @@ describe('group.mapper', () => {
       const followOnly = toGroupResponseDto(
         group,
         { childGroupsCount: 0, directSectionsCount: 0 },
-        { isMemberThroughSection: false, isFollowing: true },
+        {
+          isMemberThroughSection: false,
+          isFollowing: true,
+          hasPendingJoinRequest: false,
+        },
         buildUrlBuilder(),
       );
       expect(followOnly.isMemberThroughSection).toBe(false);
@@ -104,7 +116,11 @@ describe('group.mapper', () => {
       const dto = toGroupResponseDto(
         group,
         { childGroupsCount: 0, directSectionsCount: 0 },
-        { isMemberThroughSection: false, isFollowing: false },
+        {
+          isMemberThroughSection: false,
+          isFollowing: false,
+          hasPendingJoinRequest: false,
+        },
         buildUrlBuilder(),
       );
 
@@ -121,7 +137,11 @@ describe('group.mapper', () => {
       const dto = toGroupResponseDto(
         group,
         { childGroupsCount: 0, directSectionsCount: 0 },
-        { isMemberThroughSection: false, isFollowing: false },
+        {
+          isMemberThroughSection: false,
+          isFollowing: false,
+          hasPendingJoinRequest: false,
+        },
         buildUrlBuilder(),
       );
 
@@ -137,7 +157,11 @@ describe('group.mapper', () => {
       const dto = toGroupResponseDto(
         group,
         { childGroupsCount: 0, directSectionsCount: 0 },
-        { isMemberThroughSection: false, isFollowing: false },
+        {
+          isMemberThroughSection: false,
+          isFollowing: false,
+          hasPendingJoinRequest: false,
+        },
         buildUrlBuilder(),
       );
 
@@ -154,7 +178,11 @@ describe('group.mapper', () => {
       const dto = toGroupResponseDto(
         group,
         { childGroupsCount: 0, directSectionsCount: 0 },
-        { isMemberThroughSection: false, isFollowing: false },
+        {
+          isMemberThroughSection: false,
+          isFollowing: false,
+          hasPendingJoinRequest: false,
+        },
         buildUrlBuilder(),
       );
 

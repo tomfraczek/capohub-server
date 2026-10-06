@@ -10,6 +10,7 @@ import { AuditTargetType } from '../groups/enums/audit-target-type.enum';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
 import { User } from '../users/entities/user.entity';
 import { buildCordSegments } from './cord-segment-builder';
+import { cordSignature } from './cord-signature';
 import { CreateRankInput } from './dto/create-rank.schema';
 import {
   FormalRankOptionDto,
@@ -209,6 +210,13 @@ export class RanksService {
         input.previousRankId,
         null,
       );
+      await this.assertCordUnique(
+        em,
+        system,
+        input.track,
+        input.cordSegments,
+        null,
+      );
 
       const rank = new Rank();
       rank.system = system;
@@ -268,6 +276,17 @@ export class RanksService {
         input.previousRankId,
         rank.id,
       );
+      // An archived rank isn't part of the progression, so its cord can't
+      // clash with anything until it is restored (checked there instead).
+      if (!rank.isArchived) {
+        await this.assertCordUnique(
+          em,
+          system,
+          input.track,
+          input.cordSegments,
+          rank.id,
+        );
+      }
       const previousRankIdChanged =
         (rank.previousRank?.id ?? null) !== (previousRank?.id ?? null);
 
@@ -360,6 +379,13 @@ export class RanksService {
         message: 'This rank is not archived',
       });
     }
+    await this.assertCordUnique(
+      this.em,
+      rank.system,
+      rank.track,
+      rank.cordSegments.getItems(),
+      rank.id,
+    );
     rank.isArchived = false;
 
     this.auditLogService.record(this.em, {
@@ -456,6 +482,48 @@ export class RanksService {
     }
 
     return candidate;
+  }
+
+  /**
+   * No two ACTIVE ranks of one track may wear a visually identical cord
+   * (see cord-signature.ts for what "identical" means) - otherwise the
+   * progression can't be told apart by its cords. Scoped per track: CHILD
+   * and ADULT are independent progressions and may reuse colors. Archived
+   * ranks are ignored (they are out of the progression); restoring one is
+   * checked here too, against the then-active ranks. `currentRankId`
+   * excludes the rank being edited/restored from the comparison.
+   */
+  private async assertCordUnique(
+    em: EntityManager,
+    system: GraduationSystem,
+    track: RankTrack,
+    segments: readonly {
+      position: number;
+      colorHex: string;
+      proportion: number;
+    }[],
+    currentRankId: string | null,
+  ): Promise<void> {
+    const signature = cordSignature(segments);
+    const others = await em.find(
+      Rank,
+      {
+        system: system.id,
+        track,
+        isArchived: false,
+        ...(currentRankId ? { id: { $ne: currentRankId } } : {}),
+      },
+      { populate: ['cordSegments'] },
+    );
+    const duplicate = others.find(
+      (other) => cordSignature(other.cordSegments.getItems()) === signature,
+    );
+    if (duplicate) {
+      throw new ConflictException({
+        code: 'RANK_CORD_DUPLICATE',
+        message: `Another active rank in this track already has the same cord ("${duplicate.name}")`,
+      });
+    }
   }
 
   private async loadActiveSystem(

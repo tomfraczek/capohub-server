@@ -19,7 +19,12 @@ export interface GroupResponseDto {
   facebookUrl: string | null;
   instagramUrl: string | null;
   youtubeUrl: string | null;
+  // Profile visibility for viewers with no Role/Membership - see
+  // group.entity.ts.
   isPublic: boolean;
+  // "Dołączanie publiczne" off - setting this Group as one's formal Group
+  // sends a join request instead (see group.entity.ts).
+  joinRequiresApproval: boolean;
   isHidden: boolean;
   memberInvitesAllowed: boolean;
   followersVisibility: CommunityListVisibility;
@@ -42,6 +47,10 @@ export interface GroupResponseDto {
   // musisz usuwać istniejącego GroupFollow" when the follower later joins a
   // Section).
   isFollowing: boolean;
+  // Whether the viewer has a PENDING Group join request for this Group
+  // (formal Group awaiting approval - see MembershipRequestsService).
+  // Withdrawable via DELETE /groups/:id/join-requests/mine.
+  hasPendingJoinRequest: boolean;
   createdAt: string;
   updatedAt: string;
 }

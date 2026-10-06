@@ -15,6 +15,7 @@
  *     bad hex
  *  7. Archive/restore
  *  8. Public read (GROUP_VIEW) - active ranks only, mutations stay closed
+ *  9. Unique cords - no two active ranks of one track look the same
  */
 import {
   INestApplication,
@@ -354,6 +355,15 @@ describe('Graduation Catalog (e2e)', () => {
     );
   }
 
+  // Every default rank gets its own color - a track may not hold two
+  // visually identical cords (409 RANK_CORD_DUPLICATE), so a shared default
+  // would make every multi-rank scenario here collide.
+  let defaultColorSeed = 0;
+  function uniqueColor(): string {
+    defaultColorSeed += 1;
+    return `#${defaultColorSeed.toString(16).padStart(6, '0').toUpperCase()}`;
+  }
+
   function rankPayload(
     overrides: Record<string, unknown> = {},
   ): Record<string, unknown> {
@@ -362,7 +372,7 @@ describe('Graduation Catalog (e2e)', () => {
       name: 'Corda Crua',
       description: null,
       previousRankId: null,
-      cordSegments: oneSegment(),
+      cordSegments: oneSegment({ colorHex: uniqueColor() }),
       ...overrides,
     };
   }
@@ -807,6 +817,136 @@ describe('Graduation Catalog (e2e)', () => {
       expect(list[RankTrack.ADULT].map((r) => r.name)).toEqual(['A', 'B']);
       expect(list[RankTrack.ADULT][0].isArchived).toBe(true);
       void b;
+    });
+  });
+
+  // ─── Ranks: unique cords ─────────────────────────────────────────────────
+
+  describe('Ranks - unique cords per track', () => {
+    const greenYellow = [
+      { position: 1, colorHex: '#00FF00', proportion: 60 },
+      { position: 2, colorHex: '#FFFF00', proportion: 40 },
+    ];
+
+    it('rejects a second active rank with a visually identical cord in the same track (hex case and split segments ignored)', async () => {
+      const group = await createGroupWithSystem();
+      const first = (await createRank(
+        group.token,
+        group.id,
+        rankPayload({ name: 'Verde-amarela', cordSegments: greenYellow }),
+      )) as RankResponseDto;
+
+      const error = (await createRank(
+        group.token,
+        group.id,
+        rankPayload({
+          name: 'Duplikat',
+          previousRankId: first.id,
+          cordSegments: [
+            { position: 1, colorHex: '#00ff00', proportion: 30 },
+            { position: 2, colorHex: '#00FF00', proportion: 30 },
+            { position: 3, colorHex: '#ffff00', proportion: 40 },
+          ],
+        }),
+        409,
+      )) as HttpErrorResponse;
+      expect(error.code).toBe('RANK_CORD_DUPLICATE');
+    });
+
+    it('allows the same colors in other proportions, and the same cord in the other track', async () => {
+      const group = await createGroupWithSystem();
+      const first = (await createRank(
+        group.token,
+        group.id,
+        rankPayload({ name: 'Verde-amarela', cordSegments: greenYellow }),
+      )) as RankResponseDto;
+      await createRank(
+        group.token,
+        group.id,
+        rankPayload({
+          name: 'Verde-amarela 50/50',
+          previousRankId: first.id,
+          cordSegments: [
+            { position: 1, colorHex: '#00FF00', proportion: 50 },
+            { position: 2, colorHex: '#FFFF00', proportion: 50 },
+          ],
+        }),
+      );
+      await createRank(
+        group.token,
+        group.id,
+        rankPayload({
+          name: 'Verde-amarela (dzieci)',
+          track: RankTrack.CHILD,
+          cordSegments: greenYellow,
+        }),
+      );
+    });
+
+    it('rejects editing a rank into another active rank cord, but not saving a rank with its own cord', async () => {
+      const group = await createGroupWithSystem();
+      const first = (await createRank(
+        group.token,
+        group.id,
+        rankPayload({ name: 'A', cordSegments: greenYellow }),
+      )) as RankResponseDto;
+      const second = (await createRank(
+        group.token,
+        group.id,
+        rankPayload({ name: 'B', previousRankId: first.id }),
+      )) as RankResponseDto;
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/groups/${group.id}/ranks/${first.id}`)
+        .set('Authorization', `Bearer ${group.token}`)
+        .send(rankPayload({ name: 'A (renamed)', cordSegments: greenYellow }))
+        .expect(200);
+
+      const error = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/groups/${group.id}/ranks/${second.id}`)
+          .set('Authorization', `Bearer ${group.token}`)
+          .send(
+            rankPayload({
+              name: 'B',
+              previousRankId: first.id,
+              cordSegments: greenYellow,
+            }),
+          )
+          .expect(409),
+      );
+      expect(error.code).toBe('RANK_CORD_DUPLICATE');
+    });
+
+    it('ignores archived ranks, but blocks restoring one whose cord is now taken', async () => {
+      const group = await createGroupWithSystem();
+      const first = (await createRank(
+        group.token,
+        group.id,
+        rankPayload({ name: 'Old', cordSegments: greenYellow }),
+      )) as RankResponseDto;
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${group.id}/ranks/${first.id}/archive`)
+        .set('Authorization', `Bearer ${group.token}`)
+        .expect(201);
+
+      await createRank(
+        group.token,
+        group.id,
+        rankPayload({
+          name: 'New',
+          previousRankId: first.id,
+          cordSegments: greenYellow,
+        }),
+      );
+
+      const error = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${group.id}/ranks/${first.id}/restore`)
+          .set('Authorization', `Bearer ${group.token}`)
+          .expect(409),
+      );
+      expect(error.code).toBe('RANK_CORD_DUPLICATE');
     });
   });
 

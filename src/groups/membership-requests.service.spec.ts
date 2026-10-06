@@ -30,6 +30,7 @@ import { AuditLogService } from './audit-log.service';
 import { MembershipRequestsService } from './membership-requests.service';
 import { RoleAssignmentsService } from './role-assignments.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { R2StorageService } from '../storage/r2-storage.service';
 
 // ─── Builders ────────────────────────────────────────────────────────────────
 
@@ -159,11 +160,16 @@ function buildService(em: EntityManager) {
     createMany: jest.fn().mockResolvedValue([]),
   } as unknown as NotificationsService;
 
+  const r2StorageService = {
+    buildPublicUrl: jest.fn((key: string) => `https://cdn.test/${key}`),
+  } as unknown as R2StorageService;
+
   const service = new MembershipRequestsService(
     em,
     roleAssignmentsService,
     auditLogService,
     notificationsService,
+    r2StorageService,
   );
 
   return {

@@ -149,6 +149,34 @@ export function sectionJoinRequestRejectedText(): NotificationText {
   };
 }
 
+export function groupJoinRequestReceivedText(
+  requesterName: string,
+  groupName: string,
+): NotificationText {
+  return {
+    title: 'Nowa prośba o dołączenie',
+    body: `${requesterName} chce dołączyć do grupy „${groupName}”.`,
+  };
+}
+
+export function groupJoinRequestApprovedText(
+  groupName: string,
+): NotificationText {
+  return {
+    title: 'Prośba zaakceptowana',
+    body: `Dołączyłeś do grupy „${groupName}” - to teraz Twoja grupa formalna.`,
+  };
+}
+
+export function groupJoinRequestRejectedText(
+  groupName: string,
+): NotificationText {
+  return {
+    title: 'Prośba odrzucona',
+    body: `Twoja prośba o dołączenie do grupy „${groupName}” została odrzucona.`,
+  };
+}
+
 export function sectionInvitationReceivedText(): NotificationText {
   return {
     title: 'Nowe zaproszenie',

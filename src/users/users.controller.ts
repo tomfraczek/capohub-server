@@ -10,9 +10,11 @@ import {
   Patch,
   Put,
   Query,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PermissionService } from '../auth/permissions/permission.service';
 import { UserCheckInIdentityService } from '../common/identity/user-check-in-identity.service';
@@ -29,7 +31,10 @@ import {
 } from '../storage/multer-image.interceptor';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { SetAvatarPresetDto } from './dto/set-avatar-preset.schema';
-import { FormalGroupResponseDto } from './dto/formal-group-response.dto';
+import {
+  FormalGroupResponseDto,
+  PendingFormalGroupRequestResponseDto,
+} from './dto/formal-group-response.dto';
 import { PublicUserProfileResponseDto } from './dto/public-user-profile-response.dto';
 import { SetFormalGroupDto } from './dto/set-formal-group.schema';
 import { buildSongCapabilities } from './dto/song-capabilities.dto';
@@ -170,17 +175,25 @@ export class UsersController {
     return this.userProfileService.updateOwnProfile(user, dto);
   }
 
+  // 200 + FormalGroupResponseDto when set immediately; 202 +
+  // PendingFormalGroupRequestResponseDto when the Group requires approval
+  // and a join request was sent instead (see UserProfileService.setFormalGroup).
   @Put('me/formal-group')
-  setMyFormalGroup(
+  async setMyFormalGroup(
     @CurrentUser() user: User,
     @Body(new ZodValidationPipe(SetFormalGroupDto.schema))
     dto: SetFormalGroupDto,
-  ): Promise<FormalGroupResponseDto> {
-    return this.userProfileService.setFormalGroup(
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<FormalGroupResponseDto | PendingFormalGroupRequestResponseDto> {
+    const result = await this.userProfileService.setFormalGroup(
       user,
       dto.groupId,
       dto.startedOn,
     );
+    if ('pendingRequest' in result) {
+      response.status(202);
+    }
+    return result;
   }
 
   @Delete('me/formal-group')

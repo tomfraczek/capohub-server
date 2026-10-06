@@ -23,7 +23,15 @@ import { User } from '../src/users/entities/user.entity';
 import { UserResponseDto } from '../src/users/dto/user-response.dto';
 import { UserProfileResponseDto } from '../src/users/dto/user-profile-response.dto';
 import { PublicUserProfileResponseDto } from '../src/users/dto/public-user-profile-response.dto';
-import { FormalGroupResponseDto } from '../src/users/dto/formal-group-response.dto';
+import {
+  FormalGroupResponseDto,
+  PendingFormalGroupRequestResponseDto,
+} from '../src/users/dto/formal-group-response.dto';
+import { MembershipRequestResponseDto } from '../src/groups/dto/membership-request-response.dto';
+import { MembershipRequest } from '../src/groups/entities/membership-request.entity';
+import { MembershipRequestStatus } from '../src/groups/enums/membership-request-status.enum';
+import { Notification } from '../src/notifications/entities/notification.entity';
+import { NotificationType } from '../src/notifications/enums/notification-type.enum';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { SectionResponseDto } from '../src/groups/dto/section-response.dto';
 import { GraduationSystemResponseDto } from '../src/graduation/dto/graduation-system-response.dto';
@@ -195,6 +203,17 @@ describe('User Profile (e2e)', () => {
         $or: [
           { communityGroup: { $in: createdGroupIds } },
           { communitySection: { $in: createdGroupIds } },
+        ],
+      });
+      // Group join requests (and the notifications they raised) reference
+      // both the Groups and the fixture Users - cleared first.
+      await cleanup.nativeDelete(Notification, {
+        contextGroup: { $in: createdGroupIds },
+      });
+      await cleanup.nativeDelete(MembershipRequest, {
+        $or: [
+          { targetGroup: { $in: createdGroupIds } },
+          { targetSection: { $in: createdGroupIds } },
         ],
       });
       // FormalGroupAffiliation.group has deleteRule 'no action' - must be
@@ -1199,6 +1218,292 @@ describe('User Profile (e2e)', () => {
       const profile = await getOwnProfile(OTHER_ADMIN_TOKEN);
       expect(profile.formalGroup?.groupId).toBe(group.id);
       expect(profile.formalGroup?.endedOn).toBeNull();
+    });
+  });
+
+  // ─── Group join requests (Group.joinRequiresApproval) ──────────────────
+  // "Dołączanie publiczne" off: PUT /users/me/formal-group sends a join
+  // request to the Group's OWNER/ADMIN instead of switching the formal
+  // Group; only approval switches it (atomically, ending the old one).
+  describe('PUT /users/me/formal-group - Group requiring approval', () => {
+    // A brand-new plain user (no Group, no formal affiliation) per call -
+    // the file's fixed tokens carry formal-Group state across tests.
+    async function createFreshUser(
+      prefix: string,
+    ): Promise<{ token: string; userId: string }> {
+      const suffix = `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+      const clerkUserId = `user_test_join_${suffix}`;
+      const token = `valid-join-${suffix}-token`;
+      TOKEN_TO_AUTH[token] = {
+        userId: clerkUserId,
+        sessionId: `sess_${suffix}`,
+        tokenType: 'session_token',
+        claims: { sub: clerkUserId, sid: `sess_${suffix}` },
+      };
+      FIXTURE_CLERK_PROFILES[clerkUserId] = {
+        imageUrl: `https://img.clerk.com/${suffix}.png`,
+        primaryEmailAddress: { emailAddress: `${suffix}@example.com` },
+      };
+      await request(app.getHttpServer())
+        .get('/api/v1/users/me')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const user = await app
+        .get(EntityManager)
+        .fork()
+        .findOneOrFail(User, { clerkUserId });
+      return { token, userId: user.id };
+    }
+
+    async function requestFormalGroup(
+      token: string,
+      groupId: string,
+    ): Promise<PendingFormalGroupRequestResponseDto> {
+      return bodyOf<PendingFormalGroupRequestResponseDto>(
+        request(app.getHttpServer())
+          .put('/api/v1/users/me/formal-group')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ groupId })
+          .expect(202),
+      );
+    }
+
+    async function getGroup(
+      token: string,
+      groupId: string,
+    ): Promise<GroupResponseDto> {
+      return bodyOf<GroupResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${groupId}`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200),
+      );
+    }
+
+    async function listJoinRequests(
+      token: string,
+      groupId: string,
+      expectStatus = 200,
+    ): Promise<MembershipRequestResponseDto[]> {
+      return bodyOf<MembershipRequestResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${groupId}/join-requests`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(expectStatus),
+      );
+    }
+
+    async function decide(
+      token: string,
+      groupId: string,
+      requestId: string,
+      decision: 'approve' | 'reject',
+      expectStatus = 204,
+    ): Promise<void> {
+      await request(app.getHttpServer())
+        .post(
+          `/api/v1/groups/${groupId}/join-requests/${requestId}/${decision}`,
+        )
+        .set('Authorization', `Bearer ${token}`)
+        .expect(expectStatus);
+    }
+
+    async function requestStatus(
+      requestId: string,
+    ): Promise<MembershipRequestStatus> {
+      const row = await app
+        .get(EntityManager)
+        .fork()
+        .findOneOrFail(MembershipRequest, { id: requestId });
+      return row.status;
+    }
+
+    it('sends a request instead of switching, without needing a Section membership, and refuses a duplicate', async () => {
+      const group = await createGroup({
+        name: 'Approval Group Pending',
+        joinRequiresApproval: true,
+      });
+      expect(group.joinRequiresApproval).toBe(true);
+      const requester = await createFreshUser('pending');
+
+      const { pendingRequest } = await requestFormalGroup(
+        requester.token,
+        group.id,
+      );
+      expect(pendingRequest.status).toBe(MembershipRequestStatus.PENDING);
+      expect(pendingRequest.targetGroupId).toBe(group.id);
+
+      expect((await getOwnProfile(requester.token)).formalGroup).toBeNull();
+      expect(
+        (await getGroup(requester.token, group.id)).hasPendingJoinRequest,
+      ).toBe(true);
+
+      const duplicate = (await setFormalGroup(
+        requester.token,
+        group.id,
+        undefined,
+        409,
+      )) as HttpErrorResponse;
+      expect((duplicate as unknown as { code: string }).code).toBe(
+        'JOIN_REQUEST_ALREADY_PENDING',
+      );
+
+      const received = await app.get(EntityManager).fork().find(Notification, {
+        contextGroup: group.id,
+        type: NotificationType.GROUP_JOIN_REQUEST_RECEIVED,
+      });
+      expect(received.map((row) => row.recipient.id)).toContain(group.userId);
+    });
+
+    it('approval switches the formal Group atomically, ending the previous one, and notifies the requester', async () => {
+      const previous = await createGroup({ name: 'Approval Previous Group' });
+      const previousSection = await createSection(previous.token, previous.id, {
+        name: 'Approval Previous Section',
+      });
+      const requester = await createFreshUser('approve');
+      localUserIdByToken.set(requester.token, requester.userId);
+      await joinSection(previous.token, previousSection.id, requester.token);
+      await setFormalGroup(requester.token, previous.id);
+
+      const group = await createGroup({
+        name: 'Approval Group Approve',
+        joinRequiresApproval: true,
+      });
+      const { pendingRequest } = await requestFormalGroup(
+        requester.token,
+        group.id,
+      );
+
+      const listed = await listJoinRequests(group.token, group.id);
+      const row = listed.find((item) => item.id === pendingRequest.id);
+      expect(row?.initiatedBy.id).toBe(requester.userId);
+      expect(row?.initiatedBy).toHaveProperty('apelido');
+      expect(row?.initiatedBy).toHaveProperty('image');
+
+      // Still the previous one until approved.
+      expect((await getOwnProfile(requester.token)).formalGroup?.groupId).toBe(
+        previous.id,
+      );
+
+      await decide(group.token, group.id, pendingRequest.id, 'approve');
+
+      expect(await requestStatus(pendingRequest.id)).toBe(
+        MembershipRequestStatus.ACCEPTED,
+      );
+      expect((await getOwnProfile(requester.token)).formalGroup?.groupId).toBe(
+        group.id,
+      );
+      const rows = await app
+        .get(EntityManager)
+        .fork()
+        .find(FormalGroupAffiliation, { user: requester.userId });
+      expect(
+        rows.filter((affiliation) => affiliation.endedOn === null),
+      ).toHaveLength(1);
+      expect(
+        rows.find((affiliation) => affiliation.group.id === previous.id)
+          ?.endedOn,
+      ).not.toBeNull();
+
+      const approved = await app.get(EntityManager).fork().find(Notification, {
+        recipient: requester.userId,
+        type: NotificationType.GROUP_JOIN_REQUEST_APPROVED,
+      });
+      expect(approved).toHaveLength(1);
+    });
+
+    it('rejection keeps the formal Group as it was and allows a new request later', async () => {
+      const group = await createGroup({
+        name: 'Approval Group Reject',
+        joinRequiresApproval: true,
+      });
+      const requester = await createFreshUser('reject');
+      const { pendingRequest } = await requestFormalGroup(
+        requester.token,
+        group.id,
+      );
+
+      await decide(group.token, group.id, pendingRequest.id, 'reject');
+
+      expect(await requestStatus(pendingRequest.id)).toBe(
+        MembershipRequestStatus.REJECTED,
+      );
+      expect((await getOwnProfile(requester.token)).formalGroup).toBeNull();
+      expect(
+        (await getGroup(requester.token, group.id)).hasPendingJoinRequest,
+      ).toBe(false);
+
+      const again = await requestFormalGroup(requester.token, group.id);
+      expect(again.pendingRequest.id).not.toBe(pendingRequest.id);
+    });
+
+    it('lets the requester withdraw a pending request', async () => {
+      const group = await createGroup({
+        name: 'Approval Group Withdraw',
+        joinRequiresApproval: true,
+      });
+      const requester = await createFreshUser('withdraw');
+      const { pendingRequest } = await requestFormalGroup(
+        requester.token,
+        group.id,
+      );
+
+      await request(app.getHttpServer())
+        .delete(`/api/v1/groups/${group.id}/join-requests/mine`)
+        .set('Authorization', `Bearer ${requester.token}`)
+        .expect(204);
+
+      expect(await requestStatus(pendingRequest.id)).toBe(
+        MembershipRequestStatus.CANCELLED,
+      );
+      expect(
+        (await getGroup(requester.token, group.id)).hasPendingJoinRequest,
+      ).toBe(false);
+    });
+
+    it('a new request to another Group cancels the previous pending one', async () => {
+      const groupA = await createGroup({
+        name: 'Approval Group Switch A',
+        joinRequiresApproval: true,
+      });
+      const groupB = await createGroup({
+        name: 'Approval Group Switch B',
+        joinRequiresApproval: true,
+      });
+      const requester = await createFreshUser('switch');
+      const first = await requestFormalGroup(requester.token, groupA.id);
+      await requestFormalGroup(requester.token, groupB.id);
+
+      expect(await requestStatus(first.pendingRequest.id)).toBe(
+        MembershipRequestStatus.CANCELLED,
+      );
+    });
+
+    it("only the target Group's own reviewers may see or decide its requests", async () => {
+      const group = await createGroup({
+        name: 'Approval Group Scope',
+        joinRequiresApproval: true,
+      });
+      const otherGroup = await createGroup({ name: 'Approval Other Group' });
+      const requester = await createFreshUser('scope');
+      const { pendingRequest } = await requestFormalGroup(
+        requester.token,
+        group.id,
+      );
+
+      // A plain user has no GROUP_JOIN_REQUEST_REVIEW on the Group.
+      await listJoinRequests(requester.token, group.id, 404);
+      // Another Group's OWNER can't reach it through their own Group's route.
+      await decide(
+        otherGroup.token,
+        otherGroup.id,
+        pendingRequest.id,
+        'approve',
+        404,
+      );
+      expect(await requestStatus(pendingRequest.id)).toBe(
+        MembershipRequestStatus.PENDING,
+      );
     });
   });
 });

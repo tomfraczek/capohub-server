@@ -102,11 +102,22 @@ export class Group extends BaseEntity {
   @Property({ nullable: true, length: 2048 })
   youtubeUrl: string | null = null;
 
-  // Whether users can join this Group without admin approval.
-  // true  → auto-join (Membership or MEMBER Role created immediately on "join").
-  // false → "join" creates a JOIN_REQUEST that must be approved.
+  // Whether any authenticated user may view this Group's own profile
+  // without a Role/Membership (see PUBLIC_VIEW_SAFE_PERMISSIONS and
+  // RoleAssignmentsService.resolvePublicView). Visibility only - how one
+  // *joins* the Group (becomes its formal member) is joinRequiresApproval
+  // below, deliberately a separate flag.
   @Property()
   isPublic: boolean = true;
+
+  // "Dołączanie publiczne" off: setting this Group as one's formal Group
+  // (PUT /users/me/formal-group) creates a GROUP-target JOIN_REQUEST that an
+  // OWNER/ADMIN must approve (GROUP_JOIN_REQUEST_REVIEW) - the
+  // FormalGroupAffiliation only starts on approval (see
+  // MembershipRequestsService.approveJoinRequest). false = the affiliation
+  // is set immediately, as before this flag existed.
+  @Property()
+  joinRequiresApproval: boolean = false;
 
   // Whether this Group is discoverable via the regular search
   // and listings. Hidden resources are still reachable via direct link,

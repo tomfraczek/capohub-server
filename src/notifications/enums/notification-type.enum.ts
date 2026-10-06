@@ -53,6 +53,12 @@ export enum NotificationType {
   SECTION_INVITATION_ACCEPTED = 'SECTION_INVITATION_ACCEPTED',
   SECTION_INVITATION_REJECTED = 'SECTION_INVITATION_REJECTED',
 
+  // Group join request = a request to make this Group one's formal Group
+  // while its joinRequiresApproval is on (see MembershipRequestsService).
+  GROUP_JOIN_REQUEST_RECEIVED = 'GROUP_JOIN_REQUEST_RECEIVED',
+  GROUP_JOIN_REQUEST_APPROVED = 'GROUP_JOIN_REQUEST_APPROVED',
+  GROUP_JOIN_REQUEST_REJECTED = 'GROUP_JOIN_REQUEST_REJECTED',
+
   // Hierarchy invitation (see HierarchyManagementService).
   HIERARCHY_INVITATION_RECEIVED = 'HIERARCHY_INVITATION_RECEIVED',
   HIERARCHY_INVITATION_ACCEPTED = 'HIERARCHY_INVITATION_ACCEPTED',
@@ -100,6 +106,12 @@ export const NOTIFICATION_CATEGORY_BY_TYPE: Readonly<
   [NotificationType.SECTION_INVITATION_ACCEPTED]:
     NotificationCategory.MEMBERSHIP,
   [NotificationType.SECTION_INVITATION_REJECTED]:
+    NotificationCategory.MEMBERSHIP,
+  [NotificationType.GROUP_JOIN_REQUEST_RECEIVED]:
+    NotificationCategory.MEMBERSHIP,
+  [NotificationType.GROUP_JOIN_REQUEST_APPROVED]:
+    NotificationCategory.MEMBERSHIP,
+  [NotificationType.GROUP_JOIN_REQUEST_REJECTED]:
     NotificationCategory.MEMBERSHIP,
   [NotificationType.HIERARCHY_INVITATION_RECEIVED]:
     NotificationCategory.MEMBERSHIP,

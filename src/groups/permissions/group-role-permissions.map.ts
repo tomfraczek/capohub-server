@@ -6,10 +6,12 @@ import { GroupPermission } from './group-permission.enum';
 // only ever grants OWNER/ADMIN (no membership, no ordinary members - see
 // RoleAssignment's role-matches-target CHECK constraint), so
 // GROUP_TARGET_ROLE_PERMISSIONS deliberately excludes every
-// membership-lifecycle permission (MEMBERSHIP_*, GROUP_INVITE,
-// GROUP_JOIN_REQUEST_REVIEW) - not because the route doesn't exist, but
-// because a Group-context authorization check must never even have the
-// chance to grant them. Section keeps the full, richer role set (all 5
+// membership-lifecycle permission (MEMBERSHIP_*, GROUP_INVITE) - not
+// because the route doesn't exist, but because a Group-context
+// authorization check must never even have the chance to grant them. The
+// one exception is GROUP_JOIN_REQUEST_REVIEW: a Group join request (formal
+// Group, joinRequiresApproval - see MembershipRequestsService) is reviewed
+// by the Group's own OWNER/ADMIN. Section keeps the full, richer role set (all 5
 // roles, every permission) under SECTION_TARGET_ROLE_PERMISSIONS.
 //
 // This is the single, deterministic source of truth for (target kind,
@@ -137,12 +139,12 @@ export const SECTION_TARGET_ROLE_PERMISSIONS: Readonly<
 };
 
 // Group never has ordinary members - only OWNER/ADMIN administer it. Every
-// membership-lifecycle permission (MEMBERSHIP_*, GROUP_INVITE,
-// GROUP_JOIN_REQUEST_REVIEW) is deliberately absent: there is no route
-// that could ever request them for a Group target (see groups.controller.ts
-// - member/join/leave/ban/suspend routes only exist on SectionController),
-// but keeping the map itself free of them means a coding mistake can't
-// accidentally grant them either.
+// membership-lifecycle permission (MEMBERSHIP_*, GROUP_INVITE) is
+// deliberately absent: there is no route that could ever request them for a
+// Group target (see groups.controller.ts - member/join/leave/ban/suspend
+// routes only exist on SectionController), but keeping the map itself free
+// of them means a coding mistake can't accidentally grant them either.
+// GROUP_JOIN_REQUEST_REVIEW is the exception - see the top-of-file note.
 const GROUP_ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.GROUP_VIEW,
   GroupPermission.GROUP_EDIT,
@@ -176,6 +178,9 @@ const GROUP_ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   // same trust tier as AUDIT_LOG_VIEW above.
   GroupPermission.GROUP_FOLLOWERS_VIEW,
   GroupPermission.GROUP_FOLLOWERS_MANAGE,
+  // "Prośby o dołączenie" - approving makes the requester's formal Group
+  // this one (see MembershipRequestsService.approveJoinRequest).
+  GroupPermission.GROUP_JOIN_REQUEST_REVIEW,
   // Propose attaching a child Group/Section this ADMIN does not directly
   // control - the recipient's own OWNER still has to accept (see
   // HierarchyInvitation), so this never mutates anything by itself and can

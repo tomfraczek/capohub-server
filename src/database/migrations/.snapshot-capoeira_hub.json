@@ -7043,6 +7043,22 @@
             "PRIVATE"
           ],
           "mappedType": "enum"
+        },
+        "join_requires_approval": {
+          "name": "join_requires_approval",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
         }
       },
       "name": "groups",
@@ -9025,7 +9041,10 @@
             "FORMAL_RANK_CORRECTION_REQUIRED",
             "FORMAL_RANK_CORRECTION_SUBMITTED",
             "FORMAL_RANK_CORRECTION_APPROVED",
-            "FORMAL_RANK_CORRECTION_REJECTED"
+            "FORMAL_RANK_CORRECTION_REJECTED",
+            "GROUP_JOIN_REQUEST_RECEIVED",
+            "GROUP_JOIN_REQUEST_APPROVED",
+            "GROUP_JOIN_REQUEST_REJECTED"
           ],
           "mappedType": "enum"
         },

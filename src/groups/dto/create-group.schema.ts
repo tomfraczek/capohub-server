@@ -46,9 +46,14 @@ export const createGroupObjectSchema = z.object({
   facebookUrl: optionalNullableSocialUrl(URL_MAX_LENGTH),
   instagramUrl: optionalNullableSocialUrl(URL_MAX_LENGTH),
   youtubeUrl: optionalNullableSocialUrl(URL_MAX_LENGTH),
-  // Whether users can join without admin approval (true = auto-join,
-  // false = creates a JOIN_REQUEST).
+  // Profile visibility for viewers with no Role/Membership (see
+  // group.entity.ts).
   isPublic: z.boolean().default(true),
+  // "Dołączanie publiczne" off = becoming this Group's formal member needs
+  // OWNER/ADMIN approval (see group.entity.ts). Defaulted, so a client that
+  // predates this field keeps working (and, on a full-replace update, turns
+  // it back off).
+  joinRequiresApproval: z.boolean().default(false),
   // Whether this Group appears in the regular discovery search
   // and listings.  Hidden resources are still accessible via direct link,
   // publicCode, or QR code.
