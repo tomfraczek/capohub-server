@@ -30,10 +30,9 @@ export interface HomeAnnouncementsDto {
 }
 
 export interface HomeResponseDto {
-  // The one name to greet the caller with - see HomeService for why this
-  // is simply User.displayName (there is no separate "imię"/"login" field
-  // in this codebase to prefer over it). Frontend must display this as-is,
-  // never re-deriving a greeting name from `email` itself.
+  // The one name to greet the caller with: apelido, else first name, else
+  // the account displayName - see HomeService.resolveGreetingName. Frontend
+  // must display this as-is, never re-deriving a name itself.
   greetingName: string;
   // The soonest upcoming Event (any type) the caller can see, or `null` if
   // none - see HomeService. May be the same Event as `nearestTraining`

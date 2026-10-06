@@ -2,7 +2,7 @@
  * Unit tests for HomeService.
  *
  * Covers:
- *  - greetingName is exactly User.displayName, untouched
+ *  - greetingName: apelido, else first name, else User.displayName
  *  - nearestEvent is read as-is from EventsService.findNearestEvent,
  *    nearestTraining is read as-is from
  *    TrainingsService.findNearestForViewer, both `null` when there is
@@ -215,10 +215,30 @@ function buildService(options: {
 }
 
 describe('HomeService', () => {
-  it("returns the caller's displayName as greetingName, untouched", async () => {
+  it("falls back to the caller's displayName when they set no apelido or first name", async () => {
     const { service } = buildService({});
     const home = await service.getHome(buildUser({ displayName: 'Ana' }));
     expect(home.greetingName).toBe('Ana');
+  });
+
+  it('greets by first name instead of the email-derived displayName', async () => {
+    const { service } = buildService({});
+    const home = await service.getHome(
+      buildUser({ displayName: 'Tomasfr90', firstName: 'Tomasz' }),
+    );
+    expect(home.greetingName).toBe('Tomasz');
+  });
+
+  it('always prefers the apelido when one is set', async () => {
+    const { service } = buildService({});
+    const home = await service.getHome(
+      buildUser({
+        displayName: 'Tomasfr90',
+        firstName: 'Tomasz',
+        apelido: 'Lagarto',
+      }),
+    );
+    expect(home.greetingName).toBe('Lagarto');
   });
 
   it('returns nearestEvent/nearestTraining exactly as EventsService/TrainingsService resolve them, and passes the caller through', async () => {

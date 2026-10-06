@@ -73,12 +73,7 @@ export class HomeService {
     const toReviewPreview = toReviewItems.slice(0, TO_REVIEW_PREVIEW_LIMIT);
 
     return {
-      // The one and only name field this codebase tracks for a user beyond
-      // `email` - already generated once at account creation from the
-      // email local-part (see generateDisplayNameFromEmail) and never
-      // overwritten afterwards, so it already *is* the best available name
-      // to greet the caller with.
-      greetingName: user.displayName,
+      greetingName: resolveGreetingName(user),
       nearestEvent,
       nearestTraining,
       continueLearning: {
@@ -94,4 +89,20 @@ export class HomeService {
       },
     };
   }
+}
+
+// Who the caller is in capoeira first: their apelido whenever they have
+// one, else their first name from the profile, and only then the account
+// displayName (generated once from the email local-part, e.g.
+// "Tomasfr90" - never something the user chose to be called).
+export function resolveGreetingName(user: User): string {
+  const apelido = user.apelido?.trim();
+  if (apelido) {
+    return apelido;
+  }
+  const firstName = user.firstName?.trim();
+  if (firstName) {
+    return firstName;
+  }
+  return user.displayName;
 }
