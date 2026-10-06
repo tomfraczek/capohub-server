@@ -233,23 +233,37 @@ export function formalRankRequestReceivedText(
   };
 }
 
+// Always names who decided (`deciderName`). `requestedRankName` only when
+// the reviewer confirmed a different, corrected rank than the one asked for.
 export function formalRankRequestApprovedText(
   rankName: string,
   groupName: string,
+  deciderName: string,
+  requestedRankName: string | null = null,
 ): NotificationText {
-  return {
-    title: 'Stopień potwierdzony',
-    body: `Twój stopień ${rankName} został potwierdzony w systemie grupy „${groupName}”.`,
-  };
+  return requestedRankName
+    ? {
+        title: 'Stopień potwierdzony po korekcie',
+        body: `${deciderName} potwierdził(a) Twój stopień w systemie grupy „${groupName}” jako ${rankName} (prośba dotyczyła stopnia ${requestedRankName}).`,
+      }
+    : {
+        title: 'Stopień potwierdzony',
+        body: `${deciderName} potwierdził(a) Twój stopień ${rankName} w systemie grupy „${groupName}”.`,
+      };
 }
 
 export function formalRankRequestRejectedText(
   rankName: string,
   groupName: string,
+  deciderName: string,
+  reason: string | null = null,
 ): NotificationText {
   return {
     title: 'Stopień nie został potwierdzony',
-    body: `Prośba o potwierdzenie stopnia ${rankName} w grupie „${groupName}” została odrzucona. Możesz wybrać stopień ponownie.`,
+    body:
+      `${deciderName} odrzucił(a) prośbę o potwierdzenie stopnia ${rankName} w grupie „${groupName}”.` +
+      (reason ? ` Uzasadnienie: ${reason}` : '') +
+      ' Możesz wybrać stopień ponownie.',
   };
 }
 

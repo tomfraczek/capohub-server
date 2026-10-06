@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
@@ -16,7 +17,14 @@ import {
 import { RequireGroupPermission } from '../groups/decorators/require-group-permission.decorator';
 import { GroupPermissionsGuard } from '../groups/guards/group-permissions.guard';
 import { GroupPermission } from '../groups/permissions/group-permission.enum';
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { User } from '../users/entities/user.entity';
+import {
+  ApproveFormalRankRequestDto,
+  approveFormalRankRequestSchema,
+  RejectFormalRankRequestDto,
+  rejectFormalRankRequestSchema,
+} from './dto/decide-formal-rank-request.schema';
 import {
   GroupFormalRankRequestResponseDto,
   OwnFormalRankRequestStateDto,
@@ -48,9 +56,16 @@ export class GroupFormalRankRequestsController {
   approve(
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Param('requestId', ParseUUIDPipe) requestId: string,
+    @Body(new ZodValidationPipe(approveFormalRankRequestSchema))
+    dto: ApproveFormalRankRequestDto,
     @CurrentUser() user: User,
   ): Promise<void> {
-    return this.formalRankRequestsService.approve(groupId, requestId, user);
+    return this.formalRankRequestsService.approve(
+      groupId,
+      requestId,
+      user,
+      dto.rankId,
+    );
   }
 
   @Post(':requestId/reject')
@@ -59,9 +74,16 @@ export class GroupFormalRankRequestsController {
   reject(
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Param('requestId', ParseUUIDPipe) requestId: string,
+    @Body(new ZodValidationPipe(rejectFormalRankRequestSchema))
+    dto: RejectFormalRankRequestDto,
     @CurrentUser() user: User,
   ): Promise<void> {
-    return this.formalRankRequestsService.reject(groupId, requestId, user);
+    return this.formalRankRequestsService.reject(
+      groupId,
+      requestId,
+      user,
+      dto.reason,
+    );
   }
 }
 

@@ -1120,6 +1120,148 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
       await endFormalGroup(OTHER_MEMBER_TOKEN);
     });
 
+    // The app shows "Prośby o potwierdzenie stopnia" from this capability,
+    // derived from FORMAL_RANK_REQUEST_REVIEW - the OWNER has it, a plain
+    // member of the Group's Section does not.
+    it('exposes canReviewFormalRankRequestsInGroupIds on Community Home to the owner only', async () => {
+      const { section, group, token } = await createGroupWithCatalog();
+      await joinSection(token, section.id, OUTSIDER_TOKEN);
+
+      const ownerHome = await request(app.getHttpServer())
+        .get('/api/v1/community/home')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(
+        (
+          ownerHome.body as {
+            capabilities: { canReviewFormalRankRequestsInGroupIds: string[] };
+          }
+        ).capabilities.canReviewFormalRankRequestsInGroupIds,
+      ).toContain(group.id);
+
+      const memberHome = await request(app.getHttpServer())
+        .get('/api/v1/community/home')
+        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+        .expect(200);
+      expect(
+        (
+          memberHome.body as {
+            capabilities: { canReviewFormalRankRequestsInGroupIds: string[] };
+          }
+        ).capabilities.canReviewFormalRankRequestsInGroupIds,
+      ).not.toContain(group.id);
+
+      await leaveSection(section.id, OUTSIDER_TOKEN);
+    });
+
+    // The user picked the wrong rank (e.g. Professor instead of Instrutor):
+    // the reviewer confirms the correct one of the same catalog instead.
+    it('lets the reviewer confirm a corrected rank, keeping what was asked, and names them in the notification', async () => {
+      await ensureNoFormalGroup(MEMBER_TOKEN);
+      const {
+        section,
+        group,
+        rank: askedRank,
+        token,
+      } = await createGroupWithCatalog();
+      const correctRank = await bodyOf<RankResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${group.id}/ranks`)
+          .set('Authorization', `Bearer ${token}`)
+          .send({
+            track: RankTrack.ADULT,
+            name: 'Instrutor',
+            description: null,
+            previousRankId: askedRank.id,
+            cordSegments: oneSegment('#00FF00'),
+          })
+          .expect(201),
+      );
+      const otherGroup = await createGroupWithCatalog();
+      await joinSection(token, section.id, MEMBER_TOKEN);
+      await setFormalGroup(MEMBER_TOKEN, group.id);
+      const { pendingRequest } = await putFormalRank(MEMBER_TOKEN, {
+        rankId: askedRank.id,
+      });
+
+      // A rank from another Group's catalog is refused.
+      await request(app.getHttpServer())
+        .post(
+          `/api/v1/groups/${group.id}/formal-rank-requests/${pendingRequest.id}/approve`,
+        )
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rankId: otherGroup.rank.id })
+        .expect(409);
+
+      await request(app.getHttpServer())
+        .post(
+          `/api/v1/groups/${group.id}/formal-rank-requests/${pendingRequest.id}/approve`,
+        )
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rankId: correctRank.id })
+        .expect(204);
+
+      expect((await getCurrentFormalRank(MEMBER_TOKEN))?.rank.id).toBe(
+        correctRank.id,
+      );
+      const row = await app
+        .get(EntityManager)
+        .fork()
+        .findOneOrFail(FormalRankRequest, { id: pendingRequest.id });
+      expect(row.rank.id).toBe(askedRank.id);
+      expect(row.approvedRank?.id).toBe(correctRank.id);
+
+      const [approved] = await notificationsFor(
+        localUserIdByToken.get(MEMBER_TOKEN) as string,
+        NotificationType.FORMAL_RANK_REQUEST_APPROVED,
+        pendingRequest.id,
+      );
+      expect(approved.body).toContain('jako Instrutor');
+      expect(approved.body).toContain(askedRank.name);
+
+      await leaveSection(section.id, MEMBER_TOKEN);
+      await endFormalGroup(MEMBER_TOKEN);
+      await request(app.getHttpServer())
+        .delete('/api/v1/users/me/formal-rank')
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`);
+    });
+
+    it('keeps an optional rejection reason and passes it, with the decider, to the user', async () => {
+      await ensureNoFormalGroup(OTHER_MEMBER_TOKEN);
+      const { section, group, rank, token } = await createGroupWithCatalog();
+      await joinSection(token, section.id, OTHER_MEMBER_TOKEN);
+      await setFormalGroup(OTHER_MEMBER_TOKEN, group.id);
+      const { pendingRequest } = await putFormalRank(OTHER_MEMBER_TOKEN, {
+        rankId: rank.id,
+      });
+
+      await request(app.getHttpServer())
+        .post(
+          `/api/v1/groups/${group.id}/formal-rank-requests/${pendingRequest.id}/reject`,
+        )
+        .set('Authorization', `Bearer ${token}`)
+        .send({ reason: 'Nie otrzymałeś jeszcze tego stopnia.' })
+        .expect(204);
+
+      const row = await app
+        .get(EntityManager)
+        .fork()
+        .findOneOrFail(FormalRankRequest, { id: pendingRequest.id });
+      expect(row.rejectionReason).toBe('Nie otrzymałeś jeszcze tego stopnia.');
+      const [rejected] = await notificationsFor(
+        localUserIdByToken.get(OTHER_MEMBER_TOKEN) as string,
+        NotificationType.FORMAL_RANK_REQUEST_REJECTED,
+        pendingRequest.id,
+      );
+      expect(rejected.body).toContain(
+        'Uzasadnienie: Nie otrzymałeś jeszcze tego stopnia.',
+      );
+      expect(rejected.body).toContain('odrzucił(a)');
+
+      await leaveSection(section.id, OTHER_MEMBER_TOKEN);
+      await endFormalGroup(OTHER_MEMBER_TOKEN);
+    });
+
     it("confirms immediately for the formal group's own OWNER", async () => {
       const { group, rank, token } = await createGroupWithCatalog();
       const result = await bodyOf<FormalRankAssignmentResponseDto>(

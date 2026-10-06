@@ -33,6 +33,7 @@ import {
 import { CustomUserRank } from './entities/custom-user-rank.entity';
 import { FormalRankAssignment } from './entities/formal-rank-assignment.entity';
 import { FormalRankRequest } from './entities/formal-rank-request.entity';
+import { Rank } from './entities/rank.entity';
 import { FormalRankRequestStatus } from './enums/formal-rank-request-status.enum';
 import {
   toDateOnly,
@@ -185,6 +186,9 @@ export class FormalRankRequestsService {
    * The requested rank becomes the user's current one with exactly the
    * declared startedOn/awardedByName/event; the previous current rank
    * (formal or independent) is ended, never deleted (assignFormalRank).
+   * `rankId` lets the reviewer confirm a different, correct rank of this
+   * same Group's catalog instead (the user picked the wrong one) - kept as
+   * approvedRank, while `rank` still records what was asked.
    * Refused when it no longer makes sense: the user's formal Group is no
    * longer this one (FORMAL_RANK_REQUEST_GROUP_CHANGED - normally already
    * CANCELLED by the switch itself), or the Rank was archived meanwhile.
@@ -193,6 +197,7 @@ export class FormalRankRequestsService {
     groupId: string,
     requestId: string,
     actor: User,
+    rankId: string | null = null,
   ): Promise<void> {
     await this.em.transactional(async (em) => {
       const request = await this.loadPendingForGroup(em, groupId, requestId);
@@ -209,7 +214,11 @@ export class FormalRankRequestsService {
           message: "This group is no longer the user's formal group",
         });
       }
-      if (request.rank.isArchived) {
+      const confirmedRank =
+        rankId && rankId !== request.rank.id
+          ? await this.loadCatalogRank(em, groupId, rankId)
+          : request.rank;
+      if (confirmedRank.isArchived) {
         throw new ConflictException({
           code: 'RANK_ARCHIVED',
           message: 'This rank has been archived in the meantime',
@@ -218,13 +227,15 @@ export class FormalRankRequestsService {
 
       await assignFormalRank(em, {
         user: request.user,
-        rank: request.rank,
+        rank: confirmedRank,
         group: request.group,
         startedOn: request.startedOn,
         awardedByName: request.awardedByName,
         event: request.event,
       });
+      const corrected = confirmedRank.id !== request.rank.id;
       request.status = FormalRankRequestStatus.APPROVED;
+      request.approvedRank = corrected ? confirmedRank : null;
       request.decidedAt = new Date();
       request.decidedBy = actor;
       await em.flush();
@@ -234,7 +245,12 @@ export class FormalRankRequestsService {
           request,
           request.user,
           NotificationType.FORMAL_RANK_REQUEST_APPROVED,
-          formalRankRequestApprovedText(request.rank.name, request.group.name),
+          formalRankRequestApprovedText(
+            confirmedRank.name,
+            request.group.name,
+            resolveDisplayName(actor),
+            corrected ? request.rank.name : null,
+          ),
           actor,
         ),
       ]);
@@ -242,10 +258,16 @@ export class FormalRankRequestsService {
   }
 
   /** Nothing else changes; the user may send a new request later. */
-  async reject(groupId: string, requestId: string, actor: User): Promise<void> {
+  async reject(
+    groupId: string,
+    requestId: string,
+    actor: User,
+    reason: string | null = null,
+  ): Promise<void> {
     await this.em.transactional(async (em) => {
       const request = await this.loadPendingForGroup(em, groupId, requestId);
       request.status = FormalRankRequestStatus.REJECTED;
+      request.rejectionReason = reason;
       request.decidedAt = new Date();
       request.decidedBy = actor;
       await em.flush();
@@ -255,7 +277,12 @@ export class FormalRankRequestsService {
           request,
           request.user,
           NotificationType.FORMAL_RANK_REQUEST_REJECTED,
-          formalRankRequestRejectedText(request.rank.name, request.group.name),
+          formalRankRequestRejectedText(
+            request.rank.name,
+            request.group.name,
+            resolveDisplayName(actor),
+            reason,
+          ),
           actor,
         ),
       ]);
@@ -305,6 +332,33 @@ export class FormalRankRequestsService {
       });
     }
     return request;
+  }
+
+  // A rank the reviewer confirms instead of the requested one must come from
+  // this same Group's catalog (populated with cords for the assignment).
+  private async loadCatalogRank(
+    em: EntityManager,
+    groupId: string,
+    rankId: string,
+  ): Promise<Rank> {
+    const rank = await em.findOne(
+      Rank,
+      { id: rankId },
+      { populate: ['system.group', 'cordSegments'] },
+    );
+    if (!rank) {
+      throw new NotFoundException({
+        code: 'RANK_NOT_FOUND',
+        message: 'Rank not found',
+      });
+    }
+    if (rank.system.group.id !== groupId) {
+      throw new ConflictException({
+        code: 'RANK_NOT_IN_FORMAL_GROUP_CATALOG',
+        message: "This rank does not belong to this group's catalog",
+      });
+    }
+    return rank;
   }
 
   private notFound(): NotFoundException {

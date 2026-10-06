@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createZodDto } from '../../common/dto/create-zod-dto';
+import { booleanQuerySchema } from '../../common/validation/query.schemas';
 import { enumValuesSchema } from '../../songs/dto/song-validation.helpers';
 import { EventStatus } from '../enums/event-status.enum';
 import { EventType } from '../enums/event-type.enum';
@@ -18,6 +19,12 @@ export const eventListQuerySchema = z.object({
   from: z.string().datetime({ offset: true }).optional(),
   // Only Events whose startsAt is <= this instant.
   to: z.string().datetime({ offset: true }).optional(),
+  // GET /events (the caller's own feed) only: just Events the caller
+  // actually took part in - an EventAttendee row for themselves with a
+  // participating RSVP (PARTICIPATING_RSVP_STATUSES), the same rule
+  // FormalRankService applies to a rank's evidence Event. Ignored by the
+  // community-scoped list.
+  attended: booleanQuerySchema.optional(),
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
   offset: z.coerce.number().int().min(0).default(0),
 });

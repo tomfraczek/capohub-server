@@ -1814,6 +1814,66 @@ describe('Events (e2e)', () => {
       const ownerFeed = await fetchGlobalFeed(community.token);
       expect(ownerFeed.some((e) => e.id === draft.id)).toBe(true);
     });
+
+    // attended=true - only Events the caller took part in (GOING), e.g. the
+    // rank form's "Powiązane wydarzenie" picker.
+    it('with attended=true lists only events the caller registered for themselves', async () => {
+      const community = await createCommunityWithMembers();
+      const attended = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${community.id}/events`)
+          .set('Authorization', `Bearer ${community.token}`)
+          .send(
+            globalFeedEvent({
+              name: 'Global Feed Attended Event',
+              visibility: EventVisibility.PUBLIC,
+            }),
+          )
+          .expect(201),
+      );
+      await publishEvent(community.token, attended.id);
+      const notAttended = await bodyOf<EventResponseDto>(
+        request(app.getHttpServer())
+          .post(`/api/v1/groups/${community.id}/events`)
+          .set('Authorization', `Bearer ${community.token}`)
+          .send(
+            globalFeedEvent({
+              name: 'Global Feed Not Attended Event',
+              visibility: EventVisibility.PUBLIC,
+            }),
+          )
+          .expect(201),
+      );
+      await publishEvent(community.token, notAttended.id);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/events/${attended.id}/register`)
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .send({ attendSelf: true, children: [] })
+        .expect(201);
+
+      const result = await bodyOf<{ items: EventResponseDto[] }>(
+        request(app.getHttpServer())
+          .get('/api/v1/events')
+          .query({
+            from: '2031-02-28T00:00:00.000Z',
+            to: '2031-03-02T00:00:00.000Z',
+            limit: 100,
+            attended: 'true',
+          })
+          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+          .expect(200),
+      );
+      const ids = result.items.map((event) => event.id);
+      expect(ids).toContain(attended.id);
+      expect(ids).not.toContain(notAttended.id);
+
+      // Without the filter both are visible to the same caller.
+      const feed = await fetchGlobalFeed(MEMBER_TOKEN);
+      expect(feed.map((event) => event.id)).toEqual(
+        expect.arrayContaining([attended.id, notAttended.id]),
+      );
+    });
   });
 
   describe('User-organized Events (POST /events)', () => {

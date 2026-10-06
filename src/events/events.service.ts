@@ -37,6 +37,7 @@ import {
   eventCommunity,
 } from './event-community.util';
 import { EventAttendee } from './entities/event-attendee.entity';
+import { PARTICIPATING_RSVP_STATUSES } from './event-participation.util';
 import { EventInvitation } from './entities/event-invitation.entity';
 import { EventRoleAssignment } from './entities/event-role-assignment.entity';
 import { EventScheduleDay } from './entities/event-schedule-day.entity';
@@ -909,6 +910,20 @@ export class EventsService {
     if (query.type) where.type = query.type;
     if (query.from) where.endsAt = { $gte: new Date(query.from) };
     if (query.to) where.startsAt = { $lte: new Date(query.to) };
+    if (query.attended) {
+      // Events the viewer took part in themselves - see
+      // eventListQuerySchema.attended (same rule as a rank's evidence
+      // Event in FormalRankService).
+      const attendances = await em.find(
+        EventAttendee,
+        {
+          subjectUser: viewer.id,
+          rsvpStatus: { $in: PARTICIPATING_RSVP_STATUSES },
+        },
+        { fields: ['event'] },
+      );
+      where.id = { $in: [...new Set(attendances.map((row) => row.event.id))] };
+    }
 
     const [events, total] = await em.findAndCount(Event, where, {
       populate: ['communityGroup', 'communitySection', 'organizerUser'],

@@ -81,4 +81,16 @@ export class FormalRankRequest extends BaseEntity {
   // FormalRankCorrectionRequest.reviewedBy. Null for CANCELLED.
   @ManyToOne(() => User, { nullable: true, deleteRule: 'set null' })
   decidedBy: User | null = null;
+
+  // APPROVED only, and only when the reviewer confirmed a *different* rank
+  // of the same catalog than the one asked for (the user picked the wrong
+  // one - e.g. asked for Professor, holds Instrutor). `rank` keeps what was
+  // asked, so the history shows both; the FormalRankAssignment uses this.
+  @ManyToOne(() => Rank, { nullable: true, deleteRule: 'no action' })
+  approvedRank: Rank | null = null;
+
+  // REJECTED only - the reviewer's optional explanation, passed on to the
+  // user in the rejection notification.
+  @Property({ nullable: true, type: 'text' })
+  rejectionReason: string | null = null;
 }

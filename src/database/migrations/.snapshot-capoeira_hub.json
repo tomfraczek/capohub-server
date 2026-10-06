@@ -6424,6 +6424,38 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "approved_rank_id": {
+          "name": "approved_rank_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "rejection_reason": {
+          "name": "rejection_reason",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
         }
       },
       "name": "formal_rank_requests",
@@ -6483,6 +6515,19 @@
       ],
       "checks": [],
       "foreignKeys": {
+        "formal_rank_requests_approved_rank_id_foreign": {
+          "columnNames": [
+            "approved_rank_id"
+          ],
+          "constraintName": "formal_rank_requests_approved_rank_id_foreign",
+          "localTableName": "public.formal_rank_requests",
+          "referencedTableName": "public.ranks",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
         "formal_rank_requests_decided_by_id_foreign": {
           "columnNames": [
             "decided_by_id"
