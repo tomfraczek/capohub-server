@@ -3,6 +3,8 @@
  * - the Section OWNER/ADMIN prep view for the formal-rank-correction
  * workflow.
  */
+import { setAndConfirmFormalRank } from './formal-rank-confirm.helper';
+import { FormalRankRequest } from '../src/graduation/entities/formal-rank-request.entity';
 import {
   INestApplication,
   UnauthorizedException,
@@ -184,6 +186,11 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
       });
       await cleanup.nativeDelete(FormalRankCorrectionRequest, {
         targetUser: { $in: [...localUserIdByToken.values()] },
+      });
+      // FormalRankRequest.group/rank have no delete cascade - cleared
+      // before the Groups/Ranks themselves.
+      await cleanup.nativeDelete(FormalRankRequest, {
+        group: { $in: createdGroupIds },
       });
       await cleanup.nativeDelete(FormalRankAssignment, {
         user: { $in: [...localUserIdByToken.values()] },
@@ -394,11 +401,7 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
   }
 
   async function setFormalRank(token: string, rankId: string): Promise<void> {
-    await request(app.getHttpServer())
-      .put('/api/v1/users/me/formal-rank')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ rankId })
-      .expect(200);
+    await setAndConfirmFormalRank(app, token, { rankId });
   }
 
   async function getMemberFormalRank(

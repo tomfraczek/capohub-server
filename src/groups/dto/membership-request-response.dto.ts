@@ -29,6 +29,10 @@ export interface MembershipRequestResponseDto {
   invitedEmail: string | null;
   processedAt: string | null;
   processedBy: MembershipRequestUserRefDto | null;
+  // GROUP-target JOIN_REQUEST only: the affiliation start date (YYYY-MM-DD)
+  // the requester gave, applied on approval - see
+  // MembershipRequest.requestedStartedOn. Null otherwise.
+  requestedStartedOn: string | null;
   createdAt: string;
   updatedAt: string;
 }

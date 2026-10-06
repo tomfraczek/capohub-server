@@ -1,3 +1,5 @@
+import { setAndConfirmFormalRank } from './formal-rank-confirm.helper';
+import { FormalRankRequest } from '../src/graduation/entities/formal-rank-request.entity';
 import {
   INestApplication,
   UnauthorizedException,
@@ -216,6 +218,11 @@ describe('User Profile (e2e)', () => {
           { targetSection: { $in: createdGroupIds } },
         ],
       });
+      // FormalRankRequest.group/rank have no delete cascade - cleared
+      // before the Groups/Ranks themselves.
+      await cleanup.nativeDelete(FormalRankRequest, {
+        group: { $in: createdGroupIds },
+      });
       // FormalGroupAffiliation.group has deleteRule 'no action' - must be
       // cleared before the Groups themselves are deleted below.
       await cleanup.nativeDelete(FormalGroupAffiliation, {
@@ -405,16 +412,6 @@ describe('User Profile (e2e)', () => {
       .expect(201);
   }
 
-  async function archiveSection(
-    token: string,
-    sectionId: string,
-  ): Promise<void> {
-    await request(app.getHttpServer())
-      .post(`/api/v1/sections/${sectionId}/archive`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(201);
-  }
-
   async function getOwnProfile(token: string): Promise<UserProfileResponseDto> {
     return bodyOf<UserProfileResponseDto>(
       request(app.getHttpServer())
@@ -510,13 +507,7 @@ describe('User Profile (e2e)', () => {
     token: string,
     rankId: string,
   ): Promise<FormalRankAssignmentResponseDto> {
-    return bodyOf<FormalRankAssignmentResponseDto>(
-      request(app.getHttpServer())
-        .put('/api/v1/users/me/formal-rank')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ rankId })
-        .expect(200),
-    );
+    return setAndConfirmFormalRank(app, token, { rankId });
   }
 
   async function endFormalRank(token: string): Promise<void> {
@@ -841,6 +832,10 @@ describe('User Profile (e2e)', () => {
   describe('GET /users/:userId/profile - independent rank', () => {
     it('appears when set and visible, reusing the showFormalRank toggle, and is null when hidden, unset, or the owner clears it', async () => {
       const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
+      // The independent rank is read-only while a formal Group is set.
+      await request(app.getHttpServer())
+        .delete('/api/v1/users/me/formal-group')
+        .set('Authorization', `Bearer ${TARGET_TOKEN}`);
       await endCustomRank(TARGET_TOKEN);
 
       // Not yet set at all - null, not an error, regardless of the flag.
@@ -877,7 +872,12 @@ describe('User Profile (e2e)', () => {
       await patchOwnProfile(TARGET_TOKEN, { showFormalRank: false });
     });
 
-    it('shows the independent rank instead of a stale formal rank once the owner has left their formal group, or neither when there is no independent rank either', async () => {
+    // Leaving (or changing) the formal Group never hides the rank earned
+    // there - it stays the user's rank, labelled with its own Group, until
+    // they hold a newer one. Setting an independent rank afterwards (allowed
+    // only without a formal Group) makes that the current one and ends the
+    // formal one as history.
+    it('keeps showing the formal rank after the owner left their formal group, until a newer independent rank replaces it', async () => {
       const { group, section, rank } = await createGroupWithCatalog();
       await joinSection(group.token, section.id, TARGET_TOKEN);
       await setFormalGroup(TARGET_TOKEN, group.id);
@@ -885,49 +885,33 @@ describe('User Profile (e2e)', () => {
       await patchOwnProfile(TARGET_TOKEN, { showFormalRank: true });
       const targetId = localUserIdByToken.get(TARGET_TOKEN) as string;
 
-      // Still in the group - the formal rank shows normally, no
-      // independent rank set yet.
       const whileInGroup = await getPublicProfile(VIEWER_TOKEN, targetId);
       expect(whileInGroup.formalRank?.name).toBe('Corda Crua');
       expect(whileInGroup.independentRank).toBeNull();
 
-      // Leave the section and end the formal group affiliation.
-      // endFormalGroup only ends the FormalGroupAffiliation row, not the
-      // FormalRankAssignment itself (see UserProfileService.endFormalGroup
-      // and getPublicProfile's own comment) - so without the public-
-      // profile-local gate, formalRank would incorrectly keep showing the
-      // stale rank forever.
       await leaveSection(section.id, TARGET_TOKEN);
       await request(app.getHttpServer())
         .delete('/api/v1/users/me/formal-group')
         .set('Authorization', `Bearer ${TARGET_TOKEN}`)
         .expect(204);
 
-      const afterLeavingNoIndependent = await getPublicProfile(
-        VIEWER_TOKEN,
-        targetId,
-      );
-      expect(afterLeavingNoIndependent.formalRank).toBeNull();
-      expect(afterLeavingNoIndependent.independentRank).toBeNull();
+      const afterLeaving = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(afterLeaving.formalRank?.name).toBe('Corda Crua');
+      expect(afterLeaving.formalRank?.sourceGroup?.id).toBe(group.id);
+      expect(afterLeaving.independentRank).toBeNull();
 
-      // Setting an independent rank afterwards shows that instead of the
-      // (now-hidden) stale formal rank.
       await setCustomRank(TARGET_TOKEN, {
         name: 'Corda Depois do Grupo',
         track: RankTrack.ADULT,
         cordSegments: oneSegment('#111111'),
       });
-      const afterLeavingWithIndependent = await getPublicProfile(
-        VIEWER_TOKEN,
-        targetId,
-      );
-      expect(afterLeavingWithIndependent.formalRank).toBeNull();
-      expect(afterLeavingWithIndependent.independentRank?.name).toBe(
+      const withIndependent = await getPublicProfile(VIEWER_TOKEN, targetId);
+      expect(withIndependent.formalRank).toBeNull();
+      expect(withIndependent.independentRank?.name).toBe(
         'Corda Depois do Grupo',
       );
 
       await endCustomRank(TARGET_TOKEN);
-      await endFormalRank(TARGET_TOKEN);
       await patchOwnProfile(TARGET_TOKEN, { showFormalRank: false });
     });
   });
@@ -958,17 +942,29 @@ describe('User Profile (e2e)', () => {
   // ─── Formal Group ────────────────────────────────────────────────────────
 
   describe('PUT/DELETE /users/me/formal-group', () => {
-    it('rejects setting a formal group with no active section membership anywhere in its hierarchy', async () => {
+    // The formal Group and training in its Sections are independent: with
+    // joinRequiresApproval off, no Section membership, follow or any other
+    // prior relation is needed.
+    it('sets a formal group immediately with no section membership, follow or other relation to it', async () => {
       const group = await createGroup({
         name: 'No Membership Formal Group',
+        joinRequiresApproval: false,
       });
-      const error = (await setFormalGroup(
+      const result = (await setFormalGroup(
         EVENT_ATTENDEE_TOKEN,
         group.id,
-        undefined,
-        409,
-      )) as HttpErrorResponse;
-      expect(error.statusCode).toBe(409);
+      )) as FormalGroupResponseDto;
+      expect(result.groupId).toBe(group.id);
+      expect(result.endedOn).toBeNull();
+
+      const affiliation = await app
+        .get(EntityManager)
+        .fork()
+        .findOne(FormalGroupAffiliation, {
+          user: localUserIdByToken.get(EVENT_ATTENDEE_TOKEN),
+          endedOn: null,
+        });
+      expect(affiliation?.group.id).toBe(group.id);
     });
 
     it('accepts a section under a nested child group, not just direct sections', async () => {
@@ -1092,35 +1088,6 @@ describe('User Profile (e2e)', () => {
         409,
       )) as HttpErrorResponse;
       expect(error.statusCode).toBe(409);
-    });
-
-    it('rejects when the only qualifying membership is in an archived section, but accepts once an active section also qualifies', async () => {
-      const group = await createGroup({
-        name: 'Archived Section Formal Group',
-      });
-      const archivedSection = await createSection(group.token, group.id, {
-        name: 'Archived Formal Section',
-      });
-      const activeSection = await createSection(group.token, group.id, {
-        name: 'Active Formal Section',
-      });
-      await joinSection(group.token, archivedSection.id, EVENT_ATTENDEE_TOKEN);
-      await archiveSection(group.token, archivedSection.id);
-
-      const stillRejected = (await setFormalGroup(
-        EVENT_ATTENDEE_TOKEN,
-        group.id,
-        undefined,
-        409,
-      )) as HttpErrorResponse;
-      expect(stillRejected.statusCode).toBe(409);
-
-      await joinSection(group.token, activeSection.id, EVENT_ATTENDEE_TOKEN);
-      const accepted = (await setFormalGroup(
-        EVENT_ATTENDEE_TOKEN,
-        group.id,
-      )) as FormalGroupResponseDto;
-      expect(accepted.groupId).toBe(group.id);
     });
 
     it('DELETE ends the active affiliation, and repeating it 404s', async () => {
@@ -1410,6 +1377,29 @@ describe('User Profile (e2e)', () => {
         type: NotificationType.GROUP_JOIN_REQUEST_APPROVED,
       });
       expect(approved).toHaveLength(1);
+    });
+
+    it('keeps the startedOn given with the request and applies exactly it on approval', async () => {
+      const group = await createGroup({
+        name: 'Approval Group StartedOn',
+        joinRequiresApproval: true,
+      });
+      const requester = await createFreshUser('started-on');
+      const { pendingRequest } =
+        await bodyOf<PendingFormalGroupRequestResponseDto>(
+          request(app.getHttpServer())
+            .put('/api/v1/users/me/formal-group')
+            .set('Authorization', `Bearer ${requester.token}`)
+            .send({ groupId: group.id, startedOn: '2015-06-20' })
+            .expect(202),
+        );
+      expect(pendingRequest.requestedStartedOn).toBe('2015-06-20');
+
+      await decide(group.token, group.id, pendingRequest.id, 'approve');
+
+      const profile = await getOwnProfile(requester.token);
+      expect(profile.formalGroup?.groupId).toBe(group.id);
+      expect(profile.formalGroup?.startedOn).toBe('2015-06-20');
     });
 
     it('rejection keeps the formal Group as it was and allows a new request later', async () => {

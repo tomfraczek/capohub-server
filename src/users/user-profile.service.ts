@@ -12,7 +12,6 @@ import { Section } from '../groups/entities/section.entity';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
 import { RoleAssignment } from '../groups/entities/role-assignment.entity';
 import { SectionMembership } from '../groups/entities/section-membership.entity';
-import { GroupHierarchyService } from '../groups/group-hierarchy.service';
 import {
   cancelPendingGroupJoinRequests,
   startOfTodayUtc,
@@ -21,6 +20,7 @@ import {
 import { MembershipRequestsService } from '../groups/membership-requests.service';
 import { assertNotLeavingOwnedGroup } from '../groups/owner-formal-group';
 import { findOwnedLiveGroupIds } from '../groups/user-owns-group';
+import { cancelPendingFormalRankRequests } from '../graduation/rank-transitions';
 import { GroupRole } from '../groups/enums/group-role.enum';
 import { GroupStatus } from '../groups/enums/group-status.enum';
 import { SectionMembershipStatus } from '../groups/enums/section-membership-status.enum';
@@ -71,7 +71,6 @@ function parseDateOnly(value: string): Date {
 export class UserProfileService {
   constructor(
     private readonly em: EntityManager,
-    private readonly groupHierarchyService: GroupHierarchyService,
     private readonly roleAssignmentsService: RoleAssignmentsService,
     private readonly formalRankService: FormalRankService,
     private readonly customUserRankService: CustomUserRankService,
@@ -202,33 +201,17 @@ export class UserProfileService {
   }
 
   /**
-   * FormalRankService.getCurrentOrNull resolves "the row with endedOn =
-   * null", but UserProfileService.endFormalGroup only ends the
-   * FormalGroupAffiliation row - it does NOT end the corresponding
-   * FormalRankAssignment (see that method's own comment). That means a
-   * user who has left their formal Group would otherwise keep showing
-   * their old formal-group rank here forever. This gate gives the public-
-   * profile surface its own, narrower notion of "current": the assignment
-   * only counts if the target still has a *matching* active
-   * FormalGroupAffiliation for the exact same sourceGroup. Deliberately
-   * local to this method only - it does not touch FormalRankAssignment
-   * itself or FormalRankService, so GET /users/me/formal-rank and every
-   * other caller of getCurrentOrNull/getCurrent are unaffected.
+   * The target's current confirmed formal rank, whichever Group it comes
+   * from. Changing or ending the formal Group never hides it: a rank earned
+   * in a previous Group stays the user's rank (labelled with *its own*
+   * sourceGroup) until a rank in the new Group is confirmed - see
+   * FormalRankRequestsService. At most one of this and the independent
+   * rank is ever active (see graduation/rank-transitions.ts).
    */
   private async resolvePublicFormalRank(
     targetId: string,
   ): Promise<FormalRankAssignment | null> {
-    const assignment = await this.formalRankService.getCurrentOrNull(targetId);
-    if (!assignment) {
-      return null;
-    }
-    const hasMatchingActiveAffiliation =
-      (await this.em.count(FormalGroupAffiliation, {
-        user: targetId,
-        group: assignment.sourceGroup.id,
-        endedOn: null,
-      })) > 0;
-    return hasMatchingActiveAffiliation ? assignment : null;
+    return this.formalRankService.getCurrentOrNull(targetId);
   }
 
   /**
@@ -286,18 +269,17 @@ export class UserProfileService {
    *
    *  - Immediate (Group.joinRequiresApproval off, or the caller is the
    *    Group's own OWNER/ADMIN): the current affiliation ends and a fresh
-   *    row starts atomically (switchFormalGroup). Requires an ACTIVE/
-   *    READ_ONLY SectionMembership in at least one ACTIVE Section anywhere
-   *    in the Group's hierarchy (direct or under a nested child Group - see
-   *    GroupHierarchyService.getDescendantSections), unless the caller is
-   *    the Group's OWNER/ADMIN. Any pending Group join request elsewhere
-   *    becomes moot and is cancelled.
+   *    row starts atomically (switchFormalGroup). Any pending Group join
+   *    request elsewhere becomes moot and is cancelled.
    *  - Approval (joinRequiresApproval on): nothing about the current
    *    affiliation changes yet - a PENDING Group join request is created
-   *    instead (MembershipRequestsService.createGroupJoinRequest) and the
-   *    switch only happens on approval. No Section membership is required:
-   *    the reviewer's decision replaces it. startedOn is not carried over
-   *    (the affiliation then starts with startedOn = null).
+   *    instead (MembershipRequestsService.createGroupJoinRequest), carrying
+   *    startedOn (MembershipRequest.requestedStartedOn), and the switch only
+   *    happens on approval, with that same startedOn.
+   *
+   * Neither path requires a Section membership, a follow, or any other
+   * prior relation to the Group: the formal Group ("my school") and
+   * training in its Sections are independent facts.
    *
    * Either path refuses to move an OWNER off their own Group
    * (OWNER_MUST_STAY_IN_FORMAL_GROUP). Validated at set/request time only -
@@ -331,8 +313,8 @@ export class UserProfileService {
 
       // The Group's own OWNER is its formal member by definition (see
       // owner-formal-group.ts); its ADMIN already holds the very
-      // permission that approves Group join requests. Neither needs a
-      // Section membership nor anyone's approval.
+      // permission that approves Group join requests. Neither needs
+      // anyone's approval.
       const ownsThisGroup = (await findOwnedLiveGroupIds(em, user.id)).includes(
         groupId,
       );
@@ -368,32 +350,9 @@ export class UserProfileService {
             em,
             group,
             user,
+            startedOn,
           );
         return { pendingRequest };
-      }
-
-      if (!administersThisGroup && !isAlreadyThisGroup) {
-        const descendantSections =
-          await this.groupHierarchyService.getDescendantSections(groupId, em);
-        const activeSectionIds = descendantSections
-          .filter((section) => section.status === GroupStatus.ACTIVE)
-          .map((section) => section.id);
-
-        const hasQualifyingMembership =
-          activeSectionIds.length > 0 &&
-          (await em.count(SectionMembership, {
-            user: user.id,
-            section: { $in: activeSectionIds },
-            status: { $in: ACTIVE_MEMBERSHIP_STATUSES },
-          })) > 0;
-
-        if (!hasQualifyingMembership) {
-          throw new ConflictException({
-            code: 'FORMAL_GROUP_REQUIRES_ACTIVE_SECTION_MEMBERSHIP',
-            message:
-              'You must have an active section membership within this group (or one of its active sections) to set it as your formal group',
-          });
-        }
       }
 
       const affiliation = await switchFormalGroup(em, user, group, startedOn);
@@ -417,6 +376,9 @@ export class UserProfileService {
     // has to be transferred first (OWNER_MUST_STAY_IN_FORMAL_GROUP).
     await assertNotLeavingOwnedGroup(this.em, user.id, current.group.id, null);
     current.endedOn = startOfTodayUtc();
+    // A pending rank request to the Group being left is moot; the current
+    // rank itself stays (see switchFormalGroup's identical comment).
+    await cancelPendingFormalRankRequests(this.em, user.id);
     await this.em.flush();
   }
 

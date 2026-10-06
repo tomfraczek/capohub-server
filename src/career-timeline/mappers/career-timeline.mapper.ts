@@ -1,3 +1,4 @@
+import { CustomUserRank } from '../../graduation/entities/custom-user-rank.entity';
 import { eventCommunity } from '../../events/event-community.util';
 import { Event } from '../../events/entities/event.entity';
 import { toEventCommunityRefDto } from '../../events/mappers/event-community-ref.mapper';
@@ -42,6 +43,10 @@ export function leftGroupId(affiliationId: string): string {
 
 export function receivedRankId(assignmentId: string): string {
   return `received-rank:${assignmentId}`;
+}
+
+export function independentRankId(customRankId: string): string {
+  return `independent-rank:${customRankId}`;
 }
 
 export function startedTeachingId(roleAssignmentId: string): string {
@@ -203,8 +208,47 @@ export function buildReceivedRankItem(
     rankDetails: {
       assignmentId: assignment.id,
       rankId: rank.id,
+      source: 'FORMAL_GROUP',
       track: rank.track,
       cordSegments: [...rank.cordSegments.getItems()]
+        .sort((a, b) => a.position - b.position)
+        .map((segment) => ({
+          position: segment.position,
+          colorHex: segment.colorHex,
+          proportion: segment.proportion,
+        })),
+    },
+  };
+}
+
+// An independent-rank stint (CustomUserRank) - a real, earlier rank of the
+// user that must stay in their history after it was replaced (e.g. by a
+// rank confirmed in their new formal Group). Dated by startedOn, else by
+// when it was declared in the app (createdAt) - an independent rank has no
+// other recorded timestamp, and leaving it out would make it disappear.
+export function buildIndependentRankItem(
+  customRank: CustomUserRank,
+): CareerTimelineItemDto {
+  return {
+    ...systemBase(
+      independentRankId(customRank.id),
+      CareerTimelineEntryType.RECEIVED_RANK,
+      customRank.startedOn ?? customRank.createdAt.toISOString().slice(0, 10),
+      `Otrzymanie stopnia ${customRank.name}`,
+    ),
+    group: null,
+    section: null,
+    event: null,
+    apelido: null,
+    rankName: customRank.name,
+    awardedByName: null,
+    location: null,
+    rankDetails: {
+      assignmentId: customRank.id,
+      rankId: null,
+      source: 'INDEPENDENT',
+      track: customRank.track,
+      cordSegments: [...customRank.cordSegments.getItems()]
         .sort((a, b) => a.position - b.position)
         .map((segment) => ({
           position: segment.position,

@@ -22,9 +22,7 @@ export class CustomRankController {
   constructor(private readonly customUserRankService: CustomUserRankService) {}
 
   @Get()
-  getCurrent(
-    @CurrentUser() user: User,
-  ): Promise<CustomUserRankResponseDto> {
+  getCurrent(@CurrentUser() user: User): Promise<CustomUserRankResponseDto> {
     return this.customUserRankService.getCurrent(user.id);
   }
 

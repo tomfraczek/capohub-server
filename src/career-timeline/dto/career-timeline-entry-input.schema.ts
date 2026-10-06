@@ -20,10 +20,7 @@ const LOCATION_MAX_LENGTH = 200;
 export const occurredOnPartialSchema = z
   .string()
   .trim()
-  .regex(
-    /^\d{4}(-\d{2}(-\d{2})?)?$/,
-    'Must be YYYY, YYYY-MM, or YYYY-MM-DD',
-  );
+  .regex(/^\d{4}(-\d{2}(-\d{2})?)?$/, 'Must be YYYY, YYYY-MM, or YYYY-MM-DD');
 
 const description = optionalNullableText(DESCRIPTION_MAX_LENGTH).optional();
 const location = optionalNullableText(LOCATION_MAX_LENGTH).optional();
@@ -75,7 +72,10 @@ const receivedApelido = z.object({
     .string()
     .trim()
     .min(1, 'Must not be empty')
-    .max(APELIDO_MAX_LENGTH, `Must be at most ${APELIDO_MAX_LENGTH} characters`),
+    .max(
+      APELIDO_MAX_LENGTH,
+      `Must be at most ${APELIDO_MAX_LENGTH} characters`,
+    ),
   awardedByName: optionalNullableText(AWARDED_BY_MAX_LENGTH).optional(),
   groupId,
   groupName,
@@ -89,7 +89,10 @@ const receivedRank = z.object({
     .string()
     .trim()
     .min(1, 'Must not be empty')
-    .max(RANK_NAME_MAX_LENGTH, `Must be at most ${RANK_NAME_MAX_LENGTH} characters`),
+    .max(
+      RANK_NAME_MAX_LENGTH,
+      `Must be at most ${RANK_NAME_MAX_LENGTH} characters`,
+    ),
   awardedByName: optionalNullableText(AWARDED_BY_MAX_LENGTH).optional(),
   groupId,
   groupName,

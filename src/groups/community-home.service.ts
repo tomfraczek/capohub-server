@@ -417,6 +417,7 @@ export class CommunityHomeService {
       canCreateEventInSectionIds: [],
       canReviewJoinRequestsInSectionIds: [],
       canReviewJoinRequestsInGroupIds: [],
+      canReviewFormalRankRequestsInGroupIds: [],
       canViewMembersInSectionIds: [],
       canManageMembersInSectionIds: [],
       canInviteMembersInSectionIds: [],
@@ -540,6 +541,13 @@ export class CommunityHomeService {
             ? 'canReviewJoinRequestsInGroupIds'
             : 'canReviewJoinRequestsInSectionIds',
         );
+      }
+      if (
+        isGroup &&
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.FORMAL_RANK_REQUEST_REVIEW)
+      ) {
+        push('canReviewFormalRankRequestsInGroupIds');
       }
       // Mirrors SectionMembershipsService.listMembers exactly: MEMBERSHIP_VIEW
       // plus Section.membersVisibility (PRIVATE = staff only).

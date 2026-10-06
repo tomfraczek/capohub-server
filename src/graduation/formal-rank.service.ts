@@ -11,24 +11,28 @@ import { EventAttendee } from '../events/entities/event-attendee.entity';
 import type { Event } from '../events/entities/event.entity';
 import { PARTICIPATING_RSVP_STATUSES } from '../events/event-participation.util';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
+import { RoleAssignment } from '../groups/entities/role-assignment.entity';
+import { GroupRole } from '../groups/enums/group-role.enum';
 import { User } from '../users/entities/user.entity';
 import { Rank } from './entities/rank.entity';
+import { FormalRankAssignment } from './entities/formal-rank-assignment.entity';
 import {
-  FORMAL_RANK_ASSIGNMENTS_ACTIVE_UNIQUE_INDEX,
-  FormalRankAssignment,
-} from './entities/formal-rank-assignment.entity';
+  FORMAL_RANK_REQUESTS_PENDING_UNIQUE_INDEX,
+  FormalRankRequest,
+} from './entities/formal-rank-request.entity';
 import { SetFormalRankInput } from './dto/set-formal-rank.schema';
 import { FormalRankAssignmentResponseDto } from './dto/formal-rank-assignment-response.dto';
+import { PendingFormalRankResponseDto } from './dto/formal-rank-request-response.dto';
 import { toFormalRankAssignmentResponseDto } from './mappers/formal-rank-assignment.mapper';
+import { toOwnFormalRankRequestResponseDto } from './mappers/formal-rank-request.mapper';
+import { FormalRankRequestsService } from './formal-rank-requests.service';
+import {
+  assignFormalRank,
+  cancelPendingFormalRankRequests,
+  startOfTodayUtc,
+} from './rank-transitions';
 
 const RANK_POPULATE = ['rank.cordSegments', 'sourceGroup', 'event'] as const;
-
-function startOfTodayUtc(): Date {
-  const now = new Date();
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
-}
 
 function parseDateOnly(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
@@ -39,16 +43,20 @@ function parseDateOnly(value: string): Date {
 // *formal* rank (see formal-rank-assignment.entity.ts). Only ever a
 // catalog Rank, chosen from the caller's active FormalGroupAffiliation's
 // Group - there is no "custom" path through this service at all (see
-// CustomUserRankService for that separate, non-historical concept). A
-// user changing their own rank is a profile operation, not a community
-// action, so it is deliberately NOT written to any Group's Audit Log (see
-// the module spec: "Zmiana własnego stopnia użytkownika nie musi trafiać
-// do community Audit Log").
+// CustomUserRankService for the independent rank).
+//
+// Choosing a formal rank is a *declaration* that someone authorized in the
+// Group has to confirm (FormalRankRequest - see
+// FormalRankRequestsService): setCurrent never writes the assignment
+// itself, except for the formal Group's own OWNER/ADMIN, who hold that
+// very confirming permission. Until then the user's previous rank (formal
+// from another Group, or independent) stays current and unchanged.
 @Injectable()
 export class FormalRankService {
   constructor(
     private readonly em: EntityManager,
     private readonly eventAccessService: EventAccessService,
+    private readonly formalRankRequestsService: FormalRankRequestsService,
   ) {}
 
   /**
@@ -98,10 +106,20 @@ export class FormalRankService {
     return assignments.map(toFormalRankAssignmentResponseDto);
   }
 
+  /**
+   * Validates the choice exactly as before (rank from the caller's formal
+   * Group's catalog, not archived, startedOn not in the future, Event
+   * evidence eligible), then:
+   *  - the formal Group's OWNER/ADMIN: confirmed immediately - becomes the
+   *    current rank (assignFormalRank ends the previous one, formal or
+   *    independent, as history);
+   *  - anyone else: a PENDING FormalRankRequest for that Group's reviewers,
+   *    replacing a previous pending one. The current rank is untouched.
+   */
   async setCurrent(
     user: User,
     input: SetFormalRankInput,
-  ): Promise<FormalRankAssignmentResponseDto> {
+  ): Promise<FormalRankAssignmentResponseDto | PendingFormalRankResponseDto> {
     return this.em.transactional(async (em) => {
       const formalGroup = await this.loadActiveFormalGroup(em, user.id);
       if (!formalGroup) {
@@ -150,54 +168,45 @@ export class FormalRankService {
       const event = input.eventId
         ? await this.loadAndValidateEventLink(em, user, input.eventId)
         : null;
+      const awardedByName = input.awardedByName ?? null;
 
-      const current = await em.findOne(FormalRankAssignment, {
-        user: user.id,
-        endedOn: null,
-      });
-      if (current) {
-        current.endedOn = startOfTodayUtc();
-        // Flushed before the new row is inserted below - see
-        // FormalGroupAffiliation.setFormalGroup's identical ordering
-        // comment: MikroORM applies inserts before updates within a
-        // single flush, which would otherwise transiently violate
-        // FORMAL_RANK_ASSIGNMENTS_ACTIVE_UNIQUE_INDEX.
-        await em.flush();
+      if (await this.administersGroup(em, user.id, formalGroup.group.id)) {
+        await cancelPendingFormalRankRequests(em, user.id);
+        const assignment = await assignFormalRank(em, {
+          user,
+          rank,
+          group: formalGroup.group,
+          startedOn,
+          awardedByName,
+          event,
+        });
+        return toFormalRankAssignmentResponseDto(assignment);
       }
 
-      // Selecting a formal Rank no longer touches CustomUserRank at all -
-      // now that `isActive` is gone (see custom-user-rank.entity.ts), an
-      // independent rank simply stays in the database untouched; which of
-      // the two "counts" for display is a purely display-time computation
-      // done by callers (e.g. UserProfileService.getPublicProfile), not
-      // something this service enforces by mutating rows.
-      const assignment = new FormalRankAssignment();
-      assignment.user = user;
-      assignment.rank = rank;
-      assignment.sourceGroup = formalGroup.group;
-      assignment.startedOn = startedOn;
-      assignment.awardedByName = input.awardedByName ?? null;
-      assignment.event = event;
-
+      await cancelPendingFormalRankRequests(em, user.id);
+      const request = new FormalRankRequest();
+      request.user = user;
+      request.group = formalGroup.group;
+      request.rank = rank;
+      request.startedOn = startedOn;
+      request.awardedByName = awardedByName;
+      request.event = event;
       try {
-        em.persist(assignment);
+        em.persist(request);
         await em.flush();
       } catch (error) {
         if (
-          isUniqueViolationOn(
-            error,
-            FORMAL_RANK_ASSIGNMENTS_ACTIVE_UNIQUE_INDEX,
-          )
+          isUniqueViolationOn(error, FORMAL_RANK_REQUESTS_PENDING_UNIQUE_INDEX)
         ) {
           throw new ConflictException({
-            code: 'RANK_ALREADY_SET',
-            message: 'A concurrent change already set an active formal rank',
+            code: 'FORMAL_RANK_REQUEST_ALREADY_PENDING',
+            message: 'A concurrent change already sent a rank request',
           });
         }
         throw error;
       }
-
-      return toFormalRankAssignmentResponseDto(assignment);
+      await this.formalRankRequestsService.notifyReviewers(em, request);
+      return { pendingRequest: toOwnFormalRankRequestResponseDto(request) };
     });
   }
 
@@ -214,6 +223,24 @@ export class FormalRankService {
     }
     current.endedOn = startOfTodayUtc();
     await this.em.flush();
+  }
+
+  // The Group's OWNER/ADMIN hold FORMAL_RANK_REQUEST_REVIEW on it (see
+  // group-role-permissions.map.ts) - their own choice needs no one else's
+  // confirmation.
+  private async administersGroup(
+    em: EntityManager,
+    userId: string,
+    groupId: string,
+  ): Promise<boolean> {
+    return (
+      (await em.count(RoleAssignment, {
+        user: userId,
+        group: groupId,
+        role: { $in: [GroupRole.OWNER, GroupRole.ADMIN] },
+        revokedAt: null,
+      })) > 0
+    );
   }
 
   private async loadActiveFormalGroup(

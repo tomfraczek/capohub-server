@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { EventsModule } from '../events/events.module';
 import { GroupsModule } from '../groups/groups.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { StorageModule } from '../storage/storage.module';
 import { CustomRankController } from './custom-rank.controller';
 import { CustomUserRankService } from './custom-user-rank.service';
 import { FormalRankOptionsController } from './formal-rank-options.controller';
@@ -13,6 +14,11 @@ import {
   FormalRankHistoryController,
 } from './formal-rank.controller';
 import { FormalRankService } from './formal-rank.service';
+import {
+  GroupFormalRankRequestsController,
+  MyFormalRankRequestController,
+} from './formal-rank-requests.controller';
+import { FormalRankRequestsService } from './formal-rank-requests.service';
 import { GraduationSystemController } from './graduation-system.controller';
 import { GraduationSystemService } from './graduation-system.service';
 import { RanksController } from './ranks.controller';
@@ -53,7 +59,8 @@ import { SectionMemberFormalRankController } from './section-member-formal-rank.
 // and /users/me/formal-rank-correction* all live here directly rather than
 // on UsersController.
 @Module({
-  imports: [GroupsModule, EventsModule, NotificationsModule],
+  // StorageModule for FormalRankRequestsService's requester avatars.
+  imports: [GroupsModule, EventsModule, NotificationsModule, StorageModule],
   controllers: [
     GraduationSystemController,
     RanksController,
@@ -64,6 +71,8 @@ import { SectionMemberFormalRankController } from './section-member-formal-rank.
     MyFormalRankCorrectionController,
     FormalRankOptionsController,
     SectionMemberFormalRankController,
+    GroupFormalRankRequestsController,
+    MyFormalRankRequestController,
   ],
   providers: [
     GraduationSystemService,
@@ -71,7 +80,12 @@ import { SectionMemberFormalRankController } from './section-member-formal-rank.
     FormalRankService,
     CustomUserRankService,
     FormalRankCorrectionService,
+    FormalRankRequestsService,
   ],
-  exports: [FormalRankService, CustomUserRankService, FormalRankCorrectionService],
+  exports: [
+    FormalRankService,
+    CustomUserRankService,
+    FormalRankCorrectionService,
+  ],
 })
 export class GraduationModule {}

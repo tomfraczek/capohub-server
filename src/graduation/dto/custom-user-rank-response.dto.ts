@@ -12,6 +12,7 @@ export interface CustomUserRankResponseDto {
   description: string | null;
   track: RankTrack;
   cordSegments: CordSegmentResponseDto[];
+  startedOn: string | null;
   createdAt: string;
   updatedAt: string;
 }

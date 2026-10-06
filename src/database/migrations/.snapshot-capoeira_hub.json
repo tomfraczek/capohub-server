@@ -297,7 +297,7 @@
       "checks": [
         {
           "name": "academies_group_or_section_check",
-          "columnName": "section_id",
+          "columnName": "group_id",
           "definition": "CHECK ((((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))))",
           "expression": "((group_id IS NOT NULL) AND (section_id IS NULL)) OR ((group_id IS NULL) AND (section_id IS NOT NULL))"
         }
@@ -2750,6 +2750,38 @@
             "ADULT"
           ],
           "mappedType": "enum"
+        },
+        "started_on": {
+          "name": "started_on",
+          "type": "date",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 0,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "date"
+        },
+        "ended_on": {
+          "name": "ended_on",
+          "type": "date",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 0,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "date"
         }
       },
       "name": "custom_user_ranks",
@@ -2771,18 +2803,19 @@
           ],
           "composite": false,
           "constraint": false,
-          "keyName": "custom_user_ranks_user_id_index",
-          "unique": false,
-          "primary": false
+          "keyName": "custom_user_ranks_user_id_active_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX custom_user_ranks_user_id_active_unique ON public.custom_user_ranks USING btree (user_id) WHERE (ended_on IS NULL)"
         },
         {
           "columnNames": [
             "user_id"
           ],
           "composite": false,
-          "constraint": true,
-          "keyName": "custom_user_ranks_user_id_unique",
-          "unique": true,
+          "constraint": false,
+          "keyName": "custom_user_ranks_user_id_index",
+          "unique": false,
           "primary": false
         }
       ],
@@ -5069,7 +5102,7 @@
         },
         {
           "name": "events_organizer_identity_check",
-          "columnName": "community_section_id",
+          "columnName": "organizer_user_display_name",
           "definition": "CHECK ((((organizer_type = 'GROUP'::text) AND (community_group_id IS NOT NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'SECTION'::text) AND (community_section_id IS NOT NULL) AND (community_group_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'USER'::text) AND (community_group_id IS NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NOT NULL))))",
           "expression": "((organizer_type = 'GROUP'::text) AND (community_group_id IS NOT NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'SECTION'::text) AND (community_section_id IS NOT NULL) AND (community_group_id IS NULL) AND (organizer_user_display_name IS NULL)) OR ((organizer_type = 'USER'::text) AND (community_group_id IS NULL) AND (community_section_id IS NULL) AND (organizer_user_display_name IS NOT NULL))"
         }
@@ -6182,6 +6215,332 @@
           ],
           "constraintName": "formal_rank_correction_requests_target_user_id_foreign",
           "localTableName": "public.formal_rank_correction_requests",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "group_id": {
+          "name": "group_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "rank_id": {
+          "name": "rank_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "started_on": {
+          "name": "started_on",
+          "type": "date",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 0,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "date"
+        },
+        "awarded_by_name": {
+          "name": "awarded_by_name",
+          "type": "varchar(150)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 150,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'PENDING'",
+          "comment": null,
+          "enumItems": [
+            "PENDING",
+            "APPROVED",
+            "REJECTED",
+            "CANCELLED"
+          ],
+          "mappedType": "enum"
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "decided_by_id": {
+          "name": "decided_by_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        }
+      },
+      "name": "formal_rank_requests",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "group_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "formal_rank_requests_group_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "formal_rank_requests_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "status"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "formal_rank_requests_status_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "user_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "formal_rank_requests_user_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "user_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "formal_rank_requests_user_id_pending_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX formal_rank_requests_user_id_pending_unique ON public.formal_rank_requests USING btree (user_id) WHERE (status = 'PENDING'::text)"
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "formal_rank_requests_decided_by_id_foreign": {
+          "columnNames": [
+            "decided_by_id"
+          ],
+          "constraintName": "formal_rank_requests_decided_by_id_foreign",
+          "localTableName": "public.formal_rank_requests",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "formal_rank_requests_event_id_foreign": {
+          "columnNames": [
+            "event_id"
+          ],
+          "constraintName": "formal_rank_requests_event_id_foreign",
+          "localTableName": "public.formal_rank_requests",
+          "referencedTableName": "public.events",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "formal_rank_requests_group_id_foreign": {
+          "columnNames": [
+            "group_id"
+          ],
+          "constraintName": "formal_rank_requests_group_id_foreign",
+          "localTableName": "public.formal_rank_requests",
+          "referencedTableName": "public.groups",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "formal_rank_requests_rank_id_foreign": {
+          "columnNames": [
+            "rank_id"
+          ],
+          "constraintName": "formal_rank_requests_rank_id_foreign",
+          "localTableName": "public.formal_rank_requests",
+          "referencedTableName": "public.ranks",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "formal_rank_requests_user_id_foreign": {
+          "columnNames": [
+            "user_id"
+          ],
+          "constraintName": "formal_rank_requests_user_id_foreign",
+          "localTableName": "public.formal_rank_requests",
           "referencedTableName": "public.users",
           "referencedColumnNames": [
             "id"
@@ -7390,7 +7749,7 @@
         },
         {
           "name": "hierarchy_invitations_target_group_or_section_check",
-          "columnName": "target_section_id",
+          "columnName": "target_group_id",
           "definition": "CHECK ((((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))))",
           "expression": "((target_group_id IS NOT NULL) AND (target_section_id IS NULL)) OR ((target_group_id IS NULL) AND (target_section_id IS NOT NULL))"
         }
@@ -8519,6 +8878,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "requested_started_on": {
+          "name": "requested_started_on",
+          "type": "date",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 0,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "date"
         }
       },
       "name": "membership_requests",
@@ -9044,7 +9419,10 @@
             "FORMAL_RANK_CORRECTION_REJECTED",
             "GROUP_JOIN_REQUEST_RECEIVED",
             "GROUP_JOIN_REQUEST_APPROVED",
-            "GROUP_JOIN_REQUEST_REJECTED"
+            "GROUP_JOIN_REQUEST_REJECTED",
+            "FORMAL_RANK_REQUEST_RECEIVED",
+            "FORMAL_RANK_REQUEST_APPROVED",
+            "FORMAL_RANK_REQUEST_REJECTED"
           ],
           "mappedType": "enum"
         },

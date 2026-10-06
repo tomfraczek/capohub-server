@@ -223,6 +223,36 @@ export function hierarchyInvitationRejectedText(): NotificationText {
   };
 }
 
+export function formalRankRequestReceivedText(
+  requesterName: string,
+  rankName: string,
+): NotificationText {
+  return {
+    title: 'Prośba o potwierdzenie stopnia',
+    body: `${requesterName} prosi o potwierdzenie stopnia ${rankName} w systemie Twojej grupy.`,
+  };
+}
+
+export function formalRankRequestApprovedText(
+  rankName: string,
+  groupName: string,
+): NotificationText {
+  return {
+    title: 'Stopień potwierdzony',
+    body: `Twój stopień ${rankName} został potwierdzony w systemie grupy „${groupName}”.`,
+  };
+}
+
+export function formalRankRequestRejectedText(
+  rankName: string,
+  groupName: string,
+): NotificationText {
+  return {
+    title: 'Stopień nie został potwierdzony',
+    body: `Prośba o potwierdzenie stopnia ${rankName} w grupie „${groupName}” została odrzucona. Możesz wybrać stopień ponownie.`,
+  };
+}
+
 export function formalRankCorrectionRequiredText(): NotificationText {
   return {
     title: 'Wymagana korekta stopnia',

@@ -183,6 +183,14 @@ export enum GroupPermission {
   // any real distinction (same reasoning as RECIPIENT_GROUP_MANAGE).
   GRADUATION_SYSTEM_VIEW = 'GRADUATION_SYSTEM_VIEW',
   GRADUATION_SYSTEM_MANAGE = 'GRADUATION_SYSTEM_MANAGE',
+  // Confirm/reject a member's declared rank in this Group's graduation
+  // system (FormalRankRequest - "Prośby o potwierdzenie stopnia").
+  // Exact-Group-only, OWNER and ADMIN alike - deliberately its own
+  // permission rather than GRADUATION_SYSTEM_MANAGE: deciding *who holds*
+  // a rank is a different capability from editing the catalog, even if
+  // both sit at the same trust tier today. Not FORMAL_RANK_CORRECTION_* -
+  // those are Section-scoped and correct an existing assignment.
+  FORMAL_RANK_REQUEST_REVIEW = 'FORMAL_RANK_REQUEST_REVIEW',
 
   // Read-only list of the people tied to a Group - members of its direct
   // Sections plus its GroupFollow followers (see GroupAudienceService).

@@ -164,14 +164,10 @@ export class GroupsService {
   // (besides UserProfileService.setFormalGroup) a FormalGroupAffiliation
   // comes into being, so a user who already has one is blocked outright -
   // USER_ALREADY_HAS_FORMAL_GROUP, 409 - before anything is written. This
-  // is the one path that creates a FormalGroupAffiliation without first
-  // requiring a SectionMembership in the target Group: the creator's OWNER
-  // grant is itself a strong enough tie that making them join/create a
-  // Section of their own Group first, purely to satisfy
-  // setFormalGroup's usual qualifying-membership check, would be
-  // pointless ceremony. UserProfileService.setFormalGroup's own
-  // SectionMembership requirement is untouched for every other case
-  // (changing to/setting an *existing* Group as formal).
+  // is the only path besides UserProfileService.setFormalGroup and an
+  // approved Group join request (MembershipRequestsService) that creates a
+  // FormalGroupAffiliation - none of them needs a SectionMembership, the
+  // formal Group and Section training are independent.
   //
   // Group, OWNER RoleAssignment and FormalGroupAffiliation are all created
   // in one transaction - if the affiliation insert fails (including the

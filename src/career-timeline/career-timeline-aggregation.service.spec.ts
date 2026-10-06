@@ -4,6 +4,7 @@ import { Event } from '../events/entities/event.entity';
 import { EventVisibility } from '../events/enums/event-visibility.enum';
 import { FormalRankCorrectionService } from '../graduation/formal-rank-correction.service';
 import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignment.entity';
+import { CustomUserRank } from '../graduation/entities/custom-user-rank.entity';
 import { Rank } from '../graduation/entities/rank.entity';
 import { RankTrack } from '../graduation/enums/rank-track.enum';
 import { Collection } from '@mikro-orm/core';
@@ -95,6 +96,7 @@ interface MockRouting {
   roleAssignments?: RoleAssignment[];
   groups?: Group[];
   sections?: Section[];
+  independentRanks?: CustomUserRank[];
 }
 
 interface RoleAssignmentWhere {
@@ -141,6 +143,9 @@ function buildMockEm(routing: MockRouting = {}) {
     }
     if (entityClass === FormalRankAssignment) {
       return Promise.resolve(routing.assignments ?? []);
+    }
+    if (entityClass === CustomUserRank) {
+      return Promise.resolve(routing.independentRanks ?? []);
     }
     if (entityClass === CareerTimelineEntry) {
       const entries = routing.entries ?? [];
@@ -353,6 +358,43 @@ describe('CareerTimelineAggregationService', () => {
       });
 
       expect(result.items).toHaveLength(0);
+    });
+
+    // History keeps the real earlier rank: an ended independent stint next
+    // to the rank later confirmed in a formal Group.
+    it('lists a past independent rank alongside the formal rank that replaced it', async () => {
+      const user = buildUser({ showFormalRank: true });
+      const independent = new CustomUserRank();
+      independent.id = 'custom-1';
+      independent.name = 'Instrutor';
+      independent.track = RankTrack.ADULT;
+      independent.startedOn = new Date('2019-01-01');
+      independent.endedOn = new Date('2022-01-01');
+      independent.createdAt = new Date('2023-01-01T00:00:00.000Z');
+      independent.cordSegments = new Collection<never>(independent);
+      const em = buildMockEm({
+        assignments: [buildAssignment()],
+        independentRanks: [independent],
+      });
+      const service = buildService(em);
+
+      const result = await service.getTimeline(user, user.id, {
+        limit: 20,
+        offset: 0,
+      });
+
+      const ranks = result.items.filter((item) => item.rankDetails);
+      expect(ranks).toHaveLength(2);
+      const independentItem = ranks.find(
+        (item) => item.rankDetails?.source === 'INDEPENDENT',
+      );
+      expect(independentItem?.rankName).toBe('Instrutor');
+      expect(independentItem?.group).toBeNull();
+      expect(independentItem?.rankDetails?.rankId).toBeNull();
+      expect(
+        ranks.find((item) => item.rankDetails?.source === 'FORMAL_GROUP')
+          ?.group,
+      ).not.toBeNull();
     });
 
     it('always shows the RECEIVED_RANK entry to the owner, regardless of an active correction', async () => {

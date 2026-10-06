@@ -4,6 +4,7 @@ import { EventAccessService } from '../events/event-access.service';
 import { Event } from '../events/entities/event.entity';
 import { FormalRankCorrectionService } from '../graduation/formal-rank-correction.service';
 import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignment.entity';
+import { CustomUserRank } from '../graduation/entities/custom-user-rank.entity';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
 import { Group } from '../groups/entities/group.entity';
 import { GroupRole } from '../groups/enums/group-role.enum';
@@ -22,6 +23,7 @@ import {
 } from './enums/career-timeline-entry-type.enum';
 import {
   buildFoundedGroupItem,
+  buildIndependentRankItem,
   buildJoinedGroupItem,
   buildLeftGroupItem,
   buildManualItem,
@@ -174,6 +176,17 @@ export class CareerTimelineAggregationService {
             includeEvent,
           ),
         );
+      }
+      // Independent-rank stints - current and past (see
+      // buildIndependentRankItem). Same showFormalRank gate as on the
+      // public profile.
+      const independentRanks = await this.em.find(
+        CustomUserRank,
+        { user: target.id },
+        { populate: ['cordSegments'] },
+      );
+      for (const customRank of independentRanks) {
+        items.push(buildIndependentRankItem(customRank));
       }
     }
 

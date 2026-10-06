@@ -1,10 +1,20 @@
-import { Body, Controller, Delete, Get, HttpCode, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Put,
+  Res,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { User } from '../users/entities/user.entity';
 import { setFormalRankSchema } from './dto/set-formal-rank.schema';
 import type { SetFormalRankInput } from './dto/set-formal-rank.schema';
 import { FormalRankAssignmentResponseDto } from './dto/formal-rank-assignment-response.dto';
+import { PendingFormalRankResponseDto } from './dto/formal-rank-request-response.dto';
 import { FormalRankService } from './formal-rank.service';
 
 // The caller's own current/historical *formal* rank - a global part of
@@ -24,12 +34,20 @@ export class FormalRankController {
     return this.formalRankService.getCurrent(user.id);
   }
 
+  // 200 + the new assignment when confirmed immediately (the caller is
+  // their formal Group's OWNER/ADMIN); otherwise 202 + the pending
+  // FormalRankRequest - see FormalRankService.setCurrent.
   @Put()
-  setCurrent(
+  async setCurrent(
     @CurrentUser() user: User,
     @Body(new ZodValidationPipe(setFormalRankSchema)) dto: SetFormalRankInput,
-  ): Promise<FormalRankAssignmentResponseDto> {
-    return this.formalRankService.setCurrent(user, dto);
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<FormalRankAssignmentResponseDto | PendingFormalRankResponseDto> {
+    const result = await this.formalRankService.setCurrent(user, dto);
+    if ('pendingRequest' in result) {
+      response.status(202);
+    }
+    return result;
   }
 
   @Delete()

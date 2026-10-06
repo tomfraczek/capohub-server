@@ -2,6 +2,7 @@ import { CordSegmentResponseDto } from '../dto/rank-response.dto';
 import { CustomUserRankResponseDto } from '../dto/custom-user-rank-response.dto';
 import { CustomUserRankCordSegment } from '../entities/custom-user-rank-cord-segment.entity';
 import { CustomUserRank } from '../entities/custom-user-rank.entity';
+import { toDateOnly } from './formal-rank-request.mapper';
 
 function toCordSegmentResponseDto(
   segment: CustomUserRankCordSegment,
@@ -29,6 +30,7 @@ export function toCustomUserRankResponseDto(
     cordSegments: [...segments]
       .sort((a, b) => a.position - b.position)
       .map(toCordSegmentResponseDto),
+    startedOn: toDateOnly(customRank.startedOn),
     createdAt: customRank.createdAt.toISOString(),
     updatedAt: customRank.updatedAt.toISOString(),
   };

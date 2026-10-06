@@ -25,6 +25,8 @@
  *  7. Notifications and Audit Log: correct recipients, deduplicated,
  *     never "all Section admins", always logged under the exact Section
  */
+import { setAndConfirmFormalRank } from './formal-rank-confirm.helper';
+import { FormalRankRequest } from '../src/graduation/entities/formal-rank-request.entity';
 import {
   INestApplication,
   UnauthorizedException,
@@ -199,6 +201,11 @@ describe('Formal Rank Correction (e2e)', () => {
       });
       await cleanup.nativeDelete(FormalRankCorrectionRequest, {
         targetUser: { $in: [...localUserIdByToken.values()] },
+      });
+      // FormalRankRequest.group/rank have no delete cascade - cleared
+      // before the Groups/Ranks themselves.
+      await cleanup.nativeDelete(FormalRankRequest, {
+        group: { $in: createdGroupIds },
       });
       await cleanup.nativeDelete(FormalRankAssignment, {
         user: { $in: [...localUserIdByToken.values()] },
@@ -400,11 +407,7 @@ describe('Formal Rank Correction (e2e)', () => {
   }
 
   async function setFormalRank(token: string, rankId: string): Promise<void> {
-    await request(app.getHttpServer())
-      .put('/api/v1/users/me/formal-rank')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ rankId })
-      .expect(200);
+    await setAndConfirmFormalRank(app, token, { rankId });
   }
 
   /**

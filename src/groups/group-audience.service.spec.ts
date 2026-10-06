@@ -11,7 +11,6 @@ import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignm
 import type { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { AvatarType } from '../users/enums/avatar-type.enum';
-import { FormalGroupAffiliation } from './entities/formal-group-affiliation.entity';
 import { GroupFollow } from './entities/group-follow.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
 import { GroupRole } from './enums/group-role.enum';
@@ -332,11 +331,14 @@ describe('GroupAudienceService', () => {
     ]);
   });
 
-  it('shows the formal rank only with a matching active affiliation, else the independent rank, never when hidden', async () => {
+  // Changing the formal Group never hides a rank earned in the previous
+  // one - it stays the user's rank until the new Group confirms one.
+  it('shows the current formal rank from any Group (incl. a previous one), else the independent rank, never when hidden', async () => {
     const { service } = buildService({
       [GroupFollow.name]: [
         { user: { id: 'formal' } },
-        { user: { id: 'stale' } },
+        { user: { id: 'previous' } },
+        { user: { id: 'independent' } },
         { user: { id: 'hidden' } },
       ],
       [User.name]: [
@@ -347,16 +349,18 @@ describe('GroupAudienceService', () => {
           showFormalGroup: true,
         }),
         buildUser({
-          id: 'stale',
+          id: 'previous',
           publicCode: 'B',
           showFormalRank: true,
           showFormalGroup: true,
         }),
-        buildUser({ id: 'hidden', publicCode: 'C', showFormalRank: false }),
-      ],
-      [FormalGroupAffiliation.name]: [
-        { user: { id: 'formal' }, group: { id: 'g-formal' } },
-        { user: { id: 'stale' }, group: { id: 'g-new' } },
+        buildUser({
+          id: 'independent',
+          publicCode: 'C',
+          showFormalRank: true,
+          showFormalGroup: true,
+        }),
+        buildUser({ id: 'hidden', publicCode: 'D', showFormalRank: false }),
       ],
       [FormalRankAssignment.name]: [
         {
@@ -365,14 +369,14 @@ describe('GroupAudienceService', () => {
           rank: { name: 'Corda Azul', cordSegments: segments('#0000FF') },
         },
         {
-          user: { id: 'stale' },
+          user: { id: 'previous' },
           sourceGroup: { id: 'g-old' },
           rank: { name: 'Old rank', cordSegments: segments('#000000') },
         },
       ],
       [CustomUserRank.name]: [
         {
-          user: { id: 'stale' },
+          user: { id: 'independent' },
           name: 'Independent',
           cordSegments: segments('#FFFF00'),
         },
@@ -385,7 +389,8 @@ describe('GroupAudienceService', () => {
     );
 
     expect(rankById.get('formal')).toBe('Corda Azul');
-    expect(rankById.get('stale')).toBe('Independent');
+    expect(rankById.get('previous')).toBe('Old rank');
+    expect(rankById.get('independent')).toBe('Independent');
     expect(rankById.get('hidden')).toBeNull();
   });
 });

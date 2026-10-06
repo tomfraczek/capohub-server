@@ -11,6 +11,9 @@ export const createCustomUserRankSchema = z.object({
   description: optionalNullableText(DESCRIPTION_MAX_LENGTH),
   track: z.nativeEnum(RankTrack),
   cordSegments: cordSegmentsSchema,
+  // Since when the user holds this rank (YYYY-MM-DD, optional, never in
+  // the future - checked in CustomUserRankService).
+  startedOn: z.string().date('Must be a valid date (YYYY-MM-DD)').optional(),
 });
 
 export class CreateCustomUserRankDto extends createZodDto(

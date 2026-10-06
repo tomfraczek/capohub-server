@@ -36,12 +36,16 @@ export interface CareerTimelineEventRefDto {
   locationName: string | null;
 }
 
-// Only ever populated on a SYSTEM RECEIVED_RANK item (built from a
-// FormalRankAssignment) - a MANUAL RECEIVED_RANK entry has only the free-
-// text `rankName` field below, no cord/track/segments to render.
+// Only ever populated on a SYSTEM RECEIVED_RANK item - built from a
+// FormalRankAssignment (source FORMAL_GROUP, `group` = the Group whose
+// system it is) or from an independent-rank stint (source INDEPENDENT,
+// CustomUserRank - no catalog Rank, so `rankId` is null and `group` is
+// null). A MANUAL RECEIVED_RANK entry has only the free-text `rankName`.
 export interface CareerTimelineFormalRankDetailsDto {
+  // The FormalRankAssignment's id, or the CustomUserRank's id.
   assignmentId: string;
-  rankId: string;
+  rankId: string | null;
+  source: 'FORMAL_GROUP' | 'INDEPENDENT';
   track: RankTrack;
   cordSegments: CordSegmentResponseDto[];
 }

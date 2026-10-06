@@ -174,6 +174,8 @@ const GROUP_ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   // split/escalated to OWNER_PERMISSIONS the way lifecycle actions are.
   GroupPermission.GRADUATION_SYSTEM_VIEW,
   GroupPermission.GRADUATION_SYSTEM_MANAGE,
+  // "Prośby o potwierdzenie stopnia" - see GroupPermission's own comment.
+  GroupPermission.FORMAL_RANK_REQUEST_REVIEW,
   // Who is tied to this Group (Section members + followers) - read-only,
   // same trust tier as AUDIT_LOG_VIEW above.
   GroupPermission.GROUP_FOLLOWERS_VIEW,

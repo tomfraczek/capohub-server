@@ -25,6 +25,8 @@
  *     owner). A SYSTEM item's id can never be edited/deleted through this
  *     endpoint - it simply isn't a row this endpoint owns.
  */
+import { setAndConfirmFormalRank } from './formal-rank-confirm.helper';
+import { FormalRankRequest } from '../src/graduation/entities/formal-rank-request.entity';
 import {
   INestApplication,
   UnauthorizedException,
@@ -214,6 +216,11 @@ describe('Career Timeline (e2e)', () => {
       });
       // FormalRankAssignment.event has deleteRule 'no action' - must be
       // cleared before the Events themselves are deleted below.
+      // FormalRankRequest.group/rank have no delete cascade - cleared
+      // before the Groups/Ranks themselves.
+      await cleanup.nativeDelete(FormalRankRequest, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(FormalRankAssignment, {
         user: { $in: [...localUserIdByToken.values()] },
       });
@@ -506,6 +513,9 @@ describe('Career Timeline (e2e)', () => {
     extra: Record<string, unknown> = {},
     expectStatus = 200,
   ): Promise<FormalRankAssignmentResponseDto | HttpErrorResponse> {
+    if (expectStatus === 200) {
+      return setAndConfirmFormalRank(app, token, { rankId, ...extra });
+    }
     return bodyOf(
       request(app.getHttpServer())
         .put('/api/v1/users/me/formal-rank')

@@ -7,7 +7,6 @@ import { resolveUserAvatarUrl } from '../storage/image-url.util';
 import { resolveDisplayName } from '../users/display-name.util';
 import { User } from '../users/entities/user.entity';
 import { GroupAudienceMemberDto } from './dto/group-audience-member-response.dto';
-import { FormalGroupAffiliation } from './entities/formal-group-affiliation.entity';
 import { GroupFollow } from './entities/group-follow.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
 import { SectionMembership } from './entities/section-membership.entity';
@@ -207,12 +206,13 @@ export class GroupAudienceService {
   }
 
   /**
-   * Batched mirror of the public profile's effective rank (see
-   * UserProfileService.getPublicProfile/resolvePublicFormalRank and the
-   * app's computeEffectiveRank): the current FormalRankAssignment counts
-   * only while a matching active FormalGroupAffiliation exists and both
-   * showFormalGroup and showFormalRank are on; otherwise the independent
-   * rank, gated by showFormalRank alone.
+   * Batched mirror of the public profile's current rank (see
+   * UserProfileService.getPublicProfile and the app's computeEffectiveRank):
+   * the active FormalRankAssignment - from whichever Group, a rank earned in
+   * a previous Group stays the user's rank until a new one is confirmed -
+   * while both showFormalGroup and showFormalRank are on; otherwise the
+   * active independent rank, gated by showFormalRank alone. At most one of
+   * the two is ever active (see graduation/rank-transitions.ts).
    */
   private async loadVisibleRanks(users: User[]): Promise<Map<string, RankRef>> {
     const result = new Map<string, RankRef>();
@@ -225,29 +225,16 @@ export class GroupAudienceService {
       .filter((user) => user.showFormalGroup)
       .map((user) => user.id);
     if (formalCandidates.length > 0) {
-      const affiliations = await this.em.find(
-        FormalGroupAffiliation,
-        { user: { $in: formalCandidates }, endedOn: null },
-        { fields: ['user', 'group'] },
-      );
-      const affiliationGroupByUser = new Map(
-        affiliations.map((a) => [a.user.id, a.group.id]),
-      );
       const assignments = await this.em.find(
         FormalRankAssignment,
         { user: { $in: formalCandidates }, endedOn: null },
         { populate: ['rank.cordSegments'] },
       );
       for (const assignment of assignments) {
-        if (
-          affiliationGroupByUser.get(assignment.user.id) ===
-          assignment.sourceGroup.id
-        ) {
-          result.set(assignment.user.id, {
-            name: assignment.rank.name,
-            cordSegments: toSegments(assignment.rank.cordSegments.getItems()),
-          });
-        }
+        result.set(assignment.user.id, {
+          name: assignment.rank.name,
+          cordSegments: toSegments(assignment.rank.cordSegments.getItems()),
+        });
       }
     }
 
@@ -257,7 +244,7 @@ export class GroupAudienceService {
     if (independentCandidates.length > 0) {
       const customRanks = await this.em.find(
         CustomUserRank,
-        { user: { $in: independentCandidates } },
+        { user: { $in: independentCandidates }, endedOn: null },
         { populate: ['cordSegments'] },
       );
       for (const customRank of customRanks) {

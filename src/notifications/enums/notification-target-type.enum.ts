@@ -12,5 +12,8 @@ export enum NotificationTargetType {
   MEMBERSHIP_REQUEST = 'MEMBERSHIP_REQUEST',
   HIERARCHY_INVITATION = 'HIERARCHY_INVITATION',
   FORMAL_RANK_CORRECTION = 'FORMAL_RANK_CORRECTION',
+  // A FormalRankRequest ("Prośba o potwierdzenie stopnia") - contextGroup
+  // is the Group whose system the rank is from.
+  FORMAL_RANK_REQUEST = 'FORMAL_RANK_REQUEST',
   USER = 'USER',
 }

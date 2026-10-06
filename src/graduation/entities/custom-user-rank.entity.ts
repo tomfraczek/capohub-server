@@ -13,32 +13,36 @@ import { User } from '../../users/entities/user.entity';
 import { RankTrack } from '../enums/rank-track.enum';
 import { CustomUserRankCordSegment } from './custom-user-rank-cord-segment.entity';
 
-export const CUSTOM_USER_RANKS_USER_UNIQUE_INDEX =
-  'custom_user_ranks_user_id_unique';
+export const CUSTOM_USER_RANKS_ACTIVE_UNIQUE_INDEX =
+  'custom_user_ranks_user_id_active_unique';
 
-// A purely cosmetic, user-declared cordão - never a formal rank, never
-// career history, and never written to FormalRankAssignment (see that
-// entity's own comment and CustomUserRankService). Not a catalog: has no
-// `previousRank`/position/system, and belongs to exactly one user.
+// A user-declared ("independent") rank - one not confirmed in any Group's
+// graduation system, e.g. earned outside a formal Group. Never written to
+// FormalRankAssignment (see that entity's own comment) and has no catalog:
+// no `previousRank`/position/system, belongs to exactly one user.
 // Deliberately a separate entity from Rank rather than a shared
 // polymorphic "rank" base: the two have almost no fields in common once
-// GraduationSystem/previousRank/isArchived are removed, and sharing a
-// table would force every catalog-only column to be nullable here for no
-// benefit.
+// GraduationSystem/previousRank/isArchived are removed.
 //
-// A true singleton, at most one row per user (see the plain unique
-// constraint below) - there is no `isActive`/activation concept any more,
-// so a user simply has an independent rank or does not. Setting it
-// (CustomUserRankService.setCurrent) is an upsert: update in place if a
-// row already exists, insert otherwise. Which of a user's formal rank and
-// this independent rank "counts" for display is now purely a display-time
-// decision made by callers (e.g. the public profile surface, or the
-// client) - the backend no longer mutates this row as a side effect of a
-// formal rank being selected (see FormalRankService.setCurrent).
+// Same "one row per stint, never overwritten, ended by setting endedOn"
+// shape as FormalRankAssignment, so a past independent rank stays a real,
+// structured part of the user's history (career timeline RECEIVED_RANK)
+// instead of disappearing when replaced. At most one *active* row
+// (endedOn = null) per user - see the partial unique index below.
+//
+// A user has at most one active rank overall - this or a
+// FormalRankAssignment, never both (see CustomUserRankService.setCurrent,
+// which ends the formal one, and FormalRankRequestsService.approve, which
+// ends this one). While the user has an active formal Group, their
+// independent rank is read-only: it can neither be set, changed nor ended
+// (CustomUserRankService) - a rank inside a formal Group only ever comes
+// from its graduation system, through a confirmed FormalRankRequest.
 @Entity({ tableName: 'custom_user_ranks' })
 @Unique({
-  name: CUSTOM_USER_RANKS_USER_UNIQUE_INDEX,
+  name: CUSTOM_USER_RANKS_ACTIVE_UNIQUE_INDEX,
   properties: ['user'],
+  expression: (table, columns, indexName) =>
+    `create unique index "${indexName}" on ${table.toString()} ("${columns.user}") where ("${columns.endedOn}" is null)`,
 })
 export class CustomUserRank extends BaseEntity {
   @Index()
@@ -56,4 +60,14 @@ export class CustomUserRank extends BaseEntity {
 
   @OneToMany(() => CustomUserRankCordSegment, (segment) => segment.customRank)
   cordSegments = new Collection<CustomUserRankCordSegment>(this);
+
+  // Real-world dates this stint covers, same meaning as
+  // FormalRankAssignment's. startedOn is never guessed - null when the user
+  // didn't give one (the timeline then dates it by createdAt, the moment
+  // it was declared in the app).
+  @Property({ nullable: true, type: 'date' })
+  startedOn: Date | null = null;
+
+  @Property({ nullable: true, type: 'date' })
+  endedOn: Date | null = null;
 }

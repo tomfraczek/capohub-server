@@ -4,6 +4,7 @@
  * POST .../formal-rank-correction/submit, without requiring
  * GroupPermission.GRADUATION_SYSTEM_VIEW.
  */
+import { FormalRankRequest } from '../src/graduation/entities/formal-rank-request.entity';
 import {
   INestApplication,
   UnauthorizedException,
@@ -155,6 +156,11 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
   afterAll(async () => {
     await closeE2eApp(app, async () => {
       const cleanup = app.get(EntityManager).fork();
+      // FormalRankRequest.group/rank have no delete cascade - cleared
+      // before the Groups/Ranks themselves.
+      await cleanup.nativeDelete(FormalRankRequest, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(FormalRankAssignment, {
         user: { $in: [...localUserIdByToken.values()] },
       });
@@ -521,11 +527,13 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
     const chosen = options.ranks[RankTrack.ADULT][0];
     expect(chosen.id).toBe(rank.id);
 
-    await request(app.getHttpServer())
+    // Accepted as a choice: confirmed immediately for the Group's
+    // OWNER/ADMIN (200) or sent for confirmation (202) - never refused.
+    const put = await request(app.getHttpServer())
       .put('/api/v1/users/me/formal-rank')
       .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
-      .send({ rankId: chosen.id })
-      .expect(200);
+      .send({ rankId: chosen.id });
+    expect([200, 202]).toContain(put.status);
   });
 
   it('returns 401 for an unauthenticated request', async () => {

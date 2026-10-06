@@ -23,6 +23,8 @@
  *     (there is no `:id` any more, so IDOR is structurally moot) - GET/
  *     DELETE 404 (CUSTOM_RANK_NOT_SET) when the caller hasn't set one
  */
+import { setAndConfirmFormalRank } from './formal-rank-confirm.helper';
+import { FormalRankRequest } from '../src/graduation/entities/formal-rank-request.entity';
 import {
   INestApplication,
   UnauthorizedException,
@@ -54,6 +56,15 @@ import { GraduationSystemResponseDto } from '../src/graduation/dto/graduation-sy
 import { RankResponseDto } from '../src/graduation/dto/rank-response.dto';
 import { CustomUserRankResponseDto } from '../src/graduation/dto/custom-user-rank-response.dto';
 import { FormalRankAssignmentResponseDto } from '../src/graduation/dto/formal-rank-assignment-response.dto';
+import {
+  GroupFormalRankRequestResponseDto,
+  OwnFormalRankRequestStateDto,
+  PendingFormalRankResponseDto,
+} from '../src/graduation/dto/formal-rank-request-response.dto';
+import { FormalRankRequestStatus } from '../src/graduation/enums/formal-rank-request-status.enum';
+import { Notification } from '../src/notifications/entities/notification.entity';
+import { NotificationType } from '../src/notifications/enums/notification-type.enum';
+import { PublicUserProfileResponseDto } from '../src/users/dto/public-user-profile-response.dto';
 import { GraduationSystem } from '../src/graduation/entities/graduation-system.entity';
 import { Rank } from '../src/graduation/entities/rank.entity';
 import { CustomUserRank } from '../src/graduation/entities/custom-user-rank.entity';
@@ -181,6 +192,11 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
   afterAll(async () => {
     await closeE2eApp(app, async () => {
       const cleanup = app.get(EntityManager).fork();
+      // FormalRankRequest.group/rank have no delete cascade - cleared
+      // before the Groups/Ranks themselves.
+      await cleanup.nativeDelete(FormalRankRequest, {
+        group: { $in: createdGroupIds },
+      });
       await cleanup.nativeDelete(FormalRankAssignment, {
         user: { $in: [...localUserIdByToken.values()] },
       });
@@ -405,12 +421,18 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
     return res.body as FormalRankAssignmentResponseDto;
   }
 
+  // A success (200) means "this user now holds the rank" - confirmed
+  // through the real approval when the PUT only created a request (see
+  // setAndConfirmFormalRank). Error statuses hit the PUT directly.
   async function setFormalRank(
     token: string,
     rankId: string,
     expectStatus = 200,
     extra: Record<string, unknown> = {},
   ): Promise<FormalRankAssignmentResponseDto | HttpErrorResponse> {
+    if (expectStatus === 200) {
+      return setAndConfirmFormalRank(app, token, { rankId, ...extra });
+    }
     return bodyOf(
       request(app.getHttpServer())
         .put('/api/v1/users/me/formal-rank')
@@ -634,28 +656,45 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
       expect(error.code).toBe('CUSTOM_RANK_NOT_SET');
     });
 
-    it('can be set (PUT) even while an active formal group is set - setting is always allowed, and never carries formal-only fields', async () => {
+    // Inside a formal Group a rank only comes from its graduation system -
+    // the independent rank is read-only there.
+    it('is read-only (set/change/end) while the caller has an active formal group', async () => {
+      await ensureNoFormalGroup(MEMBER_TOKEN);
+      await ensureNoCustomRank(MEMBER_TOKEN);
+      const before = (await setCustomRank(MEMBER_TOKEN, {
+        name: 'Cordão pessoal',
+      })) as CustomUserRankResponseDto;
+
       const { section, group, token } = await createGroupWithCatalog();
       await joinSection(token, section.id, MEMBER_TOKEN);
       await setFormalGroup(MEMBER_TOKEN, group.id);
 
-      const created = (await setCustomRank(MEMBER_TOKEN, {
-        name: 'Cordão pessoal',
-      })) as CustomUserRankResponseDto;
-      expect(created.name).toBe('Cordão pessoal');
-      expect(created).not.toHaveProperty('isActive');
-      expect(created).not.toHaveProperty('awardedByName');
-      expect(created).not.toHaveProperty('startedOn');
-      expect(created).not.toHaveProperty('endedOn');
+      const setError = (await setCustomRank(
+        MEMBER_TOKEN,
+        { name: 'Nowy cordão' },
+        409,
+      )) as HttpErrorResponse;
+      expect(setError.code).toBe('INDEPENDENT_RANK_LOCKED_BY_FORMAL_GROUP');
+      const endError = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .delete('/api/v1/users/me/custom-rank')
+          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+          .expect(409),
+      );
+      expect(endError.code).toBe('INDEPENDENT_RANK_LOCKED_BY_FORMAL_GROUP');
 
-      const current = await getCustomRank(MEMBER_TOKEN);
-      expect(current?.id).toBe(created.id);
+      // Still the current rank, untouched.
+      expect(await getCustomRank(MEMBER_TOKEN)).toEqual(before);
+      await leaveSection(section.id, MEMBER_TOKEN);
+      await endFormalGroup(MEMBER_TOKEN);
     });
 
-    it('a second PUT updates the existing row in place rather than creating a second one - GET only ever returns the latest', async () => {
+    it('changing the rank starts a new stint and keeps the previous one as history - GET returns only the current one', async () => {
+      await ensureNoFormalGroup(OUTSIDER_TOKEN);
       await ensureNoCustomRank(OUTSIDER_TOKEN);
       const first = (await setCustomRank(OUTSIDER_TOKEN, {
         name: 'First cordão',
+        startedOn: '2018-04-01',
       })) as CustomUserRankResponseDto;
 
       const second = (await setCustomRank(OUTSIDER_TOKEN, {
@@ -664,47 +703,39 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
         cordSegments: oneSegment('#00FF00'),
       })) as CustomUserRankResponseDto;
 
-      // Same underlying row (same id), updated in place - never a second
-      // row, so there is no "old" one left to find.
-      expect(second.id).toBe(first.id);
+      expect(second.id).not.toBe(first.id);
       expect(second.name).toBe('Second cordão');
-      expect(second.track).toBe(RankTrack.CHILD);
+      expect(await getCustomRank(OUTSIDER_TOKEN)).toEqual(second);
 
-      const current = await getCustomRank(OUTSIDER_TOKEN);
-      expect(current).toEqual(second);
+      const stints = await app
+        .get(EntityManager)
+        .fork()
+        .find(CustomUserRank, {
+          user: localUserIdByToken.get(OUTSIDER_TOKEN),
+        });
+      const ended = stints.find((stint) => stint.id === first.id);
+      expect(ended?.endedOn).not.toBeNull();
+      expect(ended?.name).toBe('First cordão');
     });
 
-    it('can be freely edited (PUT) by the owner regardless of formal group status', async () => {
-      const { section, group, token } = await createGroupWithCatalog();
-      await joinSection(token, section.id, OTHER_MEMBER_TOKEN);
-      await setFormalGroup(OTHER_MEMBER_TOKEN, group.id);
-
-      const created = (await setCustomRank(OTHER_MEMBER_TOKEN, {
-        name: 'Editable cordão',
-      })) as CustomUserRankResponseDto;
-
-      const updated = (await setCustomRank(OTHER_MEMBER_TOKEN, {
-        name: 'Edited cordão',
-        description: 'updated',
-        track: RankTrack.CHILD,
-        cordSegments: oneSegment('#ABCDEF'),
-      })) as CustomUserRankResponseDto;
-      expect(updated.id).toBe(created.id);
-      expect(updated.name).toBe('Edited cordão');
-      expect(updated.track).toBe(RankTrack.CHILD);
-    });
-
-    it('can always be deleted by the owner - never blocked as "in use" - and a repeat GET/DELETE 404s', async () => {
+    it('can be ended by the owner (kept as history, not deleted) - a repeat GET/DELETE 404s', async () => {
+      await ensureNoFormalGroup(OUTSIDER_TOKEN);
       await ensureNoCustomRank(OUTSIDER_TOKEN);
-      await setCustomRank(OUTSIDER_TOKEN, { name: 'Deletable cordão' });
+      const created = (await setCustomRank(OUTSIDER_TOKEN, {
+        name: 'Endable cordão',
+      })) as CustomUserRankResponseDto;
 
       await request(app.getHttpServer())
         .delete('/api/v1/users/me/custom-rank')
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .expect(204);
 
-      const afterDelete = await getCustomRank(OUTSIDER_TOKEN);
-      expect(afterDelete).toBeNull();
+      expect(await getCustomRank(OUTSIDER_TOKEN)).toBeNull();
+      const row = await app
+        .get(EntityManager)
+        .fork()
+        .findOne(CustomUserRank, { id: created.id });
+      expect(row?.endedOn).not.toBeNull();
 
       const repeatDelete = await bodyOf<HttpErrorResponse>(
         request(app.getHttpServer())
@@ -716,6 +747,8 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
     });
 
     it('is fully scoped to the caller - one user setting/deleting theirs never affects another user', async () => {
+      await ensureNoFormalGroup(MEMBER_TOKEN);
+      await ensureNoFormalGroup(OTHER_MEMBER_TOKEN);
       await ensureNoCustomRank(MEMBER_TOKEN);
       await ensureNoCustomRank(OTHER_MEMBER_TOKEN);
 
@@ -742,7 +775,10 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
       expect(memberUnaffected?.name).toBe("Member's cordão");
     });
 
-    it('selecting a formal rank no longer touches the independent cordão at all - the two are fully decoupled', async () => {
+    // The independent rank stays current through joining a formal Group;
+    // only a rank confirmed in that Group replaces it - and it stays in
+    // the history (ended), never deleted.
+    it('stays current after joining a formal group until a group rank is confirmed, then is ended as history', async () => {
       await ensureNoFormalGroup(MEMBER_TOKEN);
       await ensureNoCustomRank(MEMBER_TOKEN);
       const cordao = (await setCustomRank(MEMBER_TOKEN, {
@@ -752,16 +788,377 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
       const { section, group, rank, token } = await createGroupWithCatalog();
       await joinSection(token, section.id, MEMBER_TOKEN);
       await setFormalGroup(MEMBER_TOKEN, group.id);
+      expect(await getCustomRank(MEMBER_TOKEN)).toEqual(cordao);
+
       await setFormalRank(MEMBER_TOKEN, rank.id);
 
-      const afterFormal = await getCustomRank(MEMBER_TOKEN);
-      expect(afterFormal).toEqual(cordao);
+      expect(await getCustomRank(MEMBER_TOKEN)).toBeNull();
+      expect((await getCurrentFormalRank(MEMBER_TOKEN))?.rank.id).toBe(rank.id);
+      const row = await app
+        .get(EntityManager)
+        .fork()
+        .findOne(CustomUserRank, { id: cordao.id });
+      expect(row?.endedOn).not.toBeNull();
 
       await leaveSection(section.id, MEMBER_TOKEN);
       await endFormalGroup(MEMBER_TOKEN);
+      await request(app.getHttpServer())
+        .delete('/api/v1/users/me/formal-rank')
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`);
+    });
+  });
 
-      const afterLeaving = await getCustomRank(MEMBER_TOKEN);
-      expect(afterLeaving).toEqual(cordao);
+  // ─── Rank confirmation requests ("Prośby o potwierdzenie stopnia") ─────
+
+  describe('Formal rank confirmation (FormalRankRequest)', () => {
+    async function putFormalRank(
+      token: string,
+      body: Record<string, unknown>,
+    ): Promise<PendingFormalRankResponseDto> {
+      return bodyOf<PendingFormalRankResponseDto>(
+        request(app.getHttpServer())
+          .put('/api/v1/users/me/formal-rank')
+          .set('Authorization', `Bearer ${token}`)
+          .send(body)
+          .expect(202),
+      );
+    }
+
+    async function listRequests(
+      token: string,
+      groupId: string,
+      expectStatus = 200,
+    ): Promise<GroupFormalRankRequestResponseDto[]> {
+      return bodyOf<GroupFormalRankRequestResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${groupId}/formal-rank-requests`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(expectStatus),
+      );
+    }
+
+    async function decide(
+      token: string,
+      groupId: string,
+      requestId: string,
+      decision: 'approve' | 'reject',
+      expectStatus = 204,
+    ): Promise<void> {
+      await request(app.getHttpServer())
+        .post(
+          `/api/v1/groups/${groupId}/formal-rank-requests/${requestId}/${decision}`,
+        )
+        .set('Authorization', `Bearer ${token}`)
+        .expect(expectStatus);
+    }
+
+    async function ownRequest(
+      token: string,
+    ): Promise<OwnFormalRankRequestStateDto> {
+      return bodyOf<OwnFormalRankRequestStateDto>(
+        request(app.getHttpServer())
+          .get('/api/v1/users/me/formal-rank-request')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200),
+      );
+    }
+
+    async function requestStatus(id: string): Promise<FormalRankRequestStatus> {
+      const row = await app
+        .get(EntityManager)
+        .fork()
+        .findOneOrFail(FormalRankRequest, { id });
+      return row.status;
+    }
+
+    it("a member's choice creates a pending request - the current (independent) rank stays and the public profile never shows the pending one", async () => {
+      await ensureNoFormalGroup(MEMBER_TOKEN);
+      await ensureNoCustomRank(MEMBER_TOKEN);
+      await setCustomRank(MEMBER_TOKEN, { name: 'Instrutor' });
+      const { section, group, rank, token } = await createGroupWithCatalog();
+      await joinSection(token, section.id, MEMBER_TOKEN);
+      await setFormalGroup(MEMBER_TOKEN, group.id);
+
+      const { pendingRequest } = await putFormalRank(MEMBER_TOKEN, {
+        rankId: rank.id,
+        startedOn: '2021-09-10',
+      });
+      expect(pendingRequest.status).toBe(FormalRankRequestStatus.PENDING);
+      expect(pendingRequest.group.id).toBe(group.id);
+      expect((await ownRequest(MEMBER_TOKEN)).request?.id).toBe(
+        pendingRequest.id,
+      );
+
+      expect(await getCurrentFormalRank(MEMBER_TOKEN)).toBeNull();
+      expect((await getCustomRank(MEMBER_TOKEN))?.name).toBe('Instrutor');
+
+      const profile = await bodyOf<PublicUserProfileResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/users/${localUserIdByToken.get(MEMBER_TOKEN)}/profile`)
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+          .expect(200),
+      );
+      expect(profile.formalRank).toBeNull();
+
+      // The Group's reviewer sees who, what they hold now, and what they ask for.
+      const listed = await listRequests(token, group.id);
+      const item = listed.find((row) => row.id === pendingRequest.id);
+      expect(item?.currentRank).toMatchObject({
+        name: 'Instrutor',
+        source: 'INDEPENDENT',
+        sourceGroup: null,
+      });
+      expect(item?.requestedRank.id).toBe(rank.id);
+      expect(item?.startedOn).toBe('2021-09-10');
+
+      await leaveSection(section.id, MEMBER_TOKEN);
+      await endFormalGroup(MEMBER_TOKEN);
+    });
+
+    it('approval makes the requested rank current with the declared startedOn, and keeps the previous rank as history', async () => {
+      await ensureNoFormalGroup(MEMBER_TOKEN);
+      await ensureNoCustomRank(MEMBER_TOKEN);
+      const independent = (await setCustomRank(MEMBER_TOKEN, {
+        name: 'Instrutor',
+      })) as CustomUserRankResponseDto;
+      const { section, group, rank, token } = await createGroupWithCatalog();
+      await joinSection(token, section.id, MEMBER_TOKEN);
+      await setFormalGroup(MEMBER_TOKEN, group.id);
+      const { pendingRequest } = await putFormalRank(MEMBER_TOKEN, {
+        rankId: rank.id,
+        startedOn: '2021-09-10',
+      });
+
+      await decide(token, group.id, pendingRequest.id, 'approve');
+
+      expect(await requestStatus(pendingRequest.id)).toBe(
+        FormalRankRequestStatus.APPROVED,
+      );
+      const current = await getCurrentFormalRank(MEMBER_TOKEN);
+      expect(current?.rank.id).toBe(rank.id);
+      expect(current?.startedOn).toBe('2021-09-10');
+      expect(current?.sourceGroup.id).toBe(group.id);
+      const previous = await app
+        .get(EntityManager)
+        .fork()
+        .findOne(CustomUserRank, { id: independent.id });
+      expect(previous?.endedOn).not.toBeNull();
+      expect((await ownRequest(MEMBER_TOKEN)).request).toBeNull();
+
+      await leaveSection(section.id, MEMBER_TOKEN);
+      await endFormalGroup(MEMBER_TOKEN);
+      await request(app.getHttpServer())
+        .delete('/api/v1/users/me/formal-rank')
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`);
+    });
+
+    it('rejection leaves the current rank unchanged and allows choosing again later', async () => {
+      await ensureNoFormalGroup(OTHER_MEMBER_TOKEN);
+      await ensureNoCustomRank(OTHER_MEMBER_TOKEN);
+      await setCustomRank(OTHER_MEMBER_TOKEN, { name: 'Instrutor' });
+      const { section, group, rank, token } = await createGroupWithCatalog();
+      await joinSection(token, section.id, OTHER_MEMBER_TOKEN);
+      await setFormalGroup(OTHER_MEMBER_TOKEN, group.id);
+      const { pendingRequest } = await putFormalRank(OTHER_MEMBER_TOKEN, {
+        rankId: rank.id,
+      });
+
+      await decide(token, group.id, pendingRequest.id, 'reject');
+
+      expect(await requestStatus(pendingRequest.id)).toBe(
+        FormalRankRequestStatus.REJECTED,
+      );
+      expect(await getCurrentFormalRank(OTHER_MEMBER_TOKEN)).toBeNull();
+      expect((await getCustomRank(OTHER_MEMBER_TOKEN))?.name).toBe('Instrutor');
+      expect((await ownRequest(OTHER_MEMBER_TOKEN)).request).toBeNull();
+
+      const again = await putFormalRank(OTHER_MEMBER_TOKEN, {
+        rankId: rank.id,
+      });
+      expect(again.pendingRequest.id).not.toBe(pendingRequest.id);
+
+      await leaveSection(section.id, OTHER_MEMBER_TOKEN);
+      await endFormalGroup(OTHER_MEMBER_TOKEN);
+    });
+
+    it('changing the formal group cancels the pending request to the previous one, without touching the current rank', async () => {
+      await ensureNoFormalGroup(OTHER_MEMBER_TOKEN);
+      await ensureNoCustomRank(OTHER_MEMBER_TOKEN);
+      await setCustomRank(OTHER_MEMBER_TOKEN, { name: 'Instrutor' });
+      const first = await createGroupWithCatalog();
+      const second = await createGroupWithCatalog();
+      await joinSection(first.token, first.section.id, OTHER_MEMBER_TOKEN);
+      await setFormalGroup(OTHER_MEMBER_TOKEN, first.group.id);
+      const { pendingRequest } = await putFormalRank(OTHER_MEMBER_TOKEN, {
+        rankId: first.rank.id,
+      });
+
+      await setFormalGroup(OTHER_MEMBER_TOKEN, second.group.id);
+
+      expect(await requestStatus(pendingRequest.id)).toBe(
+        FormalRankRequestStatus.CANCELLED,
+      );
+      expect((await getCustomRank(OTHER_MEMBER_TOKEN))?.name).toBe('Instrutor');
+      await decide(
+        first.token,
+        first.group.id,
+        pendingRequest.id,
+        'approve',
+        409,
+      );
+
+      await leaveSection(first.section.id, OTHER_MEMBER_TOKEN);
+      await endFormalGroup(OTHER_MEMBER_TOKEN);
+    });
+
+    async function notificationsFor(
+      recipientId: string,
+      type: NotificationType,
+      requestId: string,
+    ): Promise<Notification[]> {
+      return app.get(EntityManager).fork().find(Notification, {
+        recipient: recipientId,
+        type,
+        targetId: requestId,
+      });
+    }
+
+    it('notifies the group reviewers of a new request, and the requester of the decision', async () => {
+      await ensureNoFormalGroup(MEMBER_TOKEN);
+      const {
+        section,
+        group,
+        rank,
+        token,
+        userId: ownerId,
+      } = await createGroupWithCatalog();
+      await joinSection(token, section.id, MEMBER_TOKEN);
+      await setFormalGroup(MEMBER_TOKEN, group.id);
+      const memberId = localUserIdByToken.get(MEMBER_TOKEN) as string;
+
+      const first = await putFormalRank(MEMBER_TOKEN, { rankId: rank.id });
+      const received = await notificationsFor(
+        ownerId,
+        NotificationType.FORMAL_RANK_REQUEST_RECEIVED,
+        first.pendingRequest.id,
+      );
+      expect(received).toHaveLength(1);
+      expect(received[0].contextGroup?.id).toBe(group.id);
+      // The requester is never notified about their own request.
+      expect(
+        await notificationsFor(
+          memberId,
+          NotificationType.FORMAL_RANK_REQUEST_RECEIVED,
+          first.pendingRequest.id,
+        ),
+      ).toHaveLength(0);
+
+      await decide(token, group.id, first.pendingRequest.id, 'reject');
+      expect(
+        await notificationsFor(
+          memberId,
+          NotificationType.FORMAL_RANK_REQUEST_REJECTED,
+          first.pendingRequest.id,
+        ),
+      ).toHaveLength(1);
+
+      const second = await putFormalRank(MEMBER_TOKEN, { rankId: rank.id });
+      await decide(token, group.id, second.pendingRequest.id, 'approve');
+      expect(
+        await notificationsFor(
+          memberId,
+          NotificationType.FORMAL_RANK_REQUEST_APPROVED,
+          second.pendingRequest.id,
+        ),
+      ).toHaveLength(1);
+
+      await leaveSection(section.id, MEMBER_TOKEN);
+      await endFormalGroup(MEMBER_TOKEN);
+      await request(app.getHttpServer())
+        .delete('/api/v1/users/me/formal-rank')
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`);
+    });
+
+    it('lets the requester withdraw a pending request - kept as CANCELLED, current rank untouched, can choose again', async () => {
+      await ensureNoFormalGroup(OTHER_MEMBER_TOKEN);
+      await ensureNoCustomRank(OTHER_MEMBER_TOKEN);
+      await setCustomRank(OTHER_MEMBER_TOKEN, { name: 'Instrutor' });
+      const { section, group, rank, token } = await createGroupWithCatalog();
+      await joinSection(token, section.id, OTHER_MEMBER_TOKEN);
+      await setFormalGroup(OTHER_MEMBER_TOKEN, group.id);
+      const { pendingRequest } = await putFormalRank(OTHER_MEMBER_TOKEN, {
+        rankId: rank.id,
+      });
+
+      await request(app.getHttpServer())
+        .delete('/api/v1/users/me/formal-rank-request')
+        .set('Authorization', `Bearer ${OTHER_MEMBER_TOKEN}`)
+        .expect(204);
+
+      expect(await requestStatus(pendingRequest.id)).toBe(
+        FormalRankRequestStatus.CANCELLED,
+      );
+      expect((await ownRequest(OTHER_MEMBER_TOKEN)).request).toBeNull();
+      expect((await getCustomRank(OTHER_MEMBER_TOKEN))?.name).toBe('Instrutor');
+      // No longer decidable by the Group.
+      await decide(token, group.id, pendingRequest.id, 'approve', 409);
+
+      const repeat = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .delete('/api/v1/users/me/formal-rank-request')
+          .set('Authorization', `Bearer ${OTHER_MEMBER_TOKEN}`)
+          .expect(404),
+      );
+      expect(repeat.code).toBe('FORMAL_RANK_REQUEST_NOT_FOUND');
+
+      const again = await putFormalRank(OTHER_MEMBER_TOKEN, {
+        rankId: rank.id,
+      });
+      expect(again.pendingRequest.id).not.toBe(pendingRequest.id);
+
+      await leaveSection(section.id, OTHER_MEMBER_TOKEN);
+      await endFormalGroup(OTHER_MEMBER_TOKEN);
+    });
+
+    it("confirms immediately for the formal group's own OWNER", async () => {
+      const { group, rank, token } = await createGroupWithCatalog();
+      const result = await bodyOf<FormalRankAssignmentResponseDto>(
+        request(app.getHttpServer())
+          .put('/api/v1/users/me/formal-rank')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ rankId: rank.id })
+          .expect(200),
+      );
+      expect(result.isCurrent).toBe(true);
+      expect(result.sourceGroup.id).toBe(group.id);
+    });
+
+    it("only the target group's reviewers may list or decide its requests", async () => {
+      await ensureNoFormalGroup(OUTSIDER_TOKEN);
+      const { section, group, rank, token } = await createGroupWithCatalog();
+      const other = await createGroupWithCatalog();
+      await joinSection(token, section.id, OUTSIDER_TOKEN);
+      await setFormalGroup(OUTSIDER_TOKEN, group.id);
+      const { pendingRequest } = await putFormalRank(OUTSIDER_TOKEN, {
+        rankId: rank.id,
+      });
+
+      // A plain member of the Group's Section has no review permission.
+      await listRequests(OUTSIDER_TOKEN, group.id, 404);
+      // Another Group's OWNER can't reach it through their own route.
+      await decide(
+        other.token,
+        other.group.id,
+        pendingRequest.id,
+        'approve',
+        404,
+      );
+      expect(await requestStatus(pendingRequest.id)).toBe(
+        FormalRankRequestStatus.PENDING,
+      );
+
+      await leaveSection(section.id, OUTSIDER_TOKEN);
+      await endFormalGroup(OUTSIDER_TOKEN);
     });
   });
 });

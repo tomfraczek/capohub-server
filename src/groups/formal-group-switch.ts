@@ -1,6 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
+import { cancelPendingFormalRankRequests } from '../graduation/rank-transitions';
 import { User } from '../users/entities/user.entity';
 import {
   FORMAL_GROUP_AFFILIATIONS_ACTIVE_UNIQUE_INDEX,
@@ -47,6 +48,12 @@ export async function switchFormalGroup(
     current?.group.id ?? null,
     group.id,
   );
+
+  // A rank request only makes sense against the current formal Group -
+  // one sent to the previous Group is cancelled. The current rank itself
+  // (formal from the previous Group, or independent) is deliberately left
+  // untouched: it stays the user's rank until the new Group confirms one.
+  await cancelPendingFormalRankRequests(em, user.id, group.id);
 
   if (current && current.group.id === group.id) {
     if (startedOn) {

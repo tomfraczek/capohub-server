@@ -135,6 +135,7 @@ export class MembershipRequestsService {
     em: EntityManager,
     group: Group,
     user: User,
+    startedOn: Date | null,
   ): Promise<MembershipRequestResponseDto> {
     const alreadyPending = await em.count(MembershipRequest, {
       targetGroup: group.id,
@@ -152,6 +153,7 @@ export class MembershipRequestsService {
     request.targetType = MembershipRequestTarget.GROUP;
     assignTarget(request, group);
     request.initiatedBy = user;
+    request.requestedStartedOn = startedOn;
 
     try {
       em.persist(request);
@@ -774,7 +776,12 @@ export class MembershipRequestsService {
             message: 'This group is not currently active',
           });
         }
-        await switchFormalGroup(em, request.initiatedBy, target, null);
+        await switchFormalGroup(
+          em,
+          request.initiatedBy,
+          target,
+          request.requestedStartedOn,
+        );
         await cancelPendingGroupJoinRequests(
           em,
           request.initiatedBy,
@@ -1299,7 +1306,17 @@ export function toMembershipRequestResponseDto(
           displayName: request.processedBy.displayName,
         }
       : null,
+    requestedStartedOn: toDateOnly(request.requestedStartedOn),
     createdAt: request.createdAt.toISOString(),
     updatedAt: request.updatedAt.toISOString(),
   };
+}
+
+// Same 'date'-column handling as user-profile.mapper.ts's own toDateOnly -
+// the driver may hand back either a Date or an already-formatted string.
+function toDateOnly(date: Date | string | null): string | null {
+  if (!date) {
+    return null;
+  }
+  return typeof date === 'string' ? date : date.toISOString().slice(0, 10);
 }

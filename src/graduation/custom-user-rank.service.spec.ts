@@ -38,6 +38,9 @@ function buildCustomRank(
 interface MockRouting {
   customRank?: CustomUserRank | null;
   flushError?: unknown;
+  // Whether the caller has an active formal Group (independent rank
+  // read-only then).
+  hasFormalGroup?: boolean;
 }
 
 function buildMockEm(routing: MockRouting = {}) {
@@ -59,7 +62,15 @@ function buildMockEm(routing: MockRouting = {}) {
     return Promise.resolve(null);
   });
 
-  const raw: Record<string, unknown> = { findOne, persist, flush, remove };
+  const count = jest.fn(() => Promise.resolve(routing.hasFormalGroup ? 1 : 0));
+
+  const raw: Record<string, unknown> = {
+    findOne,
+    persist,
+    flush,
+    remove,
+    count,
+  };
   raw.transactional = jest.fn((cb: (em: unknown) => unknown) => cb(raw));
 
   return { em: raw as unknown as EntityManager, persist, flush, remove };
@@ -126,7 +137,7 @@ describe('CustomUserRankService', () => {
         customRank: null,
         flushError: new UniqueConstraintViolationException(
           new Error(
-            'duplicate key value violates unique constraint "custom_user_ranks_user_id_unique"',
+            'duplicate key value violates unique constraint "custom_user_ranks_user_id_active_unique"',
           ),
         ),
       });
@@ -140,12 +151,14 @@ describe('CustomUserRankService', () => {
       });
     });
 
-    it('updates the existing row in place and fully replaces cordSegments, rather than creating a second row', async () => {
+    // A different rank (name/track/cord) is a new stint - the previous one
+    // stays as history (ended), never overwritten.
+    it('ends the previous independent rank and starts a new stint when the rank itself changes', async () => {
       const existing = buildCustomRank({
         name: 'Old name',
         track: RankTrack.CHILD,
       });
-      const { em, remove } = buildMockEm({ customRank: existing });
+      const { em, persist, remove } = buildMockEm({ customRank: existing });
       const service = new CustomUserRankService(em);
 
       const result = await service.setCurrent(
@@ -154,27 +167,71 @@ describe('CustomUserRankService', () => {
           name: 'New name',
           track: RankTrack.ADULT,
           cordSegments: [{ position: 1, colorHex: '#00FF00', proportion: 100 }],
+          startedOn: '2021-03-01',
         }),
       );
 
-      expect(result.id).toBe('rank-1');
+      expect(existing.endedOn).not.toBeNull();
+      expect(existing.name).toBe('Old name');
+      expect(remove).not.toHaveBeenCalled();
+      expect(persist).toHaveBeenCalled();
+      expect(result.id).not.toBe('rank-1');
       expect(result.name).toBe('New name');
-      expect(result.track).toBe(RankTrack.ADULT);
-      expect(result.cordSegments).toEqual([
-        { position: 1, colorHex: '#00FF00', proportion: 100 },
-      ]);
-      expect(remove).not.toHaveBeenCalledWith(existing);
+      expect(result.startedOn).toBe('2021-03-01');
+    });
+
+    it('edits only the description of the same rank in place', async () => {
+      const existing = buildCustomRank({ name: 'My own cordão' });
+      const { em, persist } = buildMockEm({ customRank: existing });
+      const service = new CustomUserRankService(em);
+
+      const result = await service.setCurrent(
+        buildUser(),
+        buildInput({ cordSegments: [], description: 'Opis' }),
+      );
+
+      expect(result.id).toBe('rank-1');
+      expect(existing.endedOn).toBeNull();
+      expect(existing.description).toBe('Opis');
+      expect(persist).not.toHaveBeenCalled();
+    });
+
+    it('is read-only while the caller belongs to a formal Group', async () => {
+      const { em, persist } = buildMockEm({
+        customRank: buildCustomRank(),
+        hasFormalGroup: true,
+      });
+      const service = new CustomUserRankService(em);
+
+      const promise = service.setCurrent(buildUser(), buildInput());
+
+      await expect(promise).rejects.toMatchObject({
+        response: { code: 'INDEPENDENT_RANK_LOCKED_BY_FORMAL_GROUP' },
+      });
+      expect(persist).not.toHaveBeenCalled();
     });
   });
 
   describe('deleteCurrent', () => {
-    it('deletes the caller row', async () => {
+    it('ends the caller row instead of deleting it - it stays in their history', async () => {
       const customRank = buildCustomRank();
       const { em, remove } = buildMockEm({ customRank });
       const service = new CustomUserRankService(em);
 
       await service.deleteCurrent(buildUser());
-      expect(remove).toHaveBeenCalledWith(customRank);
+      expect(remove).not.toHaveBeenCalled();
+      expect(customRank.endedOn).not.toBeNull();
+    });
+
+    it('is refused while the caller belongs to a formal Group', async () => {
+      const customRank = buildCustomRank();
+      const { em } = buildMockEm({ customRank, hasFormalGroup: true });
+      const service = new CustomUserRankService(em);
+
+      await expect(service.deleteCurrent(buildUser())).rejects.toMatchObject({
+        response: { code: 'INDEPENDENT_RANK_LOCKED_BY_FORMAL_GROUP' },
+      });
+      expect(customRank.endedOn).toBeNull();
     });
 
     it('throws CUSTOM_RANK_NOT_SET when the caller has none', async () => {

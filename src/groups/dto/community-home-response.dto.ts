@@ -120,6 +120,9 @@ export interface CommunityHomeCapabilitiesDto {
   // Groups whose join requests (formal Group, joinRequiresApproval) the
   // caller may approve/reject - GROUP_JOIN_REQUEST_REVIEW, ACTIVE only.
   canReviewJoinRequestsInGroupIds: string[];
+  // Groups whose "Prośby o potwierdzenie stopnia" the caller may decide -
+  // FORMAL_RANK_REQUEST_REVIEW (Group OWNER/ADMIN), ACTIVE only.
+  canReviewFormalRankRequestsInGroupIds: string[];
   canViewMembersInSectionIds: string[];
   canManageMembersInSectionIds: string[];
   canInviteMembersInSectionIds: string[];

@@ -148,4 +148,13 @@ export class MembershipRequest extends BaseEntity {
   // The User who approved/rejected/cancelled the request.
   @ManyToOne(() => User, { nullable: true, deleteRule: 'no action' })
   processedBy: User | null = null;
+
+  // GROUP-target JOIN_REQUEST only (formal Group, joinRequiresApproval):
+  // the startedOn the requester gave in PUT /users/me/formal-group - the
+  // real-world start of the affiliation, applied as
+  // FormalGroupAffiliation.startedOn on approval. Null when not given (the
+  // affiliation then starts with startedOn = null, as before), and always
+  // null for Section requests/invitations.
+  @Property({ nullable: true, type: 'date' })
+  requestedStartedOn: Date | null = null;
 }

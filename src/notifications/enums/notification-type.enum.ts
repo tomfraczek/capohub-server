@@ -71,6 +71,12 @@ export enum NotificationType {
   FORMAL_RANK_CORRECTION_SUBMITTED = 'FORMAL_RANK_CORRECTION_SUBMITTED',
   FORMAL_RANK_CORRECTION_APPROVED = 'FORMAL_RANK_CORRECTION_APPROVED',
   FORMAL_RANK_CORRECTION_REJECTED = 'FORMAL_RANK_CORRECTION_REJECTED',
+
+  // Formal rank confirmation (see FormalRankRequestsService) - a member
+  // asks their formal Group to confirm their rank in its graduation system.
+  FORMAL_RANK_REQUEST_RECEIVED = 'FORMAL_RANK_REQUEST_RECEIVED',
+  FORMAL_RANK_REQUEST_APPROVED = 'FORMAL_RANK_REQUEST_APPROVED',
+  FORMAL_RANK_REQUEST_REJECTED = 'FORMAL_RANK_REQUEST_REJECTED',
 }
 
 export const NOTIFICATION_CATEGORY_BY_TYPE: Readonly<
@@ -125,6 +131,12 @@ export const NOTIFICATION_CATEGORY_BY_TYPE: Readonly<
   [NotificationType.FORMAL_RANK_CORRECTION_SUBMITTED]:
     NotificationCategory.GRADUATION,
   [NotificationType.FORMAL_RANK_CORRECTION_APPROVED]:
+    NotificationCategory.GRADUATION,
+  [NotificationType.FORMAL_RANK_REQUEST_RECEIVED]:
+    NotificationCategory.GRADUATION,
+  [NotificationType.FORMAL_RANK_REQUEST_APPROVED]:
+    NotificationCategory.GRADUATION,
+  [NotificationType.FORMAL_RANK_REQUEST_REJECTED]:
     NotificationCategory.GRADUATION,
   [NotificationType.FORMAL_RANK_CORRECTION_REJECTED]:
     NotificationCategory.GRADUATION,

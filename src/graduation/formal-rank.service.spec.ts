@@ -8,8 +8,11 @@ import { User } from '../users/entities/user.entity';
 import { GraduationSystem } from './entities/graduation-system.entity';
 import { Rank } from './entities/rank.entity';
 import { FormalRankAssignment } from './entities/formal-rank-assignment.entity';
+import { FormalRankRequest } from './entities/formal-rank-request.entity';
+import { FormalRankRequestStatus } from './enums/formal-rank-request-status.enum';
 import { RankTrack } from './enums/rank-track.enum';
 import { FormalRankService } from './formal-rank.service';
+import { FormalRankRequestsService } from './formal-rank-requests.service';
 
 // Not exercised in these cases - every setCurrent() call below passes
 // eventId: null, so FormalRankService never calls into this service.
@@ -18,6 +21,13 @@ function buildMockEventAccessService(): EventAccessService {
     loadOrFail: jest.fn(),
     isVisibleToViewer: jest.fn(),
   } as unknown as EventAccessService;
+}
+
+// Only its notifyReviewers hook is reached (after creating a request).
+function buildMockFormalRankRequestsService(): FormalRankRequestsService {
+  return {
+    notifyReviewers: jest.fn().mockResolvedValue(undefined),
+  } as unknown as FormalRankRequestsService;
 }
 
 function buildUser(id = 'user-1'): User {
@@ -56,6 +66,9 @@ interface MockRouting {
   activeFormalGroup?: FormalGroupAffiliation | null;
   rank?: Rank | null;
   currentAssignment?: FormalRankAssignment | null;
+  // Whether the caller is OWNER/ADMIN of their formal Group (RoleAssignment
+  // count) - confirms their own choice immediately.
+  administersFormalGroup?: boolean;
 }
 
 function buildMockEm(routing: MockRouting = {}) {
@@ -83,7 +96,13 @@ function buildMockEm(routing: MockRouting = {}) {
     return Promise.resolve(null);
   });
 
-  const raw: Record<string, unknown> = { findOne, persist, flush };
+  const count = jest.fn(() =>
+    Promise.resolve(routing.administersFormalGroup ? 1 : 0),
+  );
+  // No pending FormalRankRequest to cancel in these cases.
+  const find = jest.fn(() => Promise.resolve([]));
+
+  const raw: Record<string, unknown> = { findOne, persist, flush, count, find };
   raw.transactional = jest.fn((cb: (em: unknown) => unknown) => cb(raw));
 
   return { em: raw as unknown as EntityManager, persist, flush };
@@ -93,7 +112,11 @@ describe('FormalRankService', () => {
   describe('setCurrent', () => {
     it('rejects when the caller has no active formal group', async () => {
       const { em } = buildMockEm({ activeFormalGroup: null });
-      const service = new FormalRankService(em, buildMockEventAccessService());
+      const service = new FormalRankService(
+        em,
+        buildMockEventAccessService(),
+        buildMockFormalRankRequestsService(),
+      );
 
       const promise = service.setCurrent(buildUser(), {
         rankId: 'rank-1',
@@ -112,7 +135,11 @@ describe('FormalRankService', () => {
         activeFormalGroup: buildFormalGroup(),
         rank: buildRank({ isArchived: true }),
       });
-      const service = new FormalRankService(em, buildMockEventAccessService());
+      const service = new FormalRankService(
+        em,
+        buildMockEventAccessService(),
+        buildMockFormalRankRequestsService(),
+      );
 
       const promise = service.setCurrent(buildUser(), {
         rankId: 'rank-1',
@@ -130,7 +157,11 @@ describe('FormalRankService', () => {
         activeFormalGroup: buildFormalGroup('group-2'),
         rank: buildRank({}),
       });
-      const service = new FormalRankService(em, buildMockEventAccessService());
+      const service = new FormalRankService(
+        em,
+        buildMockEventAccessService(),
+        buildMockFormalRankRequestsService(),
+      );
 
       const promise = service.setCurrent(buildUser(), {
         rankId: 'rank-1',
@@ -143,13 +174,56 @@ describe('FormalRankService', () => {
       });
     });
 
-    it('sets the formal rank as current when everything is valid - never touches CustomUserRank any more', async () => {
+    // A formal rank is a declaration someone authorized in the Group has
+    // to confirm - the current rank is untouched until then.
+    it('creates a pending FormalRankRequest instead of an assignment for a regular member', async () => {
       const { em, persist } = buildMockEm({
         activeFormalGroup: buildFormalGroup('group-1'),
         rank: buildRank({}),
         currentAssignment: null,
+        administersFormalGroup: false,
       });
-      const service = new FormalRankService(em, buildMockEventAccessService());
+      const service = new FormalRankService(
+        em,
+        buildMockEventAccessService(),
+        buildMockFormalRankRequestsService(),
+      );
+
+      const result = await service.setCurrent(buildUser(), {
+        rankId: 'rank-1',
+        startedOn: '2020-05-01',
+        awardedByName: 'Mestre Marcão',
+        eventId: null,
+      });
+
+      expect('pendingRequest' in result).toBe(true);
+      const persisted = (persist.mock.calls as [unknown][]).map(
+        ([entity]) => entity,
+      );
+      expect(
+        persisted.some((entity) => entity instanceof FormalRankAssignment),
+      ).toBe(false);
+      const request = persisted.find(
+        (entity): entity is FormalRankRequest =>
+          entity instanceof FormalRankRequest,
+      );
+      expect(request?.status).toBe(FormalRankRequestStatus.PENDING);
+      expect(request?.rank.id).toBe('rank-1');
+      expect(request?.awardedByName).toBe('Mestre Marcão');
+    });
+
+    it("confirms immediately for the formal Group's own OWNER/ADMIN", async () => {
+      const { em, persist } = buildMockEm({
+        activeFormalGroup: buildFormalGroup('group-1'),
+        rank: buildRank({}),
+        currentAssignment: null,
+        administersFormalGroup: true,
+      });
+      const service = new FormalRankService(
+        em,
+        buildMockEventAccessService(),
+        buildMockFormalRankRequestsService(),
+      );
 
       const result = await service.setCurrent(buildUser(), {
         rankId: 'rank-1',
@@ -157,7 +231,14 @@ describe('FormalRankService', () => {
         eventId: null,
       });
 
-      expect(persist).toHaveBeenCalled();
+      expect(
+        (persist.mock.calls as [unknown][]).some(
+          ([entity]) => entity instanceof FormalRankAssignment,
+        ),
+      ).toBe(true);
+      if ('pendingRequest' in result) {
+        throw new Error('expected an immediate assignment');
+      }
       expect(result.awardedByName).toBe('Mestre Marcão');
       expect(result.isCurrent).toBe(true);
       expect(result.sourceGroup.id).toBe('group-1');
@@ -167,7 +248,11 @@ describe('FormalRankService', () => {
   describe('endCurrent', () => {
     it('throws RANK_NOT_SET when there is no active assignment', async () => {
       const { em } = buildMockEm({ currentAssignment: null });
-      const service = new FormalRankService(em, buildMockEventAccessService());
+      const service = new FormalRankService(
+        em,
+        buildMockEventAccessService(),
+        buildMockFormalRankRequestsService(),
+      );
 
       const promise = service.endCurrent(buildUser());
 
@@ -181,7 +266,11 @@ describe('FormalRankService', () => {
   describe('getCurrent', () => {
     it('throws RANK_NOT_SET when there is no active assignment', async () => {
       const { em } = buildMockEm({ currentAssignment: null });
-      const service = new FormalRankService(em, buildMockEventAccessService());
+      const service = new FormalRankService(
+        em,
+        buildMockEventAccessService(),
+        buildMockFormalRankRequestsService(),
+      );
 
       const promise = service.getCurrent('user-1');
 
