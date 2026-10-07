@@ -508,6 +508,10 @@ export class GroupsService {
     const directSectionsCount = await em.count(Section, {
       parentGroup: group.id,
     });
+    const membersCount = await em.count(FormalGroupAffiliation, {
+      group: group.id,
+      endedOn: null,
+    });
     const relation = viewerId
       ? await this.resolveViewerRelation(em, group.id, viewerId)
       : {
@@ -517,7 +521,7 @@ export class GroupsService {
         };
     return toGroupResponseDto(
       group,
-      { childGroupsCount, directSectionsCount },
+      { childGroupsCount, directSectionsCount, membersCount },
       relation,
       this.r2StorageService,
     );

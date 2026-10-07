@@ -4,9 +4,11 @@ import {
 } from '../../storage/image-url.util';
 import { Section } from '../entities/section.entity';
 import { SectionResponseDto } from '../dto/section-response.dto';
+import { GroupUserRefDto } from '../dto/group-user-ref.dto';
 
 export function toSectionResponseDto(
   section: Section,
+  extras: { membersCount: number; instructors: GroupUserRefDto[] },
   urlBuilder: PublicUrlBuilder,
 ): SectionResponseDto {
   return {
@@ -36,6 +38,8 @@ export function toSectionResponseDto(
     membersVisibility: section.membersVisibility,
     publicCode: section.publicCode,
     status: section.status,
+    membersCount: extras.membersCount,
+    instructors: extras.instructors,
     timezone: section.timezone,
     currencyCode: section.currencyCode,
     country: section.country,

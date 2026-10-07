@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   INestApplication,
   UnauthorizedException,
@@ -1034,6 +1035,200 @@ describe('Role Assignments (e2e)', () => {
         .get(`/api/v1/sections/${section.id}`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .expect(404);
+    });
+  });
+
+  // SectionResponseDto.instructors ("Prowadzący" on the Section profile) -
+  // exercised end-to-end through GET /sections/:id: DB -> SectionsService
+  // -> section.mapper -> controller.
+  describe('GET /sections/:id instructors', () => {
+    // Same per-call fixture-user bootstrap as createFreshGroupOwner, minus
+    // the Group - these users only ever join Sections. Registered into
+    // TOKEN_TO_AUTH/FIXTURE_CLERK_PROFILES in place, so afterAll's
+    // `Object.keys(FIXTURE_CLERK_PROFILES)` cleanup already covers them.
+    async function registerFixtureUser(
+      label: string,
+    ): Promise<{ token: string; userId: string; displayName: string }> {
+      const suffix = `instructors-${label}-${randomUUID().slice(0, 8)}`;
+      const clerkUserId = `user_test_${suffix}`;
+      const token = `valid-${suffix}-token`;
+      TOKEN_TO_AUTH[token] = {
+        userId: clerkUserId,
+        sessionId: `sess_${suffix}`,
+        tokenType: 'session_token',
+        claims: { sub: clerkUserId, sid: `sess_${suffix}` },
+      };
+      FIXTURE_CLERK_PROFILES[clerkUserId] = {
+        imageUrl: `https://img.clerk.com/${suffix}.png`,
+        primaryEmailAddress: { emailAddress: `${suffix}@example.com` },
+      };
+      await request(app.getHttpServer())
+        .get('/api/v1/groups')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const em = app.get(EntityManager).fork();
+      const user = await em.findOneOrFail(User, { clerkUserId });
+      localUserIdByToken.set(token, user.id);
+      return { token, userId: user.id, displayName: user.displayName };
+    }
+
+    async function getSection(
+      token: string,
+      sectionId: string,
+    ): Promise<SectionResponseDto> {
+      return bodyOf<SectionResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/sections/${sectionId}`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200),
+      );
+    }
+
+    it('lists only active INSTRUCTOR holders of this exact Section, earliest-granted first, regardless of membersVisibility', async () => {
+      const root = await createGroup({ name: 'Instructors Root' });
+      localUserIdByToken.set(root.token, root.userId);
+      // PRIVATE members list + public Section: a stranger may open the
+      // profile but not the member list - instructors must still be there.
+      const section = await createSection(root.token, root.id, {
+        name: 'Instructors Section',
+        membersVisibility: 'PRIVATE',
+      });
+      const otherSection = await createSection(root.token, root.id, {
+        name: 'Instructors Other Section',
+      });
+
+      const admin = await registerFixtureUser('admin');
+      const assistant = await registerFixtureUser('assistant');
+      const plainMember = await registerFixtureUser('member');
+      const firstInstructor = await registerFixtureUser('first');
+      const secondInstructor = await registerFixtureUser('second');
+      const revokedInstructor = await registerFixtureUser('revoked');
+      const otherSectionInstructor = await registerFixtureUser('other');
+      const stranger = await registerFixtureUser('stranger');
+
+      for (const user of [
+        admin,
+        assistant,
+        plainMember,
+        firstInstructor,
+        secondInstructor,
+        revokedInstructor,
+      ]) {
+        await addSectionMember(root.token, section.id, user.token);
+      }
+      await addSectionMember(
+        root.token,
+        otherSection.id,
+        otherSectionInstructor.token,
+      );
+
+      await grantSectionRole(
+        root.token,
+        section.id,
+        admin.token,
+        GroupRole.ADMIN,
+      );
+      await grantSectionRole(
+        root.token,
+        section.id,
+        assistant.token,
+        GroupRole.ASSISTANT,
+      );
+      await grantSectionRole(
+        root.token,
+        section.id,
+        firstInstructor.token,
+        GroupRole.INSTRUCTOR,
+      );
+      const revoked = await grantSectionRole(
+        root.token,
+        section.id,
+        revokedInstructor.token,
+        GroupRole.INSTRUCTOR,
+      );
+      await grantSectionRole(
+        root.token,
+        section.id,
+        secondInstructor.token,
+        GroupRole.INSTRUCTOR,
+      );
+      await grantSectionRole(
+        root.token,
+        otherSection.id,
+        otherSectionInstructor.token,
+        GroupRole.INSTRUCTOR,
+      );
+      await request(app.getHttpServer())
+        .delete(`/api/v1/sections/${section.id}/role-assignments/${revoked.id}`)
+        .set('Authorization', `Bearer ${root.token}`)
+        .expect(204);
+
+      const expected = [
+        {
+          id: firstInstructor.userId,
+          displayName: firstInstructor.displayName,
+        },
+        {
+          id: secondInstructor.userId,
+          displayName: secondInstructor.displayName,
+        },
+      ];
+
+      // Owner's view and a stranger's view (PRIVATE members list) agree.
+      for (const viewerToken of [root.token, stranger.token]) {
+        const body = await getSection(viewerToken, section.id);
+        expect(body.membersVisibility).toBe('PRIVATE');
+        // Exact list = the INSTRUCTORs present, in grant order, and nobody
+        // else: not the OWNER (who holds no INSTRUCTOR role here), ADMIN,
+        // ASSISTANT, a plain MEMBER, the revoked INSTRUCTOR or the other
+        // Section's INSTRUCTOR.
+        expect(body.instructors).toEqual(expected);
+        const ids = body.instructors.map((instructor) => instructor.id);
+        for (const excluded of [
+          root.userId,
+          admin.userId,
+          assistant.userId,
+          plainMember.userId,
+          revokedInstructor.userId,
+          otherSectionInstructor.userId,
+        ]) {
+          expect(ids).not.toContain(excluded);
+        }
+      }
+
+      // ...and the other Section lists only its own INSTRUCTOR.
+      const other = await getSection(root.token, otherSection.id);
+      expect(other.instructors).toEqual([
+        {
+          id: otherSectionInstructor.userId,
+          displayName: otherSectionInstructor.displayName,
+        },
+      ]);
+    });
+
+    it('lists the OWNER once they also hold INSTRUCTOR', async () => {
+      const root = await createGroup({ name: 'Owner Instructor Root' });
+      localUserIdByToken.set(root.token, root.userId);
+      const section = await createSection(root.token, root.id, {
+        name: 'Owner Instructor Section',
+      });
+
+      expect((await getSection(root.token, section.id)).instructors).toEqual(
+        [],
+      );
+
+      await grantSectionRole(
+        root.token,
+        section.id,
+        root.token,
+        GroupRole.INSTRUCTOR,
+      );
+
+      const body = await getSection(root.token, section.id);
+      expect(body.instructors).toHaveLength(1);
+      expect(body.instructors[0].id).toBe(root.userId);
+      expect(typeof body.instructors[0].displayName).toBe('string');
+      expect(body.instructors[0].displayName.length).toBeGreaterThan(0);
     });
   });
 });

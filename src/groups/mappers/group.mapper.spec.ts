@@ -52,7 +52,7 @@ describe('group.mapper', () => {
 
       const dto = toGroupResponseDto(
         group,
-        { childGroupsCount: 2, directSectionsCount: 3 },
+        { childGroupsCount: 2, directSectionsCount: 3, membersCount: 5 },
         {
           isMemberThroughSection: false,
           isFollowing: false,
@@ -72,6 +72,7 @@ describe('group.mapper', () => {
         status: GroupStatus.ACTIVE,
         childGroupsCount: 2,
         directSectionsCount: 3,
+        membersCount: 5,
       });
       expect(dto.createdAt).toBe(group.createdAt.toISOString());
       expect(dto.updatedAt).toBe(group.updatedAt.toISOString());
@@ -82,7 +83,7 @@ describe('group.mapper', () => {
 
       const both = toGroupResponseDto(
         group,
-        { childGroupsCount: 0, directSectionsCount: 0 },
+        { childGroupsCount: 0, directSectionsCount: 0, membersCount: 0 },
         {
           isMemberThroughSection: true,
           isFollowing: true,
@@ -95,7 +96,7 @@ describe('group.mapper', () => {
 
       const followOnly = toGroupResponseDto(
         group,
-        { childGroupsCount: 0, directSectionsCount: 0 },
+        { childGroupsCount: 0, directSectionsCount: 0, membersCount: 0 },
         {
           isMemberThroughSection: false,
           isFollowing: true,
@@ -115,7 +116,7 @@ describe('group.mapper', () => {
 
       const dto = toGroupResponseDto(
         group,
-        { childGroupsCount: 0, directSectionsCount: 0 },
+        { childGroupsCount: 0, directSectionsCount: 0, membersCount: 0 },
         {
           isMemberThroughSection: false,
           isFollowing: false,
@@ -136,7 +137,7 @@ describe('group.mapper', () => {
 
       const dto = toGroupResponseDto(
         group,
-        { childGroupsCount: 0, directSectionsCount: 0 },
+        { childGroupsCount: 0, directSectionsCount: 0, membersCount: 0 },
         {
           isMemberThroughSection: false,
           isFollowing: false,
@@ -156,7 +157,7 @@ describe('group.mapper', () => {
 
       const dto = toGroupResponseDto(
         group,
-        { childGroupsCount: 0, directSectionsCount: 0 },
+        { childGroupsCount: 0, directSectionsCount: 0, membersCount: 0 },
         {
           isMemberThroughSection: false,
           isFollowing: false,
@@ -177,7 +178,7 @@ describe('group.mapper', () => {
 
       const dto = toGroupResponseDto(
         group,
-        { childGroupsCount: 0, directSectionsCount: 0 },
+        { childGroupsCount: 0, directSectionsCount: 0, membersCount: 0 },
         {
           isMemberThroughSection: false,
           isFollowing: false,

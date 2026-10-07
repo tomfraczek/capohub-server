@@ -1,3 +1,4 @@
+import { GroupUserRefDto } from './group-user-ref.dto';
 import { CommunityListVisibility } from '../enums/community-list-visibility.enum';
 import { GroupStatus } from '../enums/group-status.enum';
 
@@ -24,6 +25,12 @@ export interface SectionResponseDto {
   membersVisibility: CommunityListVisibility;
   publicCode: string | null;
   status: GroupStatus;
+  // Active (ACTIVE/READ_ONLY) SectionMemberships - see
+  // SectionsService.toResponseDto.
+  membersCount: number;
+  // Active INSTRUCTOR RoleAssignments ("Prowadzący"), earliest-granted
+  // first - see SectionsService.toResponseDto.
+  instructors: GroupUserRefDto[];
   timezone: string;
   currencyCode: string;
   country: string | null;

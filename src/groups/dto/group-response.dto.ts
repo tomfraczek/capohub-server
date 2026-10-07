@@ -34,6 +34,10 @@ export interface GroupResponseDto {
   childGroupsCount: number;
   // Direct Sections only (one level down) - not recursive.
   directSectionsCount: number;
+  // Formal members - users whose active (endedOn = null)
+  // FormalGroupAffiliation points at this Group (see
+  // formal-group-affiliation.entity.ts).
+  membersCount: number;
   // Whether the viewer holds an active SectionMembership in one of this
   // Group's *direct* Sections (see GroupsService.resolveViewerRelation) -
   // never a membership on the Group itself (Group has none - see

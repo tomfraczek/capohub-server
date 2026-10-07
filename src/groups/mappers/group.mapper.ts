@@ -19,7 +19,11 @@ import {
 
 export function toGroupResponseDto(
   group: Group,
-  counts: { childGroupsCount: number; directSectionsCount: number },
+  counts: {
+    childGroupsCount: number;
+    directSectionsCount: number;
+    membersCount: number;
+  },
   relation: {
     isMemberThroughSection: boolean;
     isFollowing: boolean;
@@ -58,6 +62,7 @@ export function toGroupResponseDto(
     status: group.status,
     childGroupsCount: counts.childGroupsCount,
     directSectionsCount: counts.directSectionsCount,
+    membersCount: counts.membersCount,
     isMemberThroughSection: relation.isMemberThroughSection,
     isFollowing: relation.isFollowing,
     hasPendingJoinRequest: relation.hasPendingJoinRequest,

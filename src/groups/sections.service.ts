@@ -24,7 +24,9 @@ import { GroupRole } from './enums/group-role.enum';
 import { GroupStatus } from './enums/group-status.enum';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
+import { RoleAssignment } from './entities/role-assignment.entity';
 import { SectionMembership } from './entities/section-membership.entity';
+import { SectionMembershipStatus } from './enums/section-membership-status.enum';
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { toSectionResponseDto } from './mappers/section.mapper';
 import { RoleAssignmentsService } from './role-assignments.service';
@@ -80,7 +82,7 @@ export class SectionsService {
         resourceId: section.id,
       },
     });
-    return toSectionResponseDto(section, this.r2StorageService);
+    return this.toResponseDto(section);
   }
 
   // DELETE :sectionId/profile-image - mirrors
@@ -98,7 +100,7 @@ export class SectionsService {
         resourceId: section.id,
       },
     });
-    return toSectionResponseDto(section, this.r2StorageService);
+    return this.toResponseDto(section);
   }
 
   // PUT :sectionId/cover-image - mirrors GroupsService.uploadCoverImage,
@@ -130,7 +132,7 @@ export class SectionsService {
         resourceId: section.id,
       },
     });
-    return toSectionResponseDto(section, this.r2StorageService);
+    return this.toResponseDto(section);
   }
 
   // DELETE :sectionId/cover-image - idempotent, mirrors
@@ -148,7 +150,7 @@ export class SectionsService {
         resourceId: section.id,
       },
     });
-    return toSectionResponseDto(section, this.r2StorageService);
+    return this.toResponseDto(section);
   }
 
   // The parent's existence and the caller's SECTION_CREATE permission there
@@ -264,7 +266,7 @@ export class SectionsService {
       return section;
     });
 
-    return toSectionResponseDto(section, this.r2StorageService);
+    return this.toResponseDto(section);
   }
 
   private async resolveParentForCreate(
@@ -317,14 +319,17 @@ export class SectionsService {
     const visible = isMember
       ? sections
       : sections.filter((section) => section.isPublic);
-    return visible.map((section) =>
-      toSectionResponseDto(section, this.r2StorageService),
-    );
+    // Sequential, not Promise.all - see toResponseDto's own comment.
+    const dtos: SectionResponseDto[] = [];
+    for (const section of visible) {
+      dtos.push(await this.toResponseDto(section));
+    }
+    return dtos;
   }
 
   async getById(sectionId: string): Promise<SectionResponseDto> {
     const section = await this.loadOrFail(sectionId);
-    return toSectionResponseDto(section, this.r2StorageService);
+    return this.toResponseDto(section);
   }
 
   async update(
@@ -342,7 +347,7 @@ export class SectionsService {
         actor,
       );
       await em.flush();
-      return toSectionResponseDto(section, this.r2StorageService);
+      return this.toResponseDto(section, em);
     });
   }
 
@@ -384,7 +389,7 @@ export class SectionsService {
       section.status = GroupStatus.DELETED;
       this.recordCommunityAudit(em, section, AuditAction.DELETE, actor);
       await em.flush();
-      return toSectionResponseDto(section, this.r2StorageService);
+      return this.toResponseDto(section, em);
     });
   }
 
@@ -401,7 +406,7 @@ export class SectionsService {
         this.recordCommunityAudit(em, section, auditAction, actor);
       }
       await em.flush();
-      return toSectionResponseDto(section, this.r2StorageService);
+      return this.toResponseDto(section, em);
     });
   }
 
@@ -424,6 +429,43 @@ export class SectionsService {
       targetType: AuditTargetType.COMMUNITY,
       targetId: section.id,
     });
+  }
+
+  // membersCount = active (ACTIVE/READ_ONLY) SectionMemberships - same
+  // "belongs here" definition as GroupsService.resolveViewerRelation.
+  // Queried fresh per response, same as GroupsService.toResponseDto's own
+  // counts; never issued concurrently on the same EntityManager.
+  private async toResponseDto(
+    section: Section,
+    em: EntityManager = this.em,
+  ): Promise<SectionResponseDto> {
+    const membersCount = await em.count(SectionMembership, {
+      section: section.id,
+      status: {
+        $in: [
+          SectionMembershipStatus.ACTIVE,
+          SectionMembershipStatus.READ_ONLY,
+        ],
+      },
+    });
+    // Prowadzący = active INSTRUCTOR RoleAssignments only (never
+    // OWNER/ADMIN/ASSISTANT). Public Section info, independent of
+    // membersVisibility - it exposes no member list, only this role's
+    // holders. Earliest-granted first, so the order is stable.
+    const instructorAssignments = await em.find(
+      RoleAssignment,
+      { section: section.id, role: GroupRole.INSTRUCTOR, revokedAt: null },
+      { populate: ['user'], orderBy: { grantedAt: 'ASC', id: 'ASC' } },
+    );
+    const instructors = instructorAssignments.map((assignment) => ({
+      id: assignment.user.id,
+      displayName: assignment.user.displayName,
+    }));
+    return toSectionResponseDto(
+      section,
+      { membersCount, instructors },
+      this.r2StorageService,
+    );
   }
 
   private applyFields(section: Section, input: CreateSectionInput): void {
