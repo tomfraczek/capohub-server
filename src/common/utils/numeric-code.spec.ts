@@ -7,6 +7,7 @@ import {
   generateNumericCode,
   normalizeNumericCodeInput,
   normalizeUserCodeInput,
+  parseUserCodePrefix,
 } from './numeric-code';
 
 describe('generateNumericCode', () => {
@@ -157,6 +158,25 @@ describe('normalizeUserCodeInput', () => {
     'rejects %p',
     (input) => {
       expect(normalizeUserCodeInput(input)).toBeNull();
+    },
+  );
+});
+
+describe('parseUserCodePrefix', () => {
+  it.each([
+    ['878', '878'],
+    ['u878', '878'],
+    ['U878-0', '8780'],
+    ['878-021', '878021'],
+    [' U013844 ', '013844'],
+  ])('reads %p as the code prefix %p', (input, expected) => {
+    expect(parseUserCodePrefix(input)).toBe(expected);
+  });
+
+  it.each(['Tomasz', 'U', 'u-', 'Ux878', '1234567', ''])(
+    'returns null for %p',
+    (input) => {
+      expect(parseUserCodePrefix(input)).toBeNull();
     },
   );
 });

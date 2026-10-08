@@ -101,3 +101,20 @@ export async function assignUniqueNumericCode(
     }
   }
 }
+
+/**
+ * The leading digits of a (possibly partial) typed User code, for
+ * search-as-you-type: an optional leading "U" (case-insensitive), then
+ * digits with optional dashes, up to the full code length - "878",
+ * "u878", "U878-0", "878-021" all qualify. Returns null for anything else
+ * (no digits at all, letters after the "U", too many digits), so the
+ * caller falls back to a plain name search.
+ */
+export function parseUserCodePrefix(raw: string): string | null {
+  const match = /^u?([0-9-]+)$/i.exec(raw.trim());
+  if (!match) return null;
+  const digits = match[1].replace(/-/g, '');
+  return digits.length > 0 && digits.length <= NUMERIC_CODE_LENGTH
+    ? digits
+    : null;
+}

@@ -11,6 +11,7 @@ import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignm
 import type { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { AvatarType } from '../users/enums/avatar-type.enum';
+import { FormalGroupAffiliation } from './entities/formal-group-affiliation.entity';
 import { GroupFollow } from './entities/group-follow.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
 import { GroupRole } from './enums/group-role.enum';
@@ -277,6 +278,64 @@ describe('GroupAudienceService', () => {
     ).toEqual([
       ['u1', true, true],
       ['u2', false, true],
+    ]);
+  });
+
+  it('flags Group ADMINs and visible formal members, never a hidden formal group', async () => {
+    const rows: Rows = {
+      [GroupFollow.name]: [
+        { user: { id: 'admin' } },
+        { user: { id: 'formal' } },
+        { user: { id: 'hidden' } },
+      ],
+      [User.name]: [
+        buildUser({ id: 'admin', publicCode: 'A' }),
+        buildUser({ id: 'formal', publicCode: 'B', showFormalGroup: true }),
+        buildUser({ id: 'hidden', publicCode: 'C', showFormalGroup: false }),
+      ],
+      [FormalGroupAffiliation.name]: [{ user: { id: 'formal' } }],
+    };
+    const { service, find } = buildService(rows);
+    // The OWNER and ADMIN queries share an entity - answer by role.
+    find.mockImplementation(((
+      entity: { name: string },
+      where: { role?: GroupRole },
+    ) =>
+      Promise.resolve(
+        entity.name === RoleAssignment.name
+          ? where.role === GroupRole.ADMIN
+            ? [{ user: { id: 'admin' } }]
+            : []
+          : (rows[entity.name] ?? []),
+      )) as never);
+
+    const result = await service.list('group-1', { limit: 20, offset: 0 });
+
+    expect(find).toHaveBeenCalledWith(
+      RoleAssignment,
+      { group: 'group-1', role: GroupRole.ADMIN, revokedAt: null },
+      expect.anything(),
+    );
+    // Only users who show their formal group are looked up at all.
+    expect(find).toHaveBeenCalledWith(
+      FormalGroupAffiliation,
+      {
+        group: 'group-1',
+        user: { $in: [expect.objectContaining({ id: 'formal' })] },
+        endedOn: null,
+      },
+      expect.anything(),
+    );
+    expect(
+      result.items.map((item) => [
+        item.user.id,
+        item.isAdmin,
+        item.isFormalMember,
+      ]),
+    ).toEqual([
+      ['admin', true, false],
+      ['formal', false, true],
+      ['hidden', false, false],
     ]);
   });
 

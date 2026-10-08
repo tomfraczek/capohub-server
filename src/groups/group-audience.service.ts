@@ -7,6 +7,7 @@ import { resolveUserAvatarUrl } from '../storage/image-url.util';
 import { resolveDisplayName } from '../users/display-name.util';
 import { User } from '../users/entities/user.entity';
 import { GroupAudienceMemberDto } from './dto/group-audience-member-response.dto';
+import { FormalGroupAffiliation } from './entities/formal-group-affiliation.entity';
 import { GroupFollow } from './entities/group-follow.entity';
 import { RoleAssignment } from './entities/role-assignment.entity';
 import { SectionMembership } from './entities/section-membership.entity';
@@ -120,6 +121,13 @@ export class GroupAudienceService {
       { fields: ['user'] },
     );
     const ownerIds = new Set(ownerAssignments.map((a) => a.user.id));
+    // Group-level only - a Section ADMIN carries `section`, not `group`.
+    const adminAssignments = await this.em.find(
+      RoleAssignment,
+      { group: groupId, role: GroupRole.ADMIN, revokedAt: null },
+      { fields: ['user'] },
+    );
+    const adminIds = new Set(adminAssignments.map((a) => a.user.id));
 
     const membershipsByUser = new Map<
       string,
@@ -152,6 +160,10 @@ export class GroupAudienceService {
     const rankByUserId = await this.loadVisibleRanks(
       pageRows.map((row) => row.user),
     );
+    const formalMemberIds = await this.loadVisibleFormalMemberIds(
+      groupId,
+      pageRows.map((row) => row.user),
+    );
 
     return {
       total: rows.length,
@@ -168,6 +180,8 @@ export class GroupAudienceService {
         },
         rank: rankByUserId.get(user.id) ?? null,
         isOwner: ownerIds.has(user.id),
+        isAdmin: adminIds.has(user.id),
+        isFormalMember: formalMemberIds.has(user.id),
         isMemberThroughSection: memberIds.has(user.id),
         isFollowing: followerIds.has(user.id),
         memberships:
@@ -196,6 +210,27 @@ export class GroupAudienceService {
     return (
       (await this.em.count(GroupFollow, { user: userId, group: groupId })) > 0
     );
+  }
+
+  /**
+   * Which of the page's users hold an active FormalGroupAffiliation with
+   * this Group and show it (showFormalGroup) - the same toggle the public
+   * profile and loadVisibleRanks honor, with no viewer exception.
+   */
+  private async loadVisibleFormalMemberIds(
+    groupId: string,
+    users: User[],
+  ): Promise<Set<string>> {
+    const visible = users.filter((user) => user.showFormalGroup);
+    if (visible.length === 0) {
+      return new Set();
+    }
+    const affiliations = await this.em.find(
+      FormalGroupAffiliation,
+      { group: groupId, user: { $in: visible }, endedOn: null },
+      { fields: ['user'] },
+    );
+    return new Set(affiliations.map((a) => a.user.id));
   }
 
   private notFound(): NotFoundException {

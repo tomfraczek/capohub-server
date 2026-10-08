@@ -31,6 +31,15 @@ export interface GroupAudienceMemberDto {
   // Section makes its creator a MEMBER), so the app should show the owner
   // label in place of "member through Section".
   isOwner: boolean;
+  // Holds an active Group-level ADMIN RoleAssignment (not a Section-level
+  // one). Independent of every other flag.
+  isAdmin: boolean;
+  // Has an active FormalGroupAffiliation (endedOn = null) pointing at this
+  // Group, and shows it (showFormalGroup) - a hidden formal group stays
+  // hidden here too, with no viewer exception, like the rank above. Only a
+  // flag on people already listed: a formal affiliation alone does not add
+  // a row (the OWNER is listed anyway - see GroupAudienceService.list).
+  isFormalMember: boolean;
   isMemberThroughSection: boolean;
   isFollowing: boolean;
   // Every active (ACTIVE/READ_ONLY) membership behind isMemberThroughSection,

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { EntityManager, FilterQuery, LockMode } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
-import { normalizeUserCodeInput } from '../common/utils/numeric-code';
+import { parseUserCodePrefix } from '../common/utils/numeric-code';
 import { resolveUserAvatarUrl } from '../storage/image-url.util';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { resolveDisplayName } from '../users/display-name.util';
@@ -900,8 +900,8 @@ export class RoleAssignmentsService {
    * reachable behind ROLE_ASSIGNMENT_MANAGE, never a public search filter.
    *
    * `search` matches firstName/lastName/apelido (substring) or the exact
-   * user code - digits ("123456"/"123-456") or the app's displayed form
-   * ("U123-456"), see normalizeUserCodeInput. `userId` (the QR flow) narrows
+   * user code by its beginning - digits or the app's displayed form, whole
+   * or partial ("878", "u878", "U878-021" - see parseUserCodePrefix). `userId` (the QR flow) narrows
    * to that one person - also returned when they already hold a role, so
    * the app can say so. Ordered by last then first name.
    */
@@ -943,13 +943,16 @@ export class RoleAssignmentsService {
 
     const where: FilterQuery<User> = { id: { $in: candidateIds } };
     if (trimmed.length > 0) {
-      const numericCode = normalizeUserCodeInput(trimmed);
+      // A code typed so far ("878", "u878", "U878-021") matches every user
+      // code starting with those digits - names never contain digits, so
+      // this never hides a name match.
+      const codePrefix = parseUserCodePrefix(trimmed);
       const pattern = `%${trimmed}%`;
       where.$or = [
         { firstName: { $ilike: pattern } },
         { lastName: { $ilike: pattern } },
         { apelido: { $ilike: pattern } },
-        ...(numericCode ? [{ numericCode }] : []),
+        ...(codePrefix ? [{ numericCode: { $like: `${codePrefix}%` } }] : []),
       ];
     }
 
