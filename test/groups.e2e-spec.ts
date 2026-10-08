@@ -868,7 +868,7 @@ describe('Groups (e2e)', () => {
       expect(after.map((ra) => ra.id)).toContain(admin.id);
     });
 
-    it("admin-candidates lists only the Group's formal members, marking those who already hold a role - never followers or other users", async () => {
+    it("admin-candidates lists only the Group's formal members - role holders only when a search matches them, marked - never followers or other users", async () => {
       const created = await createGroup();
       // SECOND: ADMIN but not a formal member. THIRD: neither. OUTSIDER:
       // formal member (no Group role) - the only valid candidate.
@@ -891,19 +891,37 @@ describe('Groups (e2e)', () => {
             .set('Authorization', `Bearer ${created.token}`)
             .expect(200),
         );
-        // The creator (OWNER) is a formal member too - listed, but marked.
-        // SECOND (ADMIN, not a formal member) and THIRD never appear.
+        // Default list: only pickable formal members - the creator (OWNER,
+        // also a formal member) is left out. SECOND (ADMIN, not a formal
+        // member) and THIRD never appear.
+        expect(asOwner.data.map((candidate) => candidate.id)).toEqual([
+          localUserIdByToken.get(OUTSIDER_TOKEN),
+        ]);
+
+        // A search matching the OWNER returns them too, marked as such.
+        const em = app.get(EntityManager).fork();
+        await em.nativeUpdate(
+          User,
+          { id: created.userId },
+          { firstName: 'Zzcandidateowner' },
+        );
+        const searched = await bodyOf<{
+          data: { id: string; currentRole: GroupRole | null }[];
+        }>(
+          request(app.getHttpServer())
+            .get(
+              `/api/v1/groups/${created.id}/role-assignments/admin-candidates`,
+            )
+            .query({ search: 'zzcandidate' })
+            .set('Authorization', `Bearer ${created.token}`)
+            .expect(200),
+        );
         expect(
-          Object.fromEntries(
-            asOwner.data.map((candidate) => [
-              candidate.id,
-              candidate.currentRole,
-            ]),
-          ),
-        ).toEqual({
-          [created.userId]: GroupRole.OWNER,
-          [localUserIdByToken.get(OUTSIDER_TOKEN)!]: null,
-        });
+          searched.data.map((candidate) => [
+            candidate.id,
+            candidate.currentRole,
+          ]),
+        ).toEqual([[created.userId, GroupRole.OWNER]]);
 
         // ADMIN may list them too (ROLE_ASSIGNMENT_MANAGE).
         await request(app.getHttpServer())

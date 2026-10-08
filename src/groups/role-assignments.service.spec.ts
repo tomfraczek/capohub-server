@@ -446,38 +446,48 @@ describe('RoleAssignmentsService', () => {
       return { em, findAndCount };
     }
 
-    it('limits the pool to active formal members of this Group - OWNER/ADMIN holders included', async () => {
+    it('default list (no search): active formal members of this Group, minus current OWNER/ADMIN holders', async () => {
       const { em, findAndCount } = buildCandidatesEm([]);
       const { service } = buildService(em);
 
-      await service.listGroupAdminCandidates('group-1', undefined, {
-        limit: 20,
-        offset: 0,
-      });
+      await service.listGroupAdminCandidates(
+        'group-1',
+        {},
+        {
+          limit: 20,
+          offset: 0,
+        },
+      );
 
       const [entity, where] = findAndCount.mock.calls[0] as [
         unknown,
         Record<string, unknown>,
       ];
       expect(entity).toBe(User);
-      expect(where).toEqual({
-        id: { $in: ['formal-1', 'formal-2', 'owner-1'] },
-      });
+      expect(where).toEqual({ id: { $in: ['formal-1', 'formal-2'] } });
     });
 
     it('filters by name/apelido, plus the exact user code when the search is one', async () => {
       const { em, findAndCount } = buildCandidatesEm([]);
       const { service } = buildService(em);
 
-      await service.listGroupAdminCandidates('group-1', '123-456', {
-        limit: 20,
-        offset: 0,
-      });
+      await service.listGroupAdminCandidates(
+        'group-1',
+        { search: '123-456' },
+        {
+          limit: 20,
+          offset: 0,
+        },
+      );
 
       const [, where] = findAndCount.mock.calls[0] as [
         unknown,
-        { $or: unknown[] },
+        { id: unknown; $or: unknown[] },
       ];
+      // A search keeps role holders in the pool (marked via currentRole).
+      expect(where.id).toEqual({
+        $in: ['formal-1', 'formal-2', 'owner-1'],
+      });
       expect(where.$or).toEqual([
         { firstName: { $ilike: '%123-456%' } },
         { lastName: { $ilike: '%123-456%' } },
@@ -504,7 +514,7 @@ describe('RoleAssignmentsService', () => {
 
       const result = await service.listGroupAdminCandidates(
         'group-1',
-        undefined,
+        {},
         { limit: 20, offset: 0 },
       );
 
@@ -523,7 +533,7 @@ describe('RoleAssignmentsService', () => {
       });
     });
 
-    it('marks members who already hold a Group role with currentRole, OWNER winning over ADMIN', async () => {
+    it('a matching search returns members who already hold a Group role, marked with currentRole (OWNER wins over ADMIN)', async () => {
       const em = {
         find: jest.fn((entity: unknown) => {
           if (entity === FormalGroupAffiliation) {
@@ -557,7 +567,7 @@ describe('RoleAssignmentsService', () => {
 
       const result = await service.listGroupAdminCandidates(
         'group-1',
-        undefined,
+        { search: 'Tomasz' },
         { limit: 20, offset: 0 },
       );
 
@@ -566,6 +576,37 @@ describe('RoleAssignmentsService', () => {
         ['admin-1', GroupRole.ADMIN],
         ['formal-1', null],
       ]);
+    });
+
+    it('userId (QR flow) narrows the pool to that formal member, even when they already hold a role', async () => {
+      const { em, findAndCount } = buildCandidatesEm([]);
+      const { service } = buildService(em);
+
+      await service.listGroupAdminCandidates(
+        'group-1',
+        { userId: 'owner-1' },
+        { limit: 20, offset: 0 },
+      );
+
+      const [, where] = findAndCount.mock.calls[0] as [
+        unknown,
+        Record<string, unknown>,
+      ];
+      expect(where).toEqual({ id: { $in: ['owner-1'] } });
+    });
+
+    it('userId of someone who is not a formal member returns nothing', async () => {
+      const { em, findAndCount } = buildCandidatesEm([]);
+      const { service } = buildService(em);
+
+      const result = await service.listGroupAdminCandidates(
+        'group-1',
+        { userId: 'stranger-1' },
+        { limit: 20, offset: 0 },
+      );
+
+      expect(result).toEqual({ items: [], total: 0 });
+      expect(findAndCount).not.toHaveBeenCalled();
     });
 
     it('returns nothing without querying users when the Group has no formal members', async () => {
@@ -578,7 +619,7 @@ describe('RoleAssignmentsService', () => {
 
       const result = await service.listGroupAdminCandidates(
         'group-1',
-        undefined,
+        {},
         { limit: 20, offset: 0 },
       );
 

@@ -892,19 +892,21 @@ export class RoleAssignmentsService {
    * Group "Dodaj administratora" screen may pick from: only the Group's
    * formal members (an active FormalGroupAffiliation with this exact Group
    * - never followers, never people tied to it only through a Section).
-   * Members already holding OWNER/ADMIN there stay in the list with
-   * `currentRole` set, so the app can show them as "already added" rather
-   * than have them silently missing from a search. Formal affiliation
+   * Members already holding OWNER/ADMIN there are left out of the default
+   * (no `search`) list, but a search that matches them returns them with
+   * `currentRole` set, so the app shows them as "already added" instead of
+   * leaving the searcher wondering why they are missing. Formal affiliation
    * is otherwise privacy-gated (showFormalGroup), so this list is only
    * reachable behind ROLE_ASSIGNMENT_MANAGE, never a public search filter.
    *
    * `search` matches firstName/lastName/apelido (substring) or the exact
-   * user code, mirroring GET /users/search. Ordered by last then first
-   * name.
+   * user code, mirroring GET /users/search. `userId` (the QR flow) narrows
+   * to that one person - also returned when they already hold a role, so
+   * the app can say so. Ordered by last then first name.
    */
   async listGroupAdminCandidates(
     groupId: string,
-    search: string | undefined,
+    filter: { search?: string; userId?: string },
     page: { limit: number; offset: number },
   ): Promise<{ items: GroupAdminCandidateDto[]; total: number }> {
     const affiliations = await this.em.find(FormalGroupAffiliation, {
@@ -926,12 +928,18 @@ export class RoleAssignmentsService {
         );
       }
     }
-    const candidateIds = affiliations.map((affiliation) => affiliation.user.id);
+    const trimmed = filter.search?.trim() ?? '';
+    // Role holders only appear when explicitly looked for (a search or a
+    // scanned userId), never in the default list.
+    const isLookup = trimmed.length > 0 || filter.userId !== undefined;
+    const candidateIds = affiliations
+      .map((affiliation) => affiliation.user.id)
+      .filter((userId) => !filter.userId || userId === filter.userId)
+      .filter((userId) => isLookup || !roleByUserId.has(userId));
     if (candidateIds.length === 0) {
       return { items: [], total: 0 };
     }
 
-    const trimmed = search?.trim() ?? '';
     const where: FilterQuery<User> = { id: { $in: candidateIds } };
     if (trimmed.length > 0) {
       const numericCode = normalizeNumericCodeInput(trimmed);

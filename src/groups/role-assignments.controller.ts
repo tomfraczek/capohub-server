@@ -121,7 +121,7 @@ export class RoleAssignmentsController {
   ): Promise<PaginatedResponse<GroupAdminCandidateDto>> {
     const result = await this.roleAssignmentsService.listGroupAdminCandidates(
       groupId,
-      query.search,
+      { search: query.search, userId: query.userId },
       { limit: query.limit, offset: (query.page - 1) * query.limit },
     );
     return {
