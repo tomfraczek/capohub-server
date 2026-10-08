@@ -578,6 +578,23 @@ describe('RoleAssignmentsService', () => {
       ]);
     });
 
+    it('matches the app\'s displayed user code ("U123-456") as the exact code', async () => {
+      const { em, findAndCount } = buildCandidatesEm([]);
+      const { service } = buildService(em);
+
+      await service.listGroupAdminCandidates(
+        'group-1',
+        { search: 'U123-456' },
+        { limit: 20, offset: 0 },
+      );
+
+      const [, where] = findAndCount.mock.calls[0] as [
+        unknown,
+        { $or: unknown[] },
+      ];
+      expect(where.$or).toContainEqual({ numericCode: '123456' });
+    });
+
     it('userId (QR flow) narrows the pool to that formal member, even when they already hold a role', async () => {
       const { em, findAndCount } = buildCandidatesEm([]);
       const { service } = buildService(em);

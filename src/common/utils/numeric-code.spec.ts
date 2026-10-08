@@ -6,6 +6,7 @@ import {
   assignUniqueNumericCode,
   generateNumericCode,
   normalizeNumericCodeInput,
+  normalizeUserCodeInput,
 } from './numeric-code';
 
 describe('generateNumericCode', () => {
@@ -140,4 +141,22 @@ describe('assignUniqueNumericCode', () => {
       assignUniqueNumericCode(em, attempt, 'target_unique_index'),
     ).rejects.toThrow(/unable to generate a unique numeric code/i);
   });
+});
+
+describe('normalizeUserCodeInput', () => {
+  it.each([
+    ['123456', '123456'],
+    ['123-456', '123456'],
+    ['U123-456', '123456'],
+    ['u123456', '123456'],
+  ])('accepts %p as the user code %p', (input, expected) => {
+    expect(normalizeUserCodeInput(input)).toBe(expected);
+  });
+
+  it.each(['U12-3456', 'UU123456', 'Tomasz', 'U', ''])(
+    'rejects %p',
+    (input) => {
+      expect(normalizeUserCodeInput(input)).toBeNull();
+    },
+  );
 });

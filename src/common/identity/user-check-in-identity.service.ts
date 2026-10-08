@@ -6,7 +6,7 @@ import {
 import { EntityManager } from '@mikro-orm/postgresql';
 import { AppConfigService } from '../../config/app.config';
 import { User } from '../../users/entities/user.entity';
-import { normalizeNumericCodeInput } from '../utils/numeric-code';
+import { normalizeUserCodeInput } from '../utils/numeric-code';
 import { parseQrPayload } from './qr-payload.util';
 
 // A User's own check-in "scan" method - QR mirrors an in-person scan,
@@ -79,14 +79,11 @@ export class UserCheckInIdentityService {
       };
     }
 
-    // Strip an optional leading "U" (case-insensitive) - the frontend's
-    // human-display form of a User's numericCode (see
-    // common/utils/numeric-code.ts's own "123-456" display convention,
-    // which this simply extends with the "U" entity-kind letter also used
-    // for Event's own F/W/R/E human codes). A real numeric code can never
-    // itself start with "U", so stripping it unconditionally here is safe.
-    const withoutPrefix = /^u/i.test(trimmed) ? trimmed.slice(1) : trimmed;
-    const numericCode = normalizeNumericCodeInput(withoutPrefix);
+    // An optional leading "U" (case-insensitive) - the frontend's
+    // human-display form of a User's numericCode, extending the "123-456"
+    // convention with the "U" entity-kind letter also used for Event's own
+    // F/W/R/E human codes - is accepted (see normalizeUserCodeInput).
+    const numericCode = normalizeUserCodeInput(trimmed);
     if (!numericCode) {
       throw new BadRequestException({
         code: 'INVALID_CHECK_IN_IDENTITY',

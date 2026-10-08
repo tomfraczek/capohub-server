@@ -39,6 +39,18 @@ export function normalizeNumericCodeInput(raw: string): string | null {
 }
 
 /**
+ * Same as normalizeNumericCodeInput, but also accepts the app's displayed
+ * User code - an optional leading "U" (case-insensitive), e.g. "U123-456"
+ * or "u123456" (see the mobile app's formatUserCode). A real numeric code
+ * can never itself start with "U", so stripping it is always safe. Used
+ * wherever a person types a User code they read off the app.
+ */
+export function normalizeUserCodeInput(raw: string): string | null {
+  const withoutPrefix = /^u/i.test(raw) ? raw.slice(1) : raw;
+  return normalizeNumericCodeInput(withoutPrefix);
+}
+
+/**
  * Generates a random 6-digit code and persists `entity` with it, retrying
  * with a fresh code (up to MAX_GENERATION_ATTEMPTS times) only when the
  * attempt fails on the specific unique constraint named

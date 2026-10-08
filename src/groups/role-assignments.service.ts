@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { EntityManager, FilterQuery, LockMode } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
-import { normalizeNumericCodeInput } from '../common/utils/numeric-code';
+import { normalizeUserCodeInput } from '../common/utils/numeric-code';
 import { resolveUserAvatarUrl } from '../storage/image-url.util';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { resolveDisplayName } from '../users/display-name.util';
@@ -900,7 +900,8 @@ export class RoleAssignmentsService {
    * reachable behind ROLE_ASSIGNMENT_MANAGE, never a public search filter.
    *
    * `search` matches firstName/lastName/apelido (substring) or the exact
-   * user code, mirroring GET /users/search. `userId` (the QR flow) narrows
+   * user code - digits ("123456"/"123-456") or the app's displayed form
+   * ("U123-456"), see normalizeUserCodeInput. `userId` (the QR flow) narrows
    * to that one person - also returned when they already hold a role, so
    * the app can say so. Ordered by last then first name.
    */
@@ -942,7 +943,7 @@ export class RoleAssignmentsService {
 
     const where: FilterQuery<User> = { id: { $in: candidateIds } };
     if (trimmed.length > 0) {
-      const numericCode = normalizeNumericCodeInput(trimmed);
+      const numericCode = normalizeUserCodeInput(trimmed);
       const pattern = `%${trimmed}%`;
       where.$or = [
         { firstName: { $ilike: pattern } },
