@@ -16,6 +16,7 @@
 
 import { BadRequestException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
 import { Group } from './entities/group.entity';
@@ -138,10 +139,15 @@ function buildService(
     record: jest.fn(),
   } as unknown as AuditLogService;
 
+  const r2StorageService = {
+    buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
+  } as unknown as R2StorageService;
+
   const service = new RoleAssignmentsService(
     em,
     groupHierarchyService,
     auditLogService,
+    r2StorageService,
   );
 
   return { service, groupHierarchyService, auditLogService };
@@ -387,6 +393,31 @@ describe('RoleAssignmentsService', () => {
 
       expect(adminAssignment.revokedAt).not.toBeNull();
       expect(adminAssignment.revokedBy).toBe(actor);
+    });
+
+    it('Group: revoking ADMIN touches only that RoleAssignment - never the formal Group affiliation, Section memberships or the user', async () => {
+      const group = buildGroup();
+      const adminAssignment = buildRoleAssignment({
+        role: GroupRole.ADMIN,
+        group,
+      });
+      const { em, findOne, find, persist } = buildMockEm({
+        roleAssignmentFindOneResults: [adminAssignment],
+      });
+      const { service } = buildService(em, { communityResult: group });
+      const actor = buildUser({ id: 'owner-1' });
+
+      await service.revokeRole('group-1', 'ra-1', actor);
+
+      expect(adminAssignment.revokedAt).not.toBeNull();
+      expect(adminAssignment.revokedBy).toBe(actor);
+      const touchedEntities = [...findOne.mock.calls, ...find.mock.calls].map(
+        ([entity]) => entity,
+      );
+      expect(touchedEntities).not.toContain(FormalGroupAffiliation);
+      expect(touchedEntities).not.toContain(SectionMembership);
+      expect(touchedEntities).not.toContain(User);
+      expect(persist).not.toHaveBeenCalled();
     });
   });
 

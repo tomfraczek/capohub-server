@@ -424,6 +424,7 @@ export class CommunityHomeService {
       canManageInvitationsInSectionIds: [],
       canBanMembersInSectionIds: [],
       canSuspendMembersInSectionIds: [],
+      canViewRolesInGroupIds: [],
       canManageRolesInGroupIds: [],
       canManageRolesInSectionIds: [],
       canTransferOwnershipInGroupIds: [],
@@ -581,9 +582,18 @@ export class CommunityHomeService {
       ) {
         push('canManageInvitationsInSectionIds');
       }
+      // Group "Role" screen: OWNER and ADMIN may open it and manage ADMIN -
+      // mirrors RoleAssignmentsController's two permissions.
+      if (
+        isGroup &&
+        community.status === GroupStatus.ACTIVE &&
+        has(GroupPermission.ROLE_ASSIGNMENT_VIEW)
+      ) {
+        push('canViewRolesInGroupIds');
+      }
       if (
         community.status === GroupStatus.ACTIVE &&
-        has(GroupPermission.GROUP_EDIT)
+        has(GroupPermission.ROLE_ASSIGNMENT_MANAGE)
       ) {
         push(
           isGroup ? 'canManageRolesInGroupIds' : 'canManageRolesInSectionIds',

@@ -333,26 +333,89 @@ describe('group.mapper', () => {
       roleAssignment.grantedAt = new Date('2026-01-01T00:00:00.000Z');
       roleAssignment.user = {
         id: 'user-1',
-        displayName: 'Mestre Bimba',
+        // Email-seeded account label - must never reach the response.
+        displayName: 'Tomasz FR 90',
+        firstName: 'Manoel',
+        lastName: 'dos Reis',
+        apelido: 'Bimba',
+        publicCode: 'BIM00001',
+        avatarType: AvatarType.UPLOAD,
+        avatarUrl: null,
+        avatarImageKey: 'avatars/user-1.webp',
+        presetAvatarId: null,
       } as never;
       roleAssignment.grantedBy = {
         id: 'owner-1',
-        displayName: 'Ana Silva',
+        displayName: 'ana.silva',
+        firstName: 'Ana',
+        lastName: 'Silva',
+        apelido: null,
+        publicCode: 'ANA00001',
       } as never;
       roleAssignment.revokedAt = null;
       roleAssignment.revokedBy = null;
 
-      const dto = toRoleAssignmentResponseDto(roleAssignment);
+      const dto = toRoleAssignmentResponseDto(
+        roleAssignment,
+        buildUrlBuilder(),
+      );
 
       expect(dto).toEqual({
         id: 'role-assignment-1',
         groupId: 'group-1',
-        user: { id: 'user-1', displayName: 'Mestre Bimba' },
+        user: {
+          id: 'user-1',
+          displayName: 'Manoel dos Reis',
+          firstName: 'Manoel',
+          lastName: 'dos Reis',
+          apelido: 'Bimba',
+          image: {
+            type: AvatarType.UPLOAD,
+            url: 'https://cdn.example.com/avatars/user-1.webp',
+            presetAvatarId: null,
+          },
+        },
         role: GroupRole.ADMIN,
         grantedAt: '2026-01-01T00:00:00.000Z',
         grantedBy: { id: 'owner-1', displayName: 'Ana Silva' },
         revokedAt: null,
         revokedBy: null,
+      });
+    });
+
+    it('returns a PRESET avatar without a URL, so the app resolves the local asset', () => {
+      const roleAssignment = new RoleAssignment();
+      roleAssignment.id = 'role-assignment-1';
+      roleAssignment.group = buildGroup({ id: 'group-1' });
+      roleAssignment.role = GroupRole.OWNER;
+      roleAssignment.grantedAt = new Date('2026-01-01T00:00:00.000Z');
+      roleAssignment.user = {
+        id: 'user-1',
+        displayName: 'x',
+        firstName: 'Ana',
+        lastName: 'Silva',
+        apelido: null,
+        publicCode: 'ANA00001',
+        avatarType: AvatarType.PRESET,
+        avatarUrl: null,
+        avatarImageKey: null,
+        presetAvatarId: 'preset-3',
+      } as never;
+      roleAssignment.grantedBy = null;
+      roleAssignment.revokedAt = null;
+      roleAssignment.revokedBy = null;
+
+      const dto = toRoleAssignmentResponseDto(
+        roleAssignment,
+        buildUrlBuilder(),
+      );
+
+      expect(dto.user.displayName).toBe('Ana Silva');
+      expect(dto.user.apelido).toBeNull();
+      expect(dto.user.image).toEqual({
+        type: AvatarType.PRESET,
+        url: null,
+        presetAvatarId: 'preset-3',
       });
     });
 
@@ -365,15 +428,30 @@ describe('group.mapper', () => {
       roleAssignment.user = {
         id: 'user-1',
         displayName: 'Mestre Bimba',
+        firstName: 'Manoel',
+        lastName: 'dos Reis',
+        apelido: 'Bimba',
+        publicCode: 'BIM00001',
+        avatarType: AvatarType.CLERK,
+        avatarUrl: null,
+        avatarImageKey: null,
+        presetAvatarId: null,
       } as never;
       roleAssignment.grantedBy = null;
       roleAssignment.revokedAt = new Date('2026-03-01T00:00:00.000Z');
       roleAssignment.revokedBy = {
         id: 'owner-1',
-        displayName: 'Ana Silva',
+        displayName: 'ana.silva',
+        firstName: 'Ana',
+        lastName: 'Silva',
+        apelido: null,
+        publicCode: 'ANA00001',
       } as never;
 
-      const dto = toRoleAssignmentResponseDto(roleAssignment);
+      const dto = toRoleAssignmentResponseDto(
+        roleAssignment,
+        buildUrlBuilder(),
+      );
 
       expect(dto.groupId).toBe('section-1');
       expect(dto.grantedBy).toBeNull();

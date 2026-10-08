@@ -778,6 +778,127 @@ describe('Groups (e2e)', () => {
       );
       expect(response.code).toBe('CANNOT_REMOVE_OWNER');
     });
+
+    it('lets a Group ADMIN list the roles and grant/revoke ADMIN, like the OWNER', async () => {
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
+
+      // ADMIN grants ADMIN to someone else...
+      const grantedByAdmin = await grantGroupRole(
+        SECOND_TOKEN,
+        created.id,
+        THIRD_TOKEN,
+      );
+      expect(grantedByAdmin.role).toBe(GroupRole.ADMIN);
+
+      const listed = await getGroupRoleAssignments(SECOND_TOKEN, created.id);
+      expect(listed.map((ra) => ra.role).sort()).toEqual(
+        [GroupRole.ADMIN, GroupRole.ADMIN, GroupRole.OWNER].sort(),
+      );
+
+      // ...and revokes another admin's ADMIN role.
+      await request(app.getHttpServer())
+        .delete(
+          `/api/v1/groups/${created.id}/role-assignments/${grantedByAdmin.id}`,
+        )
+        .set('Authorization', `Bearer ${SECOND_TOKEN}`)
+        .expect(204);
+
+      const after = await getGroupRoleAssignments(created.token, created.id);
+      expect(after.map((ra) => ra.id)).not.toContain(grantedByAdmin.id);
+    });
+
+    it('never lets a Group ADMIN revoke the OWNER role (409) or grant OWNER (400)', async () => {
+      const created = await createGroup();
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
+      const ownerAssignment = (
+        await getGroupRoleAssignments(SECOND_TOKEN, created.id)
+      ).find((ra) => ra.role === GroupRole.OWNER);
+
+      const revokeResponse = await bodyOf<HttpErrorResponse>(
+        request(app.getHttpServer())
+          .delete(
+            `/api/v1/groups/${created.id}/role-assignments/${ownerAssignment?.id}`,
+          )
+          .set('Authorization', `Bearer ${SECOND_TOKEN}`)
+          .expect(409),
+      );
+      expect(revokeResponse.code).toBe('CANNOT_REMOVE_OWNER');
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${created.id}/role-assignments`)
+        .set('Authorization', `Bearer ${SECOND_TOKEN}`)
+        .send({
+          userId: localUserIdByToken.get(THIRD_TOKEN),
+          role: GroupRole.OWNER,
+        })
+        .expect(400);
+
+      // The OWNER is untouched.
+      const after = await getGroupRoleAssignments(created.token, created.id);
+      expect(after.filter((ra) => ra.role === GroupRole.OWNER)).toHaveLength(1);
+    });
+
+    // A Group has no ordinary members - anyone without an OWNER/ADMIN Role
+    // Assignment there (incl. members of its Sections) is a stranger to
+    // these routes and gets 404, never a hint that the Group exists.
+    it('rejects grant and revoke by a caller without a Group role - 404, nothing changes', async () => {
+      const created = await createGroup();
+      const admin = await grantGroupRole(
+        created.token,
+        created.id,
+        SECOND_TOKEN,
+      );
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${created.id}/role-assignments`)
+        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+        .send({
+          userId: localUserIdByToken.get(OUTSIDER_TOKEN),
+          role: GroupRole.ADMIN,
+        })
+        .expect(404);
+
+      await request(app.getHttpServer())
+        .delete(`/api/v1/groups/${created.id}/role-assignments/${admin.id}`)
+        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+        .expect(404);
+
+      const after = await getGroupRoleAssignments(created.token, created.id);
+      expect(after.map((ra) => ra.id)).toContain(admin.id);
+    });
+
+    it('hides the role list from a stranger even on a public Group - 404, never the list', async () => {
+      const created = await createGroup({ isPublic: true });
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/groups/${created.id}/role-assignments`)
+        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+        .expect(404);
+    });
+
+    it('returns the role holder with profile identity and avatar, never email-derived fields', async () => {
+      const created = await createGroup();
+      const granted = await grantGroupRole(
+        created.token,
+        created.id,
+        SECOND_TOKEN,
+      );
+
+      expect(Object.keys(granted.user).sort()).toEqual(
+        [
+          'apelido',
+          'displayName',
+          'firstName',
+          'id',
+          'image',
+          'lastName',
+        ].sort(),
+      );
+      expect(Object.keys(granted.user.image).sort()).toEqual(
+        ['presetAvatarId', 'type', 'url'].sort(),
+      );
+    });
   });
 
   describe('archived group (writes blocked)', () => {

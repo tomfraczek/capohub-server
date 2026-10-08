@@ -1,3 +1,5 @@
+import { AvatarType } from '../enums/avatar-type.enum';
+
 // GET /users/search - a minimal result shape for picking a
 // user from outside any Section (e.g. Trainings' external-trainer picker).
 // Deliberately does NOT reuse PublicUserProfileResponseDto: that DTO exposes
@@ -7,6 +9,17 @@
 export interface UserSearchResultDto {
   id: string;
   displayName: string;
+  // Shown under the name so a picker row looks like every other user row
+  // (Group "Role" screen's admin picker). Basic identity - no privacy
+  // toggle, same as firstName/lastName behind displayName.
+  apelido: string | null;
+  // Same shape as SectionMemberUserImageDto - a PRESET avatar has no URL,
+  // the app resolves presetAvatarId to a local asset itself.
+  image: {
+    type: AvatarType;
+    url: string | null;
+    presetAvatarId: string | null;
+  };
   numericCode?: string;
 }
 

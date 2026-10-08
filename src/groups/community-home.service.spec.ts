@@ -172,6 +172,22 @@ describe('CommunityHomeService', () => {
     expect(home.capabilities.canArchiveGroupIds).toEqual(['group-1']);
     expect(home.capabilities.canArchiveSectionIds).toEqual([]);
     expect(home.capabilities.canManageRolesInGroupIds).toEqual(['group-1']);
+    expect(home.capabilities.canViewRolesInGroupIds).toEqual(['group-1']);
+  });
+
+  it('Group ADMIN: may open the Roles screen and manage ADMIN roles, like the OWNER', async () => {
+    const group = buildGroup({ id: 'group-1' });
+    const { service } = buildService({
+      participation: [
+        { userId: 'user-1', groupId: 'group-1', roles: [GroupRole.ADMIN] },
+      ],
+      groups: [group],
+    });
+
+    const home = await service.getHome(buildUser(), null);
+
+    expect(home.capabilities.canViewRolesInGroupIds).toEqual(['group-1']);
+    expect(home.capabilities.canManageRolesInGroupIds).toEqual(['group-1']);
   });
 
   it('a membership-lifecycle capability (manage members) is never populated for a Group, even for its OWNER', async () => {

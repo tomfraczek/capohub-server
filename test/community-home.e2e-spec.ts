@@ -432,6 +432,7 @@ describe('Community Home (e2e)', () => {
       canManageInvitationsInSectionIds: [],
       canBanMembersInSectionIds: [],
       canSuspendMembersInSectionIds: [],
+      canViewRolesInGroupIds: [],
       canManageRolesInGroupIds: [],
       canManageRolesInSectionIds: [],
       canTransferOwnershipInGroupIds: [],

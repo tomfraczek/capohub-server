@@ -1,3 +1,4 @@
+import { PUBLIC_VIEW_SAFE_PERMISSIONS } from './group-role-permissions.map';
 import { SectionMembershipStatus } from '../enums/section-membership-status.enum';
 import { GroupRole } from '../enums/group-role.enum';
 import { GroupPermission } from './group-permission.enum';
@@ -159,6 +160,34 @@ describe('GroupPermissionService', () => {
     });
   });
 
+  describe('SECTION target - role assignment tiers unchanged (view: every member, manage: ADMIN/OWNER)', () => {
+    it('lets every Section role view, but only ADMIN and OWNER manage', () => {
+      for (const role of Object.values(GroupRole)) {
+        expect(
+          service.hasPermission(
+            'SECTION',
+            role,
+            GroupPermission.ROLE_ASSIGNMENT_VIEW,
+          ),
+        ).toBe(true);
+      }
+      expect(
+        service.hasPermission(
+          'SECTION',
+          GroupRole.ADMIN,
+          GroupPermission.ROLE_ASSIGNMENT_MANAGE,
+        ),
+      ).toBe(true);
+      expect(
+        service.hasPermission(
+          'SECTION',
+          GroupRole.INSTRUCTOR,
+          GroupPermission.ROLE_ASSIGNMENT_MANAGE,
+        ),
+      ).toBe(false);
+    });
+  });
+
   describe('GROUP target - no membership-lifecycle permissions, only OWNER/ADMIN', () => {
     it('grants nothing to MEMBER/INSTRUCTOR/ASSISTANT - Group has no such roles', () => {
       expect(service.getPermissionsForRole('GROUP', GroupRole.MEMBER)).toEqual(
@@ -266,6 +295,56 @@ describe('GroupPermissionService', () => {
           'SECTION',
           GroupRole.OWNER,
           GroupPermission.GRADUATION_SYSTEM_MANAGE,
+        ),
+      ).toBe(false);
+    });
+
+    it('Group Roles screen: OWNER and ADMIN may both view and grant/revoke ADMIN, nobody else', () => {
+      for (const role of [GroupRole.OWNER, GroupRole.ADMIN]) {
+        expect(
+          service.hasPermission(
+            'GROUP',
+            role,
+            GroupPermission.ROLE_ASSIGNMENT_VIEW,
+          ),
+        ).toBe(true);
+        expect(
+          service.hasPermission(
+            'GROUP',
+            role,
+            GroupPermission.ROLE_ASSIGNMENT_MANAGE,
+          ),
+        ).toBe(true);
+      }
+      for (const role of [
+        GroupRole.MEMBER,
+        GroupRole.INSTRUCTOR,
+        GroupRole.ASSISTANT,
+      ]) {
+        expect(
+          service.hasPermission(
+            'GROUP',
+            role,
+            GroupPermission.ROLE_ASSIGNMENT_VIEW,
+          ),
+        ).toBe(false);
+        expect(
+          service.hasPermission(
+            'GROUP',
+            role,
+            GroupPermission.ROLE_ASSIGNMENT_MANAGE,
+          ),
+        ).toBe(false);
+      }
+    });
+
+    it('never makes the role list public-view-safe - a stranger to a public Group gets 404, not the list', () => {
+      expect(
+        PUBLIC_VIEW_SAFE_PERMISSIONS.has(GroupPermission.ROLE_ASSIGNMENT_VIEW),
+      ).toBe(false);
+      expect(
+        PUBLIC_VIEW_SAFE_PERMISSIONS.has(
+          GroupPermission.ROLE_ASSIGNMENT_MANAGE,
         ),
       ).toBe(false);
     });

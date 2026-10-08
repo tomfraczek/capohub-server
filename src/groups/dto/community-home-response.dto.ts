@@ -129,7 +129,12 @@ export interface CommunityHomeCapabilitiesDto {
   canManageInvitationsInSectionIds: string[];
   canBanMembersInSectionIds: string[];
   canSuspendMembersInSectionIds: string[];
+  // Open a Group's "Role" screen (see its OWNER/ADMIN list) - Group OWNER
+  // and ADMIN, ACTIVE only. Section has no equivalent here: its roles are
+  // visible to every member through the member screens.
+  canViewRolesInGroupIds: string[];
   // Grant/revoke a Role Assignment - both Group and Section support this.
+  // Group and Section alike: OWNER and ADMIN.
   canManageRolesInGroupIds: string[];
   canManageRolesInSectionIds: string[];
   canTransferOwnershipInGroupIds: string[];

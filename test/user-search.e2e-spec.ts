@@ -384,7 +384,7 @@ describe('User Search (e2e)', () => {
     expect(result.items.length).toBeGreaterThan(0);
     for (const item of result.items) {
       expect(Object.keys(item).sort()).toEqual(
-        ['displayName', 'id', 'numericCode'].sort(),
+        ['apelido', 'displayName', 'id', 'image', 'numericCode'].sort(),
       );
     }
   });

@@ -1,3 +1,4 @@
+import { AvatarType } from './enums/avatar-type.enum';
 import { Collection } from '@mikro-orm/core';
 import { Group } from '../groups/entities/group.entity';
 import { Section } from '../groups/entities/section.entity';
@@ -364,29 +365,52 @@ describe('toPublicUserProfileResponseDto', () => {
 
 describe('toUserSearchResultDto', () => {
   it('never reuses User.displayName, even though it could contain a real name', () => {
-    const dto = toUserSearchResultDto(buildUser());
+    const dto = toUserSearchResultDto(buildUser(), urlBuilder);
     expect(dto.displayName).not.toBe('Ada Real Name');
     expect(dto.displayName).toBe('ADA00001');
   });
 
   it('shows the full name whenever both parts are set - never the code instead', () => {
     const user = buildUser({ firstName: 'Ada', lastName: 'Lovelace' });
-    expect(toUserSearchResultDto(user).displayName).toBe('Ada Lovelace');
+    expect(toUserSearchResultDto(user, urlBuilder).displayName).toBe(
+      'Ada Lovelace',
+    );
   });
 
   it('falls back to apelido when no full name is set', () => {
     const user = buildUser({ apelido: 'Formiga' });
-    expect(toUserSearchResultDto(user).displayName).toBe('Formiga');
+    expect(toUserSearchResultDto(user, urlBuilder).displayName).toBe('Formiga');
   });
 
   it('always includes id and numericCode, and never private fields', () => {
-    const dto = toUserSearchResultDto(buildUser());
+    const dto = toUserSearchResultDto(buildUser(), urlBuilder);
     expect(dto.id).toBe('user-1');
     expect(dto.numericCode).toBe('042981');
     expect(Object.keys(dto).sort()).toEqual([
+      'apelido',
       'displayName',
       'id',
+      'image',
       'numericCode',
     ]);
+  });
+
+  it('returns apelido alongside the full name (never instead of it) and the avatar', () => {
+    const user = buildUser({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      apelido: 'Formiga',
+      avatarType: AvatarType.UPLOAD,
+      avatarImageKey: 'avatars/user-1.webp',
+      presetAvatarId: null,
+    });
+    const dto = toUserSearchResultDto(user, urlBuilder);
+    expect(dto.displayName).toBe('Ada Lovelace');
+    expect(dto.apelido).toBe('Formiga');
+    expect(dto.image).toEqual({
+      type: AvatarType.UPLOAD,
+      url: 'https://cdn.example.com/avatars/user-1.webp',
+      presetAvatarId: null,
+    });
   });
 });

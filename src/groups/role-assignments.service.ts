@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { EntityManager, LockMode } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
+import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
 import { CreateRoleAssignmentInput } from './dto/create-role-assignment.schema';
@@ -63,6 +64,7 @@ export class RoleAssignmentsService {
     private readonly em: EntityManager,
     private readonly groupHierarchyService: GroupHierarchyService,
     private readonly auditLogService: AuditLogService,
+    private readonly r2StorageService: R2StorageService,
   ) {}
 
   /**
@@ -613,7 +615,7 @@ export class RoleAssignmentsService {
       });
       await em.flush();
 
-      return toRoleAssignmentResponseDto(assignment);
+      return toRoleAssignmentResponseDto(assignment, this.r2StorageService);
     });
   }
 
@@ -628,7 +630,9 @@ export class RoleAssignmentsService {
         orderBy: { grantedAt: 'asc' },
       },
     );
-    return assignments.map(toRoleAssignmentResponseDto);
+    return assignments.map((assignment) =>
+      toRoleAssignmentResponseDto(assignment, this.r2StorageService),
+    );
   }
 
   async getRoleAssignment(
@@ -640,7 +644,7 @@ export class RoleAssignmentsService {
       groupOrSectionId,
       roleAssignmentId,
     );
-    return toRoleAssignmentResponseDto(assignment);
+    return toRoleAssignmentResponseDto(assignment, this.r2StorageService);
   }
 
   /**
@@ -867,8 +871,14 @@ export class RoleAssignmentsService {
       await em.flush();
 
       return {
-        previousOwner: toRoleAssignmentResponseDto(previousOwnerAssignment),
-        newOwner: toRoleAssignmentResponseDto(newOwnerAssignment),
+        previousOwner: toRoleAssignmentResponseDto(
+          previousOwnerAssignment,
+          this.r2StorageService,
+        ),
+        newOwner: toRoleAssignmentResponseDto(
+          newOwnerAssignment,
+          this.r2StorageService,
+        ),
       };
     });
   }

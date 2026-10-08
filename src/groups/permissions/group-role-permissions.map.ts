@@ -33,6 +33,9 @@ const SECTION_MEMBER_PERMISSIONS: readonly GroupPermission[] = [
   // service then rejects them when the setting is off. ADMIN and OWNER
   // always pass regardless of the setting.
   GroupPermission.GROUP_INVITE,
+  // Who holds which Role in this Section - same tier as the GROUP_VIEW
+  // it replaced on RoleAssignmentsController's read routes.
+  GroupPermission.ROLE_ASSIGNMENT_VIEW,
   // Every member may browse this Section's own Trainings - actual
   // visibility of a MEMBERS_ONLY vs PUBLIC Training is resolved per-row by
   // TrainingsService, this permission only gates the endpoint itself (see
@@ -61,6 +64,9 @@ const SECTION_ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   ...SECTION_MEMBER_PERMISSIONS,
   GroupPermission.GROUP_EDIT,
   GroupPermission.GROUP_SETTINGS_MANAGE,
+  // Section ADMIN keeps grant/revoke - same tier as the GROUP_EDIT it
+  // replaced on RoleAssignmentsController's write routes.
+  GroupPermission.ROLE_ASSIGNMENT_MANAGE,
   GroupPermission.AUDIT_LOG_VIEW,
   GroupPermission.MEMBERSHIP_ADD,
   GroupPermission.MEMBERSHIP_ROLE_CHANGE,
@@ -148,6 +154,11 @@ export const SECTION_TARGET_ROLE_PERMISSIONS: Readonly<
 const GROUP_ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.GROUP_VIEW,
   GroupPermission.GROUP_EDIT,
+  // OWNER and ADMIN alike see the Group's OWNER/ADMIN list and grant/
+  // revoke ADMIN. OWNER itself is never grantable (assignable-group-role
+  // .schema.ts) nor revocable (RoleAssignmentsService.revokeRole) here.
+  GroupPermission.ROLE_ASSIGNMENT_VIEW,
+  GroupPermission.ROLE_ASSIGNMENT_MANAGE,
   GroupPermission.GROUP_SETTINGS_MANAGE,
   GroupPermission.AUDIT_LOG_VIEW,
   GroupPermission.ACADEMY_VIEW,
@@ -243,6 +254,9 @@ export const READ_ONLY_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> = new Set(
     GroupPermission.AUDIT_LOG_VIEW,
     GroupPermission.FORMAL_RANK_CORRECTION_VIEW,
     GroupPermission.TRAINING_VIEW,
+    // Keeps the READ_ONLY behavior of the GROUP_VIEW it replaced on
+    // RoleAssignmentsController's read routes.
+    GroupPermission.ROLE_ASSIGNMENT_VIEW,
   ],
 );
 

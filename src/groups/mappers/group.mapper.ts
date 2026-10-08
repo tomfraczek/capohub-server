@@ -16,6 +16,8 @@ import {
   RoleAssignmentResponseDto,
   RoleAssignmentUserRefDto,
 } from '../dto/role-assignment-response.dto';
+import { resolveDisplayName } from '../../users/display-name.util';
+import { User } from '../../users/entities/user.entity';
 
 export function toGroupResponseDto(
   group: Group,
@@ -136,14 +138,20 @@ export function toMembershipCohortRefDto(
 }
 
 function toRoleAssignmentUserRefDto(
-  user: { id: string; displayName: string } | null,
+  user: User | null,
 ): RoleAssignmentUserRefDto | null {
-  return user ? { id: user.id, displayName: user.displayName } : null;
+  return user ? { id: user.id, displayName: resolveDisplayName(user) } : null;
 }
 
+// `displayName` comes from the profile identity (resolveDisplayName), never
+// from `User.displayName` - that one is seeded from the email address at
+// account creation, which is why the Roles screen used to show labels like
+// "Tomasz FR 90" instead of the user's real name.
 export function toRoleAssignmentResponseDto(
   roleAssignment: RoleAssignment,
+  urlBuilder: PublicUrlBuilder,
 ): RoleAssignmentResponseDto {
+  const user = roleAssignment.user;
   return {
     id: roleAssignment.id,
     // `group`/`section` are the two nullable halves of RoleAssignment's
@@ -151,8 +159,16 @@ export function toRoleAssignmentResponseDto(
     // one is ever set.
     groupId: (roleAssignment.group ?? roleAssignment.section)!.id,
     user: {
-      id: roleAssignment.user.id,
-      displayName: roleAssignment.user.displayName,
+      id: user.id,
+      displayName: resolveDisplayName(user),
+      firstName: user.firstName,
+      lastName: user.lastName,
+      apelido: user.apelido,
+      image: {
+        type: user.avatarType,
+        url: resolveUserAvatarUrl(user, urlBuilder),
+        presetAvatarId: user.presetAvatarId,
+      },
     },
     role: roleAssignment.role,
     grantedAt: roleAssignment.grantedAt.toISOString(),

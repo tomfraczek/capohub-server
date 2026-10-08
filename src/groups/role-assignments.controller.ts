@@ -29,13 +29,11 @@ import { RoleAssignmentsService } from './role-assignments.service';
 // and a Section's 5-role set are both managed through this one controller,
 // each row targeting exactly one Group or Section, never both).
 //
-// Gated on GROUP_EDIT/GROUP_VIEW rather than the membership-lifecycle
-// MEMBERSHIP_ROLE_CHANGE/MEMBERSHIP_VIEW permissions: those do not exist
-// for a Group target at all (Group has no membership - see
-// group-role-permissions.map.ts), and this controller's single handler
-// serves both mount points, so it needs one permission that is valid,
-// ADMIN/OWNER-tier, in both role-permission maps. GROUP_EDIT/GROUP_VIEW are
-// exactly that.
+// Gated on ROLE_ASSIGNMENT_MANAGE/ROLE_ASSIGNMENT_VIEW (see their own
+// comment in group-permission.enum.ts): on a Group OWNER and ADMIN may
+// list and grant/revoke ADMIN; on a Section the tiers match the
+// GROUP_EDIT/GROUP_VIEW pair these replaced. Neither is public-view-safe,
+// so a caller with no Role/Membership gets 404, never the list.
 //
 // The request body uses `userId`, not a membership id - RoleAssignment has
 // no membership relation at all (see role-assignment.entity.ts). Two
@@ -59,7 +57,7 @@ export class RoleAssignmentsController {
 
   @Post()
   @HttpCode(201)
-  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupPermission(GroupPermission.ROLE_ASSIGNMENT_MANAGE)
   async create(
     @Param('groupId') groupId: string,
     @Param('sectionId') sectionId: string,
@@ -87,7 +85,7 @@ export class RoleAssignmentsController {
   }
 
   @Get()
-  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupPermission(GroupPermission.ROLE_ASSIGNMENT_VIEW)
   list(
     @Param('groupId') groupId: string,
     @Param('sectionId') sectionId: string,
@@ -98,7 +96,7 @@ export class RoleAssignmentsController {
   }
 
   @Get(':roleAssignmentId')
-  @RequireGroupPermission(GroupPermission.GROUP_VIEW)
+  @RequireGroupPermission(GroupPermission.ROLE_ASSIGNMENT_VIEW)
   getById(
     @Param('groupId') groupId: string,
     @Param('sectionId') sectionId: string,
@@ -112,7 +110,7 @@ export class RoleAssignmentsController {
 
   @Delete(':roleAssignmentId')
   @HttpCode(204)
-  @RequireGroupPermission(GroupPermission.GROUP_EDIT)
+  @RequireGroupPermission(GroupPermission.ROLE_ASSIGNMENT_MANAGE)
   revoke(
     @Param('groupId') groupId: string,
     @Param('sectionId') sectionId: string,

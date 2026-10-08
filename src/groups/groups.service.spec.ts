@@ -193,14 +193,15 @@ function buildService(em: EntityManager) {
   const auditLogService = {
     record: jest.fn().mockResolvedValue(undefined),
   } as unknown as AuditLogService;
+  const r2StorageService = {
+    buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
+  } as unknown as R2StorageService;
   const roleAssignmentsService = new RoleAssignmentsService(
     em,
     groupHierarchyService,
     auditLogService,
+    r2StorageService,
   );
-  const r2StorageService = {
-    buildPublicUrl: (key: string) => `https://cdn.example.com/${key}`,
-  } as unknown as R2StorageService;
   const imageProcessingService = {
     processProfileImage: jest.fn().mockResolvedValue(Buffer.from('webp')),
     processCoverImage: jest.fn().mockResolvedValue(Buffer.from('webp')),

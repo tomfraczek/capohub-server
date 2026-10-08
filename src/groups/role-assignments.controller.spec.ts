@@ -28,10 +28,11 @@ describe('RoleAssignmentsController', () => {
     expect(guards).toEqual([GroupPermissionsGuard]);
   });
 
-  // Gated on GROUP_EDIT/GROUP_VIEW, not MEMBERSHIP_ROLE_CHANGE/
-  // MEMBERSHIP_VIEW - this controller is dual-mounted on both Group and
-  // Section routes, and the membership-lifecycle permissions do not exist
-  // for a Group target at all (see group-role-permissions.map.ts).
+  // Gated on ROLE_ASSIGNMENT_MANAGE/ROLE_ASSIGNMENT_VIEW - not GROUP_EDIT/
+  // GROUP_VIEW (a Group ADMIN holds GROUP_EDIT but must not grant/revoke,
+  // and GROUP_VIEW is public-view-safe), nor MEMBERSHIP_ROLE_CHANGE/
+  // MEMBERSHIP_VIEW (those do not exist for a Group target at all - see
+  // group-role-permissions.map.ts).
   describe.each<
     [
       keyof RoleAssignmentsController,
@@ -39,10 +40,10 @@ describe('RoleAssignmentsController', () => {
       GroupStatus[] | undefined,
     ]
   >([
-    ['create', [GroupPermission.GROUP_EDIT], undefined],
-    ['list', [GroupPermission.GROUP_VIEW], undefined],
-    ['getById', [GroupPermission.GROUP_VIEW], undefined],
-    ['revoke', [GroupPermission.GROUP_EDIT], undefined],
+    ['create', [GroupPermission.ROLE_ASSIGNMENT_MANAGE], undefined],
+    ['list', [GroupPermission.ROLE_ASSIGNMENT_VIEW], undefined],
+    ['getById', [GroupPermission.ROLE_ASSIGNMENT_VIEW], undefined],
+    ['revoke', [GroupPermission.ROLE_ASSIGNMENT_MANAGE], undefined],
   ])('%s', (method, expectedPermissions, expectedAllowedStatuses) => {
     it(`requires ${expectedPermissions.join(', ')}`, () => {
       const reflector = new Reflector();

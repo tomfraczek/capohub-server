@@ -9,9 +9,8 @@
 // Deliberately one enum per existing domain only (Group, Membership,
 // Academy, Cohort) - no permissions for domains that don't exist yet
 // (Graduation, Invitations, Visibility Scope, ...). Role Assignment
-// management itself has no dedicated permission - it is authorized against
-// GROUP_EDIT/GROUP_VIEW for the Group the Role Assignment targets, the same
-// as any other administrative action on that Group.
+// management has its own ROLE_ASSIGNMENT_VIEW/ROLE_ASSIGNMENT_MANAGE pair -
+// see their own comment below.
 export enum GroupPermission {
   // Group
   GROUP_VIEW = 'GROUP_VIEW',
@@ -45,6 +44,18 @@ export enum GroupPermission {
   // comment for why: every Membership manages its own row, including the
   // valid zero-Role-Assignment case that GroupPermissionsGuard cannot
   // authorize at all.
+
+  // Role Assignment (RoleAssignmentsController - grant/revoke/list a
+  // Group's or Section's Roles). Deliberately its own pair rather than
+  // GROUP_VIEW/GROUP_EDIT:
+  //  - Group: OWNER and ADMIN may list and grant/revoke ADMIN; nobody
+  //    without a Role there sees the list at all (GROUP_VIEW is
+  //    public-view-safe, so it could not express that). OWNER is never
+  //    grantable/revocable through these routes, whoever the caller is.
+  //  - Section: unchanged from the GROUP_VIEW/GROUP_EDIT tiers it replaces -
+  //    every member may view, ADMIN and OWNER may manage.
+  ROLE_ASSIGNMENT_VIEW = 'ROLE_ASSIGNMENT_VIEW',
+  ROLE_ASSIGNMENT_MANAGE = 'ROLE_ASSIGNMENT_MANAGE',
 
   // Membership (always Root Group-scoped - see organization-entities.md#membership)
   MEMBERSHIP_VIEW = 'MEMBERSHIP_VIEW',

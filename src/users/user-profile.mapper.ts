@@ -234,10 +234,19 @@ function toPublicIndependentRankRefDto(
 
 // GET /users/search result row. `numericCode` is always included - it's a
 // public identifier by design (see numeric-code.ts), not privacy-gated.
-export function toUserSearchResultDto(target: User): UserSearchResultDto {
+export function toUserSearchResultDto(
+  target: User,
+  urlBuilder: PublicUrlBuilder,
+): UserSearchResultDto {
   return {
     id: target.id,
     displayName: resolveDisplayName(target),
+    apelido: target.apelido,
+    image: {
+      type: target.avatarType,
+      url: resolveUserAvatarUrl(target, urlBuilder),
+      presetAvatarId: target.presetAvatarId,
+    },
     numericCode: target.numericCode,
   };
 }

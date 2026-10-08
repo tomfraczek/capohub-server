@@ -256,7 +256,9 @@ export class UserProfileService {
     );
 
     return {
-      items: users.map(toUserSearchResultDto),
+      items: users.map((target) =>
+        toUserSearchResultDto(target, this.r2StorageService),
+      ),
       total,
       hasMore: offset + users.length < total,
     };
