@@ -231,7 +231,11 @@ describe('group.mapper', () => {
       membership.section = buildSection({ id: 'section-1' });
       membership.user = {
         id: 'user-1',
-        displayName: 'Mestre Bimba',
+        displayName: 'mestre.bimba',
+        firstName: 'Manoel',
+        lastName: 'dos Reis',
+        apelido: 'Mestre Bimba',
+        publicCode: '000001',
         avatarType: AvatarType.UPLOAD,
         avatarUrl: null,
         avatarImageKey: 'users/user-1/profile/avatar.webp',
@@ -255,7 +259,7 @@ describe('group.mapper', () => {
         sectionId: 'section-1',
         user: {
           id: 'user-1',
-          displayName: 'Mestre Bimba',
+          displayName: 'Manoel dos Reis',
           image: {
             type: AvatarType.UPLOAD,
             url: 'https://cdn.example.com/users/user-1/profile/avatar.webp',
@@ -283,7 +287,8 @@ describe('group.mapper', () => {
       membership.endReason = MembershipEndReason.LEFT;
       membership.endedBy = {
         id: 'user-1',
-        displayName: 'Mestre Bimba',
+        displayName: 'mestre.bimba',
+        apelido: 'Mestre Bimba',
       } as never;
 
       const dto = toSectionMembershipResponseDto(

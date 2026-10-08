@@ -102,7 +102,9 @@ export function toSectionMembershipResponseDto(
     sectionId: membership.section.id,
     user: {
       id: user.id,
-      displayName: user.displayName,
+      // Profile identity, never the email-seeded User.displayName - see
+      // toRoleAssignmentResponseDto below.
+      displayName: resolveDisplayName(user),
       gender: user.gender,
       image: {
         type: user.avatarType,
@@ -121,7 +123,7 @@ export function toSectionMembershipResponseDto(
     endedBy: membership.endedBy
       ? {
           id: membership.endedBy.id,
-          displayName: membership.endedBy.displayName,
+          displayName: resolveDisplayName(membership.endedBy),
         }
       : null,
     cohorts,
