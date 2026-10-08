@@ -446,7 +446,7 @@ describe('RoleAssignmentsService', () => {
       return { em, findAndCount };
     }
 
-    it('limits the pool to active formal members of this Group, minus current OWNER/ADMIN holders', async () => {
+    it('limits the pool to active formal members of this Group - OWNER/ADMIN holders included', async () => {
       const { em, findAndCount } = buildCandidatesEm([]);
       const { service } = buildService(em);
 
@@ -460,7 +460,9 @@ describe('RoleAssignmentsService', () => {
         Record<string, unknown>,
       ];
       expect(entity).toBe(User);
-      expect(where).toEqual({ id: { $in: ['formal-1', 'formal-2'] } });
+      expect(where).toEqual({
+        id: { $in: ['formal-1', 'formal-2', 'owner-1'] },
+      });
     });
 
     it('filters by name/apelido, plus the exact user code when the search is one', async () => {
@@ -515,21 +517,61 @@ describe('RoleAssignmentsService', () => {
             apelido: 'Lagarto',
             image: { type: 'PRESET', url: null, presetAvatarId: 'avatar-02' },
             numericCode: '013844',
+            currentRole: null,
           },
         ],
       });
     });
 
-    it('returns nothing without querying users when every formal member already holds a role', async () => {
+    it('marks members who already hold a Group role with currentRole, OWNER winning over ADMIN', async () => {
+      const em = {
+        find: jest.fn((entity: unknown) => {
+          if (entity === FormalGroupAffiliation) {
+            return Promise.resolve([
+              { user: { id: 'owner-1' } },
+              { user: { id: 'admin-1' } },
+              { user: { id: 'formal-1' } },
+            ]);
+          }
+          if (entity === RoleAssignment) {
+            return Promise.resolve([
+              { user: { id: 'owner-1' }, role: GroupRole.ADMIN },
+              { user: { id: 'owner-1' }, role: GroupRole.OWNER },
+              { user: { id: 'admin-1' }, role: GroupRole.ADMIN },
+            ]);
+          }
+          return Promise.resolve([]);
+        }),
+        findAndCount: jest
+          .fn()
+          .mockResolvedValue([
+            [
+              buildUser({ id: 'owner-1' }),
+              buildUser({ id: 'admin-1' }),
+              buildUser({ id: 'formal-1' }),
+            ],
+            3,
+          ]),
+      } as unknown as EntityManager;
+      const { service } = buildService(em);
+
+      const result = await service.listGroupAdminCandidates(
+        'group-1',
+        undefined,
+        { limit: 20, offset: 0 },
+      );
+
+      expect(result.items.map((item) => [item.id, item.currentRole])).toEqual([
+        ['owner-1', GroupRole.OWNER],
+        ['admin-1', GroupRole.ADMIN],
+        ['formal-1', null],
+      ]);
+    });
+
+    it('returns nothing without querying users when the Group has no formal members', async () => {
       const findAndCount = jest.fn();
       const em = {
-        find: jest.fn((entity: unknown) =>
-          Promise.resolve(
-            entity === FormalGroupAffiliation || entity === RoleAssignment
-              ? [{ user: { id: 'owner-1' } }]
-              : [],
-          ),
-        ),
+        find: jest.fn(() => Promise.resolve([])),
         findAndCount,
       } as unknown as EntityManager;
       const { service } = buildService(em);

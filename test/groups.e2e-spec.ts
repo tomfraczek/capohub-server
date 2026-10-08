@@ -868,7 +868,7 @@ describe('Groups (e2e)', () => {
       expect(after.map((ra) => ra.id)).toContain(admin.id);
     });
 
-    it("admin-candidates lists only the Group's formal members without OWNER/ADMIN - never followers or other users", async () => {
+    it("admin-candidates lists only the Group's formal members, marking those who already hold a role - never followers or other users", async () => {
       const created = await createGroup();
       // SECOND: ADMIN but not a formal member. THIRD: neither. OUTSIDER:
       // formal member (no Group role) - the only valid candidate.
@@ -881,7 +881,7 @@ describe('Groups (e2e)', () => {
 
       try {
         const asOwner = await bodyOf<{
-          data: { id: string; displayName: string }[];
+          data: { id: string; currentRole: GroupRole | null }[];
           meta: { totalItems: number };
         }>(
           request(app.getHttpServer())
@@ -891,9 +891,19 @@ describe('Groups (e2e)', () => {
             .set('Authorization', `Bearer ${created.token}`)
             .expect(200),
         );
-        expect(asOwner.data.map((candidate) => candidate.id)).toEqual([
-          localUserIdByToken.get(OUTSIDER_TOKEN),
-        ]);
+        // The creator (OWNER) is a formal member too - listed, but marked.
+        // SECOND (ADMIN, not a formal member) and THIRD never appear.
+        expect(
+          Object.fromEntries(
+            asOwner.data.map((candidate) => [
+              candidate.id,
+              candidate.currentRole,
+            ]),
+          ),
+        ).toEqual({
+          [created.userId]: GroupRole.OWNER,
+          [localUserIdByToken.get(OUTSIDER_TOKEN)!]: null,
+        });
 
         // ADMIN may list them too (ROLE_ASSIGNMENT_MANAGE).
         await request(app.getHttpServer())

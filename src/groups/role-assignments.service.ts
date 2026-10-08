@@ -891,8 +891,10 @@ export class RoleAssignmentsService {
    * GET /groups/:groupId/role-assignments/admin-candidates - the people the
    * Group "Dodaj administratora" screen may pick from: only the Group's
    * formal members (an active FormalGroupAffiliation with this exact Group
-   * - never followers, never people tied to it only through a Section),
-   * minus everyone already holding OWNER/ADMIN there. Formal affiliation
+   * - never followers, never people tied to it only through a Section).
+   * Members already holding OWNER/ADMIN there stay in the list with
+   * `currentRole` set, so the app can show them as "already added" rather
+   * than have them silently missing from a search. Formal affiliation
    * is otherwise privacy-gated (showFormalGroup), so this list is only
    * reachable behind ROLE_ASSIGNMENT_MANAGE, never a public search filter.
    *
@@ -914,10 +916,17 @@ export class RoleAssignmentsService {
       role: { $in: [GroupRole.OWNER, GroupRole.ADMIN] },
       revokedAt: null,
     });
-    const excluded = new Set(roleHolders.map((ra) => ra.user.id));
-    const candidateIds = affiliations
-      .map((affiliation) => affiliation.user.id)
-      .filter((userId) => !excluded.has(userId));
+    // OWNER wins over ADMIN for a user holding both.
+    const roleByUserId = new Map<string, GroupRole.OWNER | GroupRole.ADMIN>();
+    for (const assignment of roleHolders) {
+      if (roleByUserId.get(assignment.user.id) !== GroupRole.OWNER) {
+        roleByUserId.set(
+          assignment.user.id,
+          assignment.role as GroupRole.OWNER | GroupRole.ADMIN,
+        );
+      }
+    }
+    const candidateIds = affiliations.map((affiliation) => affiliation.user.id);
     if (candidateIds.length === 0) {
       return { items: [], total: 0 };
     }
@@ -952,6 +961,7 @@ export class RoleAssignmentsService {
           presetAvatarId: user.presetAvatarId,
         },
         numericCode: user.numericCode,
+        currentRole: roleByUserId.get(user.id) ?? null,
       })),
     };
   }
