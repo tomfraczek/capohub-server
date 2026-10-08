@@ -868,6 +868,63 @@ describe('Groups (e2e)', () => {
       expect(after.map((ra) => ra.id)).toContain(admin.id);
     });
 
+    it("admin-candidates lists only the Group's formal members without OWNER/ADMIN - never followers or other users", async () => {
+      const created = await createGroup();
+      // SECOND: ADMIN but not a formal member. THIRD: neither. OUTSIDER:
+      // formal member (no Group role) - the only valid candidate.
+      await grantGroupRole(created.token, created.id, SECOND_TOKEN);
+      await request(app.getHttpServer())
+        .put('/api/v1/users/me/formal-group')
+        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+        .send({ groupId: created.id })
+        .expect(200);
+
+      try {
+        const asOwner = await bodyOf<{
+          data: { id: string; displayName: string }[];
+          meta: { totalItems: number };
+        }>(
+          request(app.getHttpServer())
+            .get(
+              `/api/v1/groups/${created.id}/role-assignments/admin-candidates`,
+            )
+            .set('Authorization', `Bearer ${created.token}`)
+            .expect(200),
+        );
+        expect(asOwner.data.map((candidate) => candidate.id)).toEqual([
+          localUserIdByToken.get(OUTSIDER_TOKEN),
+        ]);
+
+        // ADMIN may list them too (ROLE_ASSIGNMENT_MANAGE).
+        await request(app.getHttpServer())
+          .get(`/api/v1/groups/${created.id}/role-assignments/admin-candidates`)
+          .set('Authorization', `Bearer ${SECOND_TOKEN}`)
+          .expect(200);
+
+        const noMatch = await bodyOf<{ data: unknown[] }>(
+          request(app.getHttpServer())
+            .get(
+              `/api/v1/groups/${created.id}/role-assignments/admin-candidates`,
+            )
+            .query({ search: 'zzz-no-such-name' })
+            .set('Authorization', `Bearer ${created.token}`)
+            .expect(200),
+        );
+        expect(noMatch.data).toEqual([]);
+
+        // A formal member without a Group role is still a stranger here.
+        await request(app.getHttpServer())
+          .get(`/api/v1/groups/${created.id}/role-assignments/admin-candidates`)
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+          .expect(404);
+      } finally {
+        await request(app.getHttpServer())
+          .delete('/api/v1/users/me/formal-group')
+          .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+          .expect(204);
+      }
+    });
+
     it('hides the role list from a stranger even on a public Group - 404, never the list', async () => {
       const created = await createGroup({ isPublic: true });
 

@@ -4,14 +4,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { EntityManager, LockMode } from '@mikro-orm/postgresql';
+import { EntityManager, FilterQuery, LockMode } from '@mikro-orm/postgresql';
 import { isUniqueViolationOn } from '../common/utils/db-errors';
+import { normalizeNumericCodeInput } from '../common/utils/numeric-code';
+import { resolveUserAvatarUrl } from '../storage/image-url.util';
 import { R2StorageService } from '../storage/r2-storage.service';
+import { resolveDisplayName } from '../users/display-name.util';
 import { User } from '../users/entities/user.entity';
 import { AuditLogService } from './audit-log.service';
 import { CreateRoleAssignmentInput } from './dto/create-role-assignment.schema';
 import { RoleAssignmentResponseDto } from './dto/role-assignment-response.dto';
 import { OwnershipTransferCandidateDto } from './dto/ownership-transfer-candidate.dto';
+import { GroupAdminCandidateDto } from './dto/group-admin-candidate.dto';
 import { TransferOwnershipResponseDto } from './dto/transfer-ownership-response.dto';
 import { AuditAction } from './enums/audit-action.enum';
 import { AuditTargetType } from './enums/audit-target-type.enum';
@@ -881,6 +885,75 @@ export class RoleAssignmentsService {
         ),
       };
     });
+  }
+
+  /**
+   * GET /groups/:groupId/role-assignments/admin-candidates - the people the
+   * Group "Dodaj administratora" screen may pick from: only the Group's
+   * formal members (an active FormalGroupAffiliation with this exact Group
+   * - never followers, never people tied to it only through a Section),
+   * minus everyone already holding OWNER/ADMIN there. Formal affiliation
+   * is otherwise privacy-gated (showFormalGroup), so this list is only
+   * reachable behind ROLE_ASSIGNMENT_MANAGE, never a public search filter.
+   *
+   * `search` matches firstName/lastName/apelido (substring) or the exact
+   * user code, mirroring GET /users/search. Ordered by last then first
+   * name.
+   */
+  async listGroupAdminCandidates(
+    groupId: string,
+    search: string | undefined,
+    page: { limit: number; offset: number },
+  ): Promise<{ items: GroupAdminCandidateDto[]; total: number }> {
+    const affiliations = await this.em.find(FormalGroupAffiliation, {
+      group: groupId,
+      endedOn: null,
+    });
+    const roleHolders = await this.em.find(RoleAssignment, {
+      group: groupId,
+      role: { $in: [GroupRole.OWNER, GroupRole.ADMIN] },
+      revokedAt: null,
+    });
+    const excluded = new Set(roleHolders.map((ra) => ra.user.id));
+    const candidateIds = affiliations
+      .map((affiliation) => affiliation.user.id)
+      .filter((userId) => !excluded.has(userId));
+    if (candidateIds.length === 0) {
+      return { items: [], total: 0 };
+    }
+
+    const trimmed = search?.trim() ?? '';
+    const where: FilterQuery<User> = { id: { $in: candidateIds } };
+    if (trimmed.length > 0) {
+      const numericCode = normalizeNumericCodeInput(trimmed);
+      const pattern = `%${trimmed}%`;
+      where.$or = [
+        { firstName: { $ilike: pattern } },
+        { lastName: { $ilike: pattern } },
+        { apelido: { $ilike: pattern } },
+        ...(numericCode ? [{ numericCode }] : []),
+      ];
+    }
+
+    const [users, total] = await this.em.findAndCount(User, where, {
+      limit: page.limit,
+      offset: page.offset,
+      orderBy: { lastName: 'asc', firstName: 'asc', id: 'asc' },
+    });
+    return {
+      total,
+      items: users.map((user) => ({
+        id: user.id,
+        displayName: resolveDisplayName(user),
+        apelido: user.apelido,
+        image: {
+          type: user.avatarType,
+          url: resolveUserAvatarUrl(user, this.r2StorageService),
+          presetAvatarId: user.presetAvatarId,
+        },
+        numericCode: user.numericCode,
+      })),
+    };
   }
 
   /**

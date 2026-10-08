@@ -7,9 +7,12 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { PaginatedResponse } from '../common/pagination/pagination.types';
+import { createPaginationMeta } from '../common/pagination/pagination.utils';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { User } from '../users/entities/user.entity';
 import {
@@ -18,7 +21,16 @@ import {
   CreateSectionRoleAssignmentDto,
   createSectionRoleAssignmentSchema,
 } from './dto/create-role-assignment.schema';
+import { GroupAdminCandidateDto } from './dto/group-admin-candidate.dto';
+import {
+  GroupAdminCandidatesQueryDto,
+  groupAdminCandidatesQuerySchema,
+} from './dto/group-admin-candidates-query.schema';
 import { RoleAssignmentResponseDto } from './dto/role-assignment-response.dto';
+import {
+  GroupKind,
+  RequireGroupKind,
+} from './decorators/require-group-kind.decorator';
 import { RequireGroupPermission } from './decorators/require-group-permission.decorator';
 import { GroupPermissionsGuard } from './guards/group-permissions.guard';
 import { GroupPermission } from './permissions/group-permission.enum';
@@ -93,6 +105,33 @@ export class RoleAssignmentsController {
     return this.roleAssignmentsService.listRoleAssignments(
       groupId ?? sectionId,
     );
+  }
+
+  // Who may be made a Group ADMIN - the Group's formal members only (see
+  // RoleAssignmentsService.listGroupAdminCandidates). Group-only: on the
+  // Section mount the kind check 404s. Declared before ':roleAssignmentId'
+  // so the static segment is matched first.
+  @Get('admin-candidates')
+  @RequireGroupPermission(GroupPermission.ROLE_ASSIGNMENT_MANAGE)
+  @RequireGroupKind(GroupKind.ROOT)
+  async listAdminCandidates(
+    @Param('groupId') groupId: string,
+    @Query(new ZodValidationPipe(groupAdminCandidatesQuerySchema))
+    query: GroupAdminCandidatesQueryDto,
+  ): Promise<PaginatedResponse<GroupAdminCandidateDto>> {
+    const result = await this.roleAssignmentsService.listGroupAdminCandidates(
+      groupId,
+      query.search,
+      { limit: query.limit, offset: (query.page - 1) * query.limit },
+    );
+    return {
+      data: result.items,
+      meta: createPaginationMeta({
+        page: query.page,
+        limit: query.limit,
+        totalItems: result.total,
+      }),
+    };
   }
 
   @Get(':roleAssignmentId')

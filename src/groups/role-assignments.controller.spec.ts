@@ -44,6 +44,11 @@ describe('RoleAssignmentsController', () => {
     ['list', [GroupPermission.ROLE_ASSIGNMENT_VIEW], undefined],
     ['getById', [GroupPermission.ROLE_ASSIGNMENT_VIEW], undefined],
     ['revoke', [GroupPermission.ROLE_ASSIGNMENT_MANAGE], undefined],
+    [
+      'listAdminCandidates',
+      [GroupPermission.ROLE_ASSIGNMENT_MANAGE],
+      undefined,
+    ],
   ])('%s', (method, expectedPermissions, expectedAllowedStatuses) => {
     it(`requires ${expectedPermissions.join(', ')}`, () => {
       const reflector = new Reflector();

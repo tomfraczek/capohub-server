@@ -18,6 +18,7 @@ import { BadRequestException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { User } from '../users/entities/user.entity';
+import { AvatarType } from '../users/enums/avatar-type.enum';
 import { AuditLogService } from './audit-log.service';
 import { Group } from './entities/group.entity';
 import { Section } from './entities/section.entity';
@@ -418,6 +419,129 @@ describe('RoleAssignmentsService', () => {
       expect(touchedEntities).not.toContain(SectionMembership);
       expect(touchedEntities).not.toContain(User);
       expect(persist).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listGroupAdminCandidates', () => {
+    function buildCandidatesEm(users: Partial<User>[]) {
+      const findAndCount = jest
+        .fn()
+        .mockResolvedValue([users as User[], users.length]);
+      const em = {
+        find: jest.fn((entity: unknown) => {
+          if (entity === FormalGroupAffiliation) {
+            return Promise.resolve([
+              { user: { id: 'formal-1' } },
+              { user: { id: 'formal-2' } },
+              { user: { id: 'owner-1' } },
+            ]);
+          }
+          if (entity === RoleAssignment) {
+            return Promise.resolve([{ user: { id: 'owner-1' } }]);
+          }
+          return Promise.resolve([]);
+        }),
+        findAndCount,
+      } as unknown as EntityManager;
+      return { em, findAndCount };
+    }
+
+    it('limits the pool to active formal members of this Group, minus current OWNER/ADMIN holders', async () => {
+      const { em, findAndCount } = buildCandidatesEm([]);
+      const { service } = buildService(em);
+
+      await service.listGroupAdminCandidates('group-1', undefined, {
+        limit: 20,
+        offset: 0,
+      });
+
+      const [entity, where] = findAndCount.mock.calls[0] as [
+        unknown,
+        Record<string, unknown>,
+      ];
+      expect(entity).toBe(User);
+      expect(where).toEqual({ id: { $in: ['formal-1', 'formal-2'] } });
+    });
+
+    it('filters by name/apelido, plus the exact user code when the search is one', async () => {
+      const { em, findAndCount } = buildCandidatesEm([]);
+      const { service } = buildService(em);
+
+      await service.listGroupAdminCandidates('group-1', '123-456', {
+        limit: 20,
+        offset: 0,
+      });
+
+      const [, where] = findAndCount.mock.calls[0] as [
+        unknown,
+        { $or: unknown[] },
+      ];
+      expect(where.$or).toEqual([
+        { firstName: { $ilike: '%123-456%' } },
+        { lastName: { $ilike: '%123-456%' } },
+        { apelido: { $ilike: '%123-456%' } },
+        { numericCode: '123456' },
+      ]);
+    });
+
+    it('maps each candidate to the profile name, apelido and avatar - never User.displayName', async () => {
+      const { em } = buildCandidatesEm([
+        buildUser({
+          id: 'formal-1',
+          displayName: 'Tomaszfr90',
+          firstName: 'Tomasz',
+          lastName: 'Frączek',
+          apelido: 'Lagarto',
+          numericCode: '013844',
+          avatarType: AvatarType.PRESET,
+          presetAvatarId: 'avatar-02',
+          avatarImageKey: null,
+        }),
+      ]);
+      const { service } = buildService(em);
+
+      const result = await service.listGroupAdminCandidates(
+        'group-1',
+        undefined,
+        { limit: 20, offset: 0 },
+      );
+
+      expect(result).toEqual({
+        total: 1,
+        items: [
+          {
+            id: 'formal-1',
+            displayName: 'Tomasz Frączek',
+            apelido: 'Lagarto',
+            image: { type: 'PRESET', url: null, presetAvatarId: 'avatar-02' },
+            numericCode: '013844',
+          },
+        ],
+      });
+    });
+
+    it('returns nothing without querying users when every formal member already holds a role', async () => {
+      const findAndCount = jest.fn();
+      const em = {
+        find: jest.fn((entity: unknown) =>
+          Promise.resolve(
+            entity === FormalGroupAffiliation || entity === RoleAssignment
+              ? [{ user: { id: 'owner-1' } }]
+              : [],
+          ),
+        ),
+        findAndCount,
+      } as unknown as EntityManager;
+      const { service } = buildService(em);
+
+      const result = await service.listGroupAdminCandidates(
+        'group-1',
+        undefined,
+        { limit: 20, offset: 0 },
+      );
+
+      expect(result).toEqual({ items: [], total: 0 });
+      expect(findAndCount).not.toHaveBeenCalled();
     });
   });
 
