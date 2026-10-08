@@ -520,24 +520,36 @@ describe('Notification domain integrations (e2e)', () => {
   });
 
   describe('Hierarchy invitations', () => {
-    it('inviting a Group as a child notifies the target Group OWNER with HIERARCHY_INVITATION and a resolvable deep link', async () => {
+    it('inviting a standalone Section notifies the target Section OWNER with HIERARCHY_INVITATION and a resolvable deep link', async () => {
       const parent = await createGroup({ name: 'Notif Integ Parent Org' });
       // A genuinely different owner than `parent` - the point of this test
-      // is the cross-owner hierarchy-invitation flow, so `target` must be
-      // owned by someone else. createGroup() always mints a fresh,
-      // independent owner (see its own comment), which already guarantees
-      // that without needing a second fixed token here.
-      const target = await createGroup({ name: 'Notif Integ Target Org' });
+      // is the cross-owner hierarchy-invitation flow. createGroup() always
+      // mints a fresh, independent owner (see its own comment); that owner
+      // then creates the standalone Section being invited (only a
+      // standalone Section can be invited - Groups are always top-level).
+      const targetOwner = await createGroup({
+        name: 'Notif Integ Target Owner Org',
+      });
+      const target = await bodyOf<SectionResponseDto>(
+        request(app.getHttpServer())
+          .post('/api/v1/sections')
+          .set('Authorization', `Bearer ${targetOwner.token}`)
+          .send(sectionPayload({ name: 'Notif Integ Target Section' }))
+          .expect(201),
+      );
+      createdGroupIds.push(target.id);
 
       const invitation = await bodyOf<HierarchyInvitationResponseDto>(
         request(app.getHttpServer())
           .post(`/api/v1/groups/${parent.id}/child-invitations`)
           .set('Authorization', `Bearer ${parent.token}`)
-          .send({ targetType: 'GROUP', targetId: target.id })
+          .send({ targetType: 'SECTION', targetId: target.id })
           .expect(201),
       );
 
-      const targetOwnerNotifications = await notificationsFor(target.token);
+      const targetOwnerNotifications = await notificationsFor(
+        targetOwner.token,
+      );
       const found = targetOwnerNotifications.items.find(
         (n) => n.type === NotificationType.HIERARCHY_INVITATION_RECEIVED,
       );
@@ -548,18 +560,18 @@ describe('Notification domain integrations (e2e)', () => {
       expect(found?.targetId).toBe(invitation.id);
       // Context is the *target*, not the parent - that is where the
       // recipient (the target's OWNER) actually reviews/acts on it.
-      expect(found?.contextGroupId).toBe(target.id);
-      expect(found?.contextSectionId).toBeNull();
+      expect(found?.contextSectionId).toBe(target.id);
+      expect(found?.contextGroupId).toBeNull();
 
-      // Deep-link contract: contextGroupId + targetId alone must resolve
+      // Deep-link contract: contextSectionId + targetId alone must resolve
       // straight to this exact invitation via the target-side "received"
       // listing, no global search.
       const received = await bodyOf<HierarchyInvitationResponseDto[]>(
         request(app.getHttpServer())
           .get(
-            `/api/v1/groups/${found!.contextGroupId}/hierarchy-invitations/received`,
+            `/api/v1/sections/${found!.contextSectionId}/hierarchy-invitations/received`,
           )
-          .set('Authorization', `Bearer ${target.token}`)
+          .set('Authorization', `Bearer ${targetOwner.token}`)
           .expect(200),
       );
       expect(received.some((r) => r.id === found!.targetId)).toBe(true);

@@ -41,10 +41,6 @@ import { GroupResponseDto } from './dto/group-response.dto';
 import { GroupSummaryResponseDto } from './dto/group-summary-response.dto';
 import { HierarchyInvitationResponseDto } from './dto/hierarchy-invitation-response.dto';
 import { HierarchyEntityRefDto } from './dto/hierarchy-response.dto';
-import {
-  SetHierarchyParentDto,
-  setHierarchyParentSchema,
-} from './dto/set-hierarchy-parent.schema';
 import { OwnershipTransferCandidateDto } from './dto/ownership-transfer-candidate.dto';
 import { TransferOwnershipResponseDto } from './dto/transfer-ownership-response.dto';
 import {
@@ -418,28 +414,19 @@ export class GroupsController {
     return this.hierarchyManagementService.getBreadcrumbs(id);
   }
 
-  // Attaches (no previous parent) or moves (had a different parent) this
-  // Group under :parentGroupId - same primitive either way, see
-  // HierarchyManagementService.setGroupParent. Requires HIERARCHY_MANAGE on
-  // both this Group and parentGroupId.
+  // Groups are always top-level - always rejected with 409
+  // GROUP_CANNOT_HAVE_PARENT (see HierarchyManagementService.setGroupParent),
+  // whatever the body says.
   @Post(':id/parent')
   @RequireGroupPermission(GroupPermission.HIERARCHY_MANAGE)
   @RequireGroupKind(GroupKind.ROOT)
-  setParent(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodValidationPipe(setHierarchyParentSchema))
-    dto: SetHierarchyParentDto,
-    @CurrentUser() user: User,
-  ): Promise<GroupResponseDto> {
-    return this.hierarchyManagementService.setGroupParent(
-      id,
-      dto.parentGroupId,
-      user,
-    );
+  setParent(): never {
+    return this.hierarchyManagementService.setGroupParent();
   }
 
-  // Detaches this Group from its current parent, making it a root Group
-  // again. Never touches membership or Role Assignments.
+  // Detaches this Group from a legacy parent (Group -> Group links can no
+  // longer be created), making it a root Group again. Never touches
+  // membership or Role Assignments.
   @Delete(':id/parent')
   @RequireGroupPermission(GroupPermission.HIERARCHY_MANAGE)
   @RequireGroupKind(GroupKind.ROOT)

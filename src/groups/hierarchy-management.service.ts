@@ -140,58 +140,26 @@ export class HierarchyManagementService {
   // ─── Direct attach / move / detach ───────────────────────────────────────
 
   /**
-   * Attaches-or-moves the Group `groupId` under `parentGroupId`. The same
-   * primitive covers both "attach" (no previous parent) and "move" (had a
-   * different parent) - GroupHierarchyService.attachChildGroup
-   * unconditionally overwrites `parentGroup` regardless of its previous
-   * value. Requires HIERARCHY_MANAGE on *both* `groupId` (already checked
-   * by GroupPermissionsGuard at the route level - re-verified here inside
-   * the transaction) and `parentGroupId` (only ever checked here, since it
-   * arrives in the body, not the route).
+   * Groups are always top-level (see GroupHierarchyService) - attaching a
+   * Group under another Group is always rejected with
+   * GROUP_CANNOT_HAVE_PARENT. The route (POST /groups/:id/parent) stays so
+   * an older client gets that explicit domain error instead of a bare 404.
    */
-  async setGroupParent(
-    groupId: string,
-    parentGroupId: string,
-    actor: User,
-  ): Promise<GroupResponseDto> {
-    const group = await this.em.transactional(async (em) => {
-      await this.assertHierarchyManage(em, actor, groupId);
-      await this.assertHierarchyManage(em, actor, parentGroupId);
-
-      const child = await em.findOne(Group, { id: groupId });
-      if (!child) {
-        throw this.groupNotFound();
-      }
-      const previousParentId = child.parentGroup?.id ?? null;
-      if (previousParentId === parentGroupId) {
-        throw this.alreadyAttached();
-      }
-
-      const attached = await this.groupHierarchyService.attachChildGroup(
-        groupId,
-        parentGroupId,
-        em,
-      );
-
-      this.auditLogService.record(em, {
-        community: attached.parentGroup!,
-        action: previousParentId
-          ? AuditAction.MOVE_CHILD
-          : AuditAction.ATTACH_CHILD,
-        actor,
-        targetType: AuditTargetType.COMMUNITY,
-        targetId: attached.id,
-        metadata: { previousParentId, newParentId: parentGroupId },
-      });
-      await em.flush();
-
-      return attached;
-    });
-
-    return this.groupsService.getById(group.id, actor);
+  setGroupParent(): never {
+    return this.groupHierarchyService.rejectGroupAsChild();
   }
 
-  /** Section counterpart of setGroupParent - see its own comment. */
+  /**
+   * Attaches-or-moves the Section `sectionId` under `parentGroupId` - the
+   * deliberate, explicit way to change a Section's Group (as opposed to a
+   * HierarchyInvitation, which may only ever attach a standalone Section).
+   * Requires HIERARCHY_MANAGE on *both* `sectionId` (already checked by
+   * GroupPermissionsGuard at the route level - re-verified here inside the
+   * transaction) and `parentGroupId` (only ever checked here, since it
+   * arrives in the body, not the route). Any invitation still PENDING for
+   * this Section is cancelled in the same transaction - see
+   * cancelOtherPendingSectionInvitations.
+   */
   async setSectionParent(
     sectionId: string,
     parentGroupId: string,
@@ -201,7 +169,14 @@ export class HierarchyManagementService {
       await this.assertHierarchyManage(em, actor, sectionId);
       await this.assertHierarchyManage(em, actor, parentGroupId);
 
-      const child = await em.findOne(Section, { id: sectionId });
+      // Row lock (Section first, then invitations - see acceptInvitation's
+      // lock-order comment), refreshed past the identity-map copy the
+      // authorization lookup above may have loaded.
+      const child = await em.findOne(
+        Section,
+        { id: sectionId },
+        { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true },
+      );
       if (!child) {
         throw this.sectionNotFound();
       }
@@ -214,6 +189,12 @@ export class HierarchyManagementService {
         sectionId,
         parentGroupId,
         em,
+      );
+      await this.cancelOtherPendingSectionInvitations(
+        em,
+        sectionId,
+        null,
+        actor,
       );
 
       this.auditLogService.record(em, {
@@ -316,13 +297,16 @@ export class HierarchyManagementService {
   // ─── HierarchyInvitation: create / list / cancel (parent side) ──────────
 
   /**
-   * Proposes attaching `input.targetId` under `parentGroupId` - for when the
-   * actor manages the parent (holds HIERARCHY_INVITE there) but not the
-   * target. Never mutates the hierarchy by itself; only acceptInvitation()
-   * does that. Self-parent/cycle/parent-usability are validated immediately
-   * (see GroupHierarchyService.assertCanAttachChildGroup/assertCanAttachSection)
-   * so an invitation that could never be accepted is rejected up front -
-   * acceptInvitation() re-validates the same rules again regardless.
+   * Proposes attaching the standalone Section `input.targetId` under
+   * `parentGroupId` - for when the actor manages the parent (holds
+   * HIERARCHY_INVITE there) but not the target. Never mutates the
+   * hierarchy by itself; only acceptInvitation() does that. Only a
+   * standalone Section may be invited: a Group is always top-level
+   * (GROUP_CANNOT_HAVE_PARENT) and a Section that already belongs to a
+   * Group is rejected (ALREADY_ATTACHED for this same Group,
+   * SECTION_ALREADY_HAS_PARENT for any other) - an invitation that could
+   * never be accepted is rejected up front. acceptInvitation() re-validates
+   * all of this again regardless.
    */
   async createInvitation(
     parentGroupId: string,
@@ -332,36 +316,22 @@ export class HierarchyManagementService {
     return this.em.transactional(async (em) => {
       const parent = await this.assertHierarchyInvite(em, actor, parentGroupId);
 
-      let targetGroup: Group | null = null;
-      let targetSection: Section | null = null;
-
       if (input.targetType === 'GROUP') {
-        targetGroup = await em.findOne(Group, { id: input.targetId });
-        if (!targetGroup) {
-          throw this.groupNotFound();
-        }
-        if (targetGroup.parentGroup?.id === parent.id) {
-          throw this.alreadyAttached();
-        }
-        await this.groupHierarchyService.assertCanAttachChildGroup(
-          targetGroup.id,
-          parent.id,
-          em,
-        );
-      } else {
-        targetSection = await em.findOne(Section, { id: input.targetId });
-        if (!targetSection) {
-          throw this.sectionNotFound();
-        }
-        if (targetSection.parentGroup?.id === parent.id) {
-          throw this.alreadyAttached();
-        }
-        await this.groupHierarchyService.assertCanAttachSection(parent.id, em);
+        this.groupHierarchyService.rejectGroupAsChild();
       }
+
+      const targetSection = await em.findOne(Section, { id: input.targetId });
+      if (!targetSection) {
+        throw this.sectionNotFound();
+      }
+      if (targetSection.parentGroup?.id === parent.id) {
+        throw this.alreadyAttached();
+      }
+      this.groupHierarchyService.assertSectionIsStandalone(targetSection);
+      await this.groupHierarchyService.assertCanAttachSection(parent.id, em);
 
       const invitation = new HierarchyInvitation();
       invitation.parentGroup = parent;
-      invitation.targetGroup = targetGroup;
       invitation.targetSection = targetSection;
       invitation.invitedBy = actor;
 
@@ -390,10 +360,9 @@ export class HierarchyManagementService {
       });
       await em.flush();
 
-      const target = (targetGroup ?? targetSection)!;
       await this.notifyTargetOwner(
         em,
-        target,
+        targetSection,
         NotificationType.HIERARCHY_INVITATION_RECEIVED,
         hierarchyInvitationReceivedText(),
         invitation.id,
@@ -492,6 +461,18 @@ export class HierarchyManagementService {
    * concurrent accept/reject blocks on that lock and, once it acquires it,
    * observes the already-terminal status and is rejected, never
    * double-attaching.
+   *
+   * Only ever attaches a *standalone* Section:
+   *  - a Group target is always rejected (GROUP_CANNOT_HAVE_PARENT - only
+   *    legacy rows can still carry one),
+   *  - a Section that already belongs to a Group is rejected
+   *    (SECTION_ALREADY_HAS_PARENT) - checked under a row lock on the
+   *    Section itself, so two *different* invitations accepted concurrently
+   *    for the same Section serialize on it and the second one sees the
+   *    first one's parent, never silently overwriting it.
+   * On success every other PENDING invitation for the same Section is
+   * CANCELLED in the same transaction, so none of them can later be used to
+   * move the Section to another Group.
    */
   async acceptInvitation(
     targetId: string,
@@ -499,50 +480,61 @@ export class HierarchyManagementService {
     actor: User,
   ): Promise<void> {
     await this.em.transactional(async (em) => {
-      await this.assertHierarchyManage(em, actor, targetId);
+      const community = await this.assertHierarchyManage(em, actor, targetId);
 
-      const invitation = await em.findOne(
-        HierarchyInvitation,
-        { id: invitationId },
-        {
-          populate: [
-            'parentGroup',
-            'targetGroup',
-            'targetSection',
-            'invitedBy',
-          ],
-          lockMode: LockMode.PESSIMISTIC_WRITE,
-        },
+      if (community instanceof Group) {
+        // Only a legacy row can still address a Group - refused explicitly
+        // (not a bare 404), but never accepted.
+        const invitation = await this.lockTargetInvitationOrFail(
+          em,
+          invitationId,
+          targetId,
+        );
+        this.assertPending(invitation);
+        this.groupHierarchyService.rejectGroupAsChild();
+      }
+
+      // Lock order: the Section row first, then invitation rows - the same
+      // order setSectionParent uses. cancelOtherPendingSectionInvitations
+      // locks the *other* invitations while this Section's lock is held, so
+      // two concurrent accepts of different invitations for this Section
+      // must queue on the Section first, or each could hold one invitation
+      // lock while waiting for the other's (deadlock). `refresh` - the
+      // authorization lookup above already put a (possibly stale) copy in
+      // the identity map.
+      const section = await em.findOne(
+        Section,
+        { id: targetId },
+        { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true },
       );
-      if (!invitation) {
-        throw this.invitationNotFound();
+      if (!section) {
+        throw this.sectionNotFound();
       }
-      const target = invitation.targetGroup ?? invitation.targetSection;
-      if (!target || target.id !== targetId) {
-        throw this.invitationNotFound();
-      }
+      const invitation = await this.lockTargetInvitationOrFail(
+        em,
+        invitationId,
+        targetId,
+      );
       this.assertPending(invitation);
+      this.groupHierarchyService.assertSectionIsStandalone(section);
 
-      // Re-validated here, not just trusted from invitation-creation time
-      // (self-parent/cycle/parent-status may have changed since) -
-      // attachChildGroup/attachSection perform this unconditionally.
-      if (invitation.targetGroup) {
-        await this.groupHierarchyService.attachChildGroup(
-          invitation.targetGroup.id,
-          invitation.parentGroup.id,
-          em,
-        );
-      } else {
-        await this.groupHierarchyService.attachSection(
-          invitation.targetSection!.id,
-          invitation.parentGroup.id,
-          em,
-        );
-      }
+      // Parent existence/status re-validated here, not just trusted from
+      // invitation-creation time - attachSection does this unconditionally.
+      await this.groupHierarchyService.attachSection(
+        section.id,
+        invitation.parentGroup.id,
+        em,
+      );
 
       invitation.status = HierarchyInvitationStatus.ACCEPTED;
       invitation.respondedAt = new Date();
       invitation.respondedBy = actor;
+      await this.cancelOtherPendingSectionInvitations(
+        em,
+        section.id,
+        invitation.id,
+        actor,
+      );
       await em.flush();
 
       this.auditLogService.record(em, {
@@ -581,26 +573,11 @@ export class HierarchyManagementService {
     await this.em.transactional(async (em) => {
       await this.assertHierarchyManage(em, actor, targetId);
 
-      const invitation = await em.findOne(
-        HierarchyInvitation,
-        { id: invitationId },
-        {
-          populate: [
-            'parentGroup',
-            'targetGroup',
-            'targetSection',
-            'invitedBy',
-          ],
-          lockMode: LockMode.PESSIMISTIC_WRITE,
-        },
+      const invitation = await this.lockTargetInvitationOrFail(
+        em,
+        invitationId,
+        targetId,
       );
-      if (!invitation) {
-        throw this.invitationNotFound();
-      }
-      const target = invitation.targetGroup ?? invitation.targetSection;
-      if (!target || target.id !== targetId) {
-        throw this.invitationNotFound();
-      }
       this.assertPending(invitation);
 
       invitation.status = HierarchyInvitationStatus.REJECTED;
@@ -634,6 +611,74 @@ export class HierarchyManagementService {
   }
 
   // ─── Private helpers ──────────────────────────────────────────────────────
+
+  /**
+   * Loads `invitationId` under a row lock and asserts it is addressed to
+   * `targetId` - an invitation reached through any other target id in the
+   * URL is reported as not found (IDOR), never acted on.
+   */
+  private async lockTargetInvitationOrFail(
+    em: EntityManager,
+    invitationId: string,
+    targetId: string,
+  ): Promise<HierarchyInvitation> {
+    const invitation = await em.findOne(
+      HierarchyInvitation,
+      { id: invitationId },
+      {
+        populate: ['parentGroup', 'targetGroup', 'targetSection', 'invitedBy'],
+        lockMode: LockMode.PESSIMISTIC_WRITE,
+      },
+    );
+    if (!invitation) {
+      throw this.invitationNotFound();
+    }
+    const target = invitation.targetGroup ?? invitation.targetSection;
+    if (!target || target.id !== targetId) {
+      throw this.invitationNotFound();
+    }
+    return invitation;
+  }
+
+  /**
+   * Once a Section belongs to a Group, every other invitation still PENDING
+   * for it is moved to CANCELLED (statuses are kept, rows never deleted) -
+   * none of them may later be accepted to move the Section elsewhere
+   * (acceptInvitation would refuse anyway, with SECTION_ALREADY_HAS_PARENT;
+   * this keeps them from even being offered). Each is audited under its own
+   * parent Group, same as a parent-side cancel. Caller must already hold
+   * the Section's row lock (see acceptInvitation's lock-order comment).
+   */
+  private async cancelOtherPendingSectionInvitations(
+    em: EntityManager,
+    sectionId: string,
+    exceptInvitationId: string | null,
+    actor: User,
+  ): Promise<void> {
+    const pending = await em.find(
+      HierarchyInvitation,
+      {
+        targetSection: sectionId,
+        status: HierarchyInvitationStatus.PENDING,
+        ...(exceptInvitationId ? { id: { $ne: exceptInvitationId } } : {}),
+      },
+      { populate: ['parentGroup'], lockMode: LockMode.PESSIMISTIC_WRITE },
+    );
+    const now = new Date();
+    for (const invitation of pending) {
+      invitation.status = HierarchyInvitationStatus.CANCELLED;
+      invitation.respondedAt = now;
+      invitation.respondedBy = actor;
+      this.auditLogService.record(em, {
+        community: invitation.parentGroup,
+        action: AuditAction.CANCEL_CHILD_INVITATION,
+        actor,
+        targetType: AuditTargetType.HIERARCHY_INVITATION,
+        targetId: invitation.id,
+        metadata: { reason: 'SECTION_JOINED_ANOTHER_GROUP' },
+      });
+    }
+  }
 
   private buildHierarchyNotificationParams(
     recipient: User,

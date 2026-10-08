@@ -350,6 +350,52 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     return created;
   }
 
+  // Writes `parentGroup` straight to the DB, bypassing every service rule -
+  // only for simulating rows the API itself can no longer produce (a legacy
+  // Group -> Group link, or a Section that got a Group by some other path
+  // while an invitation was still PENDING).
+  async function setParentGroupDirectly(
+    entity: typeof Group | typeof Section,
+    id: string,
+    parentGroupId: string | null,
+  ): Promise<void> {
+    await app
+      .get(EntityManager)
+      .fork()
+      .nativeUpdate(entity, { id }, { parentGroup: parentGroupId });
+  }
+
+  async function invite(
+    parentGroupId: string,
+    sectionId: string,
+  ): Promise<HierarchyInvitationResponseDto> {
+    return bodyOf<HierarchyInvitationResponseDto>(
+      request(app.getHttpServer())
+        .post(`/api/v1/groups/${parentGroupId}/child-invitations`)
+        .set('Authorization', `Bearer ${TOKEN_A}`)
+        .send({ targetType: 'SECTION', targetId: sectionId })
+        .expect(201),
+    );
+  }
+
+  async function sectionParentId(sectionId: string): Promise<string | null> {
+    const section = await bodyOf<SectionResponseDto>(
+      request(app.getHttpServer())
+        .get(`/api/v1/sections/${sectionId}`)
+        .set('Authorization', `Bearer ${TOKEN_B}`)
+        .expect(200),
+    );
+    return section.parentGroupId;
+  }
+
+  async function invitationStatus(invitationId: string): Promise<string> {
+    const invitation = await app
+      .get(EntityManager)
+      .fork()
+      .findOneOrFail(HierarchyInvitation, { id: invitationId });
+    return invitation.status;
+  }
+
   // Creates a standalone Section (no parent) directly via POST /sections -
   // see ADR-032. Dedicated coverage for that endpoint itself lives in
   // standalone-sections.e2e-spec.ts; this helper exists so every hierarchy
@@ -370,19 +416,19 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     return created;
   }
 
-  describe('direct attach: Group <-> Group and Group <-> Section', () => {
-    it('attaches a standalone Group as a child of another Group', async () => {
+  describe('direct attach: Group -> Section only', () => {
+    it('rejects attaching a Group under another Group - Groups are always top-level', async () => {
       const parent = await createGroupOwnedByA({ name: 'Attach Parent A' });
       const child = await createGroupOwnedByA({ name: 'Attach Child A' });
 
-      const attached = await bodyOf<GroupResponseDto>(
-        request(app.getHttpServer())
-          .post(`/api/v1/groups/${child.id}/parent`)
-          .set('Authorization', `Bearer ${TOKEN_A}`)
-          .send({ parentGroupId: parent.id })
-          .expect(201),
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/groups/${child.id}/parent`)
+        .set('Authorization', `Bearer ${TOKEN_A}`)
+        .send({ parentGroupId: parent.id })
+        .expect(409);
+      expect((response.body as HttpErrorResponse).code).toBe(
+        'GROUP_CANNOT_HAVE_PARENT',
       );
-      expect(attached.parentGroupId).toBe(parent.id);
 
       const children = await bodyOf<HierarchyEntityRefDto[]>(
         request(app.getHttpServer())
@@ -390,9 +436,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
           .set('Authorization', `Bearer ${TOKEN_A}`)
           .expect(200),
       );
-      expect(children).toEqual([
-        { id: child.id, type: 'GROUP', name: child.name },
-      ]);
+      expect(children).toEqual([]);
     });
 
     it('attaches a standalone Section under a Group', async () => {
@@ -423,20 +467,14 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
       ]);
     });
 
-    it('a Group can contain both child Groups and Sections at the same time', async () => {
+    it('a Group can contain several Sections at the same time', async () => {
       const parent = await createGroupOwnedByA({ name: 'Mixed Parent' });
-      const childGroup = await createGroupOwnedByA({
-        name: 'Mixed Child Group',
+      const first = await createSection(TOKEN_A, parent.id, {
+        name: 'Mixed Child Section 1',
       });
-      const childSection = await createSection(TOKEN_A, parent.id, {
-        name: 'Mixed Child Section',
+      const second = await createSection(TOKEN_A, parent.id, {
+        name: 'Mixed Child Section 2',
       });
-
-      await request(app.getHttpServer())
-        .post(`/api/v1/groups/${childGroup.id}/parent`)
-        .set('Authorization', `Bearer ${TOKEN_A}`)
-        .send({ parentGroupId: parent.id })
-        .expect(201);
 
       const children = await bodyOf<HierarchyEntityRefDto[]>(
         request(app.getHttpServer())
@@ -445,7 +483,7 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
           .expect(200),
       );
       expect(new Set(children.map((c) => c.id))).toEqual(
-        new Set([childGroup.id, childSection.id]),
+        new Set([first.id, second.id]),
       );
     });
 
@@ -480,10 +518,12 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
       const parentSection = await createStandaloneSection(TOKEN_A, {
         name: 'Would-be Parent Section',
       });
-      const orphanGroup = await createGroupOwnedByA({ name: 'Orphan Group' });
+      const orphanSection = await createStandaloneSection(TOKEN_A, {
+        name: 'Orphan Section',
+      });
 
       const response = await request(app.getHttpServer())
-        .post(`/api/v1/groups/${orphanGroup.id}/parent`)
+        .post(`/api/v1/sections/${orphanSection.id}/parent`)
         .set('Authorization', `Bearer ${TOKEN_A}`)
         .send({ parentGroupId: parentSection.id })
         .expect(404);
@@ -491,10 +531,8 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
         'GROUP_PARENT_NOT_FOUND',
       );
     });
-  });
 
-  describe('self-parent and cycle guards', () => {
-    it('rejects a Group attaching itself as its own parent', async () => {
+    it('rejects a Group attaching itself as its own parent with the same top-level error', async () => {
       const group = await createGroupOwnedByA({ name: 'Self Parent Group' });
 
       const response = await request(app.getHttpServer())
@@ -503,89 +541,18 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
         .send({ parentGroupId: group.id })
         .expect(409);
       expect((response.body as HttpErrorResponse).code).toBe(
-        'GROUP_SELF_PARENT',
+        'GROUP_CANNOT_HAVE_PARENT',
       );
-    });
-
-    it('rejects a direct two-node cycle (A -> B, then B -> A)', async () => {
-      const a = await createGroupOwnedByA({ name: 'Cycle A' });
-      const b = await createGroupOwnedByA({ name: 'Cycle B' });
-
-      await request(app.getHttpServer())
-        .post(`/api/v1/groups/${b.id}/parent`)
-        .set('Authorization', `Bearer ${TOKEN_A}`)
-        .send({ parentGroupId: a.id })
-        .expect(201);
-
-      const response = await request(app.getHttpServer())
-        .post(`/api/v1/groups/${a.id}/parent`)
-        .set('Authorization', `Bearer ${TOKEN_A}`)
-        .send({ parentGroupId: b.id })
-        .expect(409);
-      expect((response.body as HttpErrorResponse).code).toBe(
-        'GROUP_HIERARCHY_CYCLE',
-      );
-    });
-
-    it('rejects a multi-level cycle (A -> B -> C, then C -> A)', async () => {
-      const a = await createGroupOwnedByA({ name: 'Multi Cycle A' });
-      const b = await createGroupOwnedByA({ name: 'Multi Cycle B' });
-      const c = await createGroupOwnedByA({ name: 'Multi Cycle C' });
-
-      await request(app.getHttpServer())
-        .post(`/api/v1/groups/${b.id}/parent`)
-        .set('Authorization', `Bearer ${TOKEN_A}`)
-        .send({ parentGroupId: a.id })
-        .expect(201);
-      await request(app.getHttpServer())
-        .post(`/api/v1/groups/${c.id}/parent`)
-        .set('Authorization', `Bearer ${TOKEN_A}`)
-        .send({ parentGroupId: b.id })
-        .expect(201);
-
-      const response = await request(app.getHttpServer())
-        .post(`/api/v1/groups/${a.id}/parent`)
-        .set('Authorization', `Bearer ${TOKEN_A}`)
-        .send({ parentGroupId: c.id })
-        .expect(409);
-      expect((response.body as HttpErrorResponse).code).toBe(
-        'GROUP_HIERARCHY_CYCLE',
-      );
-    });
-
-    it('allows re-parenting a Group to an unrelated Group (not a cycle)', async () => {
-      const oldParent = await createGroupOwnedByA({ name: 'Old Parent' });
-      const newParent = await createGroupOwnedByA({
-        name: 'New Unrelated Parent',
-      });
-      const child = await createGroupOwnedByA({ name: 'Reparented Child' });
-
-      await request(app.getHttpServer())
-        .post(`/api/v1/groups/${child.id}/parent`)
-        .set('Authorization', `Bearer ${TOKEN_A}`)
-        .send({ parentGroupId: oldParent.id })
-        .expect(201);
-
-      const moved = await bodyOf<GroupResponseDto>(
-        request(app.getHttpServer())
-          .post(`/api/v1/groups/${child.id}/parent`)
-          .set('Authorization', `Bearer ${TOKEN_A}`)
-          .send({ parentGroupId: newParent.id })
-          .expect(201),
-      );
-      expect(moved.parentGroupId).toBe(newParent.id);
     });
   });
 
   describe('move and detach', () => {
-    it('detaches a Group, making it a root Group again', async () => {
+    it('detaches a legacy child Group, making it a root Group again', async () => {
       const parent = await createGroupOwnedByA({ name: 'Detach Parent' });
       const child = await createGroupOwnedByA({ name: 'Detach Child' });
-      await request(app.getHttpServer())
-        .post(`/api/v1/groups/${child.id}/parent`)
-        .set('Authorization', `Bearer ${TOKEN_A}`)
-        .send({ parentGroupId: parent.id })
-        .expect(201);
+      // Group -> Group links can no longer be created through the API -
+      // only legacy rows can carry one, so it is written directly here.
+      await setParentGroupDirectly(Group, child.id, parent.id);
 
       const detached = await bodyOf<GroupResponseDto>(
         request(app.getHttpServer())
@@ -1025,15 +992,216 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
     });
   });
 
-  describe('breadcrumbs and parent chain', () => {
-    it('returns deterministic root-first breadcrumbs for a multi-level Group -> Group -> Section chain', async () => {
-      const brasil = await createGroupOwnedByA({ name: 'Breadcrumb Brasil' });
-      const poland = await createGroupOwnedByA({ name: 'Breadcrumb Poland' });
-      await request(app.getHttpServer())
-        .post(`/api/v1/groups/${poland.id}/parent`)
+  describe('a Section belongs to at most one Group', () => {
+    it('rejects inviting a Group - only a standalone Section can be invited', async () => {
+      const parent = await createGroupOwnedByA({ name: 'Group Target Parent' });
+      const target = await createGroupOwnedByA({ name: 'Group Target' });
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/groups/${parent.id}/child-invitations`)
         .set('Authorization', `Bearer ${TOKEN_A}`)
-        .send({ parentGroupId: brasil.id })
+        .send({ targetType: 'GROUP', targetId: target.id })
+        .expect(409);
+      expect((response.body as HttpErrorResponse).code).toBe(
+        'GROUP_CANNOT_HAVE_PARENT',
+      );
+    });
+
+    it('refuses to accept a legacy PENDING invitation addressed to a Group', async () => {
+      const parent = await createGroupOwnedByA({ name: 'Legacy Inv Parent' });
+      const target = await createGroupOwnedByA({ name: 'Legacy Inv Target' });
+      // Can no longer be created through the API - written directly.
+      const em = app.get(EntityManager).fork();
+      const legacy = new HierarchyInvitation();
+      legacy.parentGroup = em.getReference(Group, parent.id);
+      legacy.targetGroup = em.getReference(Group, target.id);
+      await em.persist(legacy).flush();
+
+      const response = await request(app.getHttpServer())
+        .post(
+          `/api/v1/groups/${target.id}/hierarchy-invitations/${legacy.id}/accept`,
+        )
+        .set('Authorization', `Bearer ${TOKEN_A}`)
+        .expect(409);
+      expect((response.body as HttpErrorResponse).code).toBe(
+        'GROUP_CANNOT_HAVE_PARENT',
+      );
+
+      await expectNullBody(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${target.id}/parent`)
+          .set('Authorization', `Bearer ${TOKEN_A}`)
+          .expect(200),
+      );
+    });
+
+    it('rejects inviting a Section that already belongs to another Group', async () => {
+      const current = await createGroupOwnedByA({ name: 'Current Group' });
+      const other = await createGroupOwnedByA({ name: 'Other Group' });
+      const section = await createStandaloneSection(TOKEN_B, {
+        name: 'Already Attached Section',
+      });
+      const first = await invite(current.id, section.id);
+      await request(app.getHttpServer())
+        .post(
+          `/api/v1/sections/${section.id}/hierarchy-invitations/${first.id}/accept`,
+        )
+        .set('Authorization', `Bearer ${TOKEN_B}`)
+        .expect(204);
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/groups/${other.id}/child-invitations`)
+        .set('Authorization', `Bearer ${TOKEN_A}`)
+        .send({ targetType: 'SECTION', targetId: section.id })
+        .expect(409);
+      expect((response.body as HttpErrorResponse).code).toBe(
+        'SECTION_ALREADY_HAS_PARENT',
+      );
+    });
+
+    it('rejects accepting an invitation once the Section already has a Group - never re-parents it', async () => {
+      const current = await createGroupOwnedByA({ name: 'Holding Group' });
+      const inviter = await createGroupOwnedByA({ name: 'Late Inviter' });
+      const section = await createStandaloneSection(TOKEN_B, {
+        name: 'Raced Section',
+      });
+      const invitation = await invite(inviter.id, section.id);
+      // The Section got a Group by some other path while this invitation
+      // was still PENDING (e.g. data written before this rule existed).
+      await setParentGroupDirectly(Section, section.id, current.id);
+
+      const response = await request(app.getHttpServer())
+        .post(
+          `/api/v1/sections/${section.id}/hierarchy-invitations/${invitation.id}/accept`,
+        )
+        .set('Authorization', `Bearer ${TOKEN_B}`)
+        .expect(409);
+      expect((response.body as HttpErrorResponse).code).toBe(
+        'SECTION_ALREADY_HAS_PARENT',
+      );
+
+      expect(await sectionParentId(section.id)).toBe(current.id);
+      expect(await invitationStatus(invitation.id)).toBe('PENDING');
+    });
+
+    it('cancels every other PENDING invitation once one is accepted - none can move the Section later', async () => {
+      const winner = await createGroupOwnedByA({ name: 'Winner Group' });
+      const loserA = await createGroupOwnedByA({ name: 'Loser Group A' });
+      const loserB = await createGroupOwnedByA({ name: 'Loser Group B' });
+      const section = await createStandaloneSection(TOKEN_B, {
+        name: 'Popular Section',
+      });
+      const accepted = await invite(winner.id, section.id);
+      const otherA = await invite(loserA.id, section.id);
+      const otherB = await invite(loserB.id, section.id);
+
+      await request(app.getHttpServer())
+        .post(
+          `/api/v1/sections/${section.id}/hierarchy-invitations/${accepted.id}/accept`,
+        )
+        .set('Authorization', `Bearer ${TOKEN_B}`)
+        .expect(204);
+
+      expect(await invitationStatus(accepted.id)).toBe('ACCEPTED');
+      expect(await invitationStatus(otherA.id)).toBe('CANCELLED');
+      expect(await invitationStatus(otherB.id)).toBe('CANCELLED');
+
+      const received = await bodyOf<HierarchyInvitationResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/sections/${section.id}/hierarchy-invitations/received`)
+          .set('Authorization', `Bearer ${TOKEN_B}`)
+          .expect(200),
+      );
+      expect(received).toEqual([]);
+
+      const response = await request(app.getHttpServer())
+        .post(
+          `/api/v1/sections/${section.id}/hierarchy-invitations/${otherA.id}/accept`,
+        )
+        .set('Authorization', `Bearer ${TOKEN_B}`)
+        .expect(409);
+      expect((response.body as HttpErrorResponse).code).toBe(
+        'HIERARCHY_INVITATION_NOT_PENDING',
+      );
+      expect(await sectionParentId(section.id)).toBe(winner.id);
+    });
+
+    it('two different invitations accepted concurrently attach the Section to exactly one Group', async () => {
+      const groupX = await createGroupOwnedByA({ name: 'Concurrent X' });
+      const groupY = await createGroupOwnedByA({ name: 'Concurrent Y' });
+      const section = await createStandaloneSection(TOKEN_B, {
+        name: 'Concurrent Section',
+      });
+      const toX = await invite(groupX.id, section.id);
+      const toY = await invite(groupY.id, section.id);
+
+      const [first, second] = await Promise.all(
+        [toX, toY].map((invitation) =>
+          request(app.getHttpServer())
+            .post(
+              `/api/v1/sections/${section.id}/hierarchy-invitations/${invitation.id}/accept`,
+            )
+            .set('Authorization', `Bearer ${TOKEN_B}`),
+        ),
+      );
+      expect([first.status, second.status].sort()).toEqual([204, 409]);
+
+      const winnerId = first.status === 204 ? groupX.id : groupY.id;
+      expect(await sectionParentId(section.id)).toBe(winnerId);
+    });
+
+    it('a direct move (POST /sections/:id/parent) also cancels pending invitations', async () => {
+      const target = await createGroupOwnedByA({ name: 'Direct Move Target' });
+      const inviter = await createGroupOwnedByA({
+        name: 'Direct Move Inviter',
+      });
+      const section = await createStandaloneSection(TOKEN_A, {
+        name: 'Direct Move Section',
+      });
+      const pending = await invite(inviter.id, section.id);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/sections/${section.id}/parent`)
+        .set('Authorization', `Bearer ${TOKEN_A}`)
+        .send({ parentGroupId: target.id })
         .expect(201);
+
+      expect(await invitationStatus(pending.id)).toBe('CANCELLED');
+    });
+
+    it('after detaching, the Section can receive and accept a new invitation', async () => {
+      const first = await createGroupOwnedByA({ name: 'First Home' });
+      const second = await createGroupOwnedByA({ name: 'Second Home' });
+      const section = await createStandaloneSection(TOKEN_B, {
+        name: 'Moving Section',
+      });
+      const toFirst = await invite(first.id, section.id);
+      await request(app.getHttpServer())
+        .post(
+          `/api/v1/sections/${section.id}/hierarchy-invitations/${toFirst.id}/accept`,
+        )
+        .set('Authorization', `Bearer ${TOKEN_B}`)
+        .expect(204);
+
+      await request(app.getHttpServer())
+        .delete(`/api/v1/sections/${section.id}/parent`)
+        .set('Authorization', `Bearer ${TOKEN_B}`)
+        .expect(200);
+
+      const toSecond = await invite(second.id, section.id);
+      await request(app.getHttpServer())
+        .post(
+          `/api/v1/sections/${section.id}/hierarchy-invitations/${toSecond.id}/accept`,
+        )
+        .set('Authorization', `Bearer ${TOKEN_B}`)
+        .expect(204);
+      expect(await sectionParentId(section.id)).toBe(second.id);
+    });
+  });
+
+  describe('breadcrumbs and parent chain', () => {
+    it('returns deterministic root-first breadcrumbs for a Group -> Section chain', async () => {
+      const poland = await createGroupOwnedByA({ name: 'Breadcrumb Poland' });
       const poznan = await createSection(TOKEN_A, poland.id, {
         name: 'Breadcrumb Poznan',
       });
@@ -1045,7 +1213,6 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
           .expect(200),
       );
       expect(breadcrumbs).toEqual([
-        { id: brasil.id, type: 'GROUP', name: brasil.name },
         { id: poland.id, type: 'GROUP', name: poland.name },
         { id: poznan.id, type: 'SECTION', name: poznan.name },
       ]);
@@ -1057,7 +1224,6 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
           .expect(200),
       );
       expect(groupBreadcrumbs).toEqual([
-        { id: brasil.id, type: 'GROUP', name: brasil.name },
         { id: poland.id, type: 'GROUP', name: poland.name },
       ]);
     });
@@ -1085,25 +1251,20 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
   });
 
   describe('audit log', () => {
-    it('logs attach/detach under the exact parent Group, and invitations under the exact parent Group too - never a resolved root', async () => {
-      const grandparent = await createGroupOwnedByA({
-        name: 'Audit Grandparent',
-      });
+    it('logs attach/detach under the exact parent Group only', async () => {
       const parent = await createGroupOwnedByA({ name: 'Audit Parent' });
-      await request(app.getHttpServer())
-        .post(`/api/v1/groups/${parent.id}/parent`)
-        .set('Authorization', `Bearer ${TOKEN_A}`)
-        .send({ parentGroupId: grandparent.id })
-        .expect(201);
+      const unrelated = await createGroupOwnedByA({ name: 'Audit Unrelated' });
+      const section = await createStandaloneSection(TOKEN_A, {
+        name: 'Audit Section',
+      });
 
-      const child = await createGroupOwnedByA({ name: 'Audit Child' });
       await request(app.getHttpServer())
-        .post(`/api/v1/groups/${child.id}/parent`)
+        .post(`/api/v1/sections/${section.id}/parent`)
         .set('Authorization', `Bearer ${TOKEN_A}`)
         .send({ parentGroupId: parent.id })
         .expect(201);
       await request(app.getHttpServer())
-        .delete(`/api/v1/groups/${child.id}/parent`)
+        .delete(`/api/v1/sections/${section.id}/parent`)
         .set('Authorization', `Bearer ${TOKEN_A}`)
         .expect(200);
 
@@ -1126,23 +1287,20 @@ describe('Group/Section Hierarchy + Hierarchy Invitations (e2e)', () => {
         parentLog.data.every((entry) => entry.communityId === parent.id),
       ).toBe(true);
 
-      // The grandparent's own audit log must NOT contain the child-of-parent
-      // attach/detach entries - those belong to the exact parent, never a
-      // resolved root.
-      const grandparentLog = await bodyOf<
+      const unrelatedLog = await bodyOf<
         PaginatedResponse<AuditLogEntryResponseDto>
       >(
         request(app.getHttpServer())
-          .get(`/api/v1/groups/${grandparent.id}/audit-log`)
+          .get(`/api/v1/groups/${unrelated.id}/audit-log`)
           .set('Authorization', `Bearer ${TOKEN_A}`)
           .expect(200),
       );
       expect(
-        grandparentLog.data.some(
+        unrelatedLog.data.some(
           (entry) =>
             (entry.action === AuditAction.ATTACH_CHILD ||
               entry.action === AuditAction.DETACH_CHILD) &&
-            entry.target?.id === child.id,
+            entry.target?.id === section.id,
         ),
       ).toBe(false);
     });

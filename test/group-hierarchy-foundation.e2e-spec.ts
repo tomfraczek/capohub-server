@@ -9,12 +9,11 @@
  *  - creating a standalone Section (no parent)
  *  - creating a Group (no parent)
  *  - attach/detach Section <-> Group
- *  - attach/detach Group <-> Group
- *  - a Group containing both child Groups and Sections at once
- *  - rejecting a second parent (attach always replaces, never adds)
- *  - rejecting self-parent
- *  - rejecting a direct cycle
- *  - rejecting a multi-level cycle
+ *  - a Group never becoming a child (Groups are always top-level); legacy
+ *    Group -> Group rows still load, walk and detach
+ *  - a Group containing several Sections at once
+ *  - a Section never having two parents (attach always replaces, never
+ *    adds), and assertSectionIsStandalone for the invitation flow
  *  - type immutability across attach/detach (a Group never becomes a
  *    Section and vice versa)
  */
@@ -82,6 +81,17 @@ describe('Group/Section foundation (e2e)', () => {
     });
   });
 
+  // The domain `code` of whatever `fn` throws synchronously (undefined if
+  // it does not throw).
+  function thrownCode(fn: () => unknown): string | undefined {
+    try {
+      fn();
+    } catch (error) {
+      return (error as { response?: { code?: string } }).response?.code;
+    }
+    return undefined;
+  }
+
   async function makeGroup(
     name: string,
     parent: Group | null = null,
@@ -130,7 +140,10 @@ describe('Group/Section foundation (e2e)', () => {
       expect(section.parentGroup?.id).toBe(group.id);
     });
 
-    it('creates a Group attached to another Group at creation time', async () => {
+    // Legacy shape only - Group -> Group links can no longer be created
+    // through GroupHierarchyService (see rejectGroupAsChild below), but rows
+    // written before that rule still have to load and walk correctly.
+    it('still loads a legacy Group that carries a parent Group', async () => {
       const parent = await makeGroup('Parent Group At Creation');
       const child = await makeGroup('Child Group At Creation', parent);
       expect(child.parentGroup?.id).toBe(parent.id);
@@ -161,6 +174,9 @@ describe('Group/Section foundation (e2e)', () => {
     });
 
     it('re-attaching a Section replaces its parent rather than adding a second one', async () => {
+      // The raw primitive (used by the explicit POST /sections/:id/parent
+      // move) - an invitation never reaches it for an attached Section, see
+      // assertSectionIsStandalone below.
       const groupA = await makeGroup('Reattach Group A');
       const groupB = await makeGroup('Reattach Group B');
       const section = await makeSection('Reattach Section', groupA);
@@ -171,25 +187,38 @@ describe('Group/Section foundation (e2e)', () => {
       const groupAChildren = await hierarchy.listDirectSections(groupA.id, em);
       expect(groupAChildren.map((s) => s.id)).not.toContain(section.id);
     });
-  });
 
-  describe('attach / detach Group <-> Group', () => {
-    it('attaches a standalone Group as a child of another Group', async () => {
-      const parent = await makeGroup('Attach Child Parent');
-      const child = await makeGroup('Attach Child Group');
+    it('assertSectionIsStandalone accepts a Section without a Group', async () => {
+      const section = await makeSection('Standalone Check Section');
 
-      const attached = await hierarchy.attachChildGroup(
-        child.id,
-        parent.id,
-        em,
-      );
-
-      expect(attached.parentGroup?.id).toBe(parent.id);
-      const children = await hierarchy.listChildGroups(parent.id, em);
-      expect(children.map((g) => g.id)).toContain(child.id);
+      expect(() => hierarchy.assertSectionIsStandalone(section)).not.toThrow();
     });
 
-    it('detaches a child Group, making it a root Group again', async () => {
+    it('assertSectionIsStandalone rejects a Section that already belongs to a Group', async () => {
+      const group = await makeGroup('Standalone Check Group');
+      const section = await makeSection('Attached Check Section', group);
+
+      expect(
+        thrownCode(() => hierarchy.assertSectionIsStandalone(section)),
+      ).toBe('SECTION_ALREADY_HAS_PARENT');
+    });
+  });
+
+  describe('Group is always top-level', () => {
+    it('never lets a Group become a child of another Group (or of itself)', async () => {
+      const parent = await makeGroup('Would-be Parent Group');
+      const child = await makeGroup('Would-be Child Group');
+
+      expect(thrownCode(() => hierarchy.rejectGroupAsChild())).toBe(
+        'GROUP_CANNOT_HAVE_PARENT',
+      );
+
+      const reloaded = await em.findOneOrFail(Group, { id: child.id });
+      expect(reloaded.parentGroup).toBeNull();
+      expect(await hierarchy.listChildGroups(parent.id, em)).toEqual([]);
+    });
+
+    it('detaches a legacy child Group, making it a root Group again', async () => {
       const parent = await makeGroup('Detach Child Parent');
       const child = await makeGroup('Detach Child Group', parent);
 
@@ -201,80 +230,23 @@ describe('Group/Section foundation (e2e)', () => {
     });
   });
 
-  it('a Group can contain both child Groups and Sections at the same time', async () => {
-    const parent = await makeGroup('Mixed Children Parent');
-    const childGroup = await makeGroup('Mixed Child Group', parent);
-    const childSection = await makeSection('Mixed Child Section', parent);
+  it('a Group can contain several Sections at the same time', async () => {
+    const parent = await makeGroup('Multi Sections Parent');
+    const first = await makeSection('Multi Section 1', parent);
+    const second = await makeSection('Multi Section 2', parent);
 
-    const children = await hierarchy.listChildGroups(parent.id, em);
     const sections = await hierarchy.listDirectSections(parent.id, em);
 
-    expect(children.map((g) => g.id)).toEqual([childGroup.id]);
-    expect(sections.map((s) => s.id)).toEqual([childSection.id]);
-  });
-
-  describe('cycle and parentage guards', () => {
-    it('rejects attaching a Group as its own parent (self-parent)', async () => {
-      const group = await makeGroup('Self Parent Group');
-
-      await expect(
-        hierarchy.attachChildGroup(group.id, group.id, em),
-      ).rejects.toMatchObject({
-        response: { code: 'GROUP_SELF_PARENT' },
-      });
-    });
-
-    it('rejects a direct two-node cycle (A -> B, then B -> A)', async () => {
-      const a = await makeGroup('Cycle A');
-      const b = await makeGroup('Cycle B', a);
-
-      await expect(
-        hierarchy.attachChildGroup(a.id, b.id, em),
-      ).rejects.toMatchObject({
-        response: { code: 'GROUP_HIERARCHY_CYCLE' },
-      });
-
-      // The attempted cycle must not have partially applied.
-      const reloadedA = await em.findOneOrFail(Group, { id: a.id });
-      expect(reloadedA.parentGroup).toBeNull();
-    });
-
-    it('rejects a multi-level cycle (A -> B -> C, then C -> A)', async () => {
-      const a = await makeGroup('Multi Cycle A');
-      const b = await makeGroup('Multi Cycle B', a);
-      const c = await makeGroup('Multi Cycle C', b);
-
-      await expect(
-        hierarchy.attachChildGroup(a.id, c.id, em),
-      ).rejects.toMatchObject({
-        response: { code: 'GROUP_HIERARCHY_CYCLE' },
-      });
-
-      const reloadedA = await em.findOneOrFail(Group, { id: a.id });
-      expect(reloadedA.parentGroup).toBeNull();
-    });
-
-    it('allows re-parenting a Group to an unrelated Group (not a cycle)', async () => {
-      const oldParent = await makeGroup('Reparent Old Parent');
-      const newParent = await makeGroup('Reparent New Parent');
-      const child = await makeGroup('Reparent Child', oldParent);
-
-      const moved = await hierarchy.attachChildGroup(
-        child.id,
-        newParent.id,
-        em,
-      );
-
-      expect(moved.parentGroup?.id).toBe(newParent.id);
-    });
+    expect(new Set(sections.map((s) => s.id))).toEqual(
+      new Set([first.id, second.id]),
+    );
   });
 
   describe('type immutability across attach/detach', () => {
-    it('a Group stays a Group after being attached and detached', async () => {
+    it('a legacy child Group stays a Group after being detached', async () => {
       const parent = await makeGroup('Immutability Parent');
-      const group = await makeGroup('Immutability Group');
+      const group = await makeGroup('Immutability Group', parent);
 
-      await hierarchy.attachChildGroup(group.id, parent.id, em);
       await hierarchy.detachChildGroup(group.id, em);
 
       const reloaded = await em.findOneOrFail(Group, { id: group.id });

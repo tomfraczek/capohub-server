@@ -393,16 +393,21 @@ describe('User Profile (e2e)', () => {
       .expect(201);
   }
 
-  async function attachGroupParent(
-    token: string,
+  // Group -> Group links can no longer be created through the API (Groups
+  // are always top-level - see GroupHierarchyService.rejectGroupAsChild),
+  // but legacy rows can still carry one, so this writes it directly.
+  async function attachLegacyGroupParent(
     childGroupId: string,
     parentGroupId: string,
   ): Promise<void> {
-    await request(app.getHttpServer())
-      .post(`/api/v1/groups/${childGroupId}/parent`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ parentGroupId })
-      .expect(201);
+    await app
+      .get(EntityManager)
+      .fork()
+      .nativeUpdate(
+        Group,
+        { id: childGroupId },
+        { parentGroup: parentGroupId },
+      );
   }
 
   async function archiveGroup(token: string, groupId: string): Promise<void> {
@@ -967,19 +972,17 @@ describe('User Profile (e2e)', () => {
       expect(affiliation?.group.id).toBe(group.id);
     });
 
-    it('accepts a section under a nested child group, not just direct sections', async () => {
+    it('accepts a section under a legacy nested child group, not just direct sections', async () => {
       const root = await createGroup({
         name: 'Nested Formal Group Root',
       });
       const child = await createGroup({
         name: 'Nested Formal Group Child',
       });
-      // attachGroupParent requires HIERARCHY_MANAGE (OWNER only) on *both*
-      // nodes (see hierarchy-management.service.ts's assertHierarchyManage)
-      // - root and child are two independent fresh owners here, so grant
-      // root's owner ADMIN on child, then make them child's OWNER directly
-      // in the DB (forceGroupOwnerForFixture) so a single actor can perform the
-      // attach, same reasoning as hierarchy.e2e-spec.ts's
+      // root and child are two independent fresh owners here - grant root's
+      // owner ADMIN on child, then make them child's OWNER directly in the
+      // DB (forceGroupOwnerForFixture) so a single actor can create the
+      // nested Section below, same reasoning as hierarchy.e2e-spec.ts's
       // createGroupOwnedByA.
       await request(app.getHttpServer())
         .post(`/api/v1/groups/${child.id}/role-assignments`)
@@ -990,7 +993,7 @@ describe('User Profile (e2e)', () => {
       // real transfer refuses (see forceGroupOwnerForFixture).
       await forceGroupOwnerForFixture(app, child.id, root.userId);
 
-      await attachGroupParent(root.token, child.id, root.id);
+      await attachLegacyGroupParent(child.id, root.id);
       const nestedSection = await createSection(root.token, child.id, {
         name: 'Nested Formal Group Section',
       });

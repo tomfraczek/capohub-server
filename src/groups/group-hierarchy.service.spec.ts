@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { Group } from './entities/group.entity';
+import { Section } from './entities/section.entity';
 import { GroupStatus } from './enums/group-status.enum';
 import { GroupHierarchyService } from './group-hierarchy.service';
 
@@ -158,6 +159,55 @@ describe('GroupHierarchyService', () => {
       const parent = await service.assertParentIsUsable('poland');
 
       expect(parent.id).toBe('poland');
+    });
+  });
+
+  // The domain `code` of whatever `fn` throws synchronously (undefined if
+  // it does not throw).
+  function thrownCode(fn: () => unknown): string | undefined {
+    try {
+      fn();
+    } catch (error) {
+      return (error as { response?: { code?: string } }).response?.code;
+    }
+    return undefined;
+  }
+
+  describe('rejectGroupAsChild', () => {
+    it('always rejects with GROUP_CANNOT_HAVE_PARENT - Groups are top-level', () => {
+      const service = new GroupHierarchyService(buildMockEm(buildTree()));
+
+      expect(thrownCode(() => service.rejectGroupAsChild())).toBe(
+        'GROUP_CANNOT_HAVE_PARENT',
+      );
+    });
+  });
+
+  describe('assertSectionIsStandalone', () => {
+    function buildSection(parent: Group | null): Section {
+      const section = new Section();
+      section.id = 'section';
+      section.name = 'section';
+      section.parentGroup = parent;
+      return section;
+    }
+
+    it('passes for a Section without a Group', () => {
+      const service = new GroupHierarchyService(buildMockEm(buildTree()));
+
+      expect(
+        thrownCode(() => service.assertSectionIsStandalone(buildSection(null))),
+      ).toBeUndefined();
+    });
+
+    it('rejects a Section that already belongs to a Group with SECTION_ALREADY_HAS_PARENT', () => {
+      const service = new GroupHierarchyService(buildMockEm(buildTree()));
+
+      expect(
+        thrownCode(() =>
+          service.assertSectionIsStandalone(buildSection(poland)),
+        ),
+      ).toBe('SECTION_ALREADY_HAS_PARENT');
     });
   });
 });

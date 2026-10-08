@@ -54,15 +54,19 @@ export function communityIdFilter(id: string): {
  * hierarchy invariant stay centrally enforced and are never duplicated in a
  * controller.
  *
- * Invariants enforced here (see the organizational-domain rebuild, stage
- * 1):
- *  - A Group may have at most one parent Group.
- *  - A Group may have any number of child Groups and any number of
- *    Sections.
- *  - A Section may have at most one parent Group; it may never have
- *    children of any kind.
- *  - No Group may be its own ancestor, directly or transitively (no
- *    cycles).
+ * Invariants enforced here - the hierarchy is a flat `Group -> Section`
+ * tree:
+ *  - A Group is always top-level: no new Group -> Group link can be
+ *    created (rejectGroupAsChild, GROUP_CANNOT_HAVE_PARENT). Group -> Group
+ *    nesting used to be allowed (organizational-domain rebuild, stage 1);
+ *    legacy rows that still carry a `parentGroup` stay readable (the
+ *    ancestor/descendant walks below keep working on them, cycle-guarded)
+ *    and detachable, nothing more.
+ *  - A Group may have any number of Sections.
+ *  - A Section may have at most one parent Group (a single FK) and may
+ *    never have children of any kind. Joining a Group through a
+ *    HierarchyInvitation additionally requires the Section to be standalone
+ *    (assertSectionIsStandalone).
  */
 @Injectable()
 export class GroupHierarchyService {
@@ -183,31 +187,21 @@ export class GroupHierarchyService {
   }
 
   /**
-   * Moves `childId` to become a child of `newParentGroupId`. Rejects a
-   * self-parent, a missing/archived parent, and any direct or
-   * multi-level cycle (i.e. `newParentGroupId` may not be `childId` itself
-   * or any descendant of it - attaching there would loop the tree back on
-   * itself).
+   * Groups are always top-level (see the class comment) - there is no
+   * Group -> Group attach primitive any more. Every entry point that would
+   * make a Group someone's child (direct POST /groups/:id/parent, creating
+   * or accepting a HierarchyInvitation that targets a Group) calls this, so
+   * they all reject with the same stable code.
    */
-  async attachChildGroup(
-    childId: string,
-    newParentGroupId: string,
-    em: EntityManager = this.em,
-  ): Promise<Group> {
-    if (childId === newParentGroupId) {
-      throw this.selfParent();
-    }
-
-    const child = await this.loadGroupOrFail(em, childId);
-    const newParent = await this.resolveUsableParentGroup(em, newParentGroupId);
-    await this.assertNotAncestorOrSelf(em, childId, newParent);
-
-    child.parentGroup = newParent;
-    await em.flush();
-    return child;
+  rejectGroupAsChild(): never {
+    throw this.groupCannotHaveParent();
   }
 
-  /** Detaches `childId` from its current parent, making it a root Group. */
+  /**
+   * Detaches `childId` from its current parent, making it a root Group.
+   * Kept only for legacy Group -> Group rows created before Groups became
+   * strictly top-level - it is the one way to clean such a row up.
+   */
   async detachChildGroup(
     childId: string,
     em: EntityManager = this.em,
@@ -216,30 +210,6 @@ export class GroupHierarchyService {
     child.parentGroup = null;
     await em.flush();
     return child;
-  }
-
-  /**
-   * Dry-run validation for whether `childId` could be attached under
-   * `parentGroupId` right now - self-parent, cycle, and parent
-   * existence/status checks only, no mutation. Used by
-   * HierarchyManagementService when creating a HierarchyInvitation, so a
-   * doomed invitation (self-parent/cycle) is rejected immediately instead
-   * of sitting PENDING until someone tries to accept it.
-   * attachChildGroup unconditionally re-validates the same rules again at
-   * the moment of the actual mutation, regardless of whether this was
-   * called first - this is a convenience for early feedback, never the
-   * sole guard.
-   */
-  async assertCanAttachChildGroup(
-    childId: string,
-    parentGroupId: string,
-    em: EntityManager = this.em,
-  ): Promise<void> {
-    if (childId === parentGroupId) {
-      throw this.selfParent();
-    }
-    const parent = await this.resolveUsableParentGroup(em, parentGroupId);
-    await this.assertNotAncestorOrSelf(em, childId, parent);
   }
 
   /**
@@ -253,6 +223,25 @@ export class GroupHierarchyService {
     em: EntityManager = this.em,
   ): Promise<void> {
     await this.resolveUsableParentGroup(em, parentGroupId);
+  }
+
+  /**
+   * Rejects a Section that already belongs to a Group. Used wherever a
+   * Section joins a Group through a HierarchyInvitation (both when the
+   * invitation is created and, authoritatively, when it is accepted) - an
+   * invitation may only ever attach a standalone Section, never silently
+   * move it away from its current Group. Moving an attached Section is a
+   * separate, explicit operation (POST /sections/:id/parent, which requires
+   * HIERARCHY_MANAGE on both the Section and the new parent), or a detach
+   * followed by a fresh invitation.
+   */
+  assertSectionIsStandalone(section: Section): void {
+    if (section.parentGroup) {
+      throw new ConflictException({
+        code: 'SECTION_ALREADY_HAS_PARENT',
+        message: 'This section already belongs to a group',
+      });
+    }
   }
 
   /**
@@ -340,34 +329,6 @@ export class GroupHierarchyService {
     return current;
   }
 
-  /**
-   * Rejects attaching `childId` under `candidateParent` when `candidateParent`
-   * is `childId` itself or any of its ancestors are `childId` - i.e. when
-   * `candidateParent` is already a descendant of `childId` (or is `childId`),
-   * which would close a loop the moment the attach completes.
-   */
-  private async assertNotAncestorOrSelf(
-    em: EntityManager,
-    childId: string,
-    candidateParent: Group,
-  ): Promise<void> {
-    let current: Group | null = candidateParent;
-    const visited = new Set<string>();
-
-    while (current) {
-      if (current.id === childId) {
-        throw this.cycleDetected();
-      }
-      if (visited.has(current.id)) {
-        throw this.cycleDetected();
-      }
-      visited.add(current.id);
-      current = current.parentGroup
-        ? await this.loadGroupOrFail(em, current.parentGroup.id)
-        : null;
-    }
-  }
-
   private async resolveUsableParentGroup(
     em: EntityManager,
     parentGroupId: string,
@@ -426,10 +387,10 @@ export class GroupHierarchyService {
     });
   }
 
-  private selfParent(): ConflictException {
+  private groupCannotHaveParent(): ConflictException {
     return new ConflictException({
-      code: 'GROUP_SELF_PARENT',
-      message: 'A group cannot be its own parent',
+      code: 'GROUP_CANNOT_HAVE_PARENT',
+      message: 'A group is always top-level and cannot belong to another group',
     });
   }
 
