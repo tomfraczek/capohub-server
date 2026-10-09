@@ -11,8 +11,6 @@ import { EventAttendee } from '../events/entities/event-attendee.entity';
 import type { Event } from '../events/entities/event.entity';
 import { PARTICIPATING_RSVP_STATUSES } from '../events/event-participation.util';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
-import { RoleAssignment } from '../groups/entities/role-assignment.entity';
-import { GroupRole } from '../groups/enums/group-role.enum';
 import { User } from '../users/entities/user.entity';
 import { Rank } from './entities/rank.entity';
 import { FormalRankAssignment } from './entities/formal-rank-assignment.entity';
@@ -25,6 +23,7 @@ import { FormalRankAssignmentResponseDto } from './dto/formal-rank-assignment-re
 import { PendingFormalRankResponseDto } from './dto/formal-rank-request-response.dto';
 import { toFormalRankAssignmentResponseDto } from './mappers/formal-rank-assignment.mapper';
 import { toOwnFormalRankRequestResponseDto } from './mappers/formal-rank-request.mapper';
+import { confirmsOwnRankImmediately } from './own-rank-confirmation';
 import { FormalRankRequestsService } from './formal-rank-requests.service';
 import {
   assignFormalRank,
@@ -170,7 +169,7 @@ export class FormalRankService {
         : null;
       const awardedByName = input.awardedByName ?? null;
 
-      if (await this.administersGroup(em, user.id, formalGroup.group.id)) {
+      if (await confirmsOwnRankImmediately(em, user.id, formalGroup.group.id)) {
         await cancelPendingFormalRankRequests(em, user.id);
         const assignment = await assignFormalRank(em, {
           user,
@@ -223,24 +222,6 @@ export class FormalRankService {
     }
     current.endedOn = startOfTodayUtc();
     await this.em.flush();
-  }
-
-  // The Group's OWNER/ADMIN hold FORMAL_RANK_REQUEST_REVIEW on it (see
-  // group-role-permissions.map.ts) - their own choice needs no one else's
-  // confirmation.
-  private async administersGroup(
-    em: EntityManager,
-    userId: string,
-    groupId: string,
-  ): Promise<boolean> {
-    return (
-      (await em.count(RoleAssignment, {
-        user: userId,
-        group: groupId,
-        role: { $in: [GroupRole.OWNER, GroupRole.ADMIN] },
-        revokedAt: null,
-      })) > 0
-    );
   }
 
   private async loadActiveFormalGroup(

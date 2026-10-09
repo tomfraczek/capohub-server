@@ -34,6 +34,7 @@ import {
   toRankResponseDto,
   toRanksByTrackResponseDto,
 } from './mappers/rank.mapper';
+import { confirmsOwnRankImmediately } from './own-rank-confirmation';
 import { wouldCreateCycle } from './rank-chain';
 
 // Group existence/status and that the caller is OWNER/ADMIN of *this exact
@@ -126,9 +127,15 @@ export class RanksService {
         formalGroup: null,
         graduationSystem: null,
         ranks: this.emptyRankOptionsByTrack(),
+        confirmsOwnRankImmediately: false,
       };
     }
 
+    const confirmsImmediately = await confirmsOwnRankImmediately(
+      this.em,
+      userId,
+      formalGroup.group.id,
+    );
     const system = await this.loadActiveSystem(this.em, formalGroup.group.id);
     const formalGroupRef = {
       id: formalGroup.group.id,
@@ -139,6 +146,7 @@ export class RanksService {
         formalGroup: formalGroupRef,
         graduationSystem: null,
         ranks: this.emptyRankOptionsByTrack(),
+        confirmsOwnRankImmediately: confirmsImmediately,
       };
     }
 
@@ -156,6 +164,7 @@ export class RanksService {
         [RankTrack.CHILD]: this.toFormalRankOptions(byTrack[RankTrack.CHILD]),
         [RankTrack.ADULT]: this.toFormalRankOptions(byTrack[RankTrack.ADULT]),
       },
+      confirmsOwnRankImmediately: confirmsImmediately,
     };
   }
 

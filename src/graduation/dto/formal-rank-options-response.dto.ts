@@ -33,4 +33,9 @@ export interface FormalRankOptionsResponseDto {
   formalGroup: { id: string; name: string } | null;
   graduationSystem: { id: string } | null;
   ranks: FormalRankOptionsByTrackDto;
+  // true when the caller is their formal Group's OWNER/ADMIN: choosing a
+  // rank here (PUT /users/me/formal-rank) is saved at once (200), never
+  // sent for confirmation (202) - see graduation/own-rank-confirmation.ts,
+  // the same rule the PUT applies. Always false without a formal Group.
+  confirmsOwnRankImmediately: boolean;
 }

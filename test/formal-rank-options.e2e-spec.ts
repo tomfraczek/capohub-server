@@ -164,6 +164,10 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
       await cleanup.nativeDelete(FormalRankAssignment, {
         user: { $in: [...localUserIdByToken.values()] },
       });
+      // Fresh Group owners' own (immediately confirmed) ranks too.
+      await cleanup.nativeDelete(FormalRankAssignment, {
+        sourceGroup: { $in: createdGroupIds },
+      });
 
       const systems = await cleanup.find(GraduationSystem, {
         group: { $in: createdGroupIds },
@@ -370,6 +374,7 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
 
     expect(options.formalGroup).toBeNull();
     expect(options.graduationSystem).toBeNull();
+    expect(options.confirmsOwnRankImmediately).toBe(false);
     expect(options.ranks[RankTrack.CHILD]).toEqual([]);
     expect(options.ranks[RankTrack.ADULT]).toEqual([]);
   });
@@ -534,6 +539,37 @@ describe('Formal Rank Options (self-service) (e2e)', () => {
       .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
       .send({ rankId: chosen.id });
     expect([200, 202]).toContain(put.status);
+  });
+
+  it('tells up front whose own choice is saved at once - exactly when PUT answers 200 rather than 202', async () => {
+    const group = await createGroupWithCatalog(MEMBER_TOKEN);
+    await createSystem(group.token, group.id);
+    const rank = await createRank(group.token, group.id, {
+      track: RankTrack.ADULT,
+      name: 'Immediate Or Not',
+      description: null,
+      previousRankId: null,
+      cordSegments: oneSegment(),
+    });
+    await setFormalGroup(MEMBER_TOKEN, group.id);
+
+    // The Group's OWNER (formal member of their own Group): saved at once.
+    const ownerOptions = await getOptions(group.token);
+    expect(ownerOptions.confirmsOwnRankImmediately).toBe(true);
+    await request(app.getHttpServer())
+      .put('/api/v1/users/me/formal-rank')
+      .set('Authorization', `Bearer ${group.token}`)
+      .send({ rankId: rank.id })
+      .expect(200);
+
+    // An ordinary formal member: sent for confirmation.
+    const memberOptions = await getOptions(MEMBER_TOKEN);
+    expect(memberOptions.confirmsOwnRankImmediately).toBe(false);
+    await request(app.getHttpServer())
+      .put('/api/v1/users/me/formal-rank')
+      .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+      .send({ rankId: rank.id })
+      .expect(202);
   });
 
   it('returns 401 for an unauthenticated request', async () => {
