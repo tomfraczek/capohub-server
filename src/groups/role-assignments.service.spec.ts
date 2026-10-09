@@ -467,6 +467,23 @@ describe('RoleAssignmentsService', () => {
       expect(where).toEqual({ id: { $in: ['formal-1', 'formal-2'] } });
     });
 
+    it('never offers the caller as their own candidate - not even when searched for', async () => {
+      const { em, findAndCount } = buildCandidatesEm([]);
+      const { service } = buildService(em);
+
+      await service.listGroupAdminCandidates(
+        'group-1',
+        { search: 'Tomasz', excludeUserId: 'formal-1' },
+        { limit: 20, offset: 0 },
+      );
+
+      const [, where] = findAndCount.mock.calls[0] as [
+        unknown,
+        { id: { $in: string[] } },
+      ];
+      expect(where.id.$in).toEqual(['formal-2', 'owner-1']);
+    });
+
     it('filters by name/apelido, plus the exact user code when the search is one', async () => {
       const { em, findAndCount } = buildCandidatesEm([]);
       const { service } = buildService(em);

@@ -115,13 +115,14 @@ export class RoleAssignmentsController {
   @RequireGroupPermission(GroupPermission.ROLE_ASSIGNMENT_MANAGE)
   @RequireGroupKind(GroupKind.ROOT)
   async listAdminCandidates(
+    @CurrentUser() user: User,
     @Param('groupId') groupId: string,
     @Query(new ZodValidationPipe(groupAdminCandidatesQuerySchema))
     query: GroupAdminCandidatesQueryDto,
   ): Promise<PaginatedResponse<GroupAdminCandidateDto>> {
     const result = await this.roleAssignmentsService.listGroupAdminCandidates(
       groupId,
-      { search: query.search, userId: query.userId },
+      { search: query.search, userId: query.userId, excludeUserId: user.id },
       { limit: query.limit, offset: (query.page - 1) * query.limit },
     );
     return {

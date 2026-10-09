@@ -86,6 +86,7 @@ export class RecipientGroupsController {
   @RequireGroupPermission(GroupPermission.RECIPIENT_GROUP_VIEW)
   @AllowGroupStatuses(...ANY_STATUS)
   listEligibleMembers(
+    @CurrentUser() user: User,
     @Param('groupId') groupId: string,
     @Param('sectionId') sectionId: string,
     @Query(new ZodValidationPipe(recipientGroupEligibleMembersQuerySchema))
@@ -94,6 +95,7 @@ export class RecipientGroupsController {
     return this.recipientGroupsService.listEligibleMembers(
       groupId ?? sectionId,
       query,
+      user.id,
     );
   }
 

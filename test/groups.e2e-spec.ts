@@ -899,36 +899,38 @@ describe('Groups (e2e)', () => {
           localUserIdByToken.get(OUTSIDER_TOKEN),
         ]);
 
-        // A search matching the OWNER returns them too, marked as such.
+        // A search matching the OWNER returns them, marked as such - to
+        // another admin (ADMIN may list them too: ROLE_ASSIGNMENT_MANAGE).
         const em = app.get(EntityManager).fork();
         await em.nativeUpdate(
           User,
           { id: created.userId },
           { firstName: 'Zzcandidateowner' },
         );
-        const searched = await bodyOf<{
-          data: { id: string; currentRole: GroupRole | null }[];
-        }>(
-          request(app.getHttpServer())
-            .get(
-              `/api/v1/groups/${created.id}/role-assignments/admin-candidates`,
-            )
-            .query({ search: 'zzcandidate' })
-            .set('Authorization', `Bearer ${created.token}`)
-            .expect(200),
-        );
+        const searchAs = (token: string) =>
+          bodyOf<{
+            data: { id: string; currentRole: GroupRole | null }[];
+          }>(
+            request(app.getHttpServer())
+              .get(
+                `/api/v1/groups/${created.id}/role-assignments/admin-candidates`,
+              )
+              .query({ search: 'zzcandidate' })
+              .set('Authorization', `Bearer ${token}`)
+              .expect(200),
+          );
+        const searchedByAdmin = await searchAs(SECOND_TOKEN);
         expect(
-          searched.data.map((candidate) => [
+          searchedByAdmin.data.map((candidate) => [
             candidate.id,
             candidate.currentRole,
           ]),
         ).toEqual([[created.userId, GroupRole.OWNER]]);
 
-        // ADMIN may list them too (ROLE_ASSIGNMENT_MANAGE).
-        await request(app.getHttpServer())
-          .get(`/api/v1/groups/${created.id}/role-assignments/admin-candidates`)
-          .set('Authorization', `Bearer ${SECOND_TOKEN}`)
-          .expect(200);
+        // ...but never the caller themselves, even when their own name is
+        // searched for.
+        const searchedBySelf = await searchAs(created.token);
+        expect(searchedBySelf.data).toEqual([]);
 
         const noMatch = await bodyOf<{ data: unknown[] }>(
           request(app.getHttpServer())

@@ -275,12 +275,19 @@ export class RoleAssignmentsService {
    * by firstName/lastName/apelido (the same identity fields as GET
    * /users/search - never the email-seeded User.displayName) and paginated,
    * sorted deterministically by name, id last (no configurable sort).
-   * Backs GET
-   * .../recipient-groups/eligible-members.
+   * `excludeUserId` (the caller) is left out of the listing only - a
+   * picker never offers adding yourself - never out of
+   * findEligibleMemberIds(), so it doesn't change what the write path
+   * accepts. Backs GET .../recipient-groups/eligible-members.
    */
   async findEligibleMembers(
     communityId: string,
-    options: { search?: string; limit: number; offset: number },
+    options: {
+      search?: string;
+      limit: number;
+      offset: number;
+      excludeUserId?: string;
+    },
     em: EntityManager = this.em,
   ): Promise<{ items: User[]; total: number }> {
     const community = await this.groupHierarchyService.findCommunityById(
@@ -303,7 +310,7 @@ export class RoleAssignmentsService {
       );
       let users = [
         ...new Map(assignments.map((a) => [a.user.id, a.user])).values(),
-      ];
+      ].filter((u) => u.id !== options.excludeUserId);
       if (options.search) {
         const needle = options.search.toLowerCase();
         users = users.filter((u) =>
@@ -333,6 +340,9 @@ export class RoleAssignmentsService {
             ],
           },
           user: {
+            ...(options.excludeUserId
+              ? { id: { $ne: options.excludeUserId } }
+              : {}),
             $or: [
               { firstName: { $ilike: `%${options.search}%` } },
               { lastName: { $ilike: `%${options.search}%` } },
@@ -348,6 +358,9 @@ export class RoleAssignmentsService {
               SectionMembershipStatus.READ_ONLY,
             ],
           },
+          ...(options.excludeUserId
+            ? { user: { id: { $ne: options.excludeUserId } } }
+            : {}),
         };
 
     const [memberships, total] = await em.findAndCount(
@@ -924,7 +937,9 @@ export class RoleAssignmentsService {
    */
   async listGroupAdminCandidates(
     groupId: string,
-    filter: { search?: string; userId?: string },
+    // excludeUserId: the caller - never offered as their own candidate
+    // (they already administer this Group to be here at all).
+    filter: { search?: string; userId?: string; excludeUserId?: string },
     page: { limit: number; offset: number },
   ): Promise<{ items: GroupAdminCandidateDto[]; total: number }> {
     const affiliations = await this.em.find(FormalGroupAffiliation, {
@@ -952,6 +967,7 @@ export class RoleAssignmentsService {
     const isLookup = trimmed.length > 0 || filter.userId !== undefined;
     const candidateIds = affiliations
       .map((affiliation) => affiliation.user.id)
+      .filter((userId) => userId !== filter.excludeUserId)
       .filter((userId) => !filter.userId || userId === filter.userId)
       .filter((userId) => isLookup || !roleByUserId.has(userId));
     if (candidateIds.length === 0) {

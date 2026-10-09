@@ -123,12 +123,15 @@ export class RecipientGroupsService {
   async listEligibleMembers(
     communityGroupId: string,
     query: RecipientGroupEligibleMembersQueryInput,
+    // The caller - a picker never offers adding yourself.
+    viewerId?: string,
   ): Promise<RecipientGroupEligibleMembersResponseDto> {
     const { items, total } =
       await this.roleAssignmentsService.findEligibleMembers(communityGroupId, {
         search: query.search,
         limit: query.limit,
         offset: query.offset,
+        excludeUserId: viewerId,
       });
     return {
       items: items.map((user) => ({

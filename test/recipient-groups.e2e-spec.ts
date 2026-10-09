@@ -839,7 +839,7 @@ describe('Recipient Groups (e2e)', () => {
   });
 
   describe('GET .../recipient-groups/eligible-members', () => {
-    it('for a Group, returns every user holding an active RoleAssignment there (only ever OWNER/ADMIN), minimally shaped, sorted deterministically', async () => {
+    it('for a Group, returns every user holding an active RoleAssignment there (only ever OWNER/ADMIN) except the caller, minimally shaped, sorted deterministically', async () => {
       const org = await createGroup({
         name: `Eligible Group Org ${Date.now()}`,
       });
@@ -854,11 +854,13 @@ describe('Recipient Groups (e2e)', () => {
         getEligibleMembers(org.token, `/api/v1/groups/${org.id}`).expect(200),
       );
 
-      expect(result.total).toBe(3);
+      // The caller (the OWNER) never sees themselves as a candidate.
+      expect(result.total).toBe(2);
       expect(result.hasMore).toBe(false);
       expect(result.items.map((i) => i.id).sort()).toEqual(
-        [ownerUserId, adminUserId, secondAdminUserId].sort(),
+        [adminUserId, secondAdminUserId].sort(),
       );
+      expect(result.items.map((i) => i.id)).not.toContain(ownerUserId);
 
       for (const item of result.items) {
         expect(Object.keys(item).sort()).toEqual([
@@ -895,17 +897,15 @@ describe('Recipient Groups (e2e)', () => {
       );
 
       const ids = result.items.map((i) => i.id);
-      expect(ids.sort()).toEqual(
-        [
-          localUserIdByToken.get(org.token),
-          localUserIdByToken.get(MEMBER_TOKEN),
-        ].sort(),
-      );
+      // The OWNER is a Section member too, but is the caller here - never
+      // offered to themselves.
+      expect(ids).toEqual([localUserIdByToken.get(MEMBER_TOKEN)]);
+      expect(ids).not.toContain(localUserIdByToken.get(org.token));
       // A Group ADMIN who never joined this exact Section is excluded -
       // administering the Group grants nothing on the Section (no
       // inheritance).
       expect(ids).not.toContain(localUserIdByToken.get(ADMIN_TOKEN));
-      expect(result.total).toBe(2);
+      expect(result.total).toBe(1);
     });
 
     it('excludes a user outside the community, and returns 404 (not the candidate list) for a caller with no access at all', async () => {
@@ -964,26 +964,27 @@ describe('Recipient Groups (e2e)', () => {
         getEligibleMembers(
           org.token,
           `/api/v1/groups/${org.id}`,
-          '?limit=2&offset=0',
+          '?limit=1&offset=0',
         ).expect(200),
       );
-      expect(page1.items).toHaveLength(2);
-      expect(page1.total).toBe(3);
+      // Two ADMINs - the calling OWNER is never among the candidates.
+      expect(page1.items).toHaveLength(1);
+      expect(page1.total).toBe(2);
       expect(page1.hasMore).toBe(true);
 
       const page2 = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
         getEligibleMembers(
           org.token,
           `/api/v1/groups/${org.id}`,
-          '?limit=2&offset=2',
+          '?limit=1&offset=1',
         ).expect(200),
       );
       expect(page2.items).toHaveLength(1);
-      expect(page2.total).toBe(3);
+      expect(page2.total).toBe(2);
       expect(page2.hasMore).toBe(false);
 
       const ids = [...page1.items, ...page2.items].map((i) => i.id);
-      expect(new Set(ids).size).toBe(3);
+      expect(new Set(ids).size).toBe(2);
     });
 
     it('rejects limit > 100 and a negative offset', async () => {

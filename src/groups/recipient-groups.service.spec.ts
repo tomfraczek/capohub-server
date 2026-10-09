@@ -69,3 +69,27 @@ describe('RecipientGroupsService.listEligibleMembers', () => {
     expect(result.items[0].avatarUrl).toBe('https://img.clerk.com/bimba.png');
   });
 });
+
+describe('RecipientGroupsService.listEligibleMembers - the caller', () => {
+  it('asks for the eligible members without the caller, who never adds themselves', async () => {
+    const service = buildService([]);
+    const findEligibleMembers = (
+      service as unknown as {
+        roleAssignmentsService: { findEligibleMembers: jest.Mock };
+      }
+    ).roleAssignmentsService.findEligibleMembers;
+
+    await service.listEligibleMembers(
+      'group-1',
+      { search: 'Ana', limit: 20, offset: 0 },
+      'viewer-1',
+    );
+
+    expect(findEligibleMembers).toHaveBeenCalledWith('group-1', {
+      search: 'Ana',
+      limit: 20,
+      offset: 0,
+      excludeUserId: 'viewer-1',
+    });
+  });
+});
