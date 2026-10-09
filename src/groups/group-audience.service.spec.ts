@@ -281,7 +281,7 @@ describe('GroupAudienceService', () => {
     ]);
   });
 
-  it('flags Group ADMINs and visible formal members, never a hidden formal group', async () => {
+  it('PUBLIC viewer: flags Group ADMINs and visible formal members, never a hidden formal group', async () => {
     const rows: Rows = {
       [GroupFollow.name]: [
         { user: { id: 'admin' } },
@@ -309,7 +309,11 @@ describe('GroupAudienceService', () => {
           : (rows[entity.name] ?? []),
       )) as never);
 
-    const result = await service.list('group-1', { limit: 20, offset: 0 });
+    const result = await service.list(
+      'group-1',
+      { limit: 20, offset: 0 },
+      'PUBLIC',
+    );
 
     expect(find).toHaveBeenCalledWith(
       RoleAssignment,
@@ -336,6 +340,70 @@ describe('GroupAudienceService', () => {
       ['admin', true, false],
       ['formal', false, true],
       ['hidden', false, false],
+    ]);
+  });
+
+  // OWNER/ADMIN decide who may become ADMIN (formal members only), so the
+  // formal tie must be visible to them whatever the member's privacy
+  // setting - e.g. someone who joined a Section first and the Group
+  // formally later, with their formal group hidden, must still show as a
+  // formal member, not "through a Section".
+  it('FULL (OWNER/ADMIN): flags every formal member, hidden formal group included, and lists formal-only members too', async () => {
+    const rows: Rows = {
+      [SectionMembership.name]: [
+        {
+          id: 'm-1',
+          user: { id: 'hidden' },
+          section: { id: 's-1', name: 'Poznań' },
+        },
+        {
+          id: 'm-2',
+          user: { id: 'section-only' },
+          section: { id: 's-1', name: 'Poznań' },
+        },
+      ],
+      [User.name]: [
+        buildUser({ id: 'hidden', publicCode: 'A', showFormalGroup: false }),
+        buildUser({
+          id: 'formal-only',
+          publicCode: 'B',
+          showFormalGroup: false,
+        }),
+        buildUser({ id: 'section-only', publicCode: 'C' }),
+      ],
+      [FormalGroupAffiliation.name]: [
+        { user: { id: 'hidden' } },
+        { user: { id: 'formal-only' } },
+      ],
+    };
+    const { service, find } = buildService(rows);
+
+    const result = await service.list('group-1', { limit: 20, offset: 0 });
+
+    // One unfiltered lookup of the Group's formal members.
+    expect(find).toHaveBeenCalledWith(
+      FormalGroupAffiliation,
+      { group: 'group-1', endedOn: null },
+      expect.anything(),
+    );
+    const userQuery = (
+      find.mock.calls as unknown as [unknown, { id: { $in: string[] } }][]
+    ).find(([entity]) => entity === User);
+    expect(userQuery?.[1].id.$in.sort()).toEqual([
+      'formal-only',
+      'hidden',
+      'section-only',
+    ]);
+    expect(
+      result.items.map((item) => [
+        item.user.id,
+        item.isFormalMember,
+        item.isMemberThroughSection,
+      ]),
+    ).toEqual([
+      ['hidden', true, true],
+      ['formal-only', true, false],
+      ['section-only', false, true],
     ]);
   });
 

@@ -35,10 +35,12 @@ export interface GroupAudienceMemberDto {
   // one). Independent of every other flag.
   isAdmin: boolean;
   // Has an active FormalGroupAffiliation (endedOn = null) pointing at this
-  // Group, and shows it (showFormalGroup) - a hidden formal group stays
-  // hidden here too, with no viewer exception, like the rank above. Only a
-  // flag on people already listed: a formal affiliation alone does not add
-  // a row (the OWNER is listed anyway - see GroupAudienceService.list).
+  // Group - the strongest tie, shown as the person's source ahead of
+  // Section membership. For the Group's OWNER/ADMIN (FULL access) it is
+  // never privacy-filtered and every formal member gets a row (they decide
+  // who may become ADMIN). For a PUBLIC viewer it is only set where the
+  // member shows their formal group (showFormalGroup), and only as a flag
+  // on people listed anyway - see GroupAudienceService.list.
   isFormalMember: boolean;
   isMemberThroughSection: boolean;
   isFollowing: boolean;

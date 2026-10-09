@@ -144,10 +144,28 @@ export class GroupAudienceService {
     }
     const memberIds = new Set(membershipsByUser.keys());
     const followerIds = new Set(follows.map((f) => f.user.id));
+    // Formal membership is the strongest tie to a Group. For its OWNER/ADMIN
+    // (FULL) it is never privacy-filtered - they manage exactly these people
+    // (it is what makes someone eligible for ADMIN, see
+    // RoleAssignmentsService.listGroupAdminCandidates) - and every formal
+    // member is listed, even without a Section membership or a follow. A
+    // PUBLIC viewer only sees it where the member shows their formal group
+    // (showFormalGroup), and only as a flag on rows listed anyway.
+    const fullFormalMemberIds =
+      access === 'FULL'
+        ? await this.loadFormalMemberIds(groupId)
+        : new Set<string>();
     // The OWNER is always listed - they are the Group's formal member by
     // definition (see owner-formal-group.ts), even with no Section
     // membership and no follow of their own.
-    const allIds = [...new Set([...memberIds, ...followerIds, ...ownerIds])];
+    const allIds = [
+      ...new Set([
+        ...memberIds,
+        ...followerIds,
+        ...ownerIds,
+        ...fullFormalMemberIds,
+      ]),
+    ];
     if (allIds.length === 0) {
       return { items: [], total: 0 };
     }
@@ -160,10 +178,13 @@ export class GroupAudienceService {
     const rankByUserId = await this.loadVisibleRanks(
       pageRows.map((row) => row.user),
     );
-    const formalMemberIds = await this.loadVisibleFormalMemberIds(
-      groupId,
-      pageRows.map((row) => row.user),
-    );
+    const formalMemberIds =
+      access === 'FULL'
+        ? fullFormalMemberIds
+        : await this.loadVisibleFormalMemberIds(
+            groupId,
+            pageRows.map((row) => row.user),
+          );
 
     return {
       total: rows.length,
@@ -217,6 +238,15 @@ export class GroupAudienceService {
    * this Group and show it (showFormalGroup) - the same toggle the public
    * profile and loadVisibleRanks honor, with no viewer exception.
    */
+  private async loadFormalMemberIds(groupId: string): Promise<Set<string>> {
+    const affiliations = await this.em.find(
+      FormalGroupAffiliation,
+      { group: groupId, endedOn: null },
+      { fields: ['user'] },
+    );
+    return new Set(affiliations.map((a) => a.user.id));
+  }
+
   private async loadVisibleFormalMemberIds(
     groupId: string,
     users: User[],
