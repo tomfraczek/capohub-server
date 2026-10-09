@@ -1,3 +1,4 @@
+import { resolveDisplayName } from '../../users/display-name.util';
 import { EventAttendeeSubjectType } from '../enums/event-attendee-subject-type.enum';
 import { EventAttendee } from '../entities/event-attendee.entity';
 import {
@@ -14,7 +15,9 @@ import {
 function resolveAttendeeDisplayName(attendee: EventAttendee): string {
   return attendee.subjectType === EventAttendeeSubjectType.CHILD_DEPENDENT
     ? (attendee.dependentDisplayName ?? '')
-    : (attendee.subjectUser?.displayName ?? '');
+    : attendee.subjectUser
+      ? resolveDisplayName(attendee.subjectUser)
+      : '';
 }
 
 export function toEventAttendanceEntryDto(

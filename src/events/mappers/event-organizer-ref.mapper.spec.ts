@@ -71,7 +71,8 @@ describe('toEventOrganizerRefDto', () => {
     event.organizerUserDisplayName = 'Mestre Acordeon';
     event.organizerUser = Object.assign(new User(), {
       id: 'user-1',
-      displayName: 'Mestre Acordeon',
+      displayName: 'mestre.acordeon',
+      apelido: 'Mestre Acordeon',
       avatarType: AvatarType.UPLOAD,
       avatarUrl: 'https://cdn.example.com/avatars/mestre.png',
       presetAvatarId: null,
@@ -94,7 +95,8 @@ describe('toEventOrganizerRefDto', () => {
     event.organizerUserDisplayName = 'Mestre Acordeon';
     event.organizerUser = Object.assign(new User(), {
       id: 'user-1',
-      displayName: 'Mestre Acordeon',
+      displayName: 'mestre.acordeon',
+      apelido: 'Mestre Acordeon',
       avatarType: AvatarType.UPLOAD,
       avatarUrl: null,
       avatarImageKey: 'users/user-1/profile/uuid.webp',
@@ -113,7 +115,8 @@ describe('toEventOrganizerRefDto', () => {
     event.organizerUserDisplayName = 'Mestre Acordeon';
     event.organizerUser = Object.assign(new User(), {
       id: 'user-1',
-      displayName: 'Mestre Acordeon',
+      displayName: 'mestre.acordeon',
+      apelido: 'Mestre Acordeon',
       avatarType: AvatarType.PRESET,
       avatarUrl: null,
       presetAvatarId: 'preset-07',

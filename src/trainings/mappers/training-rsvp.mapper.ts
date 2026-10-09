@@ -1,5 +1,6 @@
 import { TrainingRsvp } from '../entities/training-rsvp.entity';
 import { TrainingRsvpResponseDto } from '../dto/training-rsvp-response.dto';
+import { resolveDisplayName } from '../../users/display-name.util';
 
 export function toTrainingRsvpResponseDto(
   rsvp: TrainingRsvp,
@@ -9,7 +10,7 @@ export function toTrainingRsvpResponseDto(
     trainingId: rsvp.training.id,
     user: {
       id: rsvp.user.id,
-      displayName: rsvp.user.displayName,
+      displayName: resolveDisplayName(rsvp.user),
       gender: rsvp.user.gender,
     },
     status: rsvp.status,

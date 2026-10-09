@@ -1,5 +1,6 @@
 import { TrainingAttendance } from '../entities/training-attendance.entity';
 import { TrainingAttendanceResponseDto } from '../dto/training-attendance-response.dto';
+import { resolveDisplayName } from '../../users/display-name.util';
 
 export function toTrainingAttendanceResponseDto(
   attendance: TrainingAttendance,
@@ -9,14 +10,14 @@ export function toTrainingAttendanceResponseDto(
     trainingId: attendance.training.id,
     user: {
       id: attendance.user.id,
-      displayName: attendance.user.displayName,
+      displayName: resolveDisplayName(attendance.user),
       gender: attendance.user.gender,
     },
     attended: attendance.attended,
     recordedBy: attendance.recordedBy
       ? {
           id: attendance.recordedBy.id,
-          displayName: attendance.recordedBy.displayName,
+          displayName: resolveDisplayName(attendance.recordedBy),
           gender: attendance.recordedBy.gender,
         }
       : null,

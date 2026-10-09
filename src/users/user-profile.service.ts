@@ -135,6 +135,9 @@ export class UserProfileService {
     if (changes.showEventParticipation !== undefined) {
       user.showEventParticipation = changes.showEventParticipation;
     }
+    if (changes.displayNameMode !== undefined) {
+      user.displayNameMode = changes.displayNameMode;
+    }
     await this.em.flush();
 
     return this.getOwnProfile(user);

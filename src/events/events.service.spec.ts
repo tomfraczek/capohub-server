@@ -950,7 +950,8 @@ describe('EventsService', () => {
       attendee.rsvpStatus = EventRsvpStatus.GOING;
       attendee.subjectUser = {
         id: 'user-2',
-        displayName: 'Mestre Bimba',
+        displayName: 'mestre.bimba',
+        apelido: 'Mestre Bimba',
         avatarType: AvatarType.UPLOAD,
         avatarUrl: null,
         avatarImageKey: 'users/user-2/profile/a.webp',

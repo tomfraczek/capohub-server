@@ -34,6 +34,7 @@ import {
   UnauthorizedException,
   VersioningType,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Test, TestingModule } from '@nestjs/testing';
 import { EntityManager } from '@mikro-orm/core';
 import request from 'supertest';
@@ -348,16 +349,6 @@ describe('Recipient Groups (e2e)', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ userId: localUserIdByToken.get(memberToken), role })
       .expect(201);
-  }
-
-  async function getDisplayName(token: string): Promise<string> {
-    const me = await bodyOf<{ displayName: string }>(
-      request(app.getHttpServer())
-        .get('/api/v1/users/me')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200),
-    );
-    return me.displayName;
   }
 
   function getEligibleMembers(
@@ -933,10 +924,14 @@ describe('Recipient Groups (e2e)', () => {
       ).expect(404);
     });
 
-    it('supports search by displayName', async () => {
+    it('supports search by name/apelido - never the email-seeded account displayName', async () => {
       const org = await createOrgWithGroupAdmin();
-      const adminDisplayName = await getDisplayName(ADMIN_TOKEN);
-      const distinctiveFragment = adminDisplayName.slice(-4);
+      const distinctiveFragment = `Zq${randomUUID().slice(0, 6)}`;
+      await request(app.getHttpServer())
+        .patch('/api/v1/users/me/profile')
+        .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+        .send({ apelido: `Apelido ${distinctiveFragment}` })
+        .expect(200);
 
       const result = await bodyOf<RecipientGroupEligibleMembersResponseDto>(
         getEligibleMembers(

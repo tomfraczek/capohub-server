@@ -34,6 +34,7 @@ import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter
 import { closeE2eApp } from './close-e2e-app.helper';
 import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
+import { resolveDisplayName } from '../src/users/display-name.util';
 import { User } from '../src/users/entities/user.entity';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
 import { GroupSummaryResponseDto } from '../src/groups/dto/group-summary-response.dto';
@@ -337,7 +338,7 @@ describe('Groups (e2e)', () => {
       });
 
       expect(group.founderUser?.id).toBe(creator.id);
-      expect(group.founderNameSnapshot).toBe(creator.displayName);
+      expect(group.founderNameSnapshot).toBe(resolveDisplayName(creator));
     });
 
     // Group has no location fields (country/city/region/geonameId) as of

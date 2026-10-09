@@ -62,6 +62,7 @@ import {
 } from './formal-group-switch';
 import { loadActiveSectionMembership } from './section-membership.query';
 import { RoleAssignmentsService } from './role-assignments.service';
+import { resolveDisplayName } from '../users/display-name.util';
 
 // The Group-or-Section a MembershipRequest targets, whichever of
 // targetGroup/targetSection is actually set (see membership-request.entity.ts).
@@ -182,7 +183,7 @@ export class MembershipRequestsService {
       em,
       group,
       NotificationType.GROUP_JOIN_REQUEST_RECEIVED,
-      groupJoinRequestReceivedText(user.displayName, group.name),
+      groupJoinRequestReceivedText(resolveDisplayName(user), group.name),
       request.id,
       user,
     );
@@ -267,7 +268,7 @@ export class MembershipRequestsService {
           em,
           targetSection,
           NotificationType.SECTION_JOIN_REQUEST_RECEIVED,
-          sectionJoinRequestReceivedText(requestingUser.displayName),
+          sectionJoinRequestReceivedText(resolveDisplayName(requestingUser)),
           request.id,
           requestingUser,
         );
@@ -655,7 +656,7 @@ export class MembershipRequestsService {
         this.buildMembershipNotificationParams(
           request.initiatedBy,
           NotificationType.SECTION_INVITATION_ACCEPTED,
-          sectionInvitationAcceptedText(acceptingUser.displayName),
+          sectionInvitationAcceptedText(resolveDisplayName(acceptingUser)),
           target,
           request.id,
           acceptingUser,
@@ -720,7 +721,7 @@ export class MembershipRequestsService {
         this.buildMembershipNotificationParams(
           request.initiatedBy,
           NotificationType.SECTION_INVITATION_REJECTED,
-          sectionInvitationRejectedText(rejectingUser.displayName),
+          sectionInvitationRejectedText(resolveDisplayName(rejectingUser)),
           requestTarget(request),
           request.id,
           rejectingUser,
@@ -1284,7 +1285,7 @@ export function toMembershipRequestResponseDto(
     status: request.status,
     initiatedBy: {
       id: request.initiatedBy.id,
-      displayName: request.initiatedBy.displayName,
+      displayName: resolveDisplayName(request.initiatedBy),
       apelido: request.initiatedBy.apelido,
       image: {
         type: request.initiatedBy.avatarType,
@@ -1295,7 +1296,7 @@ export function toMembershipRequestResponseDto(
     invitedUser: request.invitedUser
       ? {
           id: request.invitedUser.id,
-          displayName: request.invitedUser.displayName,
+          displayName: resolveDisplayName(request.invitedUser),
         }
       : null,
     invitedEmail: request.invitedEmail,
@@ -1303,7 +1304,7 @@ export function toMembershipRequestResponseDto(
     processedBy: request.processedBy
       ? {
           id: request.processedBy.id,
-          displayName: request.processedBy.displayName,
+          displayName: resolveDisplayName(request.processedBy),
         }
       : null,
     requestedStartedOn: toDateOnly(request.requestedStartedOn),

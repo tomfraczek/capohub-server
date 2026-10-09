@@ -8,6 +8,7 @@ import { Event } from '../entities/event.entity';
 import { eventCommunity } from '../event-community.util';
 import { EventOrganizerType } from '../enums/event-organizer-type.enum';
 import { EventOrganizerRefDto } from '../dto/event-organizer-ref.dto';
+import { resolveDisplayName } from '../../users/display-name.util';
 
 // Builds the single public organizer identity for `event` - requires
 // `organizerUser`/`communityGroup`/`communitySection` to already be
@@ -22,7 +23,7 @@ export function toEventOrganizerRefDto(
       return {
         type: 'USER',
         id: user.id,
-        name: user.displayName,
+        name: resolveDisplayName(user),
         image: {
           type: user.avatarType,
           // Prefers the R2 public URL derived from avatarImageKey over the

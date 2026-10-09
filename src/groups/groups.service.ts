@@ -41,6 +41,7 @@ import {
 } from './mappers/group.mapper';
 import { RoleAssignmentsService } from './role-assignments.service';
 import { userOwnsGroup } from './user-owns-group';
+import { resolveDisplayName } from '../users/display-name.util';
 
 @Injectable()
 export class GroupsService {
@@ -207,7 +208,7 @@ export class GroupsService {
       // never touched again by anything (not transferOwnership, not
       // update()).
       group.founderUser = user;
-      group.founderNameSnapshot = user.displayName;
+      group.founderNameSnapshot = resolveDisplayName(user);
       em.persist(group);
 
       await this.roleAssignmentsService.insertRoleAssignment(

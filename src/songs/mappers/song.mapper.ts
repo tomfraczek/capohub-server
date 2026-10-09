@@ -17,6 +17,7 @@ import { Song } from '../entities/song.entity';
 import { SongMediaVoteAggregates } from '../song-media-vote-aggregates';
 import { toSongCategoryResponseDto } from './song-category.mapper';
 import { toTagResponseDto } from './tag.mapper';
+import { resolveDisplayName } from '../../users/display-name.util';
 
 // Everything private to the current viewer (spec section 5/6) - always
 // externally computed (see SongsService.getDetails), never queried here.
@@ -55,7 +56,11 @@ export function toSongUserRefDto(user: User | null): SongUserRefDto | null {
     return null;
   }
 
-  return { id: user.id, displayName: user.displayName, gender: user.gender };
+  return {
+    id: user.id,
+    displayName: resolveDisplayName(user),
+    gender: user.gender,
+  };
 }
 
 /**

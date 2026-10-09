@@ -4,6 +4,7 @@ import {
 } from '../../storage/image-url.util';
 import { TrainingSeries } from '../entities/training-series.entity';
 import { TrainingSeriesResponseDto } from '../dto/training-series-response.dto';
+import { resolveDisplayName } from '../../users/display-name.util';
 
 export function toTrainingSeriesResponseDto(
   series: TrainingSeries,
@@ -32,7 +33,7 @@ export function toTrainingSeriesResponseDto(
     defaultTrainer: series.defaultTrainer
       ? {
           id: series.defaultTrainer.id,
-          displayName: series.defaultTrainer.displayName,
+          displayName: resolveDisplayName(series.defaultTrainer),
           gender: series.defaultTrainer.gender,
         }
       : null,

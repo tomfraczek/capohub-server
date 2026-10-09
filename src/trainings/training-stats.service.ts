@@ -7,6 +7,7 @@ import { TrainingStatsResponseDto } from './dto/training-stats-response.dto';
 import { Training } from './entities/training.entity';
 import { TrainingAttendance } from './entities/training-attendance.entity';
 import { TrainingStatus } from './enums/training-status.enum';
+import { resolveDisplayName } from '../users/display-name.util';
 
 // Deliberately minimal, read-only aggregation over Training/
 // TrainingAttendance - no materialized aggregates, no streaks/rankings/
@@ -77,7 +78,7 @@ export class TrainingStatsService {
         byUser.set(attendance.user.id, {
           user: {
             id: attendance.user.id,
-            displayName: attendance.user.displayName,
+            displayName: resolveDisplayName(attendance.user),
             gender: attendance.user.gender,
           },
           attendedCount: 1,

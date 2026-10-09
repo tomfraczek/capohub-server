@@ -49,6 +49,7 @@ import {
   RoleAssignmentsService,
 } from './role-assignments.service';
 import { SectionsService } from './sections.service';
+import { resolveDisplayName } from '../users/display-name.util';
 
 /**
  * Authorization + audit + DTO orchestration for the Group/Section hierarchy
@@ -761,7 +762,7 @@ export class HierarchyManagementService {
       invitedBy: invitation.invitedBy
         ? {
             id: invitation.invitedBy.id,
-            displayName: invitation.invitedBy.displayName,
+            displayName: resolveDisplayName(invitation.invitedBy),
           }
         : null,
       status: invitation.status,
@@ -772,7 +773,7 @@ export class HierarchyManagementService {
       respondedBy: invitation.respondedBy
         ? {
             id: invitation.respondedBy.id,
-            displayName: invitation.respondedBy.displayName,
+            displayName: resolveDisplayName(invitation.respondedBy),
           }
         : null,
     };

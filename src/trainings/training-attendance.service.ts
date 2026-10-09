@@ -12,6 +12,7 @@ import { AuditAction } from '../groups/enums/audit-action.enum';
 import { AuditTargetType } from '../groups/enums/audit-target-type.enum';
 import { SectionMembership } from '../groups/entities/section-membership.entity';
 import { SectionMembershipStatus } from '../groups/enums/section-membership-status.enum';
+import { resolveDisplayName } from '../users/display-name.util';
 import { User } from '../users/entities/user.entity';
 import { RecordTrainingAttendanceInput } from './dto/record-training-attendance.schema';
 import {
@@ -107,7 +108,7 @@ export class TrainingAttendanceService {
     return {
       user: {
         id: resolved.user.id,
-        displayName: resolved.user.displayName,
+        displayName: resolveDisplayName(resolved.user),
         gender: resolved.user.gender,
       },
       attended: true,
@@ -229,25 +230,29 @@ export class TrainingAttendanceService {
     const rsvpByUser = new Map(rsvps.map((r) => [r.user.id, r]));
     const attendanceByUser = new Map(attendances.map((a) => [a.user.id, a]));
     const eligibleIds = await this.resolveEligibleUserIds(em, training, rsvps);
+    // Members with neither an RSVP nor an attendance row yet still need a
+    // name on the roster - one batched load for all of them.
+    const otherIds = [...eligibleIds].filter(
+      (userId) => !rsvpByUser.has(userId) && !attendanceByUser.has(userId),
+    );
+    const otherUsers =
+      otherIds.length > 0 ? await em.find(User, { id: { $in: otherIds } }) : [];
+    const otherUserById = new Map(otherUsers.map((user) => [user.id, user]));
 
     const entries: TrainingAttendanceRosterEntryDto[] = [];
     for (const userId of eligibleIds) {
       const rsvp = rsvpByUser.get(userId);
       const attendance = attendanceByUser.get(userId);
+      const user =
+        rsvp?.user ?? attendance?.user ?? otherUserById.get(userId) ?? null;
       entries.push({
-        user: rsvp
+        user: user
           ? {
-              id: rsvp.user.id,
-              displayName: rsvp.user.displayName,
-              gender: rsvp.user.gender,
+              id: user.id,
+              displayName: resolveDisplayName(user),
+              gender: user.gender,
             }
-          : attendance
-            ? {
-                id: attendance.user.id,
-                displayName: attendance.user.displayName,
-                gender: attendance.user.gender,
-              }
-            : { id: userId, displayName: '', gender: null },
+          : { id: userId, displayName: '', gender: null },
         rsvpStatus: rsvp?.status ?? null,
         attendance: attendance
           ? toTrainingAttendanceResponseDto(attendance)

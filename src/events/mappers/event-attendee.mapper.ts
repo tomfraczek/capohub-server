@@ -2,6 +2,7 @@ import {
   PublicUrlBuilder,
   resolveUserAvatarUrl,
 } from '../../storage/image-url.util';
+import { resolveDisplayName } from '../../users/display-name.util';
 import { EventAttendeeResponseDto } from '../dto/event-attendee-response.dto';
 import { EventPublicAttendeeDto } from '../dto/event-public-attendee.dto';
 import {
@@ -18,7 +19,9 @@ export function toEventAttendeeResponseDto(
   const displayName =
     attendee.subjectType === EventAttendeeSubjectType.CHILD_DEPENDENT
       ? (attendee.dependentDisplayName ?? '')
-      : (attendee.subjectUser?.displayName ?? '');
+      : attendee.subjectUser
+        ? resolveDisplayName(attendee.subjectUser)
+        : '';
 
   return {
     id: attendee.id,
@@ -88,7 +91,7 @@ export function toEventPublicAttendeeDto(
     id: attendee.id,
     user: {
       id: user.id,
-      displayName: user.displayName,
+      displayName: resolveDisplayName(user),
       image: {
         type: user.avatarType,
         url: resolveUserAvatarUrl(user, urlBuilder),

@@ -26,6 +26,8 @@ function buildUser(overrides: Partial<User> = {}): User {
   const user = new User();
   user.id = 'user-1';
   user.displayName = 'Ana Silva';
+  user.firstName = 'Ana';
+  user.lastName = 'Silva';
   return Object.assign(user, overrides);
 }
 

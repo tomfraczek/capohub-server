@@ -13,6 +13,7 @@ import { Section } from './entities/section.entity';
 import { Community, communityIdFilter } from './group-hierarchy.service';
 import { AuditAction } from './enums/audit-action.enum';
 import { AuditTargetType } from './enums/audit-target-type.enum';
+import { resolveDisplayName } from '../users/display-name.util';
 
 export interface RecordAuditEntryParams {
   // Always the *exact* entity the action occurred on - never a resolved
@@ -120,7 +121,7 @@ function toAuditLogEntryResponseDto(
     communityId: (entry.group ?? entry.section)!.id,
     action: entry.action,
     actor: entry.actor
-      ? { id: entry.actor.id, displayName: entry.actor.displayName }
+      ? { id: entry.actor.id, displayName: resolveDisplayName(entry.actor) }
       : null,
     target,
     description: entry.description,

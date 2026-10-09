@@ -26,6 +26,7 @@ import {
 } from './discovery-response.dto';
 import { CommunitySearchResultDto } from './dto/community-search-result.dto';
 import { DiscoverySearchQuery } from './dto/discovery-search-query.schema';
+import { resolveDisplayName } from '../users/display-name.util';
 
 @Injectable()
 export class DiscoveryService {
@@ -296,7 +297,7 @@ function toPublicUserProfile(
 ): PublicUserProfileDto {
   return {
     id: user.id,
-    displayName: user.displayName,
+    displayName: resolveDisplayName(user),
     // Prefers the R2 public URL derived from avatarImageKey over the
     // legacy avatarUrl column once an UPLOAD avatar exists - see
     // storage/image-url.util.ts's resolveUserAvatarUrl.

@@ -67,7 +67,9 @@ export interface PublicIndependentRankRefDto {
 // fact through a field that reads as ordinary membership.
 export interface PublicUserProfileResponseDto {
   userId: string;
-  // Full name, else apelido, else publicCode - see display-name.util.ts.
+  // Full name, else apelido, else publicCode - see display-name.util.ts's
+  // resolveFullName. Deliberately NOT the target's DisplayNameMode: the
+  // full profile screen keeps its own layout of every identity field.
   displayName: string;
   // Unconditionally public, never privacy-gated - same precedent as
   // EventOrganizerUserImageDto (an Event's organizer avatar, shown to any

@@ -3,6 +3,7 @@ import { Community } from '../groups/group-hierarchy.service';
 import { User } from '../users/entities/user.entity';
 import { Event } from './entities/event.entity';
 import { EventOrganizerType } from './enums/event-organizer-type.enum';
+import { resolveDisplayName } from '../users/display-name.util';
 
 // Event's public organizer identity is one of three mutually-exclusive
 // things (see event.entity.ts's events_organizer_check): a Group, a
@@ -63,7 +64,7 @@ export function assignEventCommunity(event: Event, community: Community): void {
 export function assignEventOrganizerUser(event: Event, user: User): void {
   event.organizerType = EventOrganizerType.USER;
   event.organizerUser = user;
-  event.organizerUserDisplayName = user.displayName;
+  event.organizerUserDisplayName = resolveDisplayName(user);
   event.communityGroup = null;
   event.communitySection = null;
 }

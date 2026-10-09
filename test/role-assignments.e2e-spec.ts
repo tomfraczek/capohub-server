@@ -17,6 +17,7 @@ import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter
 import { closeE2eApp } from './close-e2e-app.helper';
 import { createFreshGroupOwner } from './fresh-group-owner.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
+import { resolveDisplayName } from '../src/users/display-name.util';
 import { User } from '../src/users/entities/user.entity';
 import { SectionMembershipResponseDto } from '../src/groups/dto/section-membership-response.dto';
 import { GroupResponseDto } from '../src/groups/dto/group-response.dto';
@@ -1069,7 +1070,11 @@ describe('Role Assignments (e2e)', () => {
       const em = app.get(EntityManager).fork();
       const user = await em.findOneOrFail(User, { clerkUserId });
       localUserIdByToken.set(token, user.id);
-      return { token, userId: user.id, displayName: user.displayName };
+      return {
+        token,
+        userId: user.id,
+        displayName: resolveDisplayName(user),
+      };
     }
 
     async function getSection(

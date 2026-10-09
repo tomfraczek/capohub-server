@@ -1,3 +1,4 @@
+import { DisplayNameMode } from '../enums/display-name-mode.enum';
 import { UserGender } from '../enums/user-gender.enum';
 
 // No identity toggles: firstName/lastName/apelido are always visible.
@@ -39,6 +40,14 @@ export interface UserProfileResponseDto {
   // frontend work, out of scope here.
   profileComplete: boolean;
   privacy: UserProfilePrivacyDto;
+  // How other users see this user's name (Profil -> Capoeira ->
+  // "Sposób wyświetlania nazwy").
+  displayNameMode: DisplayNameMode;
+  // The name others would see under each mode, right now - same rules as
+  // everywhere else (resolveDisplayNameVariants), current rank and
+  // showFormalRank included. Lets the settings preview switch instantly
+  // between the two without re-deriving anything client-side.
+  displayNameVariants: Record<DisplayNameMode, string>;
   formalGroup: OwnFormalGroupRefDto | null;
   // Stable 6-digit code (see entities/user.entity.ts) - exposed on the
   // *own* profile only, not on PublicUserProfileResponseDto (see that

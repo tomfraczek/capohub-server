@@ -22,6 +22,7 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.id = 'attendee-user-1';
   user.email = 'ada@example.com';
   user.displayName = 'Ada';
+  user.apelido = 'Ada';
   return Object.assign(user, overrides);
 }
 

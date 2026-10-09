@@ -272,8 +272,10 @@ export class RoleAssignmentsService {
   /**
    * Every User eligible to be added to a Recipient Group of `communityId` -
    * i.e. exactly the set findEligibleMemberIds() would accept - searchable
-   * by `displayName` and paginated, sorted deterministically (displayName
-   * ASC, id ASC, no configurable sort). Backs GET
+   * by firstName/lastName/apelido (the same identity fields as GET
+   * /users/search - never the email-seeded User.displayName) and paginated,
+   * sorted deterministically by name, id last (no configurable sort).
+   * Backs GET
    * .../recipient-groups/eligible-members.
    */
   async findEligibleMembers(
@@ -305,12 +307,14 @@ export class RoleAssignmentsService {
       if (options.search) {
         const needle = options.search.toLowerCase();
         users = users.filter((u) =>
-          u.displayName.toLowerCase().includes(needle),
+          [u.firstName, u.lastName, u.apelido, resolveDisplayName(u)].some(
+            (value) => value?.toLowerCase().includes(needle),
+          ),
         );
       }
       users.sort(
         (a, b) =>
-          a.displayName.localeCompare(b.displayName) ||
+          resolveDisplayName(a).localeCompare(resolveDisplayName(b), 'pl') ||
           a.id.localeCompare(b.id),
       );
       return {
@@ -328,7 +332,13 @@ export class RoleAssignmentsService {
               SectionMembershipStatus.READ_ONLY,
             ],
           },
-          user: { displayName: { $ilike: `%${options.search}%` } },
+          user: {
+            $or: [
+              { firstName: { $ilike: `%${options.search}%` } },
+              { lastName: { $ilike: `%${options.search}%` } },
+              { apelido: { $ilike: `%${options.search}%` } },
+            ],
+          },
         }
       : {
           section: communityId,
@@ -345,7 +355,14 @@ export class RoleAssignmentsService {
       where,
       {
         populate: ['user'],
-        orderBy: { user: { displayName: 'asc', id: 'asc' } } as never,
+        orderBy: {
+          user: {
+            firstName: 'asc',
+            lastName: 'asc',
+            apelido: 'asc',
+            id: 'asc',
+          },
+        } as never,
         limit: options.limit,
         offset: options.offset,
       },
@@ -1006,7 +1023,10 @@ export class RoleAssignmentsService {
         groupId,
       );
       candidates.push({
-        user: { id: admin.user.id, displayName: admin.user.displayName },
+        user: {
+          id: admin.user.id,
+          displayName: resolveDisplayName(admin.user),
+        },
         eligible: blocker === null,
         blocker,
       });

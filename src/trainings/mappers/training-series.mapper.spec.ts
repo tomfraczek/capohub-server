@@ -29,7 +29,8 @@ function buildSeries(overrides: Partial<TrainingSeries> = {}): TrainingSeries {
   series.locationAddress = null;
   series.defaultTrainer = Object.assign(new User(), {
     id: 'trainer-1',
-    displayName: 'Mestre Bimba',
+    displayName: 'mestre.bimba',
+    apelido: 'Mestre Bimba',
   });
   series.defaultDescription = null;
   series.visibility = TrainingVisibility.MEMBERS_ONLY;

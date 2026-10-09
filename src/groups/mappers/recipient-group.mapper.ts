@@ -1,3 +1,4 @@
+import { resolveDisplayName } from '../../users/display-name.util';
 import { User } from '../../users/entities/user.entity';
 import { RecipientGroupResponseDto } from '../dto/recipient-group-response.dto';
 import { RecipientGroup } from '../entities/recipient-group.entity';
@@ -15,8 +16,8 @@ export function toRecipientGroupResponseDto(
     name: recipientGroup.name,
     isActive: recipientGroup.isActive,
     members: members
-      .map((user) => ({ id: user.id, displayName: user.displayName }))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      .map((user) => ({ id: user.id, displayName: resolveDisplayName(user) }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, 'pl')),
     createdByUserId: recipientGroup.createdBy?.id ?? null,
     createdAt: recipientGroup.createdAt.toISOString(),
     updatedAt: recipientGroup.updatedAt.toISOString(),

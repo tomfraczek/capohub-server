@@ -27,6 +27,7 @@ import {
   toEventAttendanceEntryDto,
   toEventCheckInResultDto,
 } from './mappers/event-attendance.mapper';
+import { resolveDisplayName } from '../users/display-name.util';
 
 // PUBLISHED, or FINISHED (an Event lazily auto-finishes once endsAt passes -
 // see reconcileEventFinished - and latecomers must still be checkable after
@@ -123,7 +124,10 @@ export class EventAttendanceService {
     }
 
     return {
-      user: { id: resolved.user.id, displayName: resolved.user.displayName },
+      user: {
+        id: resolved.user.id,
+        displayName: resolveDisplayName(resolved.user),
+      },
       selfAttendee: selfAttendee
         ? toEventAttendanceEntryDto(selfAttendee)
         : null,

@@ -31,7 +31,11 @@ function buildAnnouncement(
   // explicitly (see communityResourceType tests below).
   announcement.communityGroup = buildGroup();
   announcement.communitySection = null;
-  announcement.author = { id: 'user-1', displayName: 'Author' } as never;
+  announcement.author = {
+    id: 'user-1',
+    displayName: 'author.email',
+    apelido: 'Author',
+  } as never;
   announcement.title = 'Title';
   announcement.body = 'Body';
   announcement.recipientType = AnnouncementRecipientType.GROUP;

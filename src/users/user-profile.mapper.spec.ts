@@ -12,6 +12,7 @@ import { RankTrack } from '../graduation/enums/rank-track.enum';
 import { GroupRole } from '../groups/enums/group-role.enum';
 import { PublicUrlBuilder } from '../storage/image-url.util';
 import { User } from './entities/user.entity';
+import { DisplayNameMode } from './enums/display-name-mode.enum';
 import { UserGender } from './enums/user-gender.enum';
 import {
   toPublicUserProfileResponseDto,
@@ -412,5 +413,71 @@ describe('toUserSearchResultDto', () => {
       url: 'https://cdn.example.com/avatars/user-1.webp',
       presetAvatarId: null,
     });
+  });
+});
+
+describe('display name mode', () => {
+  const titledUser = (overrides: Partial<User> = {}) =>
+    buildUser({
+      firstName: 'Tomasz',
+      lastName: 'Frączek',
+      apelido: 'Lagarto',
+      displayNameMode: DisplayNameMode.TITLE_APELIDO,
+      currentRankTitle: 'Graduado',
+      showFormalRank: true,
+      ...overrides,
+    });
+
+  it('returns the stored mode and both live variants on the own profile', () => {
+    const dto = toUserProfileResponseDto(titledUser(), null);
+    expect(dto.displayNameMode).toBe(DisplayNameMode.TITLE_APELIDO);
+    expect(dto.displayNameVariants).toEqual({
+      FULL_NAME: 'Tomasz Frączek',
+      TITLE_APELIDO: 'Graduado Lagarto',
+    });
+  });
+
+  it('defaults to FULL_NAME on the own profile', () => {
+    expect(toUserProfileResponseDto(buildUser(), null).displayNameMode).toBe(
+      DisplayNameMode.FULL_NAME,
+    );
+  });
+
+  it("shows the preview's title variant without the title while the rank is hidden", () => {
+    const dto = toUserProfileResponseDto(
+      titledUser({ showFormalRank: false }),
+      null,
+    );
+    expect(dto.displayNameVariants.TITLE_APELIDO).toBe('Lagarto');
+  });
+
+  it('applies the mode wherever the user is listed for others (search results)', () => {
+    expect(toUserSearchResultDto(titledUser(), urlBuilder).displayName).toBe(
+      'Graduado Lagarto',
+    );
+    expect(
+      toUserSearchResultDto(
+        titledUser({ displayNameMode: DisplayNameMode.FULL_NAME }),
+        urlBuilder,
+      ).displayName,
+    ).toBe('Tomasz Frączek');
+  });
+
+  it('leaves the full profile exactly as it was - full name, every identity field in its place', () => {
+    const dto = toPublicUserProfileResponseDto(titledUser(), {
+      canSeeCapoeiraStartedAt: false,
+      sections: null,
+      sectionRoles: new Map<string, GroupRole[]>(),
+      formalGroup: null,
+      formalRank: null,
+      independentRank: null,
+      urlBuilder,
+    });
+    expect(dto.displayName).toBe('Tomasz Frączek');
+    expect(dto.firstName).toBe('Tomasz');
+    expect(dto.lastName).toBe('Frączek');
+    expect(dto.apelido).toBe('Lagarto');
+    expect(dto).not.toHaveProperty('displayNameMode');
+    expect(dto).not.toHaveProperty('displayNameVariants');
   });
 });

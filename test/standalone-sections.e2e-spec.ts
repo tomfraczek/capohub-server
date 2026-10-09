@@ -39,6 +39,7 @@ import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter
 import { closeE2eApp } from './close-e2e-app.helper';
 import { HttpErrorResponse } from '../src/common/types/http-error-response.type';
 import { PaginatedResponse } from '../src/common/pagination/pagination.types';
+import { resolveDisplayName } from '../src/users/display-name.util';
 import { User } from '../src/users/entities/user.entity';
 import { AuditLogEntry } from '../src/groups/entities/audit-log-entry.entity';
 import { FormalGroupAffiliation } from '../src/groups/entities/formal-group-affiliation.entity';
@@ -336,7 +337,7 @@ describe('Standalone Sections (e2e)', () => {
       });
 
       expect(section.founderUser?.id).toBe(creator.id);
-      expect(section.founderNameSnapshot).toBe(creator.displayName);
+      expect(section.founderNameSnapshot).toBe(resolveDisplayName(creator));
     });
 
     // Same schema as Section-under-Group (create-section.schema.ts) -

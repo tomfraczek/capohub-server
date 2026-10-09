@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createZodDto } from '../../common/dto/create-zod-dto';
+import { DisplayNameMode } from '../enums/display-name-mode.enum';
 import { UserGender } from '../enums/user-gender.enum';
 
 const MAX_NAME_LENGTH = 100;
@@ -88,6 +89,9 @@ export const updateUserProfileSchema = z.object({
   showFormalRank: privacyToggleSchema,
   showCareerTimeline: privacyToggleSchema,
   showEventParticipation: privacyToggleSchema,
+  // How others see this user's name - see DisplayNameMode. Never null:
+  // FULL_NAME is the "default" choice, not an absence of one.
+  displayNameMode: z.nativeEnum(DisplayNameMode).optional(),
 });
 
 export class UpdateUserProfileDto extends createZodDto(

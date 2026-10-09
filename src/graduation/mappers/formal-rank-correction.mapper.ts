@@ -7,12 +7,17 @@ import {
 import { FormalRankCorrectionOwnResponseDto } from '../dto/formal-rank-correction-own-response.dto';
 import { FormalRankCorrectionRequest } from '../entities/formal-rank-correction-request.entity';
 import { Rank } from '../entities/rank.entity';
+import { resolveDisplayName } from '../../users/display-name.util';
 
 function toCorrectionUserRefDto(
   user: User | null,
 ): CorrectionUserRefDto | null {
   return user
-    ? { id: user.id, displayName: user.displayName, gender: user.gender }
+    ? {
+        id: user.id,
+        displayName: resolveDisplayName(user),
+        gender: user.gender,
+      }
     : null;
 }
 
@@ -35,7 +40,7 @@ export function toFormalRankCorrectionResponseDto(
     section: { id: request.section.id, name: request.section.name },
     targetUser: {
       id: request.targetUser.id,
-      displayName: request.targetUser.displayName,
+      displayName: resolveDisplayName(request.targetUser),
       gender: request.targetUser.gender,
     },
     formalRankAssignmentId: request.formalRankAssignment.id,

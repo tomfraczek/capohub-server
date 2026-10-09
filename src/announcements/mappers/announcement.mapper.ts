@@ -3,6 +3,7 @@ import { MembershipRequestTarget } from '../../groups/enums/membership-request-t
 import { announcementCommunity } from '../announcement-community.util';
 import { Announcement } from '../entities/announcement.entity';
 import { AnnouncementResponseDto } from '../dto/announcement-response.dto';
+import { resolveDisplayName } from '../../users/display-name.util';
 
 export function isAnnouncementActive(
   announcement: Announcement,
@@ -31,7 +32,7 @@ export function toAnnouncementResponseDto(
     author: announcement.author
       ? {
           id: announcement.author.id,
-          displayName: announcement.author.displayName,
+          displayName: resolveDisplayName(announcement.author),
         }
       : null,
     recipientType: announcement.recipientType,

@@ -54,6 +54,7 @@ import {
   toFormalRankCorrectionResponseDto,
 } from './mappers/formal-rank-correction.mapper';
 import { toFormalRankAssignmentResponseDto } from './mappers/formal-rank-assignment.mapper';
+import { resolveDisplayName } from '../users/display-name.util';
 
 const ACTIVE_MEMBERSHIP_STATUSES = [
   SectionMembershipStatus.ACTIVE,
@@ -330,7 +331,7 @@ export class FormalRankCorrectionService {
     }
 
     return {
-      user: { id: targetUser.id, displayName: targetUser.displayName },
+      user: { id: targetUser.id, displayName: resolveDisplayName(targetUser) },
       formalGroup: formalGroup
         ? { id: formalGroup.group.id, name: formalGroup.group.name }
         : null,

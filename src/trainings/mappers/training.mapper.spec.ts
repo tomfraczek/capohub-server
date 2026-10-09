@@ -31,7 +31,8 @@ function buildTraining(overrides: Partial<Training> = {}): Training {
   training.locationAddress = null;
   training.trainer = Object.assign(new User(), {
     id: 'trainer-1',
-    displayName: 'Mestre Bimba',
+    displayName: 'mestre.bimba',
+    apelido: 'Mestre Bimba',
   });
   training.description = null;
   training.visibility = TrainingVisibility.MEMBERS_ONLY;

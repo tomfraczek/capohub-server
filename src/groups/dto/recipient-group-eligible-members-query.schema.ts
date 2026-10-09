@@ -8,7 +8,7 @@ const MAX_LIMIT = 100;
 // announcements/dto/announcement-list-query.schema.ts - a capped page, not
 // the older page/meta PaginatedResponse shape (see docs/api-conventions.md
 // "Dashboard section shape"). `search` is optional and matches against
-// User.displayName only - never email or any other field (see
+// firstName/lastName/apelido only - never email or any other field (see
 // role-assignments.service.ts's own findEligibleMembers comment for why
 // email is never exposed here).
 export const recipientGroupEligibleMembersQuerySchema = z.object({

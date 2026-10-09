@@ -22,7 +22,11 @@ import {
   PublicUserProfileResponseDto,
 } from './dto/public-user-profile-response.dto';
 import { UserSearchResultDto } from './dto/user-search-result.dto';
-import { resolveDisplayName } from './display-name.util';
+import {
+  resolveDisplayName,
+  resolveDisplayNameVariants,
+  resolveFullName,
+} from './display-name.util';
 import { User } from './entities/user.entity';
 import { Section } from '../groups/entities/section.entity';
 
@@ -77,6 +81,8 @@ export function toUserProfileResponseDto(
       showCareerTimeline: user.showCareerTimeline,
       showEventParticipation: user.showEventParticipation,
     },
+    displayNameMode: user.displayNameMode,
+    displayNameVariants: resolveDisplayNameVariants(user),
     formalGroup: activeFormalGroup
       ? toOwnFormalGroupRefDto(activeFormalGroup)
       : null,
@@ -132,7 +138,9 @@ export function toPublicUserProfileResponseDto(
 ): PublicUserProfileResponseDto {
   return {
     userId: target.id,
-    displayName: resolveDisplayName(target),
+    // The full profile keeps showing the full name whatever the target's
+    // DisplayNameMode - see resolveFullName.
+    displayName: resolveFullName(target),
     avatarType: target.avatarType,
     avatarUrl: resolveUserAvatarUrl(target, ctx.urlBuilder),
     presetAvatarId: target.presetAvatarId,

@@ -26,6 +26,7 @@ import { toRecipientGroupResponseDto } from './mappers/recipient-group.mapper';
 import { RoleAssignmentsService } from './role-assignments.service';
 import { resolveUserAvatarUrl } from '../storage/image-url.util';
 import { R2StorageService } from '../storage/r2-storage.service';
+import { resolveDisplayName } from '../users/display-name.util';
 
 // Recipient Group existence/status of its *Group* is already enforced by
 // GroupPermissionsGuard (via :groupId/:sectionId) before any handler here
@@ -132,7 +133,7 @@ export class RecipientGroupsService {
     return {
       items: items.map((user) => ({
         id: user.id,
-        displayName: user.displayName,
+        displayName: resolveDisplayName(user),
         // Prefers the R2 public URL derived from avatarImageKey over the
         // legacy avatarUrl column once an UPLOAD avatar exists - see
         // storage/image-url.util.ts's resolveUserAvatarUrl.

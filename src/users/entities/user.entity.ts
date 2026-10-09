@@ -1,7 +1,16 @@
-import { Check, Entity, Enum, Index, Property, Unique } from '@mikro-orm/core';
+import {
+  Check,
+  Entity,
+  Enum,
+  Formula,
+  Index,
+  Property,
+  Unique,
+} from '@mikro-orm/core';
 import { GlobalRole } from '../../auth/permissions/global-role.enum';
 import { BaseEntity } from '../../database/entities/base.entity';
 import { AvatarType } from '../enums/avatar-type.enum';
+import { DisplayNameMode } from '../enums/display-name-mode.enum';
 import { UserGender } from '../enums/user-gender.enum';
 
 export const THEMES = ['system', 'light', 'dark'] as const;
@@ -200,6 +209,37 @@ export class User extends BaseEntity {
   // like UNDISCLOSED: the neutral "Dołączył(a)").
   @Enum({ items: () => Object.values(UserGender), nullable: true })
   gender: UserGender | null = null;
+
+  // How others see this user's name across the app - see
+  // users/display-name.util.ts (resolveDisplayName), the only reader.
+  // Only the choice is stored, never the resulting string.
+  @Enum({ items: () => Object.values(DisplayNameMode) })
+  displayNameMode: DisplayNameMode = DisplayNameMode.FULL_NAME;
+
+  // The name of this user's current, *confirmed* rank - the "title" half
+  // of DisplayNameMode.TITLE_APELIDO ("Graduado" in "Graduado Lagarto").
+  // Read-only and computed by the database on every load (no column, never
+  // written), so a promotion shows up the moment the new rank becomes
+  // active, with no stored copy to keep in sync. Same rule as
+  // FormalRankService.getCurrentOrNull/CustomUserRankService
+  // .getCurrentOrNull: the active FormalRankAssignment (endedOn null - only
+  // ever written on approval, so a PENDING FormalRankRequest never counts
+  // and the previous rank stays until then), else the active independent
+  // CustomUserRank; at most one of the two is ever active (see
+  // graduation/rank-transitions.ts). Both lookups hit their partial unique
+  // "user_id where ended_on is null" index. Not privacy-filtered here -
+  // resolveDisplayName applies showFormalRank. `undefined` on an entity
+  // that was created (not loaded) in the current request.
+  @Formula(
+    (table) =>
+      // Aliases prefixed `dnt_` so they can never shadow the outer
+      // query's own alias (MikroORM's are e0, u1, ...).
+      `coalesce(` +
+      `(select dnt_r.name from formal_rank_assignments dnt_fra join ranks dnt_r on dnt_r.id = dnt_fra.rank_id where dnt_fra.user_id = ${table.alias}.id and dnt_fra.ended_on is null limit 1), ` +
+      `(select dnt_cur.name from custom_user_ranks dnt_cur where dnt_cur.user_id = ${table.alias}.id and dnt_cur.ended_on is null limit 1))`,
+    { type: 'string', nullable: true },
+  )
+  currentRankTitle?: string | null;
 
   // Private contact/personal data - returned on the owner's own profile
   // (UserProfileResponseDto) and to the staff of an Event this user is

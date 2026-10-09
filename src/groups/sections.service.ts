@@ -30,6 +30,7 @@ import { SectionMembershipStatus } from './enums/section-membership-status.enum'
 import { GroupHierarchyService } from './group-hierarchy.service';
 import { toSectionResponseDto } from './mappers/section.mapper';
 import { RoleAssignmentsService } from './role-assignments.service';
+import { resolveDisplayName } from '../users/display-name.util';
 
 // A Section is its own entity type, physically separate from Group (see
 // the organizational-domain rebuild, stage 1) - it may have at most one
@@ -212,7 +213,7 @@ export class SectionsService {
       // the under-a-Group and standalone creation paths, and never touched
       // again by anything (not transferOwnership, not update()).
       section.founderUser = actor;
-      section.founderNameSnapshot = actor.displayName;
+      section.founderNameSnapshot = resolveDisplayName(actor);
       em.persist(section);
 
       const membership = new SectionMembership();
@@ -459,7 +460,7 @@ export class SectionsService {
     );
     const instructors = instructorAssignments.map((assignment) => ({
       id: assignment.user.id,
-      displayName: assignment.user.displayName,
+      displayName: resolveDisplayName(assignment.user),
     }));
     return toSectionResponseDto(
       section,
