@@ -41,6 +41,7 @@ import {
   toOwnFormalRankRequestResponseDto,
   toSortedSegments,
 } from './mappers/formal-rank-request.mapper';
+import { resolveRankName } from './rank-name.util';
 import { assignFormalRank } from './rank-transitions';
 
 const REQUEST_POPULATE = [
@@ -103,7 +104,7 @@ export class FormalRankRequestsService {
     }
     const text = formalRankRequestReceivedText(
       resolveDisplayName(request.user),
-      request.rank.name,
+      resolveRankName(request.rank, request.user.gender),
     );
     await this.notificationsService.createMany(
       em,
@@ -159,8 +160,9 @@ export class FormalRankRequestsService {
       { group: groupId, status: FormalRankRequestStatus.PENDING },
       { populate: REQUEST_POPULATE, orderBy: { createdAt: 'asc' } },
     );
-    const userIds = requests.map((request) => request.user.id);
-    const currentRanks = await this.loadCurrentRanks(userIds);
+    const currentRanks = await this.loadCurrentRanks(
+      requests.map((request) => request.user),
+    );
 
     return requests.map((request) => ({
       id: request.id,
@@ -173,9 +175,13 @@ export class FormalRankRequestsService {
           url: resolveUserAvatarUrl(request.user, this.r2StorageService),
           presetAvatarId: request.user.presetAvatarId,
         },
+        gender: request.user.gender,
       },
       currentRank: currentRanks.get(request.user.id) ?? null,
-      requestedRank: toFormalRankRequestRankDto(request.rank),
+      requestedRank: toFormalRankRequestRankDto(
+        request.rank,
+        request.user.gender,
+      ),
       startedOn: toDateOnly(request.startedOn),
       awardedByName: request.awardedByName,
       createdAt: request.createdAt.toISOString(),
@@ -246,10 +252,12 @@ export class FormalRankRequestsService {
           request.user,
           NotificationType.FORMAL_RANK_REQUEST_APPROVED,
           formalRankRequestApprovedText(
-            confirmedRank.name,
+            resolveRankName(confirmedRank, request.user.gender),
             request.group.name,
             resolveDisplayName(actor),
-            corrected ? request.rank.name : null,
+            corrected
+              ? resolveRankName(request.rank, request.user.gender)
+              : null,
           ),
           actor,
         ),
@@ -278,7 +286,7 @@ export class FormalRankRequestsService {
           request.user,
           NotificationType.FORMAL_RANK_REQUEST_REJECTED,
           formalRankRequestRejectedText(
-            request.rank.name,
+            resolveRankName(request.rank, request.user.gender),
             request.group.name,
             resolveDisplayName(actor),
             reason,
@@ -372,7 +380,7 @@ export class FormalRankRequestsService {
   // FormalRankAssignment / active CustomUserRank exists per user (see
   // rank-transitions.ts); formal wins defensively if both ever do.
   private async loadCurrentRanks(
-    userIds: string[],
+    users: User[],
   ): Promise<
     Map<string, NonNullable<GroupFormalRankRequestResponseDto['currentRank']>>
   > {
@@ -380,9 +388,12 @@ export class FormalRankRequestsService {
       string,
       NonNullable<GroupFormalRankRequestResponseDto['currentRank']>
     >();
-    if (userIds.length === 0) {
+    if (users.length === 0) {
       return result;
     }
+    const userIds = users.map((user) => user.id);
+    // A formal rank's title follows its holder's gender (rank-name.util.ts).
+    const genderByUserId = new Map(users.map((user) => [user.id, user.gender]));
     // Sequential - concurrent queries on one EntityManager race at the
     // driver level (see GroupsService).
     const independent = await this.em.find(
@@ -405,7 +416,10 @@ export class FormalRankRequestsService {
     );
     for (const assignment of formal) {
       result.set(assignment.user.id, {
-        name: assignment.rank.name,
+        name: resolveRankName(
+          assignment.rank,
+          genderByUserId.get(assignment.user.id),
+        ),
         cordSegments: toSortedSegments(assignment.rank.cordSegments.getItems()),
         source: 'FORMAL_GROUP',
         sourceGroup: {

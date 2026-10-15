@@ -395,7 +395,9 @@ describe('Section Member Formal Rank (admin) (e2e)', () => {
       request(app.getHttpServer())
         .post(`/api/v1/groups/${groupId}/ranks`)
         .set('Authorization', `Bearer ${token}`)
-        .send(body)
+        // nameFemale is required (createRankSchema); default it to the
+        // masculine name unless a test sets its own.
+        .send({ nameFemale: body.name, ...body })
         .expect(201),
     );
   }

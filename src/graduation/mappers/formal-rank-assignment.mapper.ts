@@ -4,6 +4,7 @@ import {
   FormalRankRefDto,
 } from '../dto/formal-rank-assignment-response.dto';
 import { FormalRankAssignment } from '../entities/formal-rank-assignment.entity';
+import { resolveRankName } from '../rank-name.util';
 
 // MikroORM's postgres driver returns a `date` column as a plain
 // "YYYY-MM-DD" string at runtime despite the entity's TS type - same
@@ -15,11 +16,14 @@ function toDateOnly(date: Date | string | null): string | null {
   return typeof date === 'string' ? date : date.toISOString().slice(0, 10);
 }
 
+// `name` is the holder's form of the title (see rank-name.util.ts), so
+// `user` must be populated too (FormalRankService.RANK_POPULATE) - an
+// unloaded reference has no gender and would always fall back to `name`.
 function toFormalRankRef(assignment: FormalRankAssignment): FormalRankRefDto {
   const rank = assignment.rank;
   return {
     id: rank.id,
-    name: rank.name,
+    name: resolveRankName(rank, assignment.user.gender),
     track: rank.track,
     description: rank.description,
     isArchived: rank.isArchived,

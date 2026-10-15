@@ -7,6 +7,7 @@ import {
 import { FormalRankCorrectionOwnResponseDto } from '../dto/formal-rank-correction-own-response.dto';
 import { FormalRankCorrectionRequest } from '../entities/formal-rank-correction-request.entity';
 import { Rank } from '../entities/rank.entity';
+import { resolveRankName } from '../rank-name.util';
 import { resolveDisplayName } from '../../users/display-name.util';
 
 function toCorrectionUserRefDto(
@@ -21,8 +22,17 @@ function toCorrectionUserRefDto(
     : null;
 }
 
-function toCorrectionRankRefDto(rank: Rank): CorrectionRankRefDto {
-  return { id: rank.id, name: rank.name, track: rank.track };
+// Both ranks of a correction are the target user's (current and proposed),
+// so `name` follows their gender - see rank-name.util.ts.
+function toCorrectionRankRefDto(
+  rank: Rank,
+  holder: User,
+): CorrectionRankRefDto {
+  return {
+    id: rank.id,
+    name: resolveRankName(rank, holder.gender),
+    track: rank.track,
+  };
 }
 
 /**
@@ -44,9 +54,9 @@ export function toFormalRankCorrectionResponseDto(
       gender: request.targetUser.gender,
     },
     formalRankAssignmentId: request.formalRankAssignment.id,
-    currentRank: toCorrectionRankRefDto(currentRank),
+    currentRank: toCorrectionRankRefDto(currentRank, request.targetUser),
     proposedRank: request.submittedRank
-      ? toCorrectionRankRefDto(request.submittedRank)
+      ? toCorrectionRankRefDto(request.submittedRank, request.targetUser)
       : null,
     status: request.status,
     reason: request.reason,
@@ -70,9 +80,9 @@ export function toFormalRankCorrectionOwnResponseDto(
     status: request.status,
     reason: request.reason,
     reportedBy: toCorrectionUserRefDto(request.reportedBy),
-    currentRank: toCorrectionRankRefDto(currentRank),
+    currentRank: toCorrectionRankRefDto(currentRank, request.targetUser),
     proposedRank: request.submittedRank
-      ? toCorrectionRankRefDto(request.submittedRank)
+      ? toCorrectionRankRefDto(request.submittedRank, request.targetUser)
       : null,
     catalogGroupId,
     submittedAt: request.submittedAt ? request.submittedAt.toISOString() : null,

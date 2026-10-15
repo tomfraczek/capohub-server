@@ -9,7 +9,11 @@ const DESCRIPTION_MAX_LENGTH = 2000;
 
 export const createRankSchema = z.object({
   track: z.nativeEnum(RankTrack),
+  // Both forms are required on create and on every (full-replace) update -
+  // see rank.entity.ts. A legacy rank without nameFemale therefore can't be
+  // saved again until the Group fills it in.
   name: z.string().trim().min(1, 'Must not be empty').max(150),
+  nameFemale: z.string().trim().min(1, 'Must not be empty').max(150),
   description: optionalNullableText(DESCRIPTION_MAX_LENGTH),
   // null / omitted both mean "this is the first rank of its track" - see
   // rank.entity.ts.

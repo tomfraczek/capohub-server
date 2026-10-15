@@ -11,7 +11,10 @@ export interface CordSegmentResponseDto {
 export interface RankResponseDto {
   id: string;
   track: RankTrack;
+  // Masculine/default form; nameFemale is null only on a legacy rank that
+  // hasn't been edited since (see rank.entity.ts).
   name: string;
+  nameFemale: string | null;
   description: string | null;
   previousRankId: string | null;
   nextRankId: string | null;

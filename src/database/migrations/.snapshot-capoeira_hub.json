@@ -10638,6 +10638,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "boolean"
+        },
+        "name_female": {
+          "name": "name_female",
+          "type": "varchar(150)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 150,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "ranks",

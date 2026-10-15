@@ -33,9 +33,10 @@ export interface UserProfileResponseDto {
   birthDate: string | null;
   phoneNumber: string | null;
   gender: UserGender | null;
-  // true only once both firstName and lastName have been set - never
-  // reverts to false afterwards, since UpdateUserProfileDto never allows
-  // clearing either back to null. Backend-only signal: no endpoint in this
+  // true only once firstName, lastName and gender have all been set (any
+  // of the three genders, UNDISCLOSED included) - never reverts to false
+  // afterwards, since UpdateUserProfileDto never allows clearing any of
+  // them back to null. Backend-only signal: no endpoint in this
   // stage is gated on it - enforcing an onboarding flow off this field is
   // frontend work, out of scope here.
   profileComplete: boolean;

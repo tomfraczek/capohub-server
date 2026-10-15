@@ -8,7 +8,10 @@ import { CordSegmentResponseDto } from './rank-response.dto';
 // createdAt/updatedAt (administrative bookkeeping).
 export interface PublicRankDto {
   id: string;
+  // Both forms - a catalog read isn't about any one holder (see
+  // rank-name.util.ts); nameFemale null on a not-yet-edited legacy rank.
   name: string;
+  nameFemale: string | null;
   description: string | null;
   cordSegments: CordSegmentResponseDto[];
 }

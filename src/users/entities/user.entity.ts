@@ -203,10 +203,14 @@ export class User extends BaseEntity {
   @Property({ nullable: true, type: 'date' })
   capoeiraStartedAt: Date | null = null;
 
-  // Self-declared, optional - only ever used to inflect Polish wording
-  // about this user ("Dołączył"/"Dołączyła"), so it travels with the user
-  // references on the screens that need it. null = not set yet (rendered
-  // like UNDISCLOSED: the neutral "Dołączył(a)").
+  // Self-declared - used to inflect Polish wording about this user
+  // ("Dołączył"/"Dołączyła") and to pick their form of a rank title
+  // ("Graduado"/"Graduada", see graduation/rank-name.util.ts), so it
+  // travels with the user references on the screens that need it. Part of
+  // profileComplete (UNDISCLOSED counts as answered), but nullable: null =
+  // not answered yet (existing accounts are never backfilled), rendered
+  // like UNDISCLOSED (neutral wording, masculine/default rank title).
+  // UpdateUserProfileDto never allows setting it back to null.
   @Enum({ items: () => Object.values(UserGender), nullable: true })
   gender: UserGender | null = null;
 
@@ -228,14 +232,17 @@ export class User extends BaseEntity {
   // CustomUserRank; at most one of the two is ever active (see
   // graduation/rank-transitions.ts). Both lookups hit their partial unique
   // "user_id where ended_on is null" index. Not privacy-filtered here -
-  // resolveDisplayName applies showFormalRank. `undefined` on an entity
-  // that was created (not loaded) in the current request.
+  // resolveDisplayName applies showFormalRank. A formal rank's title is
+  // this user's form of it - same rule as graduation/rank-name.util.ts
+  // (resolveRankName): the feminine name for FEMALE when the rank has one,
+  // else the masculine/default `name`. `undefined` on an entity that was
+  // created (not loaded) in the current request.
   @Formula(
     (table) =>
       // Aliases prefixed `dnt_` so they can never shadow the outer
       // query's own alias (MikroORM's are e0, u1, ...).
       `coalesce(` +
-      `(select dnt_r.name from formal_rank_assignments dnt_fra join ranks dnt_r on dnt_r.id = dnt_fra.rank_id where dnt_fra.user_id = ${table.alias}.id and dnt_fra.ended_on is null limit 1), ` +
+      `(select coalesce(case when ${table.alias}.gender = 'FEMALE' then dnt_r.name_female end, dnt_r.name) from formal_rank_assignments dnt_fra join ranks dnt_r on dnt_r.id = dnt_fra.rank_id where dnt_fra.user_id = ${table.alias}.id and dnt_fra.ended_on is null limit 1), ` +
       `(select dnt_cur.name from custom_user_ranks dnt_cur where dnt_cur.user_id = ${table.alias}.id and dnt_cur.ended_on is null limit 1))`,
     { type: 'string', nullable: true },
   )

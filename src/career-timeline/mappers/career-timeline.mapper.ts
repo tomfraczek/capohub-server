@@ -4,11 +4,13 @@ import { Event } from '../../events/entities/event.entity';
 import { toEventCommunityRefDto } from '../../events/mappers/event-community-ref.mapper';
 import { FormalGroupAffiliation } from '../../groups/entities/formal-group-affiliation.entity';
 import { FormalRankAssignment } from '../../graduation/entities/formal-rank-assignment.entity';
+import { resolveRankName } from '../../graduation/rank-name.util';
 import { Group } from '../../groups/entities/group.entity';
 import { RoleAssignment } from '../../groups/entities/role-assignment.entity';
 import { Section } from '../../groups/entities/section.entity';
 import { PublicUrlBuilder } from '../../storage/image-url.util';
 import { User } from '../../users/entities/user.entity';
+import { UserGender } from '../../users/enums/user-gender.enum';
 import { CareerTimelineEntry } from '../entities/career-timeline-entry.entity';
 import {
   CareerTimelineEntryType,
@@ -181,6 +183,8 @@ export function buildLeftGroupItem(
 
 export function buildReceivedRankItem(
   assignment: FormalRankAssignment,
+  // The timeline owner's - the title is in their form (rank-name.util.ts).
+  holderGender: UserGender | null,
   urlBuilder: PublicUrlBuilder,
   // false when a non-owner viewer isn't allowed to see the linked Event's
   // own details (EventAccessService.isVisibleToViewer) - the rank fact
@@ -190,19 +194,20 @@ export function buildReceivedRankItem(
   includeEvent = true,
 ): CareerTimelineItemDto {
   const rank = assignment.rank;
+  const rankName = resolveRankName(rank, holderGender);
   const event = assignment.event;
   return {
     ...systemBase(
       receivedRankId(assignment.id),
       CareerTimelineEntryType.RECEIVED_RANK,
       assignment.startedOn!,
-      `Otrzymanie stopnia ${rank.name}`,
+      `Otrzymanie stopnia ${rankName}`,
     ),
     group: groupRef(assignment.sourceGroup),
     section: null,
     event: event && includeEvent ? eventRef(event, urlBuilder) : null,
     apelido: null,
-    rankName: rank.name,
+    rankName,
     awardedByName: assignment.awardedByName,
     location: null,
     rankDetails: {

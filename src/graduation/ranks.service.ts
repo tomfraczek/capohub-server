@@ -86,6 +86,7 @@ export class RanksService {
       .map((rank) => ({
         id: rank.id,
         name: rank.name,
+        nameFemale: rank.nameFemale,
         description: rank.description,
         cordSegments: rank.cordSegments,
       }));
@@ -174,6 +175,7 @@ export class RanksService {
       .map((rank) => ({
         id: rank.id,
         name: rank.name,
+        nameFemale: rank.nameFemale,
         description: rank.description,
         track: rank.track,
         previousRankId: rank.previousRankId,
@@ -231,6 +233,7 @@ export class RanksService {
       rank.system = system;
       rank.track = input.track;
       rank.name = input.name;
+      rank.nameFemale = input.nameFemale;
       rank.description = input.description;
       rank.previousRank = previousRank;
 
@@ -300,6 +303,7 @@ export class RanksService {
         (rank.previousRank?.id ?? null) !== (previousRank?.id ?? null);
 
       rank.name = input.name;
+      rank.nameFemale = input.nameFemale;
       rank.description = input.description;
       rank.track = input.track;
       rank.previousRank = previousRank;

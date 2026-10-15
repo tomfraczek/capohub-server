@@ -54,6 +54,7 @@ import {
   toFormalRankCorrectionResponseDto,
 } from './mappers/formal-rank-correction.mapper';
 import { toFormalRankAssignmentResponseDto } from './mappers/formal-rank-assignment.mapper';
+import { resolveRankName } from './rank-name.util';
 import { resolveDisplayName } from '../users/display-name.util';
 
 const ACTIVE_MEMBERSHIP_STATUSES = [
@@ -295,7 +296,7 @@ export class FormalRankCorrectionService {
     const assignment = await this.em.findOne(
       FormalRankAssignment,
       { user: targetUser.id, endedOn: null },
-      { populate: ['rank.cordSegments', 'sourceGroup', 'event'] },
+      { populate: ['user', 'rank.cordSegments', 'sourceGroup', 'event'] },
     );
 
     let correction: SectionMemberFormalRankResponseDto['correction'] = null;
@@ -316,7 +317,10 @@ export class FormalRankCorrectionService {
           proposedRank: activeRequest.submittedRank
             ? {
                 id: activeRequest.submittedRank.id,
-                name: activeRequest.submittedRank.name,
+                name: resolveRankName(
+                  activeRequest.submittedRank,
+                  targetUser.gender,
+                ),
                 track: activeRequest.submittedRank.track,
               }
             : null,

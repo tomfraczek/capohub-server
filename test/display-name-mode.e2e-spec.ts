@@ -402,6 +402,7 @@ describe('Display name mode (e2e)', () => {
             .send({
               track: RankTrack.ADULT,
               name,
+              nameFemale: name,
               description: null,
               previousRankId,
               cordSegments: oneSegment(),

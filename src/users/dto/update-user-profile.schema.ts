@@ -81,8 +81,11 @@ export const updateUserProfileSchema = z.object({
   capoeiraStartedAt: capoeiraStartedAtSchema,
   birthDate: birthDateSchema,
   phoneNumber: phoneNumberSchema,
-  // null clears it back to "not set".
-  gender: z.nativeEnum(UserGender).nullable().optional(),
+  // Business-required like firstName/lastName (see profileComplete):
+  // omitted = unchanged, but never settable back to null - UNDISCLOSED
+  // ("Wolę nie odpowiadać") is the answer for not saying, and counts as
+  // answered.
+  gender: z.nativeEnum(UserGender).optional(),
   showCapoeiraStartedAt: privacyToggleSchema,
   showSections: privacyToggleSchema,
   showFormalGroup: privacyToggleSchema,

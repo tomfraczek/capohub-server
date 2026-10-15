@@ -1,4 +1,5 @@
 import { SectionMemberUserImageDto } from '../../groups/dto/section-member-user-ref.dto';
+import { UserGender } from '../../users/enums/user-gender.enum';
 import { FormalRankRequestStatus } from '../enums/formal-rank-request-status.enum';
 import { RankTrack } from '../enums/rank-track.enum';
 import { CordSegmentResponseDto } from './rank-response.dto';
@@ -47,6 +48,10 @@ export interface GroupFormalRankRequestResponseDto {
     displayName: string;
     apelido: string | null;
     image: SectionMemberUserImageDto;
+    // So a reviewer's corrected pick from the catalog is shown in the
+    // requester's form of the title - see rank-name.util.ts. currentRank/
+    // requestedRank below already are.
+    gender: UserGender | null;
   };
   currentRank: {
     name: string;

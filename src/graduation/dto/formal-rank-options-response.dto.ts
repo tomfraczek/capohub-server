@@ -9,7 +9,10 @@ import { CordSegmentResponseDto } from './rank-response.dto';
 // rank).
 export interface FormalRankOptionDto {
   id: string;
+  // Both forms - the picker shows the one matching whoever the rank is
+  // being chosen for (see rank-name.util.ts).
   name: string;
+  nameFemale: string | null;
   description: string | null;
   track: RankTrack;
   previousRankId: string | null;

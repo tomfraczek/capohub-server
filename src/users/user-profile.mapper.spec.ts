@@ -148,12 +148,22 @@ describe('toUserProfileResponseDto', () => {
     expect(dto.qrPayload).toBe('https://capohub.pl/u/042981');
   });
 
-  it('computes profileComplete=true once both names are set', () => {
+  it('computes profileComplete=false while gender is not set, even with both names', () => {
     const dto = toUserProfileResponseDto(
       buildUser({ firstName: 'Ada', lastName: 'Lovelace' }),
       null,
     );
-    expect(dto.profileComplete).toBe(true);
+    expect(dto.profileComplete).toBe(false);
+  });
+
+  it('computes profileComplete=true once both names and any gender are set - UNDISCLOSED included', () => {
+    for (const gender of Object.values(UserGender)) {
+      const dto = toUserProfileResponseDto(
+        buildUser({ firstName: 'Ada', lastName: 'Lovelace', gender }),
+        null,
+      );
+      expect(dto.profileComplete).toBe(true);
+    }
   });
 
   it('maps the private birthDate/phoneNumber on the own profile', () => {

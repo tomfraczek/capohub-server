@@ -4,7 +4,9 @@ import {
   OwnFormalRankRequestResponseDto,
 } from '../dto/formal-rank-request-response.dto';
 import { FormalRankRequest } from '../entities/formal-rank-request.entity';
+import { UserGender } from '../../users/enums/user-gender.enum';
 import { Rank } from '../entities/rank.entity';
+import { resolveRankName } from '../rank-name.util';
 
 // Same 'date'-column normalization as formal-rank-assignment.mapper.ts.
 export function toDateOnly(date: Date | string | null): string | null {
@@ -26,19 +28,21 @@ export function toSortedSegments(
     }));
 }
 
-// Requires `rank.cordSegments` to be populated.
+// Requires `rank.cordSegments` to be populated. `holderGender` is the
+// requester's - the rank is theirs, whoever is looking (rank-name.util.ts).
 export function toFormalRankRequestRankDto(
   rank: Rank,
+  holderGender: UserGender | null,
 ): FormalRankRequestRankDto {
   return {
     id: rank.id,
-    name: rank.name,
+    name: resolveRankName(rank, holderGender),
     track: rank.track,
     cordSegments: toSortedSegments(rank.cordSegments.getItems()),
   };
 }
 
-// Requires `group` and `rank.cordSegments` to be populated.
+// Requires `user`, `group` and `rank.cordSegments` to be populated.
 export function toOwnFormalRankRequestResponseDto(
   request: FormalRankRequest,
 ): OwnFormalRankRequestResponseDto {
@@ -46,7 +50,7 @@ export function toOwnFormalRankRequestResponseDto(
     id: request.id,
     status: request.status,
     group: { id: request.group.id, name: request.group.name },
-    rank: toFormalRankRequestRankDto(request.rank),
+    rank: toFormalRankRequestRankDto(request.rank, request.user.gender),
     startedOn: toDateOnly(request.startedOn),
     awardedByName: request.awardedByName,
     createdAt: request.createdAt.toISOString(),

@@ -66,8 +66,17 @@ export class Rank extends BaseEntity {
   @Enum({ items: () => Object.values(RankTrack) })
   track!: RankTrack;
 
+  // The masculine form, and the default one shown whenever the holder isn't
+  // FEMALE or nameFemale is missing - see rank-name.util.ts.
   @Property({ length: 150 })
   name!: string;
+
+  // The feminine form ("Graduada" for "Graduado"), named by the Group itself
+  // - never derived from `name`. Null only on ranks created before it
+  // existed; createRankSchema/updateRankSchema require it, so the next edit
+  // of such a rank fills it in.
+  @Property({ length: 150, nullable: true })
+  nameFemale: string | null = null;
 
   @Property({ nullable: true, type: 'text' })
   description: string | null = null;

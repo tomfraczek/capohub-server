@@ -31,7 +31,13 @@ import {
   startOfTodayUtc,
 } from './rank-transitions';
 
-const RANK_POPULATE = ['rank.cordSegments', 'sourceGroup', 'event'] as const;
+// `user` for the holder's gender - see formal-rank-assignment.mapper.ts.
+const RANK_POPULATE = [
+  'user',
+  'rank.cordSegments',
+  'sourceGroup',
+  'event',
+] as const;
 
 function parseDateOnly(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);

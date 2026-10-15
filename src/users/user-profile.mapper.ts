@@ -3,6 +3,7 @@ import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliat
 import { GroupRole } from '../groups/enums/group-role.enum';
 import { CustomUserRank } from '../graduation/entities/custom-user-rank.entity';
 import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignment.entity';
+import { resolveRankName } from '../graduation/rank-name.util';
 import {
   PublicUrlBuilder,
   resolveImageUrl,
@@ -72,7 +73,8 @@ export function toUserProfileResponseDto(
     birthDate: toDateOnly(user.birthDate),
     phoneNumber: user.phoneNumber,
     gender: user.gender,
-    profileComplete: user.firstName !== null && user.lastName !== null,
+    profileComplete:
+      user.firstName !== null && user.lastName !== null && user.gender !== null,
     privacy: {
       showCapoeiraStartedAt: user.showCapoeiraStartedAt,
       showSections: user.showSections,
@@ -163,7 +165,7 @@ export function toPublicUserProfileResponseDto(
       ? toPublicFormalGroupRefDto(ctx.formalGroup)
       : null,
     formalRank: ctx.formalRank
-      ? toPublicFormalRankRefDto(ctx.formalRank)
+      ? toPublicFormalRankRefDto(ctx.formalRank, target)
       : null,
     independentRank: ctx.independentRank
       ? toPublicIndependentRankRefDto(ctx.independentRank)
@@ -200,11 +202,14 @@ function toPublicFormalGroupRefDto(
 // no assignment id, awardedByName, isCurrent (always true here - only the
 // current assignment is ever loaded, see getCurrentOrNull) or event, per
 // the "only what's needed" scope for the public surface.
+// `holder` (the profile's owner) picks their form of the title - see
+// graduation/rank-name.util.ts.
 function toPublicFormalRankRefDto(
   assignment: FormalRankAssignment,
+  holder: User,
 ): PublicFormalRankRefDto {
   return {
-    name: assignment.rank.name,
+    name: resolveRankName(assignment.rank, holder.gender),
     cordSegments: [...assignment.rank.cordSegments.getItems()]
       .sort((a, b) => a.position - b.position)
       .map((segment) => ({

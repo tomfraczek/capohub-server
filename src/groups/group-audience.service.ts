@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { CustomUserRank } from '../graduation/entities/custom-user-rank.entity';
 import { FormalRankAssignment } from '../graduation/entities/formal-rank-assignment.entity';
+import { resolveRankName } from '../graduation/rank-name.util';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { resolveUserAvatarUrl } from '../storage/image-url.util';
 import { resolveDisplayName } from '../users/display-name.util';
@@ -295,9 +296,16 @@ export class GroupAudienceService {
         { user: { $in: formalCandidates }, endedOn: null },
         { populate: ['rank.cordSegments'] },
       );
+      // A formal rank's title follows its holder's gender (rank-name.util.ts).
+      const genderByUserId = new Map(
+        visible.map((user) => [user.id, user.gender]),
+      );
       for (const assignment of assignments) {
         result.set(assignment.user.id, {
-          name: assignment.rank.name,
+          name: resolveRankName(
+            assignment.rank,
+            genderByUserId.get(assignment.user.id),
+          ),
           cordSegments: toSegments(assignment.rank.cordSegments.getItems()),
         });
       }

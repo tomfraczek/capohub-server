@@ -399,6 +399,7 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
         .send({
           track: RankTrack.ADULT,
           name: 'Corda Crua',
+          nameFemale: 'Corda Crua',
           description: null,
           previousRankId: null,
           cordSegments: oneSegment(),
@@ -574,6 +575,7 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
           .send({
             track: RankTrack.ADULT,
             name: 'Corda Verde',
+            nameFemale: 'Corda Verde',
             description: null,
             previousRankId: rankA.id,
             cordSegments: oneSegment('#00FF00'),
@@ -1171,6 +1173,7 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
           .send({
             track: RankTrack.ADULT,
             name: 'Instrutor',
+            nameFemale: 'Instrutor',
             description: null,
             previousRankId: askedRank.id,
             cordSegments: oneSegment('#00FF00'),

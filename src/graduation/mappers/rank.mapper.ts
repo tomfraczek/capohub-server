@@ -46,6 +46,7 @@ export function toRankResponseDto(
     id: rank.id,
     track: rank.track,
     name: rank.name,
+    nameFemale: rank.nameFemale,
     description: rank.description,
     previousRankId: rank.previousRank?.id ?? null,
     nextRankId,

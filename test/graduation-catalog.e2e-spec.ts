@@ -350,7 +350,9 @@ describe('Graduation Catalog (e2e)', () => {
       request(app.getHttpServer())
         .post(`/api/v1/groups/${groupId}/ranks`)
         .set('Authorization', `Bearer ${token}`)
-        .send(body)
+        // nameFemale is required (createRankSchema); default it to the
+        // masculine name unless a test sets its own.
+        .send({ nameFemale: body.name, ...body })
         .expect(expectStatus),
     );
   }
@@ -370,6 +372,7 @@ describe('Graduation Catalog (e2e)', () => {
     return {
       track: RankTrack.ADULT,
       name: 'Corda Crua',
+      nameFemale: 'Corda Crua',
       description: null,
       previousRankId: null,
       cordSegments: oneSegment({ colorHex: uniqueColor() }),
@@ -654,6 +657,80 @@ describe('Graduation Catalog (e2e)', () => {
   });
 
   // ─── Cord segments ───────────────────────────────────────────────────────
+
+  describe('Ranks - masculine/feminine names', () => {
+    it('stores and returns both forms, and requires nameFemale on create', async () => {
+      const group = await createGroupWithSystem();
+      const rank = (await createRank(
+        group.token,
+        group.id,
+        rankPayload({ name: 'Graduado', nameFemale: 'Graduada' }),
+      )) as RankResponseDto;
+      expect(rank.name).toBe('Graduado');
+      expect(rank.nameFemale).toBe('Graduada');
+
+      // Straight through supertest - createRank defaults nameFemale.
+      const { nameFemale: _omitted, ...withoutFemale } = rankPayload({
+        name: 'Mestre',
+        previousRankId: rank.id,
+      });
+      void _omitted;
+      await request(app.getHttpServer())
+        .post(`/api/v1/groups/${group.id}/ranks`)
+        .set('Authorization', `Bearer ${group.token}`)
+        .send(withoutFemale)
+        .expect(400);
+    });
+
+    it('keeps a legacy rank without nameFemale readable, but requires it before the next edit', async () => {
+      const group = await createGroupWithSystem();
+      const rank = (await createRank(
+        group.token,
+        group.id,
+        rankPayload({ name: 'Professor' }),
+      )) as RankResponseDto;
+      await app
+        .get(EntityManager)
+        .fork()
+        .nativeUpdate(Rank, { id: rank.id }, { nameFemale: null });
+
+      const list = await bodyOf<RanksByTrackResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${group.id}/ranks`)
+          .set('Authorization', `Bearer ${group.token}`)
+          .expect(200),
+      );
+      expect(list[RankTrack.ADULT][0].name).toBe('Professor');
+      expect(list[RankTrack.ADULT][0].nameFemale).toBeNull();
+
+      const { nameFemale: _omitted, ...withoutFemale } = rankPayload({
+        name: 'Professor',
+        cordSegments: rank.cordSegments,
+      });
+      void _omitted;
+      await request(app.getHttpServer())
+        .patch(`/api/v1/groups/${group.id}/ranks/${rank.id}`)
+        .set('Authorization', `Bearer ${group.token}`)
+        .send(withoutFemale)
+        .expect(400);
+
+      const updated = await bodyOf<RankResponseDto>(
+        request(app.getHttpServer())
+          .patch(`/api/v1/groups/${group.id}/ranks/${rank.id}`)
+          .set('Authorization', `Bearer ${group.token}`)
+          .send(
+            rankPayload({
+              name: 'Professor',
+              nameFemale: 'Professora',
+              cordSegments: rank.cordSegments,
+            }),
+          )
+          .expect(200),
+      );
+      expect(updated.id).toBe(rank.id);
+      expect(updated.nameFemale).toBe('Professora');
+    });
+  });
 
   describe('Ranks - cord segments', () => {
     it('accepts one color, two colors, and many colors summing to 100', async () => {

@@ -172,6 +172,7 @@ export class CareerTimelineAggregationService {
         items.push(
           buildReceivedRankItem(
             assignment,
+            target.gender,
             this.r2StorageService,
             includeEvent,
           ),

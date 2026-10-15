@@ -469,6 +469,7 @@ describe('Career Timeline (e2e)', () => {
         .send({
           track: RankTrack.ADULT,
           name: 'Corda Crua',
+          nameFemale: 'Corda Crua',
           description: null,
           previousRankId: null,
           cordSegments: oneSegment(),
