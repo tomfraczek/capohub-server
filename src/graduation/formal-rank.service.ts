@@ -162,8 +162,14 @@ export class FormalRankService {
         });
       }
 
-      const startedOn = input.startedOn ? parseDateOnly(input.startedOn) : null;
-      if (startedOn && startedOn.getTime() > startOfTodayUtc().getTime()) {
+      // Never left unset: a rank without a date of record would have
+      // nothing to be placed by on the career timeline, so an omitted
+      // startedOn means "received today" (the app pre-fills and requires
+      // the same).
+      const startedOn = input.startedOn
+        ? parseDateOnly(input.startedOn)
+        : startOfTodayUtc();
+      if (startedOn.getTime() > startOfTodayUtc().getTime()) {
         throw new BadRequestException({
           code: 'RANK_STARTED_ON_IN_FUTURE',
           message: 'startedOn cannot be in the future',

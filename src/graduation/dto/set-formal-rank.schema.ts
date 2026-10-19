@@ -2,9 +2,10 @@ import { z } from 'zod';
 import { createZodDto } from '../../common/dto/create-zod-dto';
 import { uuidSchema } from '../../common/validation/uuid.schema';
 
-// startedOn optional (the real-world start date is often unknown) and
-// "not in the future" is validated in the service, not here - same
-// reasoning as SetFormalGroupDto. Only ever a catalog Rank (see
+// startedOn optional on the wire - an omitted one defaults to today in
+// FormalRankService.setCurrent, so a new assignment/request always has a
+// date of record - and "not in the future" is validated in the service,
+// not here - same reasoning as SetFormalGroupDto. Only ever a catalog Rank (see
 // formal-rank-assignment.entity.ts) - setting an independent/custom
 // cordão is a wholly separate resource, PUT /users/me/custom-rank (see
 // custom-rank.controller.ts), never this endpoint.

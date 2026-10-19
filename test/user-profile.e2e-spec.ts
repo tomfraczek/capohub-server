@@ -818,7 +818,8 @@ describe('User Profile (e2e)', () => {
         name: 'Corda Crua',
         cordSegments: oneSegment(),
         sourceGroup: { id: group.id, name: group.name },
-        startedOn: null,
+        // No date sent - defaults to today (FormalRankService.setCurrent).
+        startedOn: new Date().toISOString().slice(0, 10),
       });
 
       await patchOwnProfile(TARGET_TOKEN, { showFormalRank: true });

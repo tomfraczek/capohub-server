@@ -413,6 +413,26 @@ describe('CareerTimelineAggregationService', () => {
       expect(result.items[0].rankDetails).not.toBeNull();
       expect(isPubliclyVisible).not.toHaveBeenCalled();
     });
+
+    // Assignments recorded before startedOn defaulted to today have none -
+    // they must still show, dated by when they were recorded.
+    it('lists an undated formal rank, dated by its createdAt', async () => {
+      const user = buildUser({ showFormalRank: true });
+      const assignment = buildAssignment();
+      assignment.startedOn = null;
+      assignment.createdAt = new Date('2026-10-06T12:27:33.499Z');
+      const em = buildMockEm({ assignments: [assignment] });
+      const service = buildService(em);
+
+      const result = await service.getTimeline(user, user.id, {
+        limit: 20,
+        offset: 0,
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].occurredOn).toBe('2026-10-06');
+      expect(result.items[0].rankDetails?.source).toBe('FORMAL_GROUP');
+    });
   });
 
   describe('no automatic per-Event entries', () => {

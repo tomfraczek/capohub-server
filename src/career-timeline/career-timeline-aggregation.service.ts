@@ -151,7 +151,7 @@ export class CareerTimelineAggregationService {
     ) {
       const assignments = await this.em.find(
         FormalRankAssignment,
-        { user: target.id, startedOn: { $ne: null } },
+        { user: target.id },
         { populate: RANK_POPULATE },
       );
       for (const assignment of assignments) {

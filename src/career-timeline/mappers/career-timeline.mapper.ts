@@ -200,7 +200,11 @@ export function buildReceivedRankItem(
     ...systemBase(
       receivedRankId(assignment.id),
       CareerTimelineEntryType.RECEIVED_RANK,
-      assignment.startedOn!,
+      // Undated assignments predate startedOn defaulting to today - dated
+      // by when the rank was recorded in the app instead, same fallback
+      // as buildIndependentRankItem.
+      assignment.startedOn ??
+        assignment.createdAt.toISOString().slice(0, 10),
       `Otrzymanie stopnia ${rankName}`,
     ),
     group: groupRef(assignment.sourceGroup),
