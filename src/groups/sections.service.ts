@@ -309,6 +309,13 @@ export class SectionsService {
    * from Discover (`isHidden = false`). Not `isPublic`: a Section's
    * `isPublic` is "Dołączanie publiczne", not visibility (see
    * resolvePublicView), so an approval-only Section stays listed here.
+   *
+   * A third way: the Group's own audience (formal members + members of its
+   * direct Sections - see RoleAssignmentsService.isGroupAudienceMember).
+   * They belong to this organization, so they also see its hidden
+   * Sections (`isHidden` only keeps a Section out of Discover). Anyone
+   * without a Role never sees a DELETED Section; an ARCHIVED one stays
+   * listed (with its status) so the structure stays truthful.
    */
   async list(parentId: string, userId: string): Promise<SectionResponseDto[]> {
     const sections = await this.em.find(Section, { parentGroup: parentId });
@@ -316,9 +323,19 @@ export class SectionsService {
       parentId,
       userId,
     );
+    const isAudience =
+      !isMember &&
+      (await this.roleAssignmentsService.isGroupAudienceMember(
+        parentId,
+        userId,
+      ));
     const visible = isMember
       ? sections
-      : sections.filter((section) => !section.isHidden);
+      : sections.filter(
+          (section) =>
+            section.status !== GroupStatus.DELETED &&
+            (isAudience || !section.isHidden),
+        );
     // Sequential, not Promise.all - see toResponseDto's own comment.
     const dtos: SectionResponseDto[] = [];
     for (const section of visible) {

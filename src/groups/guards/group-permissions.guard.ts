@@ -134,8 +134,8 @@ export class GroupPermissionsGuard implements CanActivate {
       // No RoleAssignment/Membership at all - only reachable for a Public
       // Group/Section, and only for the narrow GROUP_VIEW-only tier (see
       // PUBLIC_VIEW_SAFE_PERMISSIONS and resolvePublicView's own comment),
-      // or for a Group's own audience reading its announcements (see
-      // resolveGroupAudienceView). Anything wider (member list, audit log,
+      // or for a Group's own audience reading its profile/Sections/
+      // announcements (see resolveGroupAudienceView). Anything wider (member list, audit log,
       // ...) still 404s below, same as a genuinely private/nonexistent
       // target.
       const isPublicViewOnly = requiredPermissions.every((permission) =>
@@ -189,7 +189,7 @@ export class GroupPermissionsGuard implements CanActivate {
   /**
    * A Group's audience (formal members + active members of its direct
    * Sections - see RoleAssignmentsService.isGroupAudienceMember) may read
-   * its announcements without any Role there. Only for a Group target and
+   * its profile, its Sections and its announcements without any Role there. Only for a Group target and
    * only when every required permission is in
    * GROUP_AUDIENCE_SAFE_PERMISSIONS - otherwise null, and the caller 404s
    * exactly as before.

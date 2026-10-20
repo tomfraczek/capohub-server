@@ -60,7 +60,7 @@ describe('GroupPermissionsGuard', () => {
     // Only ever reached when `authorization` resolves to null AND every
     // required permission is GROUP_AUDIENCE_SAFE - null (the default) means
     // "not this Group's audience either".
-    audienceCommunity?: unknown | null;
+    audienceCommunity?: unknown;
   }): {
     guard: GroupPermissionsGuard;
     getAllAndOverride: jest.Mock;
@@ -295,7 +295,20 @@ describe('GroupPermissionsGuard', () => {
       expect(error).toBeInstanceOf(NotFoundException);
     });
 
-    it('never takes the audience fallback for a permission wider than ANNOUNCEMENT_VIEW', async () => {
+    it('allows a GROUP_VIEW/SECTION_VIEW request for the Group audience of a private Group', async () => {
+      const { guard } = buildGuard({
+        requiredPermissions: [GroupPermission.SECTION_VIEW],
+        authorization: null,
+        publicCommunity: null,
+        audienceCommunity: { status: GroupStatus.ACTIVE },
+      });
+
+      await expect(
+        guard.canActivate(buildContext({ id: VALID_GROUP_ID })),
+      ).resolves.toBe(true);
+    });
+
+    it('never takes the audience fallback for a permission outside GROUP_AUDIENCE_SAFE_PERMISSIONS', async () => {
       const { guard, resolveGroupAudienceView } = buildGuard({
         requiredPermissions: [GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW],
         authorization: null,

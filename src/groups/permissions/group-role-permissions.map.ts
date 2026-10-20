@@ -283,8 +283,17 @@ export const PUBLIC_VIEW_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> =
 // of its direct Sections - see RoleAssignmentsService.isGroupAudienceMember)
 // is granted on that Group without holding any RoleAssignment there.
 // GroupPermissionsGuard only takes this fallback for a Group target and
-// only when every permission a route requires is in here. Read-only
-// announcements access only - a Group still has no ordinary members, so
-// nothing membership-shaped (member list, audit log, ...) belongs here.
+// only when every permission a route requires is in here. Read-only:
+//  - GROUP_VIEW/SECTION_VIEW: the Group's own profile and its list of
+//    Sections - the same tier PUBLIC_VIEW_SAFE_PERMISSIONS grants a
+//    stranger on a Public Group, extended to a private Group's own people
+//    (e.g. a Section's "Struktura sekcji" screen showing its siblings).
+//  - ANNOUNCEMENT_VIEW: the Group's active announcements.
+// A Group still has no ordinary members, so nothing membership-shaped
+// (member list, audit log, ...) belongs here.
 export const GROUP_AUDIENCE_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> =
-  new Set([GroupPermission.ANNOUNCEMENT_VIEW]);
+  new Set([
+    GroupPermission.GROUP_VIEW,
+    GroupPermission.SECTION_VIEW,
+    GroupPermission.ANNOUNCEMENT_VIEW,
+  ]);

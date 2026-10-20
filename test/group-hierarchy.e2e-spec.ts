@@ -391,6 +391,49 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
       );
     });
 
+    // The Group audience fallback (RoleAssignmentsService.
+    // isGroupAudienceMember): a member of one of a *private* Group's direct
+    // Sections may read that Group's profile and every one of its Sections
+    // - hidden ones included, they belong to the same organization - while
+    // a stranger still gets 404.
+    it("lets a member of a private Group's Section read the Group and all its Sections, hidden included", async () => {
+      const root = await createGroup({
+        name: 'Private Audience Root',
+        isPublic: false,
+      });
+      const ownSection = await createSection(root.token, root.id, {
+        name: 'Own Section',
+      });
+      const hiddenSibling = await createSection(root.token, root.id, {
+        name: 'Hidden Sibling',
+        isHidden: true,
+      });
+      await request(app.getHttpServer())
+        .post(`/api/v1/sections/${ownSection.id}/members`)
+        .set('Authorization', `Bearer ${root.token}`)
+        .send({ userId: localUserIdByToken.get(MEMBER_TOKEN) })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/groups/${root.id}`)
+        .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+        .expect(200);
+      const memberView = await bodyOf<SectionResponseDto[]>(
+        request(app.getHttpServer())
+          .get(`/api/v1/groups/${root.id}/sections`)
+          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+          .expect(200),
+      );
+      expect(memberView.map((section) => section.id).sort()).toEqual(
+        [ownSection.id, hiddenSibling.id].sort(),
+      );
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/groups/${root.id}/sections`)
+        .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
+        .expect(404);
+    });
+
     it('rejects creating a Section under another Section - a Section can never have children', async () => {
       const root = await createGroup({
         name: 'No Nested Sections Root',
