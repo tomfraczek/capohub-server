@@ -563,11 +563,11 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup({
         name: 'No Inherit Down Root',
       });
-      // Private - this assertion is about permission isolation (ADMIN on
-      // the Group not inheriting down), not the Public-view fallback
-      // (RoleAssignmentsService.resolvePublicView), which would otherwise
-      // let MEMBER_TOKEN read a Public Section's GET with zero Role
-      // Assignments there.
+      // Probes /members (MEMBERSHIP_VIEW), not GET /sections/:id - a
+      // Section's profile is always readable through the Public-view
+      // fallback (RoleAssignmentsService.resolvePublicView), so only a
+      // non-public-view route shows the ADMIN Role on the Group not
+      // inheriting down.
       const section = await createSection(root.token, root.id, {
         name: 'No Inherit Down Section',
         isPublic: false,
@@ -575,7 +575,7 @@ describe('Role Assignments (e2e)', () => {
       await grantGroupRole(root.token, root.id, MEMBER_TOKEN, GroupRole.ADMIN);
 
       await request(app.getHttpServer())
-        .get(`/api/v1/sections/${section.id}`)
+        .get(`/api/v1/sections/${section.id}/members`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .expect(404);
     });
@@ -593,6 +593,28 @@ describe('Role Assignments (e2e)', () => {
       const section = await createSection(root.token, root.id, {
         name: 'Public Section View Section',
         isPublic: true,
+      });
+
+      const details = await bodyOf<SectionResponseDto>(
+        request(app.getHttpServer())
+          .get(`/api/v1/sections/${section.id}`)
+          .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
+          .expect(200),
+      );
+      expect(details.id).toBe(section.id);
+    });
+
+    // Regression: a Section's isPublic is "Dołączanie publiczne" (join
+    // without approval), not visibility - an approval-only Section found
+    // via Discover must still open, or there is no screen to send the
+    // join request from.
+    it('an approval-only (isPublic: false) Section is still readable by a caller with zero Role Assignment/Membership', async () => {
+      const root = await createGroup({
+        name: 'Approval Section View Root',
+      });
+      const section = await createSection(root.token, root.id, {
+        name: 'Approval Section View Section',
+        isPublic: false,
       });
 
       const details = await bodyOf<SectionResponseDto>(
@@ -722,11 +744,11 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup({
         name: 'Inactivity Root',
       });
-      // Private - the final 404 assertion below is about a removed
-      // membership granting no effective access, not the Public-view
-      // fallback (RoleAssignmentsService.resolvePublicView), which would
-      // otherwise let MEMBER_TOKEN keep reading a Public Section's GET
-      // even after their membership/roles are gone.
+      // The final 404 probes /members (MEMBERSHIP_VIEW), not GET
+      // /sections/:id - a Section's profile stays readable to anyone via
+      // the Public-view fallback (RoleAssignmentsService.resolvePublicView),
+      // so only a non-public-view route shows the removed membership
+      // granting no effective access.
       const section = await createSection(root.token, root.id, {
         name: 'Inactivity Section',
         isPublic: false,
@@ -757,7 +779,7 @@ describe('Role Assignments (e2e)', () => {
       // deleted), but grants no effective access any more - never a
       // fallback, never a stale grant.
       await request(app.getHttpServer())
-        .get(`/api/v1/sections/${section.id}`)
+        .get(`/api/v1/sections/${section.id}/members`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .expect(404);
 
@@ -978,9 +1000,9 @@ describe('Role Assignments (e2e)', () => {
       const root = await createGroup({
         name: 'Base Role Leave Root',
       });
-      // Private - the final 404 assertion below is about a removed
-      // membership granting no effective access, not the Public-view
-      // fallback (RoleAssignmentsService.resolvePublicView).
+      // The final 404 probes /members (MEMBERSHIP_VIEW) - a Section's
+      // profile stays readable to anyone via the Public-view fallback
+      // (RoleAssignmentsService.resolvePublicView).
       const section = await createSection(root.token, root.id, {
         name: 'Base Role Leave Section',
         isPublic: false,
@@ -1033,7 +1055,7 @@ describe('Role Assignments (e2e)', () => {
         .expect(204);
 
       await request(app.getHttpServer())
-        .get(`/api/v1/sections/${section.id}`)
+        .get(`/api/v1/sections/${section.id}/members`)
         .set('Authorization', `Bearer ${MEMBER_TOKEN}`)
         .expect(404);
     });

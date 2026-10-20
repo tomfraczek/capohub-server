@@ -149,6 +149,8 @@ function buildAnnouncement(
     id: 'announcement-1',
     communityGroupId: 'group-1',
     communityResourceType: MembershipRequestTarget.GROUP,
+    communityName: 'Group',
+    parentGroupName: null,
     title: 'Announcement',
     body: 'Body',
     author: { id: 'user-2', displayName: 'Author' },

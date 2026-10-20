@@ -27,6 +27,8 @@ export function toAnnouncementResponseDto(
       community instanceof Group && community.parentGroup === null
         ? MembershipRequestTarget.GROUP
         : MembershipRequestTarget.SECTION,
+    communityName: community.name,
+    parentGroupName: community.parentGroup?.name ?? null,
     title: announcement.title,
     body: announcement.body,
     author: announcement.author

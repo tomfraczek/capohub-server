@@ -57,7 +57,15 @@ describe('GroupPermissionsGuard', () => {
     // means "not a Public target either", so the existing no-authorization
     // tests still 404 exactly as before.
     publicCommunity?: unknown | null;
-  }): { guard: GroupPermissionsGuard; getAllAndOverride: jest.Mock } {
+    // Only ever reached when `authorization` resolves to null AND every
+    // required permission is GROUP_AUDIENCE_SAFE - null (the default) means
+    // "not this Group's audience either".
+    audienceCommunity?: unknown | null;
+  }): {
+    guard: GroupPermissionsGuard;
+    getAllAndOverride: jest.Mock;
+    resolveGroupAudienceView: jest.Mock;
+  } {
     const getAllAndOverride = jest
       .fn()
       .mockImplementation((key: string) =>
@@ -72,6 +80,9 @@ describe('GroupPermissionsGuard', () => {
         options.hasAllPermissionsForRoles ?? jest.fn().mockReturnValue(true),
     } as unknown as GroupPermissionService;
 
+    const resolveGroupAudienceView = jest
+      .fn()
+      .mockResolvedValue(options.audienceCommunity ?? null);
     const roleAssignmentsService = {
       resolveAuthorization: jest
         .fn()
@@ -81,6 +92,7 @@ describe('GroupPermissionsGuard', () => {
       resolvePublicView: jest
         .fn()
         .mockResolvedValue(options.publicCommunity ?? null),
+      resolveGroupAudienceView,
     } as unknown as RoleAssignmentsService;
 
     return {
@@ -90,6 +102,7 @@ describe('GroupPermissionsGuard', () => {
         roleAssignmentsService,
       ),
       getAllAndOverride,
+      resolveGroupAudienceView,
     };
   }
 
@@ -252,6 +265,49 @@ describe('GroupPermissionsGuard', () => {
         .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('Group audience fallback (formal / direct Section members, no Role)', () => {
+    it('allows an ANNOUNCEMENT_VIEW request when the caller belongs to the Group audience', async () => {
+      const { guard } = buildGuard({
+        requiredPermissions: [GroupPermission.ANNOUNCEMENT_VIEW],
+        authorization: null,
+        audienceCommunity: { status: GroupStatus.ACTIVE },
+      });
+
+      await expect(
+        guard.canActivate(buildContext({ id: VALID_GROUP_ID })),
+      ).resolves.toBe(true);
+    });
+
+    it('404s an ANNOUNCEMENT_VIEW request when the caller is not in the audience', async () => {
+      const { guard } = buildGuard({
+        requiredPermissions: [GroupPermission.ANNOUNCEMENT_VIEW],
+        authorization: null,
+        audienceCommunity: null,
+      });
+
+      const error: unknown = await guard
+        .canActivate(buildContext({ id: VALID_GROUP_ID }))
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(NotFoundException);
+    });
+
+    it('never takes the audience fallback for a permission wider than ANNOUNCEMENT_VIEW', async () => {
+      const { guard, resolveGroupAudienceView } = buildGuard({
+        requiredPermissions: [GroupPermission.ANNOUNCEMENT_ARCHIVE_VIEW],
+        authorization: null,
+        audienceCommunity: { status: GroupStatus.ACTIVE },
+      });
+
+      const error: unknown = await guard
+        .canActivate(buildContext({ id: VALID_GROUP_ID }))
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(NotFoundException);
+      expect(resolveGroupAudienceView).not.toHaveBeenCalled();
     });
   });
 

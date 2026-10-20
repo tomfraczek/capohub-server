@@ -244,7 +244,17 @@ describe('RoleAssignmentsService', () => {
       expect(result).toBe(section);
     });
 
-    it('returns null when the target is Private, even though it exists', async () => {
+    it("returns a Section even when isPublic is false - a Section's isPublic is about joining, not visibility", async () => {
+      const section = buildSection({ isPublic: false });
+      const { em } = buildMockEm();
+      const { service } = buildService(em, { communityResult: section });
+
+      const result = await service.resolvePublicView('section-1');
+
+      expect(result).toBe(section);
+    });
+
+    it('returns null when the target is a Private Group, even though it exists', async () => {
       const group = buildGroup({ isPublic: false });
       const { em } = buildMockEm();
       const { service } = buildService(em, { communityResult: group });

@@ -11,6 +11,7 @@ import {
 function buildGroup(overrides: Partial<Group> = {}): Group {
   const group = new Group();
   group.id = 'group-1';
+  group.name = 'Grupa';
   group.parentGroup = null;
   return Object.assign(group, overrides);
 }
@@ -18,6 +19,7 @@ function buildGroup(overrides: Partial<Group> = {}): Group {
 function buildSection(overrides: Partial<Section> = {}): Section {
   const section = new Section();
   section.id = 'section-1';
+  section.name = 'Sekcja';
   section.parentGroup = buildGroup();
   return Object.assign(section, overrides);
 }
@@ -179,5 +181,42 @@ describe('toAnnouncementResponseDto', () => {
         readAt: null,
       }).author,
     ).toBeNull();
+  });
+
+  it('names the owning Group, with no parent for a root Group', () => {
+    const dto = toAnnouncementResponseDto(buildAnnouncement(), {
+      isRead: false,
+      readAt: null,
+    });
+
+    expect(dto.communityName).toBe('Grupa');
+    expect(dto.parentGroupName).toBeNull();
+  });
+
+  it('names the owning Section and its parent Group', () => {
+    const announcement = buildAnnouncement({
+      communityGroup: null,
+      communitySection: buildSection(),
+    });
+    const dto = toAnnouncementResponseDto(announcement, {
+      isRead: false,
+      readAt: null,
+    });
+
+    expect(dto.communityName).toBe('Sekcja');
+    expect(dto.parentGroupName).toBe('Grupa');
+  });
+
+  it('leaves parentGroupName null for a standalone Section', () => {
+    const announcement = buildAnnouncement({
+      communityGroup: null,
+      communitySection: buildSection({ parentGroup: null }),
+    });
+    const dto = toAnnouncementResponseDto(announcement, {
+      isRead: false,
+      readAt: null,
+    });
+
+    expect(dto.parentGroupName).toBeNull();
   });
 });

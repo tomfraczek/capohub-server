@@ -27,6 +27,9 @@
  *     OWNER/ADMIN with archive access can open/mark-read *any* expired
  *     Announcement in their community, even a RECIPIENT_GROUP one they were
  *     never a snapshot member of
+ * 11. A Group's audience (formal members + members of its direct Sections,
+ *     no Role on the Group) sees its active Announcements - including ones
+ *     published before they joined - but never its archive
  */
 
 import {
@@ -73,6 +76,9 @@ const MEMBER_TOKEN = 'valid-ann-member-token';
 const SECTION_MEMBER_TOKEN = 'valid-ann-section-member-token';
 const RECIPIENT_TOKEN = 'valid-ann-recipient-token';
 const OUTSIDER_TOKEN = 'valid-ann-outsider-token';
+// Group audience without any Role on the Group itself - see scenario 11.
+const AUDIENCE_SECTION_TOKEN = 'valid-ann-audience-section-token';
+const AUDIENCE_FORMAL_TOKEN = 'valid-ann-audience-formal-token';
 
 // Dedicated to the GET /announcements (global feed) describe block below -
 // never touched by any other describe block in this file, so exact
@@ -93,6 +99,8 @@ const TOKENS = [
   SECTION_MEMBER_TOKEN,
   RECIPIENT_TOKEN,
   OUTSIDER_TOKEN,
+  AUDIENCE_SECTION_TOKEN,
+  AUDIENCE_FORMAL_TOKEN,
   GLOBAL_MEMBER_TOKEN,
   GLOBAL_SECTION_TOKEN,
   GLOBAL_RECIPIENT_TOKEN,
@@ -459,6 +467,81 @@ describe('Announcements (e2e)', () => {
         .get(`/api/v1/groups/${org.id}/announcements/${created.id}`)
         .set('Authorization', `Bearer ${OUTSIDER_TOKEN}`)
         .expect(404);
+    });
+  });
+
+  describe('Group audience (no Role on the Group)', () => {
+    it('a new direct-Section member and a formal member see active Group Announcements published before they joined, but not the archive', async () => {
+      const { org, section } = await createOrgWithSection();
+      const pinned = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(org.token, org.id, {
+          title: 'Pinned before join',
+          isPinned: true,
+        }).expect(201),
+      );
+      const regular = await bodyOf<AnnouncementResponseDto>(
+        createAnnouncement(org.token, org.id, {
+          title: 'Regular before join',
+        }).expect(201),
+      );
+
+      expect(pinned.communityName).toBe(org.name);
+      expect(pinned.parentGroupName).toBeNull();
+
+      // Not yet tied to the Group at all - same 404 as any outsider.
+      await request(app.getHttpServer())
+        .get(`/api/v1/groups/${org.id}/announcements`)
+        .set('Authorization', `Bearer ${AUDIENCE_SECTION_TOKEN}`)
+        .expect(404);
+
+      await addSectionMember(org.token, section.id, AUDIENCE_SECTION_TOKEN);
+      const em = app.get(EntityManager).fork();
+      const affiliation = new FormalGroupAffiliation();
+      affiliation.user = em.getReference(
+        User,
+        localUserIdByToken.get(AUDIENCE_FORMAL_TOKEN)!,
+      );
+      affiliation.group = em.getReference(Group, org.id);
+      await em.persist(affiliation).flush();
+
+      for (const token of [AUDIENCE_SECTION_TOKEN, AUDIENCE_FORMAL_TOKEN]) {
+        const list = await bodyOf<AnnouncementListResult>(
+          request(app.getHttpServer())
+            .get(`/api/v1/groups/${org.id}/announcements`)
+            .set('Authorization', `Bearer ${token}`)
+            .expect(200),
+        );
+        expect(list.items.map((item) => item.id)).toEqual([
+          pinned.id,
+          regular.id,
+        ]);
+
+        await request(app.getHttpServer())
+          .get(`/api/v1/groups/${org.id}/announcements/${regular.id}`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200);
+
+        await request(app.getHttpServer())
+          .post(`/api/v1/groups/${org.id}/announcements/${regular.id}/read`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(204);
+
+        const feed = await bodyOf<AnnouncementListResult>(
+          request(app.getHttpServer())
+            .get('/api/v1/announcements')
+            .set('Authorization', `Bearer ${token}`)
+            .expect(200),
+        );
+        const feedIds = feed.items.map((item) => item.id);
+        expect(feedIds).toContain(pinned.id);
+        expect(feedIds).toContain(regular.id);
+
+        // Audience is read-only - never the OWNER/ADMIN archive.
+        await request(app.getHttpServer())
+          .get(`/api/v1/groups/${org.id}/announcements/archive`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(404);
+      }
     });
   });
 

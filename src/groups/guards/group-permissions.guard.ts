@@ -20,7 +20,10 @@ import { Group } from '../entities/group.entity';
 import { GroupStatus } from '../enums/group-status.enum';
 import { GroupPermission } from '../permissions/group-permission.enum';
 import { GroupPermissionService } from '../permissions/group-permission.service';
-import { PUBLIC_VIEW_SAFE_PERMISSIONS } from '../permissions/group-role-permissions.map';
+import {
+  GROUP_AUDIENCE_SAFE_PERMISSIONS,
+  PUBLIC_VIEW_SAFE_PERMISSIONS,
+} from '../permissions/group-role-permissions.map';
 import { RoleAssignmentsService } from '../role-assignments.service';
 
 const DEFAULT_ALLOWED_STATUSES: readonly GroupStatus[] = [GroupStatus.ACTIVE];
@@ -58,8 +61,8 @@ const DEFAULT_ALLOWED_STATUSES: readonly GroupStatus[] = [GroupStatus.ACTIVE];
  * When that resolves to nothing (no RoleAssignment/Membership at all) AND
  * every required permission is in PUBLIC_VIEW_SAFE_PERMISSIONS, falls back
  * to RoleAssignmentsService.resolvePublicView() instead of 404ing - lets
- * ANY authenticated user view a `isPublic` Group/Section's own profile and
- * a Group's list of child Sections (see that set's own comment for exactly
+ * ANY authenticated user view an `isPublic` Group's (or any Section's)
+ * own profile and a Group's list of child Sections (see that set's own comment for exactly
  * which permissions) without holding any Role/Membership, so a community
  * found via Discover search is actually viewable before joining it (see
  * resolvePublicView's own comment for the bug this closes). A private
@@ -130,19 +133,28 @@ export class GroupPermissionsGuard implements CanActivate {
     } else {
       // No RoleAssignment/Membership at all - only reachable for a Public
       // Group/Section, and only for the narrow GROUP_VIEW-only tier (see
-      // PUBLIC_VIEW_SAFE_PERMISSIONS and resolvePublicView's own comment).
-      // Anything wider (member list, audit log, ...) still 404s below,
-      // same as a genuinely private/nonexistent target.
+      // PUBLIC_VIEW_SAFE_PERMISSIONS and resolvePublicView's own comment),
+      // or for a Group's own audience reading its announcements (see
+      // resolveGroupAudienceView). Anything wider (member list, audit log,
+      // ...) still 404s below, same as a genuinely private/nonexistent
+      // target.
       const isPublicViewOnly = requiredPermissions.every((permission) =>
         PUBLIC_VIEW_SAFE_PERMISSIONS.has(permission),
       );
       const publicCommunity = isPublicViewOnly
         ? await this.roleAssignmentsService.resolvePublicView(groupId)
         : null;
-      if (!publicCommunity) {
+      const fallbackCommunity =
+        publicCommunity ??
+        (await this.resolveGroupAudienceView(
+          groupId,
+          request.localUser.id,
+          requiredPermissions,
+        ));
+      if (!fallbackCommunity) {
         throw this.groupNotFound();
       }
-      community = publicCommunity;
+      community = fallbackCommunity;
     }
 
     const requiredKind = this.reflector.getAllAndOverride<GroupKind>(
@@ -172,6 +184,27 @@ export class GroupPermissionsGuard implements CanActivate {
     assertGroupStatusAllowed(community, allowedStatuses);
 
     return true;
+  }
+
+  /**
+   * A Group's audience (formal members + active members of its direct
+   * Sections - see RoleAssignmentsService.isGroupAudienceMember) may read
+   * its announcements without any Role there. Only for a Group target and
+   * only when every required permission is in
+   * GROUP_AUDIENCE_SAFE_PERMISSIONS - otherwise null, and the caller 404s
+   * exactly as before.
+   */
+  private async resolveGroupAudienceView(
+    groupId: string,
+    userId: string,
+    requiredPermissions: GroupPermission[],
+  ): Promise<Group | null> {
+    const isAudienceSafe = requiredPermissions.every((permission) =>
+      GROUP_AUDIENCE_SAFE_PERMISSIONS.has(permission),
+    );
+    return isAudienceSafe
+      ? this.roleAssignmentsService.resolveGroupAudienceView(groupId, userId)
+      : null;
   }
 
   private groupNotFound(): NotFoundException {

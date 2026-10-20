@@ -528,11 +528,11 @@ describe('Standalone Sections (e2e)', () => {
     });
 
     it('attaches via the hierarchy invitation flow (different owners) without inheriting membership/roles from the Group OWNER', async () => {
-      // Private - this test's 404 assertions below are about permission
-      // isolation (no Role Assignment inheritance from the Group), not
-      // about the Public-view fallback (RoleAssignmentsService.
-      // resolvePublicView), which would otherwise let SECOND_TOKEN read a
-      // Public Section's GET even with zero Role Assignments.
+      // The 404 assertions below probe /members (MEMBERSHIP_VIEW), not
+      // GET /sections/:id - a Section's profile is always readable through
+      // the Public-view fallback (RoleAssignmentsService.resolvePublicView),
+      // so only a non-public-view route shows permission isolation (no
+      // Role Assignment inheritance from the Group).
       const section = await createStandaloneSection(OWNER_TOKEN, {
         name: 'Attach-Later Section (invitation)',
         isPublic: false,
@@ -546,7 +546,7 @@ describe('Standalone Sections (e2e)', () => {
 
       // The Group OWNER cannot act on the Section before attaching...
       await request(app.getHttpServer())
-        .get(`/api/v1/sections/${section.id}`)
+        .get(`/api/v1/sections/${section.id}/members`)
         .set('Authorization', `Bearer ${SECOND_TOKEN}`)
         .expect(404);
 
@@ -587,7 +587,7 @@ describe('Standalone Sections (e2e)', () => {
       // The attach never grants the new parent Group's OWNER any
       // RoleAssignment on the Section - still no access.
       await request(app.getHttpServer())
-        .get(`/api/v1/sections/${section.id}`)
+        .get(`/api/v1/sections/${section.id}/members`)
         .set('Authorization', `Bearer ${SECOND_TOKEN}`)
         .expect(404);
 

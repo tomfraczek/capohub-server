@@ -142,9 +142,9 @@ export class RoleAssignmentsService {
   }
 
   /**
-   * Resolves the Public-view fallback: a Group or Section with
-   * `isPublic = true` may be viewed (GroupPermission.GROUP_VIEW only -
-   * see PUBLIC_VIEW_SAFE_PERMISSIONS) by ANY authenticated user, even one
+   * Resolves the Public-view fallback: a Group with `isPublic = true`, or
+   * any Section (see the note in the body), may be viewed
+   * (GroupPermission.GROUP_VIEW only - see PUBLIC_VIEW_SAFE_PERMISSIONS) by ANY authenticated user, even one
    * holding no RoleAssignment/SectionMembership at all - otherwise
    * resolveAuthorization() above returns null for exactly that caller and
    * GroupPermissionsGuard 404s, which broke the "Discover" flow: a Public
@@ -169,7 +169,17 @@ export class RoleAssignmentsService {
       groupOrSectionId,
       em,
     );
-    if (!community || !community.isPublic) {
+    if (!community) {
+      return null;
+    }
+    // A Section's `isPublic` is "Dołączanie publiczne" (join without
+    // approval - see MembershipRequestsService), not profile visibility:
+    // a Section has no private-profile setting, so its profile is always
+    // viewable. Gating it on `isPublic` 404'd every approval-only Section
+    // for a non-member, even one findable via Discover - leaving them no
+    // screen to send the join request from. Only a Group's `isPublic` is
+    // visibility ("Profil publiczny").
+    if (community instanceof Group && !community.isPublic) {
       return null;
     }
     return community;
@@ -433,6 +443,138 @@ export class RoleAssignmentsService {
       ...new Set([
         ...groupIds,
         ...sectionIds.filter((id) => activeSectionIds.has(id)),
+      ]),
+    ];
+  }
+
+  /**
+   * GroupPermissionsGuard's audience fallback: the Group itself when
+   * `groupOrSectionId` is a Group and `userId` belongs to its audience
+   * (see isGroupAudienceMember), otherwise null.
+   */
+  async resolveGroupAudienceView(
+    groupOrSectionId: string,
+    userId: string,
+    em: EntityManager = this.em,
+  ): Promise<Group | null> {
+    const community = await this.groupHierarchyService.findCommunityById(
+      groupOrSectionId,
+      em,
+    );
+    if (!(community instanceof Group)) {
+      return null;
+    }
+    return (await this.isGroupAudienceMember(community.id, userId, em))
+      ? community
+      : null;
+  }
+
+  /**
+   * A Group's *audience* - the people its announcements are meant for, even
+   * though a Group has no ordinary members/Roles of its own: anyone whose
+   * active formal Group it is (FormalGroupAffiliation, endedOn === null)
+   * and every active (ACTIVE/READ_ONLY) member of one of its *direct*
+   * Sections (the same "no inheritance" rule as GroupAudienceService).
+   * OWNER/ADMIN are not included here - they already reach the Group
+   * through their own RoleAssignment.
+   *
+   * Grants nothing beyond GROUP_AUDIENCE_SAFE_PERMISSIONS (see
+   * GroupPermissionsGuard) - this is a read-only "you belong here" tie,
+   * never a Role.
+   */
+  async isGroupAudienceMember(
+    groupId: string,
+    userId: string,
+    em: EntityManager = this.em,
+  ): Promise<boolean> {
+    const affiliations = await em.count(FormalGroupAffiliation, {
+      group: groupId,
+      user: userId,
+      endedOn: null,
+    });
+    if (affiliations > 0) {
+      return true;
+    }
+    const memberships = await em.count(SectionMembership, {
+      user: userId,
+      section: { parentGroup: groupId },
+      status: {
+        $in: [
+          SectionMembershipStatus.ACTIVE,
+          SectionMembershipStatus.READ_ONLY,
+        ],
+      },
+    });
+    return memberships > 0;
+  }
+
+  /**
+   * Every Group id whose audience `userId` belongs to (see
+   * isGroupAudienceMember) - the cross-community counterpart used by
+   * AnnouncementsService.listForViewer alongside getCommunityIdsWithAnyRole.
+   */
+  async getAudienceGroupIds(
+    userId: string,
+    em: EntityManager = this.em,
+  ): Promise<string[]> {
+    const affiliations = await em.find(
+      FormalGroupAffiliation,
+      { user: userId, endedOn: null },
+      { fields: ['group'] },
+    );
+    const memberships = await em.find(
+      SectionMembership,
+      {
+        user: userId,
+        section: { parentGroup: { $ne: null } },
+        status: {
+          $in: [
+            SectionMembershipStatus.ACTIVE,
+            SectionMembershipStatus.READ_ONLY,
+          ],
+        },
+      },
+      { populate: ['section'] },
+    );
+    return [
+      ...new Set([
+        ...affiliations.map((a) => a.group.id),
+        ...memberships.map((m) => m.section.parentGroup!.id),
+      ]),
+    ];
+  }
+
+  /**
+   * Every user in `groupId`'s audience (see isGroupAudienceMember) - the
+   * recipients of a GROUP-type Announcement, alongside the Group's own
+   * OWNER/ADMIN.
+   */
+  async getGroupAudienceUserIds(
+    groupId: string,
+    em: EntityManager = this.em,
+  ): Promise<string[]> {
+    const affiliations = await em.find(
+      FormalGroupAffiliation,
+      { group: groupId, endedOn: null },
+      { fields: ['user'] },
+    );
+    const memberships = await em.find(
+      SectionMembership,
+      {
+        section: { parentGroup: groupId },
+        status: {
+          $in: [
+            SectionMembershipStatus.ACTIVE,
+            SectionMembershipStatus.READ_ONLY,
+          ],
+        },
+      },
+      { fields: ['user'] },
+    );
+    return [
+      ...new Set([
+        ...affiliations.map((a) => a.user.id),
+        ...memberships.map((m) => m.user.id),
       ]),
     ];
   }

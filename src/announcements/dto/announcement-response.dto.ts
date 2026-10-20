@@ -16,6 +16,12 @@ export interface AnnouncementResponseDto {
   // on recipientType, which can legitimately be RECIPIENT_GROUP and so
   // cannot answer this question by itself.
   communityResourceType: MembershipRequestTarget;
+  // Where this Announcement comes from, for display - the owning Group's or
+  // Section's own name, plus (for a Section, or a Group attached under
+  // another Group) its parent Group's name, `null` when it has none (e.g. a
+  // standalone Section).
+  communityName: string;
+  parentGroupName: string | null;
   title: string;
   body: string;
   author: GroupUserRefDto | null;

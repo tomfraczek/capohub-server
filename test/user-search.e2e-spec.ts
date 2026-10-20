@@ -308,6 +308,20 @@ describe('User Search (e2e)', () => {
     expect(match?.numericCode).toBe(profile.numericCode);
   });
 
+  it('finds a user by the start of their code, also typed as the displayed "U123-456"', async () => {
+    const target = await getMe(TOKENS.publicName);
+    const profile = await getMyProfile(TOKENS.publicName);
+    const code = profile.numericCode;
+
+    for (const typed of [
+      code.slice(0, 4),
+      `U${code.slice(0, 3)}-${code.slice(3, 5)}`,
+    ]) {
+      const result = await search(typed);
+      expect(result.items.map((item) => item.id)).toContain(target.id);
+    }
+  });
+
   describe('leading-zero numericCode', () => {
     it('treats "000123" and "123" as different codes (no numeric coercion)', async () => {
       const target = await getMe(TOKENS.fallback);

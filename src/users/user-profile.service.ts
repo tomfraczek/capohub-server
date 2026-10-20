@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { EntityManager, FilterQuery } from '@mikro-orm/postgresql';
 import { AppConfigService } from '../config/app.config';
-import { normalizeNumericCodeInput } from '../common/utils/numeric-code';
+import { parseUserCodePrefix } from '../common/utils/numeric-code';
 import { Group } from '../groups/entities/group.entity';
 import { Section } from '../groups/entities/section.entity';
 import { FormalGroupAffiliation } from '../groups/entities/formal-group-affiliation.entity';
@@ -219,8 +219,9 @@ export class UserProfileService {
 
   /**
    * GET /users/search - a minimal, global (not Section-scoped) user picker,
-   * currently only needed to pick a Training's external trainer. Matches
-   * against exactly four public fields: numericCode (exact), publicCode
+   * used to pick a Training's external trainer and a person to invite
+   * to a Section. Matches
+   * against exactly four public fields: numericCode (prefix), publicCode
    * (prefix), firstName/lastName and apelido (substring) - basic identity
    * has no privacy toggle, so all of them are always searchable. Never
    * touches `User.displayName` (see resolveDisplayName). A single
@@ -232,18 +233,23 @@ export class UserProfileService {
     offset: number,
   ): Promise<UserSearchListResponseDto> {
     const trimmed = search.trim();
-    const numericCode = normalizeNumericCodeInput(trimmed);
+    // A User code typed so far ("878", "u878", "U878-021") matches every
+    // code starting with those digits - same rule as "Dodaj
+    // administratora"'s admin-candidates search, so a code reads the same
+    // in every user picker. Names never contain digits, so this never
+    // hides a name match.
+    const codePrefix = parseUserCodePrefix(trimmed);
 
-    if (!numericCode && trimmed.length < SEARCH_TEXT_MIN_LENGTH) {
+    if (!codePrefix && trimmed.length < SEARCH_TEXT_MIN_LENGTH) {
       throw new BadRequestException({
         code: 'SEARCH_TOO_SHORT',
-        message: `search must be at least ${SEARCH_TEXT_MIN_LENGTH} characters, or an exact numeric code`,
+        message: `search must be at least ${SEARCH_TEXT_MIN_LENGTH} characters, or a user code`,
       });
     }
 
     const orConditions: FilterQuery<User>[] = [];
-    if (numericCode) {
-      orConditions.push({ numericCode });
+    if (codePrefix) {
+      orConditions.push({ numericCode: { $like: `${codePrefix}%` } });
     }
     if (trimmed.length >= SEARCH_TEXT_MIN_LENGTH) {
       orConditions.push({ publicCode: { $ilike: `${trimmed}%` } });

@@ -349,22 +349,25 @@ describe('Group Hierarchy / Academies / Cohorts (e2e)', () => {
 
     // The Public-view fallback (RoleAssignmentsService.resolvePublicView)
     // covers GROUP_VIEW and SECTION_VIEW (see PUBLIC_VIEW_SAFE_PERMISSIONS'
-    // own comment) - SectionsService.list() itself is what keeps a Private
-    // child Section from leaking through that list to a stranger, since
-    // the permission alone can't express it: an outsider sees the Public
-    // child but not the Private one, while the real OWNER still sees both.
-    it("narrows a Public Group's child Sections list to Public ones only for an outsider with zero Role Assignment", async () => {
+    // own comment) - SectionsService.list() itself is what keeps a child
+    // Section hidden from Discover from leaking through that list to a
+    // stranger, since the permission alone can't express it: an outsider
+    // sees the visible child but not the hidden one, while the real OWNER
+    // still sees both.
+    it("narrows a Public Group's child Sections list to ones not hidden from Discover for an outsider with zero Role Assignment", async () => {
       const root = await createGroup({
         name: 'Mixed Visibility Root',
         isPublic: true,
       });
+      // Approval-only joining (isPublic: false) does not hide a Section -
+      // only isHidden does.
       const publicChild = await createSection(root.token, root.id, {
         name: 'Public Child',
-        isPublic: true,
+        isPublic: false,
       });
       const privateChild = await createSection(root.token, root.id, {
-        name: 'Private Child',
-        isPublic: false,
+        name: 'Hidden Child',
+        isHidden: true,
       });
 
       const outsiderView = await bodyOf<SectionResponseDto[]>(

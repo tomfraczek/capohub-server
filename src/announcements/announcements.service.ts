@@ -41,7 +41,13 @@ export interface AnnouncementListResult {
   hasMore: boolean;
 }
 
-const COMMUNITY_POPULATE = ['communityGroup', 'communitySection'] as const;
+// The parent Group is populated too - the response names where an
+// Announcement comes from (communityName/parentGroupName - see
+// announcement.mapper.ts).
+const COMMUNITY_POPULATE = [
+  'communityGroup.parentGroup',
+  'communitySection.parentGroup',
+] as const;
 
 // A concrete (spreadable) object type for buildVisibilityFilter's community
 // scope - one exact community, or a set of them for the cross-community
@@ -147,15 +153,26 @@ export class AnnouncementsService {
         // holder for this exact community - the same population
         // GroupPermissionsGuard/ANNOUNCEMENT_VIEW already lets read this
         // Announcement (join always grants a MEMBER RoleAssignment - see
-        // MembershipRequestsService.fulfillJoin), so this needs no separate
-        // membership query.
-        recipientUserIds = await this.resolveCommunityRoleHolderIds(
+        // MembershipRequestsService.fulfillJoin). A Group has no ordinary
+        // members, so its audience (formal members + direct Section
+        // members - see RoleAssignmentsService.isGroupAudienceMember) is
+        // added on top of its OWNER/ADMIN.
+        const roleHolderIds = await this.resolveCommunityRoleHolderIds(
           em,
           community.id,
         );
+        const audienceIds =
+          community instanceof Group
+            ? await this.roleAssignmentsService.getGroupAudienceUserIds(
+                community.id,
+                em,
+              )
+            : [];
+        recipientUserIds = [...new Set([...roleHolderIds, ...audienceIds])];
       }
 
       await this.notifyRecipients(em, created, recipientUserIds, author);
+      await em.populate(created, COMMUNITY_POPULATE);
 
       return created;
     });
@@ -354,7 +371,9 @@ export class AnnouncementsService {
    * parallel implementations, so both keep exactly the same visibility
    * rule as list() (deletedAt IS NULL, active-only, Recipient Group
    * snapshot filter) resolved across every Group/Section the viewer
-   * currently holds any Role Assignment for - mirrors
+   * currently holds any Role Assignment for, plus every Group whose
+   * audience they belong to (formal Group, or member of one of its direct
+   * Sections - see RoleAssignmentsService.getAudienceGroupIds) - mirrors
    * EventsService.listForViewer's own "one shared viewer-scope resolution"
    * approach.
    *
@@ -383,8 +402,15 @@ export class AnnouncementsService {
     unreadCount: number;
   }> {
     const offset = options.offset ?? 0;
-    const communityIds =
+    // Sequential, not Promise.all - concurrent queries on the same
+    // EntityManager corrupt the underlying pg connection.
+    const roleCommunityIds =
       await this.roleAssignmentsService.getCommunityIdsWithAnyRole(viewer.id);
+    const audienceGroupIds =
+      await this.roleAssignmentsService.getAudienceGroupIds(viewer.id);
+    const communityIds = [
+      ...new Set([...roleCommunityIds, ...audienceGroupIds]),
+    ];
     if (communityIds.length === 0) {
       return { items: [], total: 0, hasMore: false, unreadCount: 0 };
     }
