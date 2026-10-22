@@ -4,4 +4,5 @@ export enum SongMediaProvider {
   YOUTUBE = 'YOUTUBE',
   SPOTIFY = 'SPOTIFY',
   SOUNDCLOUD = 'SOUNDCLOUD',
+  VIMEO = 'VIMEO',
 }

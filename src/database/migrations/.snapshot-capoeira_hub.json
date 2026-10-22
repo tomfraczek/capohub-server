@@ -14546,7 +14546,8 @@
           "enumItems": [
             "YOUTUBE",
             "SPOTIFY",
-            "SOUNDCLOUD"
+            "SOUNDCLOUD",
+            "VIMEO"
           ],
           "mappedType": "enum"
         },

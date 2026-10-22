@@ -213,6 +213,34 @@ describe('createSongSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts a Vimeo media URL', () => {
+    const payload = validPayload();
+    payload.media = [
+      {
+        provider: 'VIMEO',
+        url: 'https://vimeo.com/76979871',
+        title: null,
+        position: 1,
+      },
+    ];
+    const result = createSongSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a Vimeo media URL on a non-Vimeo domain', () => {
+    const payload = validPayload();
+    payload.media = [
+      {
+        provider: 'VIMEO',
+        url: 'https://www.youtube.com/watch?v=abc123',
+        title: null,
+        position: 1,
+      },
+    ];
+    const result = createSongSchema.safeParse(payload);
+    expect(result.success).toBe(false);
+  });
+
   it('rejects a media URL that is not https', () => {
     const payload = validPayload();
     payload.media = [

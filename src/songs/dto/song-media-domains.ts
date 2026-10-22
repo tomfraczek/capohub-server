@@ -13,6 +13,11 @@ export const ALLOWED_MEDIA_HOSTS: Record<SongMediaProvider, readonly string[]> =
     ],
     [SongMediaProvider.SPOTIFY]: ['open.spotify.com'],
     [SongMediaProvider.SOUNDCLOUD]: ['soundcloud.com', 'www.soundcloud.com'],
+    [SongMediaProvider.VIMEO]: [
+      'vimeo.com',
+      'www.vimeo.com',
+      'player.vimeo.com',
+    ],
   };
 
 export function isValidMediaUrlForProvider(
