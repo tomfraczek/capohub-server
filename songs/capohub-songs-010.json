@@ -1,0 +1,3636 @@
+{
+  "formatVersion": 1,
+  "songs": [
+    {
+      "title": "Paranauê",
+      "authorName": null,
+      "categoryCode": "CORRIDO",
+      "alternativeTitles": [
+        {
+          "title": "Paraná ê, Paraná ê, Paraná",
+          "position": 1
+        },
+        {
+          "title": "Paraneuê Paraná",
+          "position": 2
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Vou dizer à minha mulher, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Powiem mojej żonie, Paraná"
+                }
+              ]
+            },
+            {
+              "originalText": "Capoeira me venceu, Paraná",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Capoeira mnie pokonała, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Paranauê, paranauê, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paranauê, paranauê, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Vou me embora pra favela, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Odchodzę do faweli, Paraná"
+                }
+              ]
+            },
+            {
+              "originalText": "Como já disse que vou, Paraná",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Tak jak już mówiłem, że odejdę, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Paranauê, paranauê, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paranauê, paranauê, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Eu aqui não sou querido, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Tutaj nie jestem mile widziany, Paraná"
+                }
+              ]
+            },
+            {
+              "originalText": "Mas na minha terra eu sou, Paraná",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ale w moich rodzinnych stronach jestem, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Paranauê, paranauê, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paranauê, paranauê, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Cantando com alegria, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Śpiewając z radością, Paraná"
+                }
+              ]
+            },
+            {
+              "originalText": "Mocidade és que mata, Paraná",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Młodości, to ty zabijasz, Paraná",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Paranauê, paranauê, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paranauê, paranauê, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "O enfeite de uma mesa, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ozdobą stołu, Paraná"
+                }
+              ]
+            },
+            {
+              "originalText": "É um garfo e uma colher, Paraná",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jest widelec i łyżka, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Paranauê, paranauê, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paranauê, paranauê, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "O enfeite de uma cama, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ozdobą łóżka, Paraná"
+                }
+              ]
+            },
+            {
+              "originalText": "É o homem e uma mulher, Paraná",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jest mężczyzna i kobieta, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Paranauê, paranauê, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paranauê, paranauê, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Ela quis bater pé firme, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chciała mocno postawić stopę, Paraná"
+                }
+              ]
+            },
+            {
+              "originalText": "Isso não aconteceu, Paraná",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To się nie wydarzyło, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Paranauê, paranauê, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paranauê, paranauê, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Oh, Paranauê, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, Paranauê, Paraná"
+                }
+              ]
+            },
+            {
+              "originalText": "Paranauê, Paraná",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paranauê, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Paranauê, paranauê, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paranauê, paranauê, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "Assim dera que o morro, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I tak się stało, że wzgórze, Paraná",
+                  "isUncertain": true
+                }
+              ]
+            },
+            {
+              "originalText": "Se mudou para a cidade, Paraná",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przeniosło się do miasta, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Paranauê, paranauê, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paranauê, paranauê, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 19,
+          "lines": [
+            {
+              "originalText": "É batuque todo dia, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Codziennie rozbrzmiewają bębny, Paraná"
+                }
+              ]
+            },
+            {
+              "originalText": "Mulata de qualidade, Paraná",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mulatka pierwsza klasa, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 20,
+          "lines": [
+            {
+              "originalText": "Paranauê, paranauê, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paranauê, paranauê, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 21,
+          "lines": [
+            {
+              "originalText": "Vou me embora pra Bahia, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyjeżdżam do Bahii, Paraná"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu aqui não fico não, Paraná",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie zostanę tutaj, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 22,
+          "lines": [
+            {
+              "originalText": "Paranauê, paranauê, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paranauê, paranauê, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 23,
+          "lines": [
+            {
+              "originalText": "Se não for essa semana, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jeśli nie w tym tygodniu, Paraná"
+                }
+              ]
+            },
+            {
+              "originalText": "É a semana que vem, Paraná",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To w przyszłym tygodniu, Paraná"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 24,
+          "lines": [
+            {
+              "originalText": "Paranauê, paranauê, Paraná",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paranauê, paranauê, Paraná"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=54JRejHOixA",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "SPOTIFY",
+          "url": "https://open.spotify.com/track/1XQpKWREOOhS9bN6vVacKq",
+          "title": "Paraneuê Paraná — Grupo Muzenza de Capoeira",
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„Paranauê” (także „Paraná ê”) to jedna z najbardziej rozpoznawalnych pieśni śpiewanych w capoeirze. Jej autor i data powstania nie są ustalone; funkcjonuje w tradycji ustnej, a zwrotki i refren spotyka się w różnych wariantach. Istnieją co najmniej trzy opowieści o jej pochodzeniu. Pierwsza wiąże refren z wojną paragwajską (1864–1870): według popularnej relacji powracający brazylijscy żołnierze, wśród których byli także wcześniej zniewoleni Afro-Brazylijczycy, mieli śpiewać nad rzeką Paraná. Nie ma jednak wystarczających dowodów, by uznać tę historię za udokumentowane źródło pieśni. Druga pochodzi z relacji Mestre Genaro: miał on improwizować „Paraná ê” w akademii Mestre Artur Emídio, gdy spóźniał się Mestre Paraná (Osvaldo Lisboa dos Santos), muzyk związany z baterią. Trzecia możliwość to wywodzenie się refrenu z tradycji samba de roda i jego późniejsze przejęcie przez capoeirę. Te opowieści nie rozstrzygają, czy melodia, refren i znane dziś zwrotki powstały w tym samym czasie.",
+      "meaningContext": "Co oznacza tytuł? „Paraná” to słowo wywodzące się z języków rdzennych mieszkańców Brazylii, tłumaczone jako „podobne do morza” lub odnoszone do wielkiej rzeki; tak nazywa się również rzeka Paraná w Ameryce Południowej oraz brazylijski stan. „Paraná ê” można rozumieć jako śpiewane wezwanie „Paraná, ê!”, w którym „ê” jest okrzykiem wokalnym, nie osobnym słowem o ustalonym dosłownym przekładzie. „Paranauê” jest zlaną w śpiewie postacią refrenu; spotyka się też interpretację łączącą „Paraná” z „auê”, ale etymologia całej formy nie jest pewna. W samej pieśni „Paraná” nie musi za każdym razem wskazywać jednego konkretnego miejsca: pełni też funkcję powracającego zawołania łączącego zwrotki.\n\nO czym jest ta wersja? Nie opowiada jednej linearnej historii. Solista śpiewa m.in. o tym, że capoeira go pokonała („Capoeira me venceu”), o zamiarze odejścia do faweli lub Bahii, o poczuciu odrzucenia („tutaj nie jestem lubiany, ale w mojej ziemi tak”), o młodości, codziennym życiu i relacjach między ludźmi. Część dwuwierszy ma charakter żartobliwy albo przysłowiowy. Wspólnym nastrojem jest ruch, tęsknota za swoim miejscem i dialog z innymi. To corrido: prowadzący śpiewa krótkie zwrotki, a chór odpowiada refrenem. Kolejne wersy mogą się zmieniać zależnie od śpiewającego i sytuacji w roda.",
+      "meaningTrivia": "„Paranauê” nie musi być odczytywane jako osobne portugalskie słowo o jednym słownikowym znaczeniu. Jest także brzmieniem refrenu, dlatego spotyka się zapisy „Paraná ê”, „Paranauê” i „Paraneuê”. Choć pieśń bywa łączona z rzeką Paraná i wojną paragwajską, istnieje też znacznie późniejsza opowieść: Mestre Genaro miał wołać w ten sposób nie do rzeki, lecz do nieobecnego Mestre Paraná. Ten sam refren może więc przywoływać różne znaczenia w zależności od przekazywanej tradycji. Co więcej, zwrotki można przestawiać i improwizować: wersy o Bahii, faweli czy „mojej ziemi” nie muszą pochodzić z jednego pierwotnego utworu. To właśnie dlatego dwa nagrania pod tym samym tytułem mogą mieć różny tekst. Dwa wersy tej wersji mają przekład niepewny. „Mocidade és que mata” można czytać jako zwrot do młodości („młodości, to ty zabijasz”) albo — w wariancie „mocidade é que mata” — jako przysłowie „to młodość zabija”. W wersie „Assim dera que o morro / se mudou para a cidade” wyrażenie „assim dera” bywa wywodzone od „quem dera” („oby”), ale tryb oznajmujący następnego wersu wskazuje raczej na opowieść: „i tak się stało, że wzgórze [czyli społeczność z morro] przeniosło się do miasta”."
+    },
+    {
+      "title": "Ai, Ai, Aidê",
+      "authorName": null,
+      "categoryCode": "CORRIDO",
+      "alternativeTitles": [
+        {
+          "title": "Ai Ai Aidê",
+          "position": 1
+        },
+        {
+          "title": "Ai Ai Aide",
+          "position": 2
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "CHORUS",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Ai ai aidê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Aj, aj, Aidê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Joga bonito que eu quero aprender",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Graj pięknie, bo chcę nauczyć się tak grać."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Ai ai aidê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Aj, aj, Aidê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Como vai como passou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak się masz, jak ci się wiodło?"
+                }
+              ]
+            },
+            {
+              "originalText": "Como vai vosmecê",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak się pan/pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Ai ai aidê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Aj, aj, Aidê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Joga bonito que eu quero ver",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Graj pięknie, bo chcę zobaczyć, jak grasz."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Ai ai aidê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Aj, aj, Aidê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Era eu, era você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To byłem ja, to byłeś ty"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Ai ai aidê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Aj, aj, Aidê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Eu venci a batalha de Camunjerê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wygrałem bitwę pod Camunjerê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Ai ai aidê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Aj, aj, Aidê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Como vai, como está",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak się masz, jak się czujesz?"
+                }
+              ]
+            },
+            {
+              "originalText": "Como vai vosmecê",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak się pan/pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Ai ai aidê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Aj, aj, Aidê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Ô era eu, era meu mano",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, to byłem ja, to był mój brat"
+                }
+              ]
+            },
+            {
+              "originalText": "Aidê cadê você",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Aidê, gdzie jesteś?"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=duFWbYmhN2g",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "SPOTIFY",
+          "url": "https://open.spotify.com/track/1JznSrEEOdCmVbPDKr1BmN",
+          "title": "Ai, Ai, Aidê — Grupo de Capoeira Angola Pelourinho",
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„Ai, Ai, Aidê” to tradycyjne corrido capoeiry, przekazywane ustnie i występujące w wielu wariantach zwrotek. Nie ma wiarygodnie ustalonego autora ani daty powstania. Wśród znanych nagrań jest wykonanie Grupo de Capoeira Angola Pelourinho na albumie „Capoeira Angola from Salvador, Brazil”, wydanym przez Smithsonian Folkways w 1996 roku. Imię Aidê łączy tę pieśń z odrębną opowieścią śpiewaną w capoeirze („Aidê, Negra Africana”): według niej zniewolona Afrykanka Aidê uciekła przed właścicielem do quilombo Camugerê, wspólnoty zbiegłych osób zniewolonych. Nie znaleziono jednak niezależnych dowodów, że Aidê i opisane wydarzenia były postacią i zdarzeniami historycznymi; należy traktować tę historię jako przekaz pieśniarski. Nie jest też pewne, czy wszystkie zwrotki „Ai, Ai, Aidê” pochodzą z jednego pierwotnego utworu.",
+      "meaningContext": "Refren „Ai ai aidê” jest odpowiedzią chóru i zawołaniem przywołującym imię Aidê; „ai” ma tu charakter okrzyku, a nie osobnej wypowiedzi z jednoznacznym przekładem. W tej wersji solista przede wszystkim zachęca graczy do „joga bonito” — pięknej, uważnej gry, którą chce oglądać lub od której chce się uczyć. W roda takie wezwanie może oznaczać pochwałę elegancji ruchu albo prośbę, by gra była bardziej płynna i mniej brutalna, zależnie od sytuacji. Zwroty „como vai” oraz dawne, potoczne „vosmecê” („vossa mercê”, spokrewnione z „você”) brzmią jak powitanie i pytanie o samopoczucie. „Era eu, era você” i „era meu mano” nawiązują do relacji z drugą osobą; „mano” może oznaczać brata albo bliskiego towarzysza. „Eu venci a batalha de Camunjerê” mówi o zwycięstwie w bitwie pod Camunjerê; tradycja pieśniarska zna też zapis „Camugerê”, kojarzony z quilombo występującym w opowieści o Aidê, ale nie można na tej podstawie potwierdzić konkretnej historycznej bitwy. Pieśń nie tworzy jednej ciągłej fabuły: kolejne wersy mogą zmieniać się podczas śpiewu.",
+      "meaningTrivia": "Utwór jest przykładem corrido „na żywo”: krótkie wezwania solisty przeplatają się z prostą odpowiedzią chóru, więc nawet początkujący mogą szybko dołączyć do śpiewu. „Joga bonito que eu quero aprender” pokazuje, że śpiewak bywa jednocześnie obserwatorem i uczniem — w roda uczy się także przez patrzenie na grę innych. Nazwę Camunjerê zapisuje się również „Camugerê”; bez dodatkowych źródeł nie należy uznawać żadnej wersji za bezdyskusyjnie pierwotną. Co ciekawe, piosenka o Aidê i pieśń „Aidê, Negra Africana” nie są tym samym tekstem, choć tradycja może je ze sobą łączyć. Popularna wersja „Ai, Ai, Aidê” została zarejestrowana przez Grupo de Capoeira Angola Pelourinho w 1996 r. — jest to data nagrania, nie data powstania pieśni."
+    },
+    {
+      "title": "Beira Mar Ió Ió",
+      "authorName": null,
+      "categoryCode": "CORRIDO",
+      "alternativeTitles": [
+        {
+          "title": "Beira Mar",
+          "position": 1
+        },
+        {
+          "title": "Beira Mar Ioiô",
+          "position": 2
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Beira Mar Ió Ió",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nad brzegiem morza, ioiô"
+                }
+              ]
+            },
+            {
+              "originalText": "Beira Mar Iá Iá",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nad brzegiem morza, iaiá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Beira Mar Ió Ió",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nad brzegiem morza, ioiô"
+                }
+              ]
+            },
+            {
+              "originalText": "Beira Mar Iá Iá",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nad brzegiem morza, iaiá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Beira mar, beira mar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Brzeg morza, brzeg morza"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "É de ió ió",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Należy do ioiô"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Beira mar, beira mar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Brzeg morza, brzeg morza"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "É de iá iá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Należy do iaiá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Beira mar, beira mar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Brzeg morza, brzeg morza"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "É de ió ió",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Należy do ioiô"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Beira mar, beira mar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Brzeg morza, brzeg morza"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "É de iá iá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Należy do iaiá"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=O9SGybz90kM",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=499py7R8ciw",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„Beira Mar Ió Ió” należy do tradycyjnego repertuaru capoeiry, szczególnie obecnego w zbiorach pieśni Capoeira Angola. Autor i czas powstania nie są wiarygodnie ustalone. Tekst odwołuje się do nadmorskiego świata Brazylii i dawnych form zwracania się do osób stojących wyżej w hierarchii społecznej. „Ioiô” (od „sinhô”, potocznego „senhor”) i „iaiá” (od „sinhá”, „senhora”) były używane m.in. w realiach społeczeństwa niewolniczego jako zwroty do pana, pani lub ich dzieci. Sam tekst nie wskazuje konkretnego miejsca ani wydarzenia, dlatego nie należy przedstawiać go jako relacji z jednej znanej historycznie sytuacji. Różne śpiewniki zachowują ten refren w podobnym kształcie; znana jest również dłuższa pieśń „Foi na beira do mar”, która wykorzystuje tę samą sekwencję.",
+      "meaningContext": "„Beira-mar” znaczy „brzeg morza” lub „wybrzeże”. Pierwsze wersy przywołują nadmorską przestrzeń i dwie dawne formy zwracania się do osób: „ioiô” (pan, młody pan) oraz „iaiá” (pani, młoda pani). W odpowiedziach „É de ió ió” i „É de iá iá” dosłowne „jest ioiô / iaiá” najlepiej rozumieć eliptycznie: „(to) należy do ioiô / iaiá”. Możliwa jest więc interpretacja obrazu wybrzeża jako czegoś należącego do pana i pani — z echem nierówności społecznych w kolonialnej i niewolniczej Brazylii. Nie wiadomo jednak, czy taki był pierwotny zamysł twórców; słowa bywają dziś wykonywane po prostu jako rytmiczny refren. Jest to corrido z wezwaniem solisty i odpowiedzią chóru, a nie opowieść rozwijająca fabułę w kolejnych zwrotkach.",
+      "meaningTrivia": "„Ioiô” i „iaiá” nie są imionami ani bez znaczenia dobranymi sylabami: wiążą się z historycznymi zwrotami „sinhô” i „sinhá”. W różnych śpiewnikach występują zapisy „ió ió”, „ioiô”, „iô iô”, „iá iá” i „iaiá”, które oddają podobne śpiewane brzmienie. Ten refren można spotkać samodzielnie oraz jako część dłuższego śpiewu „Foi na beira do mar”. W przedstawionej wersji pierwszy dwuwiersz powtarza chór, a później chór odpowiada tylko krótkim „É de ió ió” albo „É de iá iá”."
+    },
+    {
+      "title": "Oi Sim Sim Sim",
+      "authorName": null,
+      "categoryCode": "CORRIDO",
+      "alternativeTitles": [
+        {
+          "title": "Oi Sim Sim Sim, Oi Não Não Não",
+          "position": 1
+        },
+        {
+          "title": "Sim Sim Sim, Não Não Não",
+          "position": 2
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "CHORUS",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Oi sim sim sim",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj tak, tak, tak"
+                }
+              ]
+            },
+            {
+              "originalText": "Oi não não não",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj nie, nie, nie"
+                }
+              ]
+            },
+            {
+              "originalText": "Oi sim sim sim",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj tak, tak, tak"
+                }
+              ]
+            },
+            {
+              "originalText": "Oi não não não",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj nie, nie, nie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Mas hoje tem amanhã não",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ale dziś jest, a jutro może już nie być"
+                }
+              ]
+            },
+            {
+              "originalText": "Mas hoje tem amanhã não",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ale dziś jest, a jutro może już nie być"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Oi sim sim sim",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj tak, tak, tak"
+                }
+              ]
+            },
+            {
+              "originalText": "Oi não não não",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj nie, nie, nie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Mas se meu mestre disse que sim",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ale jeśli mój mistrz powiedział „tak”"
+                }
+              ]
+            },
+            {
+              "originalText": "Quero ver quem diz que não",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To chciałbym zobaczyć, kto powie „nie”"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Oi sim sim sim",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj tak, tak, tak"
+                }
+              ]
+            },
+            {
+              "originalText": "Oi não não não",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj nie, nie, nie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Olha a pisada de lampião",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Spójrz na krok Lampião"
+                }
+              ]
+            },
+            {
+              "originalText": "Olha a pisada de lampião",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Spójrz na krok Lampião"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Oi sim sim sim",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj tak, tak, tak"
+                }
+              ]
+            },
+            {
+              "originalText": "Oi não não não",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj nie, nie, nie"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=Qy9gkL1OMMs",
+          "title": "Oi sim sim sim",
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=B06bR4_ZnSI",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„Oi Sim Sim Sim” to tradycyjne corrido capoeira, rozpowszechnione w różnych wersjach. Nie ma wiarygodnie ustalonego autora ani daty powstania. Wers „Olha a pisada de Lampião” nawiązuje do Virgulino Ferreiry da Silvy, zwanego Lampião (zmarłego w 1938 roku), przywódcy cangaceiros działających w sertão północno-wschodniej Brazylii. Cangaço było zjawiskiem zbrojnych band, związanym między innymi z nierównościami społecznymi, konfliktami lokalnymi i słabą obecnością państwa. Lampião stał się postacią folkloru: bywa przedstawiany jako symbol buntu, lecz jego grupa dopuszczała się także przemocy i przestępstw. Samo wspomnienie Lampião nie dowodzi, że pieśń powstała za jego życia.",
+      "meaningContext": "Utwór nie opowiada jednej ciągłej historii. Refren „Oi sim sim sim / Oi não não não” przeciwstawia „tak” i „nie”, co może przywodzić na myśl niepewność i nieustanny dialog gry w capoeira. „Mas hoje tem amanhã não” dosłownie znaczy „ale dziś jest, jutro nie”; nie wiadomo, co konkretnie „jest”, dlatego najnaturalniej oddać to jako „dziś jest, a jutro może już nie być”. W kontekście roda może to zachęcać do korzystania z obecnej chwili, ale nie jest to jedyna interpretacja. Wersy „Mas se meu mestre disse que sim / Quero ver quem diz que não” wyrażają przywiązanie do autorytetu mestre i prowokacyjne pytanie, kto odważy się mu zaprzeczyć. „Olha a pisada de Lampião” każe zwrócić uwagę na sposób stawiania kroków przez Lampião; może przywoływać jego wizerunek człowieka zwinnego, niebezpiecznego i trudnego do przewidzenia. Nie ma jednak podstaw, by utożsamiać ten wers z konkretną techniką capoeiry.",
+      "meaningTrivia": "Słowo „pisada” oznacza m.in. krok, sposób stąpania lub ślad stopy, dlatego „Olha a pisada de Lampião” można też oddać jako „Patrz, jak stąpa Lampião”. Lampião był związany z kulturą sertão, a z cangaceiros kojarzy się także taniec xaxado; nie oznacza to jednak, że piosenka opisuje konkretny taniec. W śpiewnikach spotyka się inne kolejności zwrotek i dodatkowe wersy, ponieważ corrido dopuszcza wymianę oraz improwizowanie śpiewanych odpowiedzi. Okrzyk „oi” służy tu przede wszystkim muzycznemu zaakcentowaniu krótkich „sim” i „não”."
+    },
+    {
+      "title": "Marinheiro Só",
+      "authorName": null,
+      "categoryCode": "CORRIDO",
+      "alternativeTitles": [
+        {
+          "title": "Marinheiro Sou",
+          "position": 1
+        },
+        {
+          "title": "Eu Não Sou Daqui",
+          "position": 2
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Eu não sou daqui",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie pochodzę stąd"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Marinheiro só",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Samotny marynarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Eu não tenho amor",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie mam ukochanej osoby"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Marinheiro só",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Samotny marynarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Eu sou da Bahia",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pochodzę z Bahii"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Marinheiro só",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Samotny marynarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "De São Salvador",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Z Salvadoru"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Marinheiro só",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Samotny marynarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Marinheiro marinheiro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Marynarzu, marynarzu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Marinheiro só",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Samotny marynarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Quem te ensinou a nadar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto nauczył cię pływać?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Marinheiro só",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Samotny marynarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Foi o tombo do navio",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Czy to wywrócenie się statku?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Marinheiro só",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Samotny marynarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Ou foi o balanço do mar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A może kołysanie morza?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Marinheiro só",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Samotny marynarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "Lá vem lá vem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oto nadchodzi, już nadchodzi"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Marinheiro só",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Samotny marynarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 19,
+          "lines": [
+            {
+              "originalText": "Como ele vem faceiro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jakże dumnie i zalotnie się zbliża"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 20,
+          "lines": [
+            {
+              "originalText": "Marinheiro só",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Samotny marynarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 21,
+          "lines": [
+            {
+              "originalText": "Todo de branco",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Cały ubrany na biało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 22,
+          "lines": [
+            {
+              "originalText": "Marinheiro só",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Samotny marynarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 23,
+          "lines": [
+            {
+              "originalText": "Com seu bonezinho",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W swojej małej czapeczce"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 24,
+          "lines": [
+            {
+              "originalText": "Marinheiro só",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Samotny marynarz"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=mjqG0UlpTb8",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=X8lv0jApCbs",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„Marinheiro Só” to tradycyjna pieśń brazylijska, kojarzona z folklorem Bahii, samba de roda i repertuarem capoeira, gdzie wykonywana jest jako corrido. Jej twórca i data powstania nie są ustalone; utwór funkcjonował w przekazie ustnym. Motyw marynarza występuje też w brazylijskich pieśniach ludowych i praktykach religijnych, m.in. w śpiewach związanych z linią marinheiros w Umbandzie; nie należy jednak zakładać jednego, wyłącznie religijnego pochodzenia tej konkretnej piosenki. Znane wykonania poza środowiskiem capoeiry to nagranie Caetana Velosa na albumie z 1969 roku oraz interpretacja Clementiny de Jesus na albumie „Marinheiro Só” z 1973 roku. Wykonawcy ci nie są autorami tradycyjnego tekstu.",
+      "meaningContext": "Pieśń ukazuje marynarza przebywającego z dala od rodzinnych stron: „Eu não sou daqui” znaczy „Nie pochodzę stąd”, a „Eu sou da Bahia / De São Salvador” wskazuje na Bahię i jej stolicę, Salvador. „Eu não tenho amor” może wyrażać brak ukochanej osoby lub poczucie osamotnienia. Chór odpowiada stale „Marinheiro só” — dosłownie „samotny marynarz”; w niektórych wariantach śpiewa się „Marinheiro sou” („jestem marynarzem”), co zmienia punkt widzenia wypowiedzi. Pytanie „Quem te ensinou a nadar?” i wersy o przewróceniu się statku oraz kołysaniu morza sugerują, że marynarz nauczył się pływać przez doświadczenie i konieczność, niekoniecznie od nauczyciela. Końcowy obraz przedstawia nadchodzącego marynarza w białym stroju i czapeczce. W roda krótka odpowiedź chóru sprawia, że utwór dobrze nadaje się do dialogu prowadzącego z grupą. Nie ma podstaw, by każdą z tych zwrotek interpretować jako opis jednej historycznej osoby.",
+      "meaningTrivia": "„Marinheiro só” i „Marinheiro sou” brzmią podobnie w śpiewie, ale znaczą odpowiednio „samotny marynarz” i „jestem marynarzem”; obie wersje są spotykane. „Faceiro” w portugalskim brazylijskim może opisywać kogoś zadowolonego z siebie, figlarnego, wystrojonego lub zalotnego. „Tombo do navio” dosłownie znaczy „przewrócenie się statku” i w połączeniu z pytaniem o naukę pływania przywołuje naukę przez trudne doświadczenie. Pieśń wykracza poza capoeirę: występuje też w nagraniach muzyki popularnej, śpiewach ludowych i repertuarze niektórych wspólnot Umbandy. W tej wersji zapisano „Todo de branco” („cały ubrany na biało”), zgodnie z powszechnie spotykanym wariantem pieśni."
+    },
+    {
+      "title": "Dona Maria, Como Vai Você?",
+      "authorName": null,
+      "categoryCode": "CORRIDO",
+      "alternativeTitles": [
+        {
+          "title": "Vai Você (Dona Maria)",
+          "position": 1
+        },
+        {
+          "title": "Dona Maria Como Vai Você",
+          "position": 2
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Vai você, como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak się masz, jak się masz?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Joga bonito que eu quero aprender",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Graj pięknie, bo chcę nauczyć się tak grać"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Joga manhoso que o povo quer ver",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Graj z przebiegłością, bo ludzie chcą to zobaczyć"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Jogue o São Bento que o povo quer ver",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zagraj do São Bento, bo ludzie chcą to zobaczyć"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Joga bonito que eu quero ver",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Graj pięknie, bo chcę zobaczyć, jak grasz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Como vai você, como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak się masz, jak się masz?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Como tá como passou, como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co u ciebie, jak ci się wiodło, jak się masz?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Como vai você, eu quero saber",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak się masz? Chcę wiedzieć"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "Quero aprender a jogar com você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chcę się nauczyć grać z tobą"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 19,
+          "lines": [
+            {
+              "originalText": "E vai você vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I jak tam u ciebie, jak tam?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 20,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 21,
+          "lines": [
+            {
+              "originalText": "E pega na vassoura como vai você.",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I chwyć za miotłę — jak się masz?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 22,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 23,
+          "lines": [
+            {
+              "originalText": "E mais joga bonito que eu quero aprender.",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I jeszcze: graj pięknie, bo chcę się nauczyć"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 24,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 25,
+          "lines": [
+            {
+              "originalText": "E vai você e vai você.",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I jak tam u ciebie, jak tam?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 26,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 27,
+          "lines": [
+            {
+              "originalText": "O joga bonito que eu quero aprender.",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "O, graj pięknie, bo chcę się nauczyć"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 28,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 29,
+          "lines": [
+            {
+              "originalText": "Como vai você como vai você.",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak się masz, jak się masz?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 30,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 31,
+          "lines": [
+            {
+              "originalText": "Como tá você eu quero saber",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co u ciebie? Chcę wiedzieć"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 32,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 33,
+          "lines": [
+            {
+              "originalText": "Como tá como passou como vai você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co u ciebie, jak ci się wiodło, jak się masz?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 34,
+          "lines": [
+            {
+              "originalText": "Dona Maria como vai você?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 35,
+          "lines": [
+            {
+              "originalText": "Como vai você, como vai você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak się masz, jak się masz?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 36,
+          "lines": [
+            {
+              "originalText": "Dona Maria, como vai você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 37,
+          "lines": [
+            {
+              "originalText": "Joga bonito que eu quero ver",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Graj pięknie, bo chcę zobaczyć, jak grasz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 38,
+          "lines": [
+            {
+              "originalText": "Dona Maria, como vai você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 39,
+          "lines": [
+            {
+              "originalText": "Joga com calma que eu quero aprender",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Graj spokojnie, bo chcę się nauczyć"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 40,
+          "lines": [
+            {
+              "originalText": "Dona Maria, como vai você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 41,
+          "lines": [
+            {
+              "originalText": "Esse jogo é Capoeira, não é karate",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ta gra to capoeira, nie karate"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 42,
+          "lines": [
+            {
+              "originalText": "Dona Maria, como vai você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Mario, jak się pani miewa?"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=-z6fpWzwx-Y",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=PjTFXiGq8oQ",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„Dona Maria, Como Vai Você?” (znana też jako „Vai Você”) jest corrido od dawna wykonywanym w capoeirze. Pieśń znajduje się w repertuarze Mestre Bimby, twórcy Capoeira Regional: wśród opublikowanych nagrań jego zespołu znajduje się wykonanie z 1953 roku, a śpiew ten pojawia się również na albumie Mestre Bimby z 1963 roku. Nie przesądza to o tym, że Bimba skomponował cały utwór; źródła nie są jednoznaczne co do autorstwa, dlatego zapisano je jako nieustalone. Wersje śpiewane dziś zawierają dodatkowe improwizowane linie, których nie ma w historycznych nagraniach. Nie należy utożsamiać tytułowej Dona Marii z bohaterką innej pieśni, „Dona Maria do Camboatá”: brak dowodów, że chodzi o tę samą osobę.",
+      "meaningContext": "Pieśń opiera się na dialogu prowadzącego z chórem: solista zwraca się do rozmówcy i zachęca do gry, a chór stale odpowiada „Dona Maria, como vai você?” — „Pani Mario, jak się pani miewa?”. „Dona” jest portugalskim zwrotem grzecznościowym stosowanym wobec kobiety; w tym kontekście może wyrażać szacunek i zażyłość, ale pieśń nie pozwala ustalić tożsamości Marii. Wersy „Joga bonito que eu quero aprender” i „Joga bonito que eu quero ver” znaczą „Graj pięknie, bo chcę nauczyć się tak grać” oraz „Graj pięknie, bo chcę zobaczyć, jak grasz”. „Joga manhoso” zachęca do gry sprytnej, podstępnej i pełnej wyczucia, niekoniecznie agresywnej. „Jogue o São Bento” to w kontekście capoeiry zachęta do gry przy toque z rodziny São Bento, ale tekst nie określa konkretnego wariantu ani tego, do którego rytmu śpiewa się całą piosenkę. „Joga com calma” proponuje grę spokojniejszą, umożliwiającą naukę. Wers „Esse jogo é Capoeira, não é karate” podkreśla odrębność capoeiry od karate: znaczenie muzyki, ginga, rytmu, dialogu i malícia. Piosenka jest więc jednocześnie pozdrowieniem, zachętą do pokazania umiejętności i komentarzem do gry w roda.",
+      "meaningTrivia": "Pieśń można usłyszeć w nagraniach Mestre Bimby, ale śpiewana współcześnie wersja bywa znacznie dłuższa — prowadzący dodaje własne pytania i wskazówki, zachowując ten sam refren. „Manhoso” w kontekście capoeiry nie znaczy po prostu „leniwy”: bliższe są mu „sprytny”, „przebiegły” i „umiejący zmylić przeciwnika”. „São Bento” może oznaczać kilka różnych toques berimbau; wiersz nie upoważnia do przypisania tej pieśni jednego konkretnego rytmu. „Pega na vassoura” dosłownie oznacza „chwyć za miotłę”; nie ma podstaw, by na tej podstawie dopowiadać konkretny rytuał lub wydarzenie historyczne. W źródłach spotyka się formę „jogue bonito”, „joga bonito”, a także dodatkowe linie „jogue de longe” i „faça jogo de baixo” — dowód elastyczności corrido, a nie koniecznie odrębnych utworów."
+    },
+    {
+      "title": "A Hora É Essa",
+      "authorName": "Mestre Lobão",
+      "categoryCode": "CORRIDO",
+      "alternativeTitles": [
+        {
+          "title": "A Hora e Essa",
+          "position": 1
+        },
+        {
+          "title": "Berimbau Tocou na Capoeira",
+          "position": 2
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "A hora é essa, a hora é essa",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To właśnie ten moment, to właśnie ten moment"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "A hora é essa, a hora é essa",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To właśnie ten moment, to właśnie ten moment"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Berimbau tocou na capoeira",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Berimbau zabrzmiał podczas capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Berimbau tocou, eu vou jogar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Berimbau zabrzmiał, idę grać"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Berimbau tocou na capoeira",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Berimbau zabrzmiał podczas capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Berimbau tocou, eu vou jogar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Berimbau zabrzmiał, idę grać"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=ABw1FDwl8JU",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=dKzpMdJQUgQ",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„A Hora É Essa” to krótka pieśń typu corrido śpiewana w roda capoeira. Śpiewniki La Laue oraz Group Senzala North East przypisują jej autorstwo Mestre Lobão. Nie udało się jednak ustalić daty jej skomponowania ani zweryfikować tego przypisania w pierwotnym źródle, dlatego należy traktować je jako autorstwo podawane przez źródła repertuarowe. Tekst jest obecny w internetowych zbiorach pieśni capoeira co najmniej od połowy pierwszej dekady XXI wieku. Utwór nie opowiada o konkretnym wydarzeniu historycznym, lecz bezpośrednio odnosi się do rozpoczęcia gry i roli muzyki w roda.",
+      "meaningContext": "„A hora é essa” dosłownie znaczy „to jest ta godzina / ten moment”, a idiomatycznie: „właśnie teraz jest pora”. Pieśń zachęca do wejścia do gry bez odkładania tego na później. „Berimbau tocou na capoeira” wskazuje, że zabrzmiał berimbau — instrument, którego rytm organizuje przebieg roda i wpływa na charakter gry. „Eu vou jogar” znaczy „idę grać / będę grać” i stanowi odpowiedź capoeiristy na muzyczne wezwanie. W tym kontekście „jogar” oznacza grę capoeira, czyli fizyczny dialog dwóch osób w kręgu, a nie zwykłą grę towarzyską. Powtarzanie krótkich fraz przez prowadzącego i chór buduje energię uczestników. Nie ma w tekście podstaw do przypisywania mu konkretnego toque berimbau.",
+      "meaningTrivia": "Portugalskie „tocou” to forma czasu przeszłego od „tocar”, czyli m.in. „zagrać na instrumencie” albo „zabrzmieć”. „A hora é essa” lepiej oddać po polsku jako „To właśnie ten moment” niż dosłownie jako „Godzina jest ta”. W innych zapisach tekstu spotyka się „Berimbau tocou, eu vou jogar” bez przecinka, „berimbau tocou lá na capoeira” oraz powtórzenia obu par wersów. W przesłanym tekście ostatnie słowo brzmiało „joga”; w zapisie katalogowym poprawiono je na bezokolicznik „jogar”, zgodny z konstrukcją „vou jogar” („zamierzam grać / idę grać”)."
+    },
+    {
+      "title": "Adeus, Adeus (Boa Viagem)",
+      "authorName": null,
+      "categoryCode": "CORRIDO",
+      "alternativeTitles": [
+        {
+          "title": "Adeus (Boa Viagem)",
+          "position": 1
+        },
+        {
+          "title": "Boa Viagem",
+          "position": 2
+        },
+        {
+          "title": "Adeus, Adeus",
+          "position": 3
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Adeus, adeus",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Żegnaj, żegnaj"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Boa viagem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Szczęśliwej podróży"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Eu vou-me embora",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Odchodzę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Boa viagem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Szczęśliwej podróży"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Eu vou com Deus",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Idę z Bogiem"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Boa viagem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Szczęśliwej podróży"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Nossa Senhora",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Matka Boska"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Boa viagem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Szczęśliwej podróży"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Não vai embora",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie odchodź"
+                }
+              ]
+            },
+            {
+              "originalText": "E fica aqui, meu obrigado",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I zostawiam tu moje podziękowanie",
+                  "isUncertain": true
+                }
+              ]
+            },
+            {
+              "originalText": "Não vá embora",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie odchodź"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Adeus, adeus",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Żegnaj, żegnaj"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Boa viagem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Szczęśliwej podróży"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Adeus, adeus",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Żegnaj, żegnaj"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Boa viagem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Szczęśliwej podróży"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=tRJry_Bvtoc",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=h_IgQDJFCzo",
+          "title": null,
+          "position": 2
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=d8IRy0o24sQ",
+          "title": null,
+          "position": 3
+        }
+      ],
+      "meaningHistory": "„Adeus, Adeus (Boa Viagem)” to pieśń pożegnalna wykonywana w capoeira, zaliczana ze względu na krótkie wezwania solisty i odpowiedzi chóru do corridos; pełni też funkcję despedida (pożegnania). Jej autorstwo i data powstania nie są pewne. W śpiewnikach istnieją liczne warianty, m.in. „Eu vou-me embora / Eu vou com Deus / E com Nossa Senhora / Chegou a hora”. Nagrania i opracowania wiążą wykonania tego utworu z Mestre Marrom, ale samo takie przypisanie nie wystarcza do uznania go za pewnego kompozytora. Tekst przesłanej odmiany, wraz z nietypowym fragmentem „Não vai embora / E fica aqui, meu obrigado / Não vá embora”, jest opublikowany w repertuarze Associação Capoeira Lagoa Azul. Nie ustalono, skąd dokładnie pochodzi ten dodatkowy fragment.",
+      "meaningContext": "„Adeus” znaczy „żegnaj”, a odpowiedź chóru „Boa viagem” — „szczęśliwej podróży”. Prowadzący zapowiada odejście („Eu vou-me embora”), a pozostali uczestnicy życzą mu pomyślnej drogi. „Eu vou com Deus” oraz przywołanie „Nossa Senhora” (Matki Boskiej) wyrażają prośbę o opiekę religijną podczas rozstania; w innych wersjach wers brzmi „E com Nossa Senhora”, czyli „i z Matką Boską”. Takie corrido bywa wykorzystywane pod koniec roda jako wspólne pożegnanie i sygnał zbliżającego się zakończenia spotkania, choć samo wykonanie nie narzuca jednakowego rytmu ani zasad kończenia w każdej grupie. W przesłanej wersji pojawia się też „Não vai embora / ... / Não vá embora” („nie odchodź”), co kontrastuje z wcześniejszym „odchodzę” i pozwala usłyszeć dwie perspektywy rozstania. Fragment „E fica aqui, meu obrigado” jest językowo nietypowy i ma niepewne znaczenie, dlatego jego tłumaczenie należy traktować jako przybliżone.",
+      "meaningTrivia": "„Despedida” po portugalsku oznacza pożegnanie — opisuje funkcję tej pieśni w roda, a nie osobną kategorię w obecnym modelu Capoeira Hub. „Boa viagem” może dotyczyć prawdziwej podróży, ale podczas roda bywa też symbolicznym życzeniem dobrego powrotu. W tradycyjnych wersjach pojawiają się kolejne improwizowane wersy, np. „Chegou a hora” („nadeszła pora”) lub „Eu vou agora” („teraz odchodzę”). Zapis „vou mimbora” oddaje potoczną wymowę „vou-me embora” lub „vou embora”, a „vó cum deus” odpowiada standardowemu „vou com Deus”. W odróżnieniu od tych wymówieniowych wariantów wyrażenie „meu obrigado” po „fica aqui” nie tworzy jednoznacznego, naturalnego zdania w standardowym portugalskim — jego dokładne brzmienie warto sprawdzić w nagraniu."
+    },
+    {
+      "title": "Zum Zum Zum (Capoeira Mata Um)",
+      "authorName": null,
+      "categoryCode": "CORRIDO",
+      "alternativeTitles": [
+        {
+          "title": "Zum Zum Zum",
+          "position": 1
+        },
+        {
+          "title": "Capoeira Mata Um",
+          "position": 2
+        },
+        {
+          "title": "Zoom Zoom Zoom",
+          "position": 3
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Zum zum zum",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bzz, bzz, bzz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Capoeira mata um",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Capoeira może zabić człowieka"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Zum zum zum",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bzz, bzz, bzz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Capoeira mata um",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Capoeira może zabić człowieka"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Zum zum zum",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bzz, bzz, bzz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Capoeira mata um",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Capoeira może zabić człowieka"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Zum zum zum",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bzz, bzz, bzz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Capoeira mata um",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Capoeira może zabić człowieka"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Onde tem marimbondo?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gdzie są osy?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Zum zum zum",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bzz, bzz, bzz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Onde tem marimbondo?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gdzie są osy?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Zum zum zum",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bzz, bzz, bzz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Onde tem marimbondo?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gdzie są osy?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Zum zum zum",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bzz, bzz, bzz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Onde tem marimbondo?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gdzie są osy?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Zum zum zum",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bzz, bzz, bzz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "O A O A E",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "O, a, o, a, e"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Quero ver bater, quero ver cair",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chcę zobaczyć uderzenie, chcę zobaczyć upadek"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 19,
+          "lines": [
+            {
+              "originalText": "O A O A E",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "O, a, o, a, e"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 20,
+          "lines": [
+            {
+              "originalText": "Quero ver bater, quero ver cair",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chcę zobaczyć uderzenie, chcę zobaczyć upadek"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 21,
+          "lines": [
+            {
+              "originalText": "O A O A E",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "O, a, o, a, e"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 22,
+          "lines": [
+            {
+              "originalText": "Quero ver bater, quero ver cair",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chcę zobaczyć uderzenie, chcę zobaczyć upadek"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 23,
+          "lines": [
+            {
+              "originalText": "O A O A E",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "O, a, o, a, e"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 24,
+          "lines": [
+            {
+              "originalText": "Quero ver bater, quero ver cair",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chcę zobaczyć uderzenie, chcę zobaczyć upadek"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=-SufUq4M0EY",
+          "title": "Zum Zum Zum",
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Zum Zum Zum (Capoeira Mata Um)” to znane corrido capoeira, oparte na krótkich wezwaniach solisty i odpowiedziach chóru. Piosenka była śpiewana i opracowywana w różnych wariantach; nie ustalono wiarygodnie jednego autora tradycyjnego repertuaru, z którego pochodzi refren. Jej międzynarodową rozpoznawalność zwiększył film „Only the Strong” z 1993 roku. Filmowe opracowanie „Zoom-Zoom-Zoom” wykonał Jibril Serapis Bey, a jako jego autor figuruje Kao Rossman. Te kredyty dotyczą konkretnego opracowania filmowego i nie przesądzają o autorstwie tradycyjnych wersów. Podana wersja zawiera trzy bloki: „Zum zum zum / Capoeira mata um”, „Onde tem marimbondo? / Zum zum zum” i „O A O A E / Quero ver bater, quero ver cair”.",
+      "meaningContext": "Utwór ma energiczny, zaczepny charakter. „Zum zum zum” to onomatopeja brzęczenia, którą następne wersy wiążą z marimbondo — osą lub podobnym żądlącym owadem. „Onde tem marimbondo?” znaczy „Gdzie są osy?”; odpowiedź „zum zum zum” naśladuje ich dźwięk. „Capoeira mata um” dosłownie znaczy „Capoeira zabija jednego [człowieka]”, ale w śpiewie nie musi być dosłowną groźbą: może podkreślać groźny potencjał walki, ryzyko i siłę gry. „Quero ver bater, quero ver cair” wyraża wyzwanie — „Chcę zobaczyć uderzenie, chcę zobaczyć upadek”. Podmiot czasowników nie jest wskazany, dlatego nie dopisano, kto ma uderzyć lub upaść. „O A O A E” jest wokalizą bez ustalonego znaczenia leksykalnego. Nie ma wystarczających podstaw, aby twierdzić, że wszystkie zwrotki opisują dosłowne zabicie osy.",
+      "meaningTrivia": "„Marimbondo” w Brazylii oznacza osę lub podobnego żądlącego owada, a brzmienie „zum” imituje brzęczenie — stąd zabawa dźwiękiem w refrenie. Zapis „Zoom-Zoom-Zoom” rozsławiła anglojęzyczna dystrybucja filmowej wersji z „Only the Strong” (1993). Wersja filmowa ma własne kredyty autorskie: Kao Rossman i Jibril Serapis Bey; nie należy bez dodatkowych dowodów wpisywać ich jako autorów wszystkich tradycyjnych wersji. Niektóre warianty refrenu odpowiadają „É zum zum zum” zamiast samego „Zum zum zum”. W udostępnionym nagraniu zapisano krótszą odpowiedź, którą zachowano w JSON-ie."
+    },
+    {
+      "title": "Eu Já Vivo Enjoado",
+      "authorName": "Mestre Pastinha",
+      "categoryCode": "LADAINHA",
+      "alternativeTitles": [
+        {
+          "title": "Eu Ja Vivo Enjoado",
+          "position": 1
+        },
+        {
+          "title": "Ó Mamãe, Eu Vou Pra Lua",
+          "position": 2
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Eu já vivo enjoado,",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mam już dosyć"
+                }
+              ]
+            },
+            {
+              "originalText": "De viver aqui na terra,",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Życia tutaj, na Ziemi"
+                }
+              ]
+            },
+            {
+              "originalText": "Ó mamãe, eu vou pra lua,",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, mamo, lecę na Księżyc"
+                }
+              ]
+            },
+            {
+              "originalText": "Falei com minha mulher,",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Powiedziałem o tym mojej żonie"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela então me respondeu,",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A ona mi odpowiedziała"
+                }
+              ]
+            },
+            {
+              "originalText": "Nós vamos, se Deus quiser,",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pójdziemy, jeśli Bóg pozwoli"
+                }
+              ]
+            },
+            {
+              "originalText": "Vamos fazer um ranchinho,",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zbudujemy sobie mały domek"
+                }
+              ]
+            },
+            {
+              "originalText": "Todo feito de sapé,",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Cały zrobiony z trawy sapé"
+                }
+              ]
+            },
+            {
+              "originalText": "Amanhã às sete horas,",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jutro o siódmej godzinie"
+                }
+              ]
+            },
+            {
+              "originalText": "Nós vamos tomar café,",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Napijemy się kawy"
+                }
+              ]
+            },
+            {
+              "originalText": "Ê, eu que nunca acreditei,",
+              "position": 11,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ej, ja, który nigdy w to nie wierzyłem"
+                }
+              ]
+            },
+            {
+              "originalText": "Não posso me conformar,",
+              "position": 12,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie mogę się z tym pogodzić"
+                }
+              ]
+            },
+            {
+              "originalText": "Que a lua venha à terra,",
+              "position": 13,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Że Księżyc miałby przyjść na Ziemię"
+                }
+              ]
+            },
+            {
+              "originalText": "Que a terra venha a luar,",
+              "position": 14,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Że Ziemia miałaby przyjść do Księżyca",
+                  "isUncertain": true
+                }
+              ]
+            },
+            {
+              "originalText": "Tudo isso é conversa,",
+              "position": 15,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wszystko tylko gadanie"
+                }
+              ]
+            },
+            {
+              "originalText": "Pra comer sem trabalhar,",
+              "position": 16,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Żeby jeść bez pracowania"
+                }
+              ]
+            },
+            {
+              "originalText": "Ó senhor amigo meu,",
+              "position": 17,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "O, mój drogi przyjacielu"
+                }
+              ]
+            },
+            {
+              "originalText": "Escute o meu cantar,",
+              "position": 18,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Posłuchaj mojego śpiewu"
+                }
+              ]
+            },
+            {
+              "originalText": "Quem é dono não se enciúma,",
+              "position": 19,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ten, kto jest właścicielem, nie bywa zazdrosny"
+                }
+              ]
+            },
+            {
+              "originalText": "Quem não é quer enciumar,",
+              "position": 20,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A kto nim nie jest, chce wzbudzać zazdrość",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "É hora, é hora",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Już pora, już pora"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Iê, é hora, é hora",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, już pora, już pora"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Iê, vamos embora",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, chodźmy już"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Iê, vamos embora, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, chodźmy już, towarzyszu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Pela barra fora",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przez ujście, ku otwartemu morzu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Iê, pela barra fora, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, przez ujście, ku otwartemu morzu, towarzyszu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Iê, viva meu Deus",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, niech żyje mój Bóg"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Iê, viva meu Deus, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, niech żyje mój Bóg, towarzyszu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Iê, viva meu mestre",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, niech żyje mój mistrz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Iê, viva meu mestre, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, niech żyje mój mistrz, towarzyszu"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=lKYc81S53mg",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=ERfEYvdwdNQ",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„Eu Já Vivo Enjoado” to ladainha Capoeira Angola silnie kojarzona z Mestre Pastinha (Vicente Ferreira Pastinha, 1889–1981), ważnym nauczycielem i popularyzatorem tej tradycji z Salvadoru w Bahii. Kilka śpiewników przypisuje mu autorstwo, natomiast inne katalogi notują utwór jako tradycyjny, z niepewnym autorstwem. W polu autora podano Mestre Pastinha zgodnie z rozpowszechnioną atrybucją, lecz nie należy traktować jej jako bezspornie udokumentowanej. Ladainha jest dłuższym, solowym śpiewem często otwierającym roda Angola; po niej następuje chula (wezwania i odpowiedzi), a następnie mogą pojawić się corridos. W tej konkretnej wersji chula zaczyna się od „É hora, é hora”; inne wykonania mają odmienne wezwania, np. o piejącym kogucie. Nie ma pewnej daty powstania utworu.",
+      "meaningContext": "Śpiewający mówi, że jest już zmęczony życiem na Ziemi i zamierza udać się na Księżyc. Żona odpowiada, że wyruszą, jeśli Bóg pozwoli; planują postawić prosty domek kryty trawą sapé i następnego dnia rano napić się kawy. To obraz ucieczki od codziennych trosk, potraktowany z humorem i wyobraźnią. Następne wersy podważają łatwowierność wobec fantastycznych opowieści o Księżycu i Ziemi: „Tudo isso é conversa / Pra comer sem trabalhar” może być przytykiem do ludzi, którzy wolą piękne słowa i obietnice od pracy. Pod koniec śpiewający zwraca się do słuchacza i komentuje zazdrość oraz posiadanie; słowa „enciúma/enciumar” nawiązują do portugalskiego „ciúme” (zazdrość), lecz sens całego powiedzenia nie jest jednoznaczny. Wers „que a terra venha a luar” ma niestandardową składnię i różne warianty w śpiewnikach; nie przypisano mu jednej pewnej interpretacji. Końcowe „Iê”, „camará”, „viva meu Deus” i „viva meu mestre” należą do chuli: wspólnotowego przywołania uczestników, szacunku dla Boga i mistrza oraz płynnego przejścia od opowieści do dalszego śpiewu w roda.",
+      "meaningTrivia": "„Enjoado” może dosłownie znaczyć „mający mdłości”, ale w „vivo enjoado de viver” znaczy „mam już dość życia tutaj”. „Sapé” to trawa wykorzystywana tradycyjnie m.in. do krycia dachów prostych zabudowań, więc „ranchinho de sapé” oznacza skromną chatkę, a nie ranczo w dzisiejszym turystycznym sensie. „Tomar café” w Brazylii może oznaczać napicie się kawy, a zależnie od kontekstu także śniadanie; zapisano przekład możliwie bliski oryginałowi. Wers z godziną zapisano słownie jako „amanhã às sete horas”. „Pela barra fora” może odnosić się do opuszczania zatoki lub ujścia w stronę otwartego morza, co jest częstym obrazem w brazylijskich pieśniach. W różnych przekazach spotyka się „todo feito de sapé” i „todo cheio de sapé”, a także odmienne wersy o Ziemi i Księżycu; zachowano wariant dostarczony do katalogu, poprawiając tylko pisownię. „Iê” jest rytualnym zawołaniem pieśni capoeira, a „camará” pochodzi od „camarada” — towarzysza."
+    }
+  ]
+}

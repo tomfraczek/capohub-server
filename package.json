@@ -26,6 +26,8 @@
     "migration:pending": "mikro-orm migration:pending",
     "schema:diff": "mikro-orm schema:update --dump",
     "seed:music-content": "ts-node -r tsconfig-paths/register src/database/seeds/seed-music-content.ts",
+    "seed:songs": "ts-node -r tsconfig-paths/register src/database/seeds/songs/import-songs.ts",
+    "seed:songs:sync-translations": "ts-node -r tsconfig-paths/register src/database/seeds/songs/import-songs.ts --sync-translations",
     "geonames:build": "ts-node -r tsconfig-paths/register src/common/geo/build/generate-cities-dataset.ts",
     "backfill:section-coordinates": "ts-node -r tsconfig-paths/register src/database/scripts/backfill-section-coordinates.ts"
   },

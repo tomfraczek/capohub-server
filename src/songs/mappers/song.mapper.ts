@@ -112,6 +112,7 @@ export function toSongDetailsResponseDto(
           id: translation.id,
           languageCode: translation.languageCode,
           text: translation.text,
+          isUncertain: translation.isUncertain,
         })),
       })),
     })),

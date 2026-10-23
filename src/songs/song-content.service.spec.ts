@@ -5,13 +5,14 @@ import { User } from '../users/entities/user.entity';
 import { CreateSongInput } from './dto/create-song.schema';
 import { SongAlternativeTitle } from './entities/song-alternative-title.entity';
 import { SongCategory } from './entities/song-category.entity';
+import { SongLineTranslation } from './entities/song-line-translation.entity';
 import { SongMedia } from './entities/song-media.entity';
 import { SongPart } from './entities/song-part.entity';
 import { SongTag } from './entities/song-tag.entity';
 import { Song } from './entities/song.entity';
 import { Tag } from './entities/tag.entity';
 import { SongPerformer } from './enums/song-performer.enum';
-import { SongContentService } from './song-content.service';
+import { resolveIsUncertain, SongContentService } from './song-content.service';
 
 function buildCategory(overrides: Partial<SongCategory> = {}): SongCategory {
   const category = new SongCategory();
@@ -62,6 +63,12 @@ function buildCreateInput(
 
 interface FindOneRouting {
   category?: SongCategory | null;
+  // Rows the pre-wipe "currently flagged uncertain" query returns.
+  uncertainTranslations?: {
+    originalText: string;
+    languageCode: string;
+    text: string;
+  }[];
 }
 
 function buildMockEm(routing: FindOneRouting = {}) {
@@ -80,18 +87,26 @@ function buildMockEm(routing: FindOneRouting = {}) {
     return Promise.resolve(null);
   });
 
+  const execute = jest
+    .fn()
+    .mockResolvedValue(routing.uncertainTranslations ?? []);
+
   return {
     findOne,
     find,
     persist,
     nativeDelete,
     flush,
+    execute,
+    getConnection: () => ({ execute }),
+    getTransactionContext: () => undefined,
   } as unknown as EntityManager & {
     findOne: jest.Mock;
     find: jest.Mock;
     persist: jest.Mock<{ flush: jest.Mock }, [object[]]>;
     nativeDelete: jest.Mock;
     flush: jest.Mock;
+    execute: jest.Mock;
   };
 }
 
@@ -292,6 +307,103 @@ describe('SongContentService', () => {
         service.replaceContent(em, song, buildCreateInput(), buildUser()),
       ).rejects.toThrow(BadRequestException);
       expect(em.nativeDelete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('translation isUncertain', () => {
+    function inputWithTranslation(
+      text: string,
+      isUncertain?: boolean,
+    ): CreateSongInput {
+      return buildCreateInput({
+        parts: [
+          {
+            performer: SongPerformer.LEAD,
+            position: 1,
+            lines: [
+              {
+                originalText: 'Assim dera que o morro',
+                position: 1,
+                phonetics: [],
+                translations: [
+                  isUncertain === undefined
+                    ? { languageCode: 'pl', text }
+                    : { languageCode: 'pl', text, isUncertain },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+    }
+
+    async function persistedTranslation(
+      em: ReturnType<typeof buildMockEm>,
+      input: CreateSongInput,
+    ): Promise<SongLineTranslation> {
+      const song = new Song();
+      song.category = buildCategory();
+      await new SongContentService().replaceContent(em, song, input, null);
+      return em.persist.mock.calls[0][0].find(
+        (entity): entity is SongLineTranslation =>
+          entity instanceof SongLineTranslation,
+      )!;
+    }
+
+    const flagged = [
+      {
+        originalText: 'Assim dera que o morro',
+        languageCode: 'pl',
+        text: 'I tak się stało, że wzgórze',
+      },
+    ];
+
+    it('defaults to false for a new translation without the flag', async () => {
+      const translation = await persistedTranslation(
+        buildMockEm(),
+        inputWithTranslation('I tak się stało, że wzgórze'),
+      );
+      expect(translation.isUncertain).toBe(false);
+    });
+
+    it('stores an explicit true', async () => {
+      const translation = await persistedTranslation(
+        buildMockEm(),
+        inputWithTranslation('I tak się stało, że wzgórze', true),
+      );
+      expect(translation.isUncertain).toBe(true);
+    });
+
+    it('keeps an existing flag when an older client omits it for the same text', async () => {
+      const translation = await persistedTranslation(
+        buildMockEm({ uncertainTranslations: flagged }),
+        inputWithTranslation('I tak się stało, że wzgórze'),
+      );
+      expect(translation.isUncertain).toBe(true);
+    });
+
+    it('lets an explicit false clear an existing flag', async () => {
+      const translation = await persistedTranslation(
+        buildMockEm({ uncertainTranslations: flagged }),
+        inputWithTranslation('I tak się stało, że wzgórze', false),
+      );
+      expect(translation.isUncertain).toBe(false);
+    });
+
+    it('does not carry the flag over to a retyped translation', async () => {
+      const translation = await persistedTranslation(
+        buildMockEm({ uncertainTranslations: flagged }),
+        inputWithTranslation('Zupełnie nowy przekład'),
+      );
+      expect(translation.isUncertain).toBe(false);
+    });
+
+    it('resolveIsUncertain prefers an explicit value over the stored one', () => {
+      const previous = new Set(['key']);
+      expect(resolveIsUncertain(false, previous, 'key')).toBe(false);
+      expect(resolveIsUncertain(true, new Set(), 'key')).toBe(true);
+      expect(resolveIsUncertain(undefined, previous, 'key')).toBe(true);
+      expect(resolveIsUncertain(undefined, previous, 'other')).toBe(false);
     });
   });
 });

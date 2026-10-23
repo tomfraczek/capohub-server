@@ -1,0 +1,4992 @@
+{
+  "formatVersion": 1,
+  "songs": [
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "O Valor da Capoeira",
+      "authorName": "Alexsandro Silva dos Santos",
+      "alternativeTitles": [
+        {
+          "title": "Você Não Sabe o Valor que a Capoeira Tem",
+          "position": 1
+        },
+        {
+          "title": "Valor da Capoeira",
+          "position": 2
+        },
+        {
+          "title": "Tu Não Sabe o Valor",
+          "position": 3
+        }
+      ],
+      "parts": [
+        {
+          "performer": "CHORUS",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            },
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela tem valor demais, ê, se segura, rapaz",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jest bezcenna — hej, trzymaj się, chłopie"
+                }
+              ]
+            },
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            },
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela tem valor demais, ê, se segura, rapaz",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jest bezcenna — hej, trzymaj się, chłopie"
+                }
+              ]
+            },
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Um dia a capoeira ela lhe ajudou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pewnego dnia capoeira ci pomogła"
+                }
+              ]
+            },
+            {
+              "originalText": "Tirou você da miséria, lhe transformou",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyrwała cię z biedy i odmieniła"
+                }
+              ]
+            },
+            {
+              "originalText": "Os seus amigos jamais, nenhum deles foram capaz",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Twoi przyjaciele nigdy — żaden z nich nie potrafił"
+                }
+              ]
+            },
+            {
+              "originalText": "De te dar ajuda na vida quando precisou",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pomóc ci w życiu, gdy tego potrzebowałeś"
+                }
+              ]
+            },
+            {
+              "originalText": "Tu não sabe o valor",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką ma wartość"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            },
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela tem valor demais, ê, se segura, rapaz",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jest bezcenna — hej, trzymaj się, chłopie"
+                }
+              ]
+            },
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Um dia um grande amigo ele me disse assim",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pewnego dnia dobry przyjaciel powiedział mi tak"
+                }
+              ]
+            },
+            {
+              "originalText": "Vamos jogar capoeira, vamos lá brincar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodźmy grać w capoeirę, chodźmy się pobawić"
+                }
+              ]
+            },
+            {
+              "originalText": "Muita gente conheci, aí foi que eu entendi",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poznałem wielu ludzi i właśnie wtedy zrozumiałem"
+                }
+              ]
+            },
+            {
+              "originalText": "Que a capoeira ela veio pra me ajudar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Że capoeira pojawiła się, by mi pomóc"
+                }
+              ]
+            },
+            {
+              "originalText": "Tu não sabe o valor",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką ma wartość"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            },
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela tem valor demais, ê, se segura, rapaz",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jest bezcenna — hej, trzymaj się, chłopie"
+                }
+              ]
+            },
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Hoje eu lembro de um mundo em que um dia passei",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dziś wspominam świat, przez który kiedyś przeszedłem"
+                }
+              ]
+            },
+            {
+              "originalText": "Tudo na vida, parceiro, a primeira vez",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wszystko w życiu, przyjacielu, po raz pierwszy",
+                  "isUncertain": true
+                }
+              ]
+            },
+            {
+              "originalText": "Agradeço ao bom senhor",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dziękuję dobremu Panu",
+                  "isUncertain": true
+                }
+              ]
+            },
+            {
+              "originalText": "A capoeira me ajudou",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Capoeira mi pomogła"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela me fez ser na vida hoje quem eu sou",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To dzięki niej jestem dziś tym, kim jestem"
+                }
+              ]
+            },
+            {
+              "originalText": "Tu não sabe o valor",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką ma wartość"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            },
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela tem valor demais, ê, se segura, rapaz",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jest bezcenna — hej, trzymaj się, chłopie"
+                }
+              ]
+            },
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Eu falo da capoeira com muita emoção",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówię o capoeirze z wielkim wzruszeniem"
+                }
+              ]
+            },
+            {
+              "originalText": "Mexe com meu corpo todo, com meu coração",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Porusza całym moim ciałem i moim sercem"
+                }
+              ]
+            },
+            {
+              "originalText": "Se é pra falar de amor, ela que me conquistou",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jeśli mowa o miłości, to ona zdobyła moje serce"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela me botou nos braços e me tirou do chão",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wzięła mnie w ramiona i uniosła ponad ziemię"
+                }
+              ]
+            },
+            {
+              "originalText": "Tu não sabe o valor",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką ma wartość"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            },
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela tem valor demais, ê, se segura, rapaz",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jest bezcenna — hej, trzymaj się, chłopie"
+                }
+              ]
+            },
+            {
+              "originalText": "Você não sabe o valor que a capoeira tem",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką wartość ma capoeira"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Tu não sabe o valor",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiesz, jak wielką ma wartość"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=pG_4_HXTXd0",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=kiiu35VI_5A",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„O Valor da Capoeira” to współczesna pieśń Grupo Muzenza. Oficjalna strona grupy dla albumu nr 22 „Você Não Sabe o Valor Que a Capoeira Tem” podaje autora i wykonawcę: Alexsandro Silva dos Santos, znanego jako Sandro. Praca akademicka Uniwersytetu Federalnego Parany identyfikuje go również jako kompozytora i wskazuje wydanie płyty w 2012 roku. Według relacji Muzenza Goiás pieśń stała się szczególnie popularna podczas wydarzeń Mundial Muzenza 2013. Niektóre wtórne serwisy przypisują ją ogólnie Mestre Burguês lub grupie Muzenza, a inne nagrania prezentują wykonanie Mestre Capu. W tym rekordzie odróżniono kompozytora od wykonawców i nazwy grupy, przyjmując konkretne przypisanie autorstwa z oficjalnego wykazu płyty. Utwór nie opowiada o konkretnym wydarzeniu z XIX-wiecznej historii capoeiry. Jest świadectwem współczesnego rozumienia capoeiry jako praktyki, która może wpływać na życiową drogę i relacje społeczne.",
+      "meaningContext": "W refrenie śpiewający powtarza, że adresat nie docenia wartości capoeiry. „Ela tem valor demais” odnosi się przede wszystkim do wartości osobistej, społecznej i emocjonalnej, a nie ceny pieniężnej. Pierwsza zwrotka ukazuje capoeirę jako źródło pomocy w przezwyciężeniu biedy i problemów, którego nie zapewnili dawni znajomi. W drugiej znajomy zaprasza narratora do jogo, co prowadzi do spotkania wielu osób i odkrycia wspólnoty. Trzecia jest podziękowaniem Bogu i capoeirze za przemianę człowieka; wers „Tudo na vida, parceiro, a primeira vez” jest w przesłanej wersji składniowo niejasny. Czwarta opisuje emocjonalny i cielesny wymiar gry, porównując przywiązanie do capoeiry do miłości, która „wzięła na ręce i uniosła znad ziemi”. Pieśń wykorzystuje personifikację: capoeira pomaga, przemienia, zdobywa serce i podnosi człowieka, choć dosłownie są to skutki ludzi, relacji i praktyki. Powtórzenia „Tu não sabe o valor” są wzmocnieniem refrenu, nie osobnym chórem.",
+      "meaningTrivia": "„Valor” oznacza wartość; w piosence chodzi o wpływ capoeiry na życie. „Se segura, rapaz” to ekspresywne zawołanie „trzymaj się, chłopie”, nie opis dosłownego chwytania partnera. „Miséria” to nędza lub skrajna bieda. „Mexe com meu corpo todo, com meu coração” wyraża poruszenie jednocześnie fizyczne i emocjonalne. „Jogar capoeira” oznacza grać w capoeirę, a „brincar” — bawić się; czasowniki te mogą się uzupełniać, nie redukując capoeiry jedynie do zabawy. „Tu não sabe” jest częstą w brazylijskiej mowie potocznej konstrukcją z uzgodnieniem czasownika jak dla „você”; standardowo spodziewane byłoby „tu não sabes”. „Aí” oznacza „wtedy, właśnie tam” i zostało zapisane z akcentem. W oficjalnym zapisie widać też formy gramatyczne „nenhum deles foram capaz” — zachowano je, ponieważ należą do śpiewanego tekstu. W niektórych nagraniach pojawia się „vê se segura rapaz” zamiast „ê, se segura rapaz”; w katalogu zapisano przesłany wariant. W czterech zwrotkach jest łącznie 21 wersów, a powtarzany sześć razy czterowersowy refren daje 24; końcowe „Tu não sabe o valor” to ostatni, 46. wers."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Lembra de Bimba",
+      "authorName": "Graduado Voador",
+      "alternativeTitles": [
+        {
+          "title": "Lembra, Lembra de Bimba",
+          "position": 1
+        },
+        {
+          "title": "Ê, Lembra de Bimba",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "CHORUS",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Ê, lembra de Bimba",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Hej, pamiętaj o Bimbie"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu quero escutar de você",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chcę usłyszeć to od ciebie"
+                }
+              ]
+            },
+            {
+              "originalText": "Criador, criador da capoeira",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Twórca, twórca capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Você ensinou a bater",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nauczyłeś, jak zadawać ciosy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Foi na escola onde você praticava",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To w szkole, w której ćwiczyłeś"
+                }
+              ]
+            },
+            {
+              "originalText": "Que eu vi a luta de pé",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zobaczyłem walkę w pozycji stojącej"
+                }
+              ]
+            },
+            {
+              "originalText": "Onde a capoeira agora é brincadeira",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gdzie capoeira jest teraz także zabawą"
+                }
+              ]
+            },
+            {
+              "originalText": "Pra sempre eu quero aprender, oi, lelelele",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przez całe życie chcę się uczyć, oj, lelelele"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Lembra, lembra de Bimba",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pamiętaj, pamiętaj o Bimbie"
+                }
+              ]
+            },
+            {
+              "originalText": "Saudoso mestre mandingueiro, igual não tem",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wspominany z tęsknotą mistrz mandingi, nie ma drugiego takiego"
+                }
+              ]
+            },
+            {
+              "originalText": "Lá no céu, todos ficam olhando",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Tam w niebie wszyscy patrzą"
+                }
+              ]
+            },
+            {
+              "originalText": "Ele quer ver que pratique como ele, oi, lelelele",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "On chce widzieć, że ćwiczysz tak jak on, oj, lelelele"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=h8VzoWzWacQ",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Lembra de Bimba” jest pieśnią wykonywaną przez Capoeira Nagô, umieszczoną jako dwunasty utwór na albumie „Capoeira Nagô, Vol. 2” (2016). Portal Capoeira Brasil Paris przypisuje kompozycję Graduado Voador z Capoeira Nagô; autorstwo zapisano według tego źródła, bez utożsamiania samej nazwy grupy z nazwiskiem kompozytora. Pieśń upamiętnia Mestre Bimbę, czyli Manoela dos Reis Machado (zmarłego w 1974 r.), twórcę Luta Regional Baiana, później nazwanej Capoeira Regional. Rozwijał nauczanie capoeiry i w 1932 r. utworzył akademię w Salvadorze; uzyskała ona oficjalną rejestrację w 1937 r. Ważne zastrzeżenie: wers „Criador da capoeira” jest poetyckim hołdem, ale historycznie nie jest dosłowną prawdą — capoeira istniała na długo przed Bimbą. Jego przełom polegał na stworzeniu systemu Capoeira Regional, metody nauczania oraz na zwiększeniu społecznej akceptacji tej tradycji. Pieśń wyraża tęsknotę za zmarłym mistrzem i wolę zachowania jego dziedzictwa.",
+      "meaningContext": "Śpiewający zwraca się bezpośrednio do Mestre Bimby i zachęca innych, by pamiętali o nim i mówili o jego nauczaniu. „Você ensinou a bater” akcentuje skuteczność bojową jego metody, a „luta de pé” przywołuje obraz dynamicznej walki stojącej; nie jest to twierdzenie, że Capoeira Angola odbywała się wyłącznie na ziemi. Kontrast „luta” i „brincadeira” pokazuje podwójną naturę capoeiry jako sztuki walki i gry, w której ważne są także muzyka i radość. „Pra sempre eu quero aprender” podkreśla, że nauka capoeiry trwa całe życie. Końcowa zwrotka przywołuje mistrza jako postać wspominaną z tęsknotą, nazywa go mandingueiro i wyobraża sobie, że nawet po śmierci interesuje się sposobem, w jaki kolejne pokolenia praktykują capoeirę. To poetycka wizja, a nie relacja o faktycznym zdarzeniu. W przekazanym wariancie wers „Lá no céu, todos ficam olhando” dosłownie oznacza „W niebie wszyscy patrzą”; w innych śpiewnikach występuje „Lá no céu, a todos fica olhando” — „Z nieba patrzy na wszystkich”. Obie wersje różnią się sensem, więc zachowano wariant z transkrypcji użytkownika.",
+      "meaningTrivia": "„Lembra de Bimba” to „pamiętaj o Bimbie”. „Saudoso” oznacza „wspominany z tęsknotą” lub „nieodżałowany”. „Mestre” jest tytułem doświadczonego mistrza capoeiry. „Mandingueiro” oznacza osobę obdarzoną mandingą — sprytem, umiejętnością zwodzenia, strategicznego myślenia i odczytywania intencji przeciwnika; w afro-brazylijskim kontekście słowo może mieć również duchowe konotacje. „Bater” oznacza bić lub uderzać, tutaj odnosi się do technicznej strony walki. „Luta de pé” oznacza walkę w pozycji stojącej. „Brincadeira” to zabawa lub figlarna gra, niekoniecznie coś pozbawionego znaczenia i dyscypliny. „Lá no céu” znaczy „tam w niebie”. Śpiewne „oi lelelele” jest wokalizą bez osobnego znaczenia słownikowego. Nie należy mylić Mestre Bimby z twórcą całej capoeiry: stworzył on Capoeira Regional, nie samą wielowiekową tradycję capoeiry. W niektórych źródłach występuje wariant „Por sempre eu quero aprender”, lecz zachowano przekazane „Pra sempre”. Podział głosów pierwszej zwrotki na chór i dalszych na solistę jest roboczym odwzorowaniem zaznaczenia w transkrypcji; sam tekst nie rozstrzyga pełnej aranżacji muzycznej."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Malandragem",
+      "authorName": "Mestre Capu",
+      "alternativeTitles": [
+        {
+          "title": "Malandragem Só Sai Daqui",
+          "position": 1
+        },
+        {
+          "title": "Oi Malandro, É Malandro",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Malandragem só sai daqui",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Spryt i figlarność znikną stąd dopiero"
+                }
+              ]
+            },
+            {
+              "originalText": "Quando essa roda acabar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kiedy skończy się ta roda"
+                }
+              ]
+            },
+            {
+              "originalText": "Se o meu mestre disser Iê",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jeśli mój mistrz zawoła „Iê”"
+                }
+              ]
+            },
+            {
+              "originalText": "Ou se Cavalaria tocar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Albo gdy zabrzmi rytm Cavalaria"
+                }
+              ]
+            },
+            {
+              "originalText": "Capoeira é antiga arte",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Capoeira jest dawną sztuką"
+                }
+              ]
+            },
+            {
+              "originalText": "Foi o negro inventando",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Tworzyli ją czarnoskórzy ludzie"
+                }
+              ]
+            },
+            {
+              "originalText": "Me diga quem é brasileiro",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Powiedz mi, który Brazylijczyk"
+                }
+              ]
+            },
+            {
+              "originalText": "E não tem um pouco de malandro",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie ma w sobie choć odrobiny spryciarza"
+                }
+              ]
+            },
+            {
+              "originalText": "Malandragem",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Spryt, przebiegłość"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Oi malandro, é malandro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, spryciarz, to spryciarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Capoeira",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Capoeira"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Oi malandro, é malandro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, spryciarz, to spryciarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Na Bahia",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W Bahii"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Oi malandro, é malandro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, spryciarz, to spryciarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Na ladeira",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Na stromym zboczu, na uliczce pod górę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Oi malandro, é malandro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, spryciarz, to spryciarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Malandragem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Spryt, przebiegłość"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Oi malandro, é malandro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, spryciarz, to spryciarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Ê, finge que vai, mas não vai",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ej, udaje, że ruszy, ale nie rusza"
+                }
+              ]
+            },
+            {
+              "originalText": "Bicho vem e eu me faço de morto",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gdy nadchodzi zagrożenie, udaję martwego"
+                }
+              ]
+            },
+            {
+              "originalText": "Mas se a coisa apertar",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ale jeśli sytuacja zrobi się trudna"
+                }
+              ]
+            },
+            {
+              "originalText": "Pra Deus eu peço socorro",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Proszę Boga o pomoc"
+                }
+              ]
+            },
+            {
+              "originalText": "Entro e saio sem me machucar",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wchodzę i wychodzę bez obrażeń"
+                }
+              ]
+            },
+            {
+              "originalText": "Subo e desço sem escorregar",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wspinam się i schodzę, nie poślizgnąwszy się"
+                }
+              ]
+            },
+            {
+              "originalText": "Vou louvando o criador da mandinga",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wychwalam twórcę mandingi"
+                }
+              ]
+            },
+            {
+              "originalText": "O malandro que inventou a ginga",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Spryciarza, który wynalazł gingę"
+                }
+              ]
+            },
+            {
+              "originalText": "E a malandragem",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I ten spryt, i ta przebiegłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Malandragem",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Spryt, przebiegłość"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Oi malandro, é malandro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, spryciarz, to spryciarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Capoeira",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Capoeira"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Oi malandro, é malandro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, spryciarz, to spryciarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Na Bahia",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W Bahii"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Oi malandro, é malandro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, spryciarz, to spryciarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "Na ladeira",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Na stromym zboczu, na uliczce pod górę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Oi malandro, é malandro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, spryciarz, to spryciarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 19,
+          "lines": [
+            {
+              "originalText": "Malandragem",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Spryt, przebiegłość"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 20,
+          "lines": [
+            {
+              "originalText": "Oi malandro, é malandro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, spryciarz, to spryciarz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 21,
+          "lines": [
+            {
+              "originalText": "O sol faz o chão esquentar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Słońce rozgrzewa ziemię"
+                }
+              ]
+            },
+            {
+              "originalText": "Calma, moça, chuva vem esfriar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Spokojnie, dziewczyno, deszcz ją ochłodzi"
+                }
+              ]
+            },
+            {
+              "originalText": "Expressão do rosto da menina",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyraz twarzy dziewczyny"
+                }
+              ]
+            },
+            {
+              "originalText": "Ao saber que essa é a minha sina",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gdy dowiaduje się, że taki jest mój los"
+                }
+              ]
+            },
+            {
+              "originalText": "Bato forte, não devagar",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Uderzam mocno, a nie powoli"
+                }
+              ]
+            },
+            {
+              "originalText": "Cuidado quando se levantar",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Uważaj, kiedy będziesz wstawać"
+                }
+              ]
+            },
+            {
+              "originalText": "Berimbau já fez sua cantiga",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Berimbau już zagrał swoją pieśń"
+                }
+              ]
+            },
+            {
+              "originalText": "Coração me impulsa pra cima",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Serce popycha mnie wzwyż"
+                }
+              ]
+            },
+            {
+              "originalText": "E a malandragem",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I ten spryt, i ta przebiegłość"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=ER4DlP2A_aE",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Malandragem” jest kompozycją Mestre Capu, znanego również w starszych publikacjach jako Mestrando Capu i Professor Capu, powiązanego z Gingado Capoeira. Autorstwo potwierdzają dane kompozytorskie nagrania „Malandragem” na płycie Carolina Soares „The Best of Capoeira” z 2004 roku oraz Cifra Club. Piosenka była publikowana w śpiewnikach co najmniej w 2011 roku. Odwołuje się do malandragem — ważnego motywu kultury miejskiej Brazylii, kojarzonego ze sprytem, wyczuciem sytuacji, żartem i zdolnością radzenia sobie w trudnych warunkach — oraz do afro-brazylijskich korzeni capoeiry. Przywołuje również tradycyjny toque „Cavalaria”, grany na berimbau, który według przekazów capoeiristas ostrzegał dawniej przed zbliżaniem się konnej policji. Ten historyczny kontekst nie oznacza, że każda roda kończyła się w taki właśnie sposób. Wers „O malandro que inventou a ginga” jest poetyckim uogólnieniem, a nie historycznym wskazaniem jednego człowieka, który wynalazł gingę. Nie należy też traktować „Foi o negro inventando” jako precyzyjnego opisu jednego momentu narodzin capoeiry: sztuka rozwijała się przez pokolenia w społecznościach afro-brazylijskich.",
+      "meaningContext": "Na początku solista stwierdza, że malandragem zostaje w roda, dopóki nie zakończy się gra: na sygnał „Iê” mistrza albo na dźwięk „Cavalaria”. Pieśń podkreśla spryt jako nieodłączny element capoeiry, a w krótkich wezwaniach solisty („Malandragem”, „Capoeira”, „Na Bahia”, „Na ladeira”) chór niezmiennie odpowiada „Oi malandro, é malandro”. Zwrotka „Finge que vai, mas não vai” opisuje podstawowy mechanizm zwodzenia w capoeirze: gracz sugeruje ruch, ale wykonuje inny; w razie zagrożenia zachowuje spokój, unika ciosów i szuka wyjścia. „Bicho vem e eu me faço de morto” jest obrazową opowieścią o udawaniu bezbronności przed niebezpieczeństwem. „Criador da mandinga” i „malandro que inventou a ginga” to symboliczne pochwały sprytu i tradycji, nie biografie potwierdzonych wynalazców. Końcowa zwrotka przechodzi do obrazów upału i deszczu, młodej kobiety, nieuchronnego losu, siły uderzenia, ostrzeżenia przy wstawaniu i gry berimbau. Nie tworzy jednej zamkniętej fabuły; składa się z obrazów i zawołań, które pobudzają energię roda. W przekazanym zapisie ostatnie „E a malandragem” nie ma już następującej po nim odpowiedzi chóru, dlatego takiej odpowiedzi nie dopisano.",
+      "meaningTrivia": "„Malandro” to spryciarz lub cwaniak, a „malandragem” — spryt, przebiegłość i umiejętność poruszania się między regułami; w capoeirze może mieć pozytywne znaczenie inteligencji w grze, ale w innych kontekstach także oszustwa. „Mandinga” obejmuje zmyślność, zwodzenie i tradycyjne skojarzenia duchowe. „Iê” jest krótkim zawołaniem stosowanym przez prowadzącego roda, m.in. do sygnalizowania przerwania lub rozpoczęcia śpiewu, zależnie od tradycji. „Cavalaria” dosłownie znaczy „kawaleria” i nazywa rozpoznawalny rytm berimbau kojarzony z ostrzeganiem przed policją. „Ginga” to podstawowy ruch capoeiry; „ladeira” oznacza pochyłą ulicę lub zbocze, typowe dla historycznych krajobrazów Salvadoru w Bahii. „Se a coisa apertar” znaczy „jeśli zrobi się gorąco / trudno”, „me faço de morto” — „udaję martwego”, a „sina” — los, przeznaczenie. „Bicho” jest tu potocznym określeniem istoty lub zbliżającego się zagrożenia, niekoniecznie konkretnego zwierzęcia. „Impulsa” oddaje potocznie „popycha / pobudza”; standardowo częściej spotyka się „impulsiona”. Krótką odpowiedź chóru „Oi malandro, é malandro” odtworzono po każdym wyraźnym oznaczeniu „Coro” w przesłanej transkrypcji."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Hoje Me Leva",
+      "authorName": "Mestre Pequinês e Graduado Voador",
+      "alternativeTitles": [
+        {
+          "title": "Hoje Me Leva o Coração pra Bahia",
+          "position": 1
+        },
+        {
+          "title": "Minha Bahia (Hoje Me Leva)",
+          "position": 2
+        },
+        {
+          "title": "Lembra dos Mestres que Agora Estão com Deus",
+          "position": 3
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Hoje me leva o coração pra Bahia",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dziś moje serce niesie mnie do Bahii"
+                }
+              ]
+            },
+            {
+              "originalText": "Lembra dos mestres que agora estão com Deus",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przywołuje pamięć mistrzów, którzy są już u Boga"
+                }
+              ]
+            },
+            {
+              "originalText": "Minha Bahia",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Moja Bahia"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Hoje me leva o coração pra Bahia",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dziś moje serce niesie mnie do Bahii"
+                }
+              ]
+            },
+            {
+              "originalText": "Lembra dos mestres que agora estão com Deus",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przywołuje pamięć mistrzów, którzy są już u Boga"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Saudade e dor eu tenho no coração",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W sercu noszę tęsknotę i ból"
+                }
+              ]
+            },
+            {
+              "originalText": "Só de lembrar do Mestre Waldemar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Na samo wspomnienie Mestre Waldemara"
+                }
+              ]
+            },
+            {
+              "originalText": "Tocando São Bento e Angola no Pero Vaz",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gdy grał rytmy São Bento i Angola w Pero Vaz"
+                }
+              ]
+            },
+            {
+              "originalText": "Dia de festa, domingo no barracão",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Niedziela była dniem święta w jego zadaszonej sali"
+                }
+              ]
+            },
+            {
+              "originalText": "Minha Bahia",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Moja Bahia"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Hoje me leva o coração pra Bahia",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dziś moje serce niesie mnie do Bahii"
+                }
+              ]
+            },
+            {
+              "originalText": "Lembra dos mestres que agora estão com Deus",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przywołuje pamięć mistrzów, którzy są już u Boga"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Pastinha deu ao mundo sua expressão",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pastinha przekazał światu swoją sztukę i sposób wyrazu"
+                }
+              ]
+            },
+            {
+              "originalText": "Jogando Angola com muita dedicação",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Grając Capoeira Angola z wielkim oddaniem"
+                }
+              ]
+            },
+            {
+              "originalText": "E o sol raiou quando a morte chegou",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I słońce wzeszło, kiedy przyszła śmierć"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu agradeço ao mestre que se foi",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dziękuję mistrzowi, który odszedł"
+                }
+              ]
+            },
+            {
+              "originalText": "Minha Bahia",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Moja Bahia"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Hoje me leva o coração pra Bahia",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dziś moje serce niesie mnie do Bahii"
+                }
+              ]
+            },
+            {
+              "originalText": "Lembra dos mestres que agora estão com Deus",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przywołuje pamięć mistrzów, którzy są już u Boga"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "A arte que o mundo conhece hoje em dia",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sztuka, którą dzisiaj zna cały świat"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela começou pelos bairros da Bahia",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zaczęła się w dzielnicach Bahii"
+                }
+              ]
+            },
+            {
+              "originalText": "E o trabalho que fez hoje já se conheceu",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A wykonana przez niego praca zyskała dziś uznanie"
+                }
+              ]
+            },
+            {
+              "originalText": "Foi Manoel quem agora está com Deus",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To był Manoel, który teraz jest już u Boga"
+                }
+              ]
+            },
+            {
+              "originalText": "Minha Bahia",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Moja Bahia"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Hoje me leva o coração pra Bahia",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dziś moje serce niesie mnie do Bahii"
+                }
+              ]
+            },
+            {
+              "originalText": "Lembra dos mestres que agora estão com Deus",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przywołuje pamięć mistrzów, którzy są już u Boga"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=5A98OIJH294",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Hoje Me Leva” należy do repertuaru Capoeira Nagô i jest opublikowana na oficjalnej stronie grupy w materiałach albumu „Capoeira Nagô, Vol. 2”. Cifra Club podaje współautorstwo Mestre Pequinês i Graduado Voador; inny śpiewnik przypisuje ją samemu Graduado Voador, dlatego zapis autora odzwierciedla konkretne przypisanie Cifra Club, a nie niezależnie potwierdzony podział wkładu twórczego. Pieśń upamiętnia trzy postacie historyczne: Mestre Waldemara da Paixão, znanego z niedzielnych rodas w barracão na terenie Pero Vaz w Salvadorze, Mestre Pastinhę (Vicente Ferreira Pastinha, 1889–1981), ważnego nauczyciela i popularyzatora Capoeira Angola, oraz Mestre Bimbę (Manoel dos Reis Machado, 1900–1974), twórcę Capoeira Regional. São Bento i Angola w zwrotce o Waldemarze są nazwami toques berimbau oraz stylowych kontekstów muzycznych; „Pero Vaz” jest nazwą miejsca w Salvadorze, a „barracão” określa zadaszoną przestrzeń, gdzie organizowano roda. Wers o początkach sztuki w dzielnicach Bahii wyraża rolę regionu w nowoczesnej historii capoeiry, ale nie jest literalnie ścisły: capoeira ma szersze, wielowiekowe korzenie afro-brazylijskie, a jej początki nie ograniczają się do jednego stanu. „Manoel” w zakończeniu to właśnie Mestre Bimba, nie osobna postać.",
+      "meaningContext": "Refren przenosi serce śpiewającego ku Bahii i przywołuje pamięć nieżyjących mistrzów. Zwrot „Minha Bahia” jest emocjonalnym zawołaniem podkreślającym więź z miejscem i tradycją. Pierwsza zwrotka wyraża saudade — głęboką tęsknotę — za Mestre Waldemarem i jego niedzielnymi spotkaniami w barracão w Pero Vaz. Druga oddaje hołd Mestre Pastinhi za jego wkład w Capoeira Angola oraz wspomina nieuchronność śmierci w poetyckim obrazie wschodzącego słońca. Trzecia uznaje wkład Mestre Bimby w rozpowszechnienie i instytucjonalizację capoeiry; słowa o „bairros da Bahia” należy odczytywać jako regionalną dumę, nie jako pełną teorię genezy tej sztuki. Pieśń ma charakter elegijny i wdzięczny: zamiast rywalizacji podkreśla przekazywanie tradycji między pokoleniami. Podział LEAD i CHORUS w rekordzie odzwierciedla strukturę zwrotka–refren; w rzeczywistych wykonaniach także „Minha Bahia” może być śpiewane przez więcej osób.",
+      "meaningTrivia": "„Hoje” oznacza „dzisiaj”, a „me leva o coração pra Bahia” — „moje serce niesie mnie ku Bahii”, niekoniecznie dosłowną podróż. „Saudade” jest szczególnie ważnym portugalskim słowem na głęboką tęsknotę za kimś nieobecnym lub czymś utraconym. „Waldemar” i „Valdemar” to spotykane warianty zapisu imienia tego samego mistrza. „Pero Vaz” odnosi się do obszaru Salvadoru związanego z rodas Waldemara. „Barracão” to szopa, wiata lub zadaszony budynek; w tym kontekście historyczna przestrzeń wspólnej gry. „São Bento” i „Angola” w wersie „tocando” nawiązują do rytmów berimbau (toques), nie do kościelnej liturgii ani dosłownej podróży do Afryki. „Raiou” od „raiar” oznacza „zaświtało, wzeszło”; „se foi” to łagodne określenie kogoś, kto odszedł lub zmarł. „Bairros” to dzielnice; w transkrypcji użytkownika było „Barrios”, co jest zapisem hiszpańskim, poprawionym na portugalski. „Estão com Deus” oznacza „są już u Boga”, typowy zwrot religijny używany w kontekście zmarłych. Pierwotne „Lembra dos mestres” zachowano jako śpiewaną formę, choć w innych źródłach spotyka się „Lembrar dos mestres”."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Amor É Meu Amor",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Amor, É Meu Amor",
+          "position": 1
+        },
+        {
+          "title": "Amor, Amor É Meu Amor",
+          "position": 2
+        },
+        {
+          "title": "Você Chegou e Tudo Virou",
+          "position": 3
+        }
+      ],
+      "parts": [
+        {
+          "performer": "CHORUS",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Amor, é meu amor",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Amor, amor, é meu amor",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, miłość — to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Oi, meu amor",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, moja miłości"
+                }
+              ]
+            },
+            {
+              "originalText": "Amor, é meu amor",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Amor, amor, é meu amor",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, miłość — to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Oi, meu amor",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, moja miłości"
+                }
+              ]
+            },
+            {
+              "originalText": "Amor, é meu amor",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Amor, amor, é meu amor",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, miłość — to moja miłość"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Você chegou e tudo virou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pojawiłeś się / pojawiłaś się i wszystko się odmieniło"
+                }
+              ]
+            },
+            {
+              "originalText": "Minh'alma e todo corpo arrepiou",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Moja dusza i całe ciało przeszyły dreszcze"
+                }
+              ]
+            },
+            {
+              "originalText": "E na dança do amor vou te expressar, ah",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I w tańcu miłości wyrażę ci, ach"
+                }
+              ]
+            },
+            {
+              "originalText": "Que você é a minha vida e nunca vou te deixar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Że jesteś całym moim życiem i nigdy cię nie opuszczę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Oi, meu amor",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, moja miłości"
+                }
+              ]
+            },
+            {
+              "originalText": "Amor, é meu amor",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Amor, amor, é meu amor",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, miłość — to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Oi, meu amor",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, moja miłości"
+                }
+              ]
+            },
+            {
+              "originalText": "Amor, é meu amor",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Amor, amor, é meu amor",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, miłość — to moja miłość"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Agora estou aqui",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Teraz jestem tutaj"
+                }
+              ]
+            },
+            {
+              "originalText": "Só pensando em você",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Myśląc tylko o tobie"
+                }
+              ]
+            },
+            {
+              "originalText": "Que ilumina esse caminho",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "O tobie, który / która rozświetla tę drogę"
+                }
+              ]
+            },
+            {
+              "originalText": "Onde eu quero caminhar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Którą chcę iść"
+                }
+              ]
+            },
+            {
+              "originalText": "A ginga já me leva",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ginga już mnie niesie"
+                }
+              ]
+            },
+            {
+              "originalText": "Como as ondas levam o mar",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Tak jak fale niosą morze"
+                }
+              ]
+            },
+            {
+              "originalText": "E o peito já palpita",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A serce już bije mocniej"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu quero me apaixonar, olha, amor",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chcę się zakochać — popatrz, moja miłości"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Amor, é meu amor",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Amor, amor, é meu amor",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, miłość — to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Oi, meu amor",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, moja miłości"
+                }
+              ]
+            },
+            {
+              "originalText": "Amor, é meu amor",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Amor, amor, é meu amor",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Miłość, miłość — to moja miłość"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=JmKL3cazNHs",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Amor É Meu Amor” jest pieśnią w repertuarze Capoeira Nagô, opublikowaną na albumie „Capoeira Nagô, Vol. 2” (2016), a wcześniej znaną także z wykonań publikowanych w internecie już w 2009 roku. Część śpiewników przypisuje jej autorstwo Graduado Voador, natomiast w metadanych wydania „20 Best of Brazilian Capoeira” (2019) jako autor tekstu / kompozytor występuje Alexandre Ronán de Sousa, znany jako Mestre Pequinês. Ponieważ źródła różnią się w tym ważnym szczególe, zapis authorName pozostaje null do czasu pewnego rozstrzygnięcia. To współczesna, liryczna pieśń capoeiry; nie odwołuje się do konkretnego wydarzenia historycznego. Pokazuje, że repertuar capoeiry może wykraczać poza tematy walki i niewolnictwa, obejmując miłość, taniec, intymne uczucia i więź z innymi ludźmi.",
+      "meaningContext": "Refren „Amor, é meu amor / Amor, amor, é meu amor” jest prostym, rytmicznym wyznaniem miłości. Pierwsza zwrotka mówi o spotkaniu osoby, które odmieniło życie śpiewającego, wywołało dreszcze i potrzebę wyrażenia uczuć poprzez taniec. „Você é a minha vida e nunca vou te deixar” wyraża silne przywiązanie i obietnicę pozostania razem. Druga zwrotka opisuje myślenie o ukochanej osobie, która rozświetla drogę życia. Następnie pojawia się metafora „A ginga já me leva / Como as ondas levam o mar”: ruch ginga unosi śpiewającego podobnie do fal, które poruszają morze. Przyspieszone bicie serca zamyka obraz zakochania. Adresatem może być konkretna bliska osoba, ale dopuszczalna jest również poetycka interpretacja jako miłość do samej capoeiry. Tekst nie rozstrzyga tego wprost, dlatego nie należy traktować żadnej z interpretacji jako potwierdzonej intencji autora. Stały refren i krótkie strofy sprzyjają wspólnemu śpiewaniu w roda.",
+      "meaningTrivia": "„Amor” znaczy „miłość” albo „ukochana osoba”, a „meu amor” to częsty brazylijski zwrot „moja miłości / kochanie”. „Você chegou e tudo virou” oznacza, że pojawienie się ukochanej osoby odmieniło wszystko; „virar” dosłownie może też znaczyć obracać. „Arrepiar” to wywoływać dreszcze lub gęsią skórkę, „minh'alma” to poetycki skrót od „minha alma” („moja dusza”). „Ginga” to podstawowy, płynny ruch capoeiry, ale słowo może też oznaczać kołysanie i sposób poruszania się. „Peito já palpita” odnosi się do przyspieszonego bicia serca od emocji; „apaixonar-se” to zakochać się. „Como as ondas levam o mar” dosłownie mówi, że fale niosą morze — jest to poetyckie odwrócenie zwykłej relacji między falami a morzem. Zapis „Minh'alma e todo corpo arrepiou” pozostawiono w śpiewanym wariancie, choć w codziennej portugalszczyźnie bardziej naturalne byłoby „Minha alma e todo o corpo se arrepiaram”. Nie przenoszono dodatkowych wersów z innych wykonawców ani nie dodawano fonetycznej transkrypcji."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Berimbau Falou",
+      "authorName": "Mestre Pequinês e Graduado Voador",
+      "alternativeTitles": [
+        {
+          "title": "Falou da Escravidão",
+          "position": 1
+        },
+        {
+          "title": "Falou, Falou da Opressão",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Falou, falou da escravidão, falou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, mówił o niewolnictwie, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, falou da opressão, falou",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, mówił o ucisku, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, lá nos tempos de Bimba, falou",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, już w czasach Bimby, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, hoje se escutou",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił — dziś go usłyszano"
+                }
+              ]
+            },
+            {
+              "originalText": "Hoje falou",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dziś przemówił"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Falou, falou da escravidão, falou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, mówił o niewolnictwie, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, falou da opressão, falou",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, mówił o ucisku, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, lá nos tempos de Bimba, falou",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, już w czasach Bimby, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, hoje se escutou",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił — dziś go usłyszano"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "O negro que sofria na senzala",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Czarnoskóry człowiek, który cierpiał w kwaterach zniewolonych"
+                }
+              ]
+            },
+            {
+              "originalText": "Trabalhava na fazenda do feitor",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pracował na plantacji pod nadzorem zarządcy"
+                }
+              ]
+            },
+            {
+              "originalText": "E um dia ele escutou um lamento",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A pewnego dnia usłyszał lament"
+                }
+              ]
+            },
+            {
+              "originalText": "Era Zumbi dos Palmares",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To był Zumbi dos Palmares"
+                }
+              ]
+            },
+            {
+              "originalText": "Foi ele quem libertou",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To on wyzwolił"
+                }
+              ]
+            },
+            {
+              "originalText": "Hoje falou",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dziś przemówił"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Falou, falou da escravidão, falou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, mówił o niewolnictwie, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, falou da opressão, falou",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, mówił o ucisku, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, lá nos tempos de Bimba, falou",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, już w czasach Bimby, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, hoje se escutou",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił — dziś go usłyszano"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Berimbau ajudava os capoeiras",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Berimbau pomagał capoeiristas"
+                }
+              ]
+            },
+            {
+              "originalText": "Lá no tempo, lá no tempo da opressão",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dawniej, w czasach ucisku"
+                }
+              ]
+            },
+            {
+              "originalText": "Se escutava o toque de Cavalaria",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Można było usłyszeć rytm Cavalaria"
+                }
+              ]
+            },
+            {
+              "originalText": "Quando a polícia seguia, berimbau já me avisou",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gdy nadchodziła policja, berimbau już mnie ostrzegł"
+                }
+              ]
+            },
+            {
+              "originalText": "Hoje falou",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dziś przemówił"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Falou, falou da escravidão, falou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, mówił o niewolnictwie, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, falou da opressão, falou",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, mówił o ucisku, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, lá nos tempos de Bimba, falou",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, już w czasach Bimby, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, hoje se escutou",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił — dziś go usłyszano"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Manoel foi o mestre respeitado",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Manoel był szanowanym mistrzem"
+                }
+              ]
+            },
+            {
+              "originalText": "Criador da arte da Regional",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Twórcą sztuki Capoeira Regional"
+                }
+              ]
+            },
+            {
+              "originalText": "Hoje em dia, seu nome será lembrado",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jego imię będzie pamiętane również dziś"
+                }
+              ]
+            },
+            {
+              "originalText": "Já não se esqueceu do homem, que a capoeira falou",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nikt już nie zapomni człowieka, o którym mówiła capoeira",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Falou, falou da escravidão, falou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, mówił o niewolnictwie, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, falou da opressão, falou",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, mówił o ucisku, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, lá nos tempos de Bimba, falou",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, już w czasach Bimby, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, hoje se escutou",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił — dziś go usłyszano"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "História que se narra do passado",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Historia opowiadana o przeszłości"
+                }
+              ]
+            },
+            {
+              "originalText": "Jogadores que se escutam até hoje",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gracze, o których słychać do dzisiaj"
+                }
+              ]
+            },
+            {
+              "originalText": "E os cantos que me levam pelos tempos",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I pieśni, które przenoszą mnie przez czas"
+                }
+              ]
+            },
+            {
+              "originalText": "Lembrando esses momentos onde o berimbau tocou",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przypominając te chwile, gdy rozbrzmiewał berimbau"
+                }
+              ]
+            },
+            {
+              "originalText": "Hoje falou",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dziś przemówił"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Falou, falou da escravidão, falou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, mówił o niewolnictwie, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, falou da opressão, falou",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, mówił o ucisku, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, lá nos tempos de Bimba, falou",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił, już w czasach Bimby, mówił"
+                }
+              ]
+            },
+            {
+              "originalText": "Falou, hoje se escutou",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mówił — dziś go usłyszano"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=ZMDVOuJIvtc",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Berimbau Falou” to pieśń z repertuaru Capoeira Nagô. W danych kompozytorskich publikowanych przez Cifra Club wskazani są Mestre Pequinês i Graduado Voador; Capoeira Brasil Paris podaje Graduado Voador. Piosenka była publikowana co najmniej w 2010 r., a jej tekst dostępny był w śpiewnikach od 2011 r. Przywołuje historię niewolnictwa w Brazylii, Zumbiego dos Palmares, berimbau i tradycyjny rytm ostrzegawczy Cavalaria oraz Mestre Bimbę. Zumbi był rzeczywistym przywódcą związanego z oporem przeciw niewolnictwu Quilombo dos Palmares; nie wyzwolił jednak osobiście wszystkich osób zniewolonych w Brazylii. Zniesienie niewolnictwa w całym kraju nastąpiło w 1888 r., niemal dwa stulecia po śmierci Zumbiego w 1695 r. Manoel dos Reis Machado, znany jako Mestre Bimba, stworzył w XX wieku Capoeira Regional, a nie capoeirę jako całość. Pieśń przypisuje berimbau funkcję żywego świadka przekazywanej historii. Opowieści o toque Cavalaria jako sygnale ostrzeżenia przed konną policją funkcjonują w przekazach capoeiristas; nie należy bez źródeł uznawać ich za jednolitą praktykę wszystkich dawnych rodas.",
+      "meaningContext": "Refren personifikuje berimbau: instrument „mówi” o niewolnictwie, ucisku i dawnych mistrzach, a jego przesłanie słychać po dziś dzień. Pierwsza zwrotka opisuje niedolę zniewolonych mieszkańców senzala i przywołuje Zumbiego jako symbol wyzwolenia i oporu. Druga przedstawia berimbau jako pomocnika capoeiristas podczas represji, zwłaszcza przez sygnał Cavalaria, ostrzegający według tradycji przed policją. Trzecia poświęcona jest Manoelowi dos Reis Machado — Mestre Bimbie, twórcy Capoeira Regional — oraz pamięci o jego pracy. Czwarta przypomina, że historie graczy i pieśni przetrwały dzięki przekazowi ustnemu i muzyce. Powtarzane „Hoje falou” podkreśla ciągłość historycznej pamięci. Pieśń nie jest chronologiczną relacją ze zdarzeń: łączy epokę niewolnictwa, Palmares i XX-wiecznego Bimbę, dlatego nie należy przenosić postaci z jednej epoki do drugiej.",
+      "meaningTrivia": "„Berimbau” to muzyczny łuk z rezonatorem z tykwy (cabaça), którego rytm organizuje grę w roda. „Falou” oznacza „powiedział” lub „przemówił”; w tekście instrument jest uosobiony. „Senzala” to kwatery osób zniewolonych przy plantacjach i gospodarstwach, a „feitor” oznacza nadzorcę pracy, niekoniecznie właściciela plantacji. „Escravidão” to niewolnictwo, „opressão” ucisk, „lamento” lament. „Cavalaria” dosłownie oznacza kawalerię; w capoeirze to nazwa rozpoznawalnego rytmu berimbau, wiązanego w tradycji z alarmowaniem o policji. „Zumbi dos Palmares” to konkretna postać historyczna, nie ogólna nazwa powstańca. „Manoel” w trzeciej zwrotce to Mestre Bimba. Zachowano poetyckie uproszczenie „Foi ele quem libertou”, ale w interpretacji wyraźnie oddzielono je od faktów o abollicji. Poprawiono oczywiste akcenty i ortografię: „lá”, „polícia”, „já”, „história”, „esqueceu”, „homem”, „esses”, „tocou”. Największą rekonstrukcję zastosowano w niezgrabnym wersie „Já não se esqueçeu do homen, que a capoeira falou”, zapisując „Já não se esqueceu do homem de quem a capoeira falou”; jest to korekta gramatyczna oparta na przypuszczalnym sensie, nie potwierdzony dosłowny odsłuch nagrania. „Jogadores que se escutam até hoje” zachowano zgodnie z przesłanym tekstem, mimo nietypowej konstrukcji."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Mundo Enganador",
+      "authorName": "Mestre Barrão",
+      "alternativeTitles": [
+        {
+          "title": "Berimbau Maneiro",
+          "position": 1
+        },
+        {
+          "title": "Não É Dinheiro, Não É Ouro e Nem É Prata",
+          "position": 2
+        },
+        {
+          "title": "Desse Mundo Enganador",
+          "position": 3
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Oi vivemos aqui nessa terra",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Żyjemy tutaj, na tej ziemi"
+                }
+              ]
+            },
+            {
+              "originalText": "Lutando pra sobreviver",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Walcząc o przetrwanie"
+                }
+              ]
+            },
+            {
+              "originalText": "O lugar onde poucos têm muito",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W miejscu, gdzie nieliczni mają bardzo wiele"
+                }
+              ]
+            },
+            {
+              "originalText": "E muito sem ter o que comer",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A wielu nie ma czego jeść"
+                }
+              ]
+            },
+            {
+              "originalText": "Olhando isso eu fico triste",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kiedy to widzę, robi mi się smutno"
+                }
+              ]
+            },
+            {
+              "originalText": "Me pergunto qual é a solução?",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pytam sam siebie, jakie jest rozwiązanie"
+                }
+              ]
+            },
+            {
+              "originalText": "Estou feliz por ter a capoeira",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Cieszę się, że mam capoeirę"
+                }
+              ]
+            },
+            {
+              "originalText": "Como forma de expressão",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jako sposób wyrażania siebie"
+                }
+              ]
+            },
+            {
+              "originalText": "Capoeira é uma arte",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Capoeira jest sztuką"
+                }
+              ]
+            },
+            {
+              "originalText": "E arte é obra de Deus",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A sztuka jest dziełem Boga"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Nessa terra eu não tenho muito",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Na tej ziemi nie mam wiele"
+                }
+              ]
+            },
+            {
+              "originalText": "Mas tudo que eu tenho foi Deus que me deu",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ale wszystko, co mam, dał mi Bóg"
+                }
+              ]
+            },
+            {
+              "originalText": "Nessa terra eu não tenho muito",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Na tej ziemi nie mam wiele"
+                }
+              ]
+            },
+            {
+              "originalText": "Mas tudo que eu tenho foi Deus que me deu",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ale wszystko, co mam, dał mi Bóg"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Eu tenho um canarinho cantador",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mam śpiewającego kanarka"
+                }
+              ]
+            },
+            {
+              "originalText": "Berimbau afinado e um cavalo chotão",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nastrojone berimbau i konia idącego spokojnym chodem"
+                }
+              ]
+            },
+            {
+              "originalText": "E um carinho da morena faceira que me deu",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I czułość zalotnej brunetki, która dała mi"
+                }
+              ]
+            },
+            {
+              "originalText": "Seu amor e o menino chorão",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Swoją miłość i płaczliwego chłopca"
+                }
+              ]
+            },
+            {
+              "originalText": "Ah! Meu Deus quando eu partir",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ach, mój Boże, kiedy odejdę"
+                }
+              ]
+            },
+            {
+              "originalText": "Desse mundo enganador",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Z tego złudnego świata"
+                }
+              ]
+            },
+            {
+              "originalText": "Pra meu filho eu deixarei",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zostawię mojemu synowi"
+                }
+              ]
+            },
+            {
+              "originalText": "Uma coisa de valor, é é é",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Coś wartościowego, tak, tak, tak"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Ô, meu berimbau que toca Iúna e benguela",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, moje berimbau, które gra Iúnę i Benguelę"
+                }
+              ]
+            },
+            {
+              "originalText": "Toca paz e toca guerra e toca até chula de amor",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gra o pokoju i wojnie, a nawet chulę o miłości"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Ah! Meu Deus quando eu partir",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ach, mój Boże, kiedy odejdę"
+                }
+              ]
+            },
+            {
+              "originalText": "Desse mundo enganador",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Z tego złudnego świata"
+                }
+              ]
+            },
+            {
+              "originalText": "Pra meu filho eu deixarei",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zostawię mojemu synowi"
+                }
+              ]
+            },
+            {
+              "originalText": "Uma coisa de valor, é é é",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Coś wartościowego, tak, tak, tak"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Ô, meu berimbau que toca Iúna e benguela",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, moje berimbau, które gra Iúnę i Benguelę"
+                }
+              ]
+            },
+            {
+              "originalText": "Toca paz e toca guerra e toca até chula de amor",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gra o pokoju i wojnie, a nawet chulę o miłości"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Ô, meu berimbau que toca Iúna e benguela",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, moje berimbau, które gra Iúnę i Benguelę"
+                }
+              ]
+            },
+            {
+              "originalText": "Toca paz e toca guerra e toca até chula de amor",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gra o pokoju i wojnie, a nawet chulę o miłości"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Ô, meu berimbau que toca Iúna e benguela",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, moje berimbau, które gra Iúnę i Benguelę"
+                }
+              ]
+            },
+            {
+              "originalText": "Toca paz e toca guerra e toca até chula de amor",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gra o pokoju i wojnie, a nawet chulę o miłości"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é dinheiro, não é ouro e nem é prata",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To nie pieniądze, nie złoto ani srebro"
+                }
+              ]
+            },
+            {
+              "originalText": "É um berimbau maneiro que eu ganhei do meu avô...",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wspaniałe berimbau, które dostałem od dziadka"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=KWzO9j0ziSo",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Mundo Enganador” jest kompozycją Mestre Barrão, mistrza związanego z Grupo Axé Capoeira. Autorstwo podają Cifra Club i publikowane śpiewniki, a zapis pieśni z tym przypisaniem pojawia się również w opracowaniu akademickim dotyczącym capoeiry. Jest to współczesna pieśń o nierównościach społecznych, wierze, rodzinie i dziedzictwie. Ważny dla niej jest wielopokoleniowy przekaz berimbau: instrument otrzymany od dziadka ma zostać pozostawiony synowi. To symbol wiedzy, pamięci i przynależności do tradycji, cenniejszy dla podmiotu lirycznego niż złoto, srebro czy pieniądze. Nie wynika z tekstu, by konkretne berimbau lub relacje rodzinne opisywały udokumentowane wydarzenia z biografii Mestre Barrão. Utwór wskazuje również na nierówność w Brazylii — jedni mają bardzo dużo, a inni nie mają czego jeść — oraz na capoeirę jako sposób wyrażania siebie. Znane są także warianty wykonywane przez Carolinę Soares. Zgodnie z zasadą katalogu, wykonawstwo innych artystów nie zmienia wpisanego autorstwa.",
+      "meaningContext": "Pierwsze wersy przeciwstawiają bogactwo nielicznych niedostatkowi wielu ludzi. Śpiewający nie przedstawia gotowego rozwiązania problemu, ale odnajduje siłę i poczucie sensu w capoeirze. Kolejne słowa wyrażają wdzięczność Bogu za to, co posiada: śpiewającego kanarka, berimbau, konia i rodzinne uczucia. Centralnym punktem pieśni staje się myśl o śmierci i pozostawieniu synowi czegoś o prawdziwej wartości. Refren odrzuca pieniądze, złoto i srebro na rzecz berimbau otrzymanego od dziadka. Ten instrument ucieleśnia międzypokoleniowe dziedzictwo capoeiry. Zwrotka „Ô, meu berimbau que toca Iúna e benguela” rozszerza to znaczenie na różnorodność rytmów: berimbau może towarzyszyć grze wymagającej doświadczenia, nauce, zabawie, konfliktowi, pojednaniu, a nawet pieśni o miłości. Przeciwstawienie „toca paz e toca guerra” ma charakter poetycki; nie oznacza formalnych nazw dwóch określonych rytmów. Wykonanie charakteryzuje bardzo długie powtarzanie dwuwersowego refrenu, przerywane wokalnymi wersami o Iúnie i Bengueli. W transkrypcji przesłanej do katalogu zachowano 78 wersów bez redukowania powtórzeń.",
+      "meaningTrivia": "„Mundo enganador” to dosłownie „zwodniczy / złudny świat”, świat pozorów i niepewnych wartości. „Berimbau maneiro” to „fajne, świetne berimbau”; „maneiro” w brazylijskiej portugalszczyźnie ma pozytywne, potoczne znaczenie. „Avô” znaczy dziadek. „Canarinho cantador” to śpiewający kanarek. „Morena faceira” opisuje zalotną, uroczą brunetkę, a „menino chorão” — płaczliwego chłopca. „Cavalo chotão” to koń poruszający się chodem, określanym potocznie jako choto; zapis tego wyrazu jest niejednolity w wersjach piosenki (chotão, chandão, chantão). „Iúna” to nazwa rytmu berimbau, szczególnie związanego z Capoeira Regional i tradycją Mestre Bimby; w części szkół towarzyszy grze doświadczonych capoeiristas. „Benguela”, spotykane także jako „Banguela”, to rytm związany z innym sposobem prowadzenia gry, często bardziej płynnym lub dydaktycznym; jego dokładne użycie zależy od tradycji grupy. „Chula” może oznaczać rodzaj pieśni w tradycjach afro-brazylijskich; tu pojawia się jako „chula de amor”, pieśń o miłości. W oryginalnej transkrypcji „E muito sem ter o que comer” ma nietypową zgodę gramatyczną; sens jest jasny — wiele osób nie ma jedzenia. Zachowano to brzmienie zamiast zastępować wyraz wersją z innego śpiewnika. Ostatni wers ma wielokropek, tak jak w dostarczonej wersji. Nie dodawano transkrypcji fonetycznej."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Sou Jogador",
+      "authorName": "Mestre Barrão",
+      "alternativeTitles": [
+        {
+          "title": "Sou, Sou Jogador",
+          "position": 1
+        },
+        {
+          "title": "Sou Capoeira Axé Até Morrer",
+          "position": 2
+        },
+        {
+          "title": "Aquele que Bateu o Golpe",
+          "position": 3
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Aquele que bateu o golpe",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ten, kto wyprowadził cios"
+                }
+              ]
+            },
+            {
+              "originalText": "Nunca teve a sorte de me acertar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nigdy nie zdołał mnie trafić"
+                }
+              ]
+            },
+            {
+              "originalText": "Nem toda rasteira da vida",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Żadna z podcięć, jakie szykuje życie"
+                }
+              ]
+            },
+            {
+              "originalText": "Nem alma sofrida vai me derrubar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ani cierpiąca dusza mnie nie powali"
+                }
+              ]
+            },
+            {
+              "originalText": "Foi Deus quem guiou meus caminhos",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To Bóg prowadził mnie moimi drogami"
+                }
+              ]
+            },
+            {
+              "originalText": "Com ele, sozinho eu nunca vou estar",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Z Nim nigdy nie będę samotny"
+                }
+              ]
+            },
+            {
+              "originalText": "O Axé Capoeira é um grupo verdadeiro",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Axé Capoeira jest prawdziwą, autentyczną grupą"
+                }
+              ]
+            },
+            {
+              "originalText": "Que nem o dinheiro vai poder comprar",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Której nie można kupić za żadne pieniądze"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou um capoeira vadio",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem capoeiristą-włóczęgą"
+                }
+              ]
+            },
+            {
+              "originalText": "Que o desafio da vida aceitou",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Który przyjął wyzwania życia"
+                }
+              ]
+            },
+            {
+              "originalText": "Enquanto houver a mandinga",
+              "position": 11,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dopóki istnieje mandinga"
+                }
+              ]
+            },
+            {
+              "originalText": "Segura a ginga, o Axé chegou",
+              "position": 12,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Trzymaj rytm ginga, Axé już przybyło"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Eu sou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja jestem"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Sou, sou jogador",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem, jestem graczem capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Vem, vem cá pra ver",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodź, chodź tutaj i zobacz"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou, sou jogador",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem, jestem graczem capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Eu sou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja jestem"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Sou, sou jogador",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem, jestem graczem capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Vem, vem cá pra ver",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodź, chodź tutaj i zobacz"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou, sou jogador",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem, jestem graczem capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Ô, aquele que bateu o golpe",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, ten, kto wyprowadził cios"
+                }
+              ]
+            },
+            {
+              "originalText": "Nunca teve a sorte de me acertar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nigdy nie zdołał mnie trafić"
+                }
+              ]
+            },
+            {
+              "originalText": "Nem toda rasteira da vida",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Żadna z podcięć, jakie szykuje życie"
+                }
+              ]
+            },
+            {
+              "originalText": "Nem alma sofrida vai me derrubar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ani cierpiąca dusza mnie nie powali"
+                }
+              ]
+            },
+            {
+              "originalText": "Foi Deus quem guiou meus caminhos",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To Bóg prowadził mnie moimi drogami"
+                }
+              ]
+            },
+            {
+              "originalText": "Com ele, sozinho eu nunca vou estar",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Z Nim nigdy nie będę samotny"
+                }
+              ]
+            },
+            {
+              "originalText": "O Axé Capoeira é um grupo verdadeiro",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Axé Capoeira jest prawdziwą, autentyczną grupą"
+                }
+              ]
+            },
+            {
+              "originalText": "Que nem o dinheiro vai poder comprar",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Której nie można kupić za żadne pieniądze"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou um capoeira vadio",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem capoeiristą-włóczęgą"
+                }
+              ]
+            },
+            {
+              "originalText": "Que o desafio da vida aceitou",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Który przyjął wyzwania życia"
+                }
+              ]
+            },
+            {
+              "originalText": "Enquanto houver a mandinga",
+              "position": 11,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dopóki istnieje mandinga"
+                }
+              ]
+            },
+            {
+              "originalText": "Segura a ginga, o Axé chegou",
+              "position": 12,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Trzymaj rytm ginga, Axé już przybyło"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Eu sou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja jestem"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Sou, sou jogador",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem, jestem graczem capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Vem, vem cá pra ver",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodź, chodź tutaj i zobacz"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou, sou jogador",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem, jestem graczem capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Eu sou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja jestem"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Sou, sou jogador",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem, jestem graczem capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Vem, vem cá pra ver",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodź, chodź tutaj i zobacz"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou, sou jogador",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem, jestem graczem capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Eu sou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja jestem"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Sou, sou jogador",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem, jestem graczem capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Vem, vem cá pra ver",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodź, chodź tutaj i zobacz"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou, sou jogador",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem, jestem graczem capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Eu sou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja jestem"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Sou, sou jogador",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem, jestem graczem capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Vem, vem cá pra ver",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodź, chodź tutaj i zobacz"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou, sou jogador",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem, jestem graczem capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou capoeira Axé até morrer",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem z Axé Capoeira aż do śmierci"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=wY7vvJA1UwA",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Sou Jogador” jest utworem Mestre Barrão, założyciela Grupo Axé Capoeira. Autorstwo potwierdzają katalog tekstów Cifra Club i baza pieśni La Laue; tekst pojawia się również w śpiewnikach Axé Capoeira publikowanych przynajmniej od 2009 roku. Piosenka nie opowiada o pojedynczym wydarzeniu historycznym. Wyraża identyfikację ze wspólnotą Axé Capoeira, której nazwa występuje w tekście, oraz przekonanie, że jej więzi nie można kupić za pieniądze. „Vadio” przywołuje dawne społeczne stereotypy wobec capoeiristas i szersze znaczenie włóczęgi, niezależnego człowieka żyjącego po swojemu; w pieśni zostaje użyte w pozytywnym, autoidentyfikacyjnym sensie. Historycznie capoeirę przez długi czas kojarzono z „vadiagem” (włóczęgostwem) i represjonowano; nie znaczy to, że tekst gloryfikuje przestępczość. Wiara w Boga i mandinga są przedstawione jako źródła siły w przeciwnościach.",
+      "meaningContext": "Pierwsze wersy opisują odporność: żaden przeciwnik nie zdołał trafić śpiewającego, a życiowe „rasteiras”, czyli podcięcia, nie mogą go powalić. „Rasteira da vida” działa jako metafora niepowodzeń, nie tylko technika capoeiry. Podmiot liryczny podkreśla obecność Boga, dumę z przynależności do Grupo Axé Capoeira i niezależność od wartości materialnych. „Sou um capoeira vadio” jest autocharakterystyką capoeiristy, który przyjął wyzwania życia. „Enquanto houver a mandinga / Segura a ginga, o Axé chegou” łączy inteligencję gry, nieprzewidywalność i rytmiczny ruch z przybyciem grupy Axé. Refren „Sou, sou jogador / Vem, vem cá pra ver” zaprasza innych, by zobaczyli umiejętności śpiewającego; zakończenie „Sou capoeira Axé até morrer” jest deklaracją trwałej przynależności do grupy. W nagraniu ten wers jest wielokrotnie powtarzany jako finał, co zachowano bez żadnych skrótów.",
+      "meaningTrivia": "„Sou jogador” znaczy „jestem graczem” — w kontekście roda chodzi o osobę grającą capoeirę, nie o hazardzistę. „Golpe” jest ciosem lub uderzeniem, a „rasteira” — podcięciem stosowanym w capoeirze. „Rasteira da vida” przenosi ten termin na życiowe przeszkody. „Vadio” może znaczyć „włóczęga”, „próżniak”, „niepokorny”; jego sens w capoeirze bywa przewrotnie pozytywny. „Mandinga” to spryt, zwodzenie, strategiczne wyczucie i w części tradycji także element mistyczny. „Ginga” to charakterystyczny podstawowy ruch capoeiry. „Axé” może oznaczać energię, siłę i pomyślność w kontekście afro-brazylijskim, ale tutaj jest również nazwą konkretnej grupy Axé Capoeira. Dlatego „o Axé chegou” przetłumaczono jako „Axé już przybyło”. W przesłanej transkrypcji poprawiono „qrupo” na „grupo”, „e” na „é”, „sófrida” na „sofrida”, „meus caminho” na „meus caminhos” oraz „axé chego” na „o Axé chegou” w oparciu o udokumentowane wersje tekstu; nie zmieniono natomiast liczby powtórzeń ani kolejności wersów."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Luta e Brinca",
+      "authorName": "Mestre Barrão",
+      "alternativeTitles": [
+        {
+          "title": "La Lauê",
+          "position": 1
+        },
+        {
+          "title": "Luta e Brincadeira",
+          "position": 2
+        },
+        {
+          "title": "Bem-te-vi Voou, Voou",
+          "position": 3
+        },
+        {
+          "title": "Que Som, Que Arte É Essa",
+          "position": 4
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Bem-te-vi voou, voou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bentewi odleciał, odleciał"
+                }
+              ]
+            },
+            {
+              "originalText": "Bem-te-vi voou, voou",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bentewi odleciał, odleciał"
+                }
+              ]
+            },
+            {
+              "originalText": "Deixa voar",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pozwól mu lecieć"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Lalauelauelauelaua",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lalauelauelauelaua"
+                }
+              ]
+            },
+            {
+              "originalText": "Olalaelae",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Olalaelae"
+                }
+              ]
+            },
+            {
+              "originalText": "Lalauelauelauelaua",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lalauelauelauelaua"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Que som",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co za dźwięk"
+                }
+              ]
+            },
+            {
+              "originalText": "Oi, que arte é essa",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, cóż to za sztuka"
+                }
+              ]
+            },
+            {
+              "originalText": "Que luta brincadeira",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jaka walka i zabawa zarazem"
+                }
+              ]
+            },
+            {
+              "originalText": "Que roda",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co za roda"
+                }
+              ]
+            },
+            {
+              "originalText": "Maravilhosa é essa",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jaka ona jest wspaniała"
+                }
+              ]
+            },
+            {
+              "originalText": "É Axé Capoeira",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To Axé Capoeira"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Em cada som, em cada toque, em cada ginga, tem um estilo de jogo",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W każdym dźwięku, rytmie i ruchu ginga kryje się sposób gry"
+                }
+              ]
+            },
+            {
+              "originalText": "Em cada som, em cada toque, em cada ginga, tem um estilo de jogo",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W każdym dźwięku, rytmie i ruchu ginga kryje się sposób gry"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Lauelauelaua",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lauelauelaua"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Lalauelauelauelaua",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lalauelauelauelaua"
+                }
+              ]
+            },
+            {
+              "originalText": "Olalaelae",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Olalaelae"
+                }
+              ]
+            },
+            {
+              "originalText": "Lalauelauelauelaua",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lalauelauelauelaua"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=s4b3996suOA",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Luta e Brinca” to kompozycja Mestre Barrão wykonywana wspólnie z Contramestre Testa na albumie „Grupo Axé Capoeira, Vol. IV”, wydanym 11 listopada 2004 roku. Dane wydania przypisują autorstwo Mestre Barrão; Testa figuruje jako wykonawca, nie współautor. Utwór występuje w zbiorach pieśni również jako „La Lauê” oraz „Luta e Brincadeira”. Jego tematem jest capoeira jako sztuka łącząca walkę, zabawę i muzykę. W niektórych grupach zmienia się wers wymieniający nazwę organizacji, np. „É Axé Capoeira” zastępuje się nazwą danej grupy. W tekście występuje bem-te-vi (bentewi wielki, Pitangus sulphuratus), charakterystyczny ptak występujący w Brazylii; jego obecność w pieśni nie dowodzi konkretnego związku historycznego z capoeirą. Pieśń reprezentuje współczesną praktykę roda, gdzie proste wokalizy pozwalają uczestnikom łatwo dołączyć do śpiewu.",
+      "meaningContext": "Początek „Bem-te-vi voou, voou / Deixa voar” przywołuje obraz ptaka w locie, który można odbierać jako znak wolności i naturalności ruchu. To możliwa interpretacja symboliczna, a nie potwierdzona intencja autora. Następnie wokalista pyta „Que som, que arte é essa?”, zachwyca się roda i przedstawia capoeirę jako „luta brincadeira” — sztukę, w której konfrontacja techniczna współistnieje z grą, dialogiem i zabawą. Słowa „É Axé Capoeira” są nawiązaniem do grupy Mestre Barrão. Powtórzony wers „Em cada som, em cada toque, em cada ginga, tem um estilo de jogo” opisuje zależność sposobu gry od rytmu instrumentów, charakteru toques i ruchu capoeiristas. Wokalizy „Lalauelauelauelaua” i „Olalaelae” przede wszystkim podtrzymują melodykę oraz ułatwiają uczestnictwo chóru; nie tłumaczy się ich jako zwykłych portugalskich słów. W przekazanym wariancie zachowano każde z 18 zapisanych wywołań, w tym końcową sekwencję wokaliz.",
+      "meaningTrivia": "„Bem-te-vi” to nazwa pospolitego brazylijskiego ptaka — bentewi wielkiego (Pitangus sulphuratus), którego portugalska nazwa naśladuje brzmienie głosu; nie należy tłumaczyć jej dosłownie jako zdania „dobrze cię widziałem”. „Voou” oznacza „poleciał / odleciał”, a „deixa voar” — „pozwól lecieć”. „Luta” to walka, „brincadeira” — zabawa lub gra, a „roda” — krąg uczestników, w którym odbywa się capoeira. „Toque” oznacza rytm lub sposób gry instrumentu; „ginga” to podstawowy, kołyszący ruch capoeiry. „Estilo de jogo” to styl lub sposób gry, a „Axé Capoeira” nazywa organizację Mestre Barrão. Frazy „lalauelauelauelaua”, „olalaelae” i „lauelauelaua” to wokalizy, czyli sylaby muzyczne bez ustalonego znaczenia. Oryginalny zapis użytkownika został zachowany również wtedy, gdy typowe śpiewniki stosują inne podziały sylab, jak „lá lauê”. Istnieje wariant „Eu achei capoeira” zamiast „É Axé Capoeira”; ten rekord dokumentuje konkretnie przesłaną wersję. Nie dodawano innych zwrotek z wydłużonego wykonania płytowego ani fonetyki."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Mandei Benzer Meu Berimbau",
+      "authorName": "Mestre Barrão",
+      "alternativeTitles": [
+        {
+          "title": "Mandei Benzer",
+          "position": 1
+        },
+        {
+          "title": "Madei Benzer Meu Berimbau",
+          "position": 2
+        },
+        {
+          "title": "Mandei Benzer Meu Berimbau na Capela",
+          "position": 3
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Mandei, mandei benzer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić, kazałem pobłogosławić"
+                }
+              ]
+            },
+            {
+              "originalText": "Mandei benzer meu berimbau na capela",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić moje berimbau w kaplicy"
+                }
+              ]
+            },
+            {
+              "originalText": "Mandei...",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem..."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Mandei, mandei benzer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić, kazałem pobłogosławić"
+                }
+              ]
+            },
+            {
+              "originalText": "Mandei benzer meu berimbau na capela",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić moje berimbau w kaplicy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Mandei...",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem..."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Mandei, mandei benzer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić, kazałem pobłogosławić"
+                }
+              ]
+            },
+            {
+              "originalText": "Mandei benzer meu berimbau na capela",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić moje berimbau w kaplicy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Tocava meu berimbau, quando o arame se quebrou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Grałem na swoim berimbau, gdy pękła struna"
+                }
+              ]
+            },
+            {
+              "originalText": "Era sinal de coisa ruim, mas eu não quis acreditar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To był znak czegoś złego, lecz nie chciałem w to uwierzyć"
+                }
+              ]
+            },
+            {
+              "originalText": "Toda vez que eu tocava o berimbau, o arame voltava a se quebrar",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Za każdym razem, gdy grałem na berimbau, struna znów pękała"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu levei meu berimbau numa capela pra benzer",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zabrałem moje berimbau do kaplicy, żeby je pobłogosławić"
+                }
+              ]
+            },
+            {
+              "originalText": "E pedi para São Bento do mal vir me proteger, mandei...",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I poprosiłem św. Benedykta, żeby chronił mnie przed złem — kazałem..."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Mandei, mandei benzer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić, kazałem pobłogosławić"
+                }
+              ]
+            },
+            {
+              "originalText": "Mandei benzer meu berimbau na capela",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić moje berimbau w kaplicy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Mandei...",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem..."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Mandei, mandei benzer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić, kazałem pobłogosławić"
+                }
+              ]
+            },
+            {
+              "originalText": "Mandei benzer meu berimbau na capela",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić moje berimbau w kaplicy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Mandei, mandei benzer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić, kazałem pobłogosławić"
+                }
+              ]
+            },
+            {
+              "originalText": "Mandei benzer meu berimbau na capela",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić moje berimbau w kaplicy"
+                }
+              ]
+            },
+            {
+              "originalText": "Mandei...",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem..."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Mandei, mandei benzer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić, kazałem pobłogosławić"
+                }
+              ]
+            },
+            {
+              "originalText": "Mandei benzer meu berimbau na capela",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kazałem pobłogosławić moje berimbau w kaplicy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Eu pedi pra São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poprosiłem świętego Benedykta"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Benzer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pobłogosławić"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Eu pedi pra São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poprosiłem świętego Benedykta"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Guardar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chronić"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Eu pedi pra São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poprosiłem świętego Benedykta"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Benzer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pobłogosławić"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "O meu berimbau eu vou tocar...",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Będę grał na swoim berimbau..."
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=CLPyQ7W6lU8",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Mandei Benzer Meu Berimbau” jest utworem Mestre Barrão z Grupo Axé Capoeira. Oficjalny kanał Axé Capoeira na YouTube przypisuje mu zarówno autorstwo, jak i wykonanie; piosenka jest dziesiątym utworem albumu „Volume 7 — É o Som Que Me Leva” (nagranie wydane w 2008 roku). Niektóre serwisy muzyczne podają wariant tytułu „Madei Benzer Meu Berimbau”, który pozostawiono jako alternatywny, ale poprawną formą portugalskiego czasownika jest „mandei”. Opowieść nawiązuje do wiary w znaczenie dobrych i złych znaków oraz do błogosławieństwa jako sposobu proszenia o ochronę. Przywołany São Bento to św. Benedykt z Nursji, związany w katolickiej pobożności z modlitwą o ochronę przed złem; nie należy go utożsamiać automatycznie z São Benedito (św. Benedyktem Afrykańczykiem), innym świętym obecnym w religijnej kulturze afro-brazylijskiej. Praktyki religijne i symboliczne mają zróżnicowane miejsce w środowiskach capoeiry; nie ma podstaw, by twierdzić, że wszyscy capoeiristas święcą berimbau. Pęknięcie metalowej struny jest też zwykłą możliwością techniczną, a jego odczytanie jako zapowiedzi nieszczęścia pozostaje wierzeniem postaci w piosence.",
+      "meaningContext": "Refren „Mandei, mandei benzer / Mandei benzer meu berimbau na capela” opisuje decyzję o oddaniu berimbau do pobłogosławienia w kaplicy. Zwrotka wyjaśnia przyczynę: podczas gry wielokrotnie pęka metalowa struna (arame). Śpiewający uważa to za możliwy zły znak, początkowo mu nie wierzy, a w końcu prosi São Bento o ochronę przed złem. W końcowej wymianie solista powtarza „Eu pedi pra São Bento”, na co chór odpowiada „Benzer”, „Guardar” i ponownie „Benzer”. Błogosławieństwo ma znaczenie religijne i emocjonalne: wyraża troskę o instrument i poczucie duchowego bezpieczeństwa. Ostatni wers „O meu berimbau eu vou tocar” domyka historię powrotem do gry. Pieśń pokazuje, że berimbau może być postrzegane jako coś więcej niż narzędzie muzyczne — jako przedmiot obdarzony osobistym i tradycyjnym znaczeniem. W przekazanej wersji zachowano 30 wersów, wliczając wszystkie powtórzenia „Mandei” oraz osobne odpowiedzi chóru.",
+      "meaningTrivia": "„Mandei” to pierwsza osoba czasu przeszłego czasownika „mandar” (nakazałem, poleciłem, wysłałem); w zwrocie „mandei benzer” najnaturalniej oznacza „oddałem / kazałem pobłogosławić”. „Benzer” to błogosławić, wykonywać znak krzyża albo odprawiać praktykę błogosławieństwa. „Capela” oznacza kaplicę. „Arame” to metalowa struna berimbau, która jest napięta między końcami drewnianego łuku (verga). „Quebrou” znaczy „pękła / złamała się”; „voltar a se quebrar” — „pęknąć ponownie”. „São Bento” to św. Benedykt; „do mal me proteger” oznacza „chronić mnie przed złem”, a „guardar” — „strzec, ochraniać”. „Berimbau” jest podstawowym instrumentem wyznaczającym charakter gry w roda. W transkrypcji poprawiono oczywiste błędy „berimau” → „berimbau”, „mais eu não quis” → „mas eu não quis”, oraz nienaturalną konstrukcję „do mal vim me proteger” do bardziej gramatycznego „do mal vir me proteger”; oryginalne wykonanie może mieć inny wariant. Alternatywny tytuł „Madei Benzer Meu Berimbau” pochodzi z metadanych wybranych serwisów muzycznych, ale słowo „madei” nie jest standardową formą czasownika „mandar”. Fonetyki nie dodano."
+    }
+  ]
+}

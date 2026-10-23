@@ -16,4 +16,11 @@ export class SongLineTranslation extends BaseEntity {
 
   @Property({ type: 'text' })
   text!: string;
+
+  // Uncertainty of *this* translation only (one language of one line) -
+  // the best justified reading was chosen, but the meaning is not
+  // unambiguous. Says nothing about the correctness of the original
+  // Portuguese line itself.
+  @Property({ default: false })
+  isUncertain: boolean = false;
 }

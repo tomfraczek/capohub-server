@@ -101,18 +101,25 @@ export class SongContentService {
    * `mediaOwner` becomes `SongMedia.createdBy` for every media row rebuilt
    * here - the caller decides who that should be (the acting editor for a
    * direct update, the original proposer for an approved proposal - see
-   * each call site's own comment).
+   * each call site's own comment). Null only for system-authored content
+   * with no CapoHub user behind it (see the curated song import in
+   * database/seeds/songs/song-import.ts) - SongMedia.createdBy is nullable
+   * anyway.
    */
   async replaceContent(
     em: EntityManager,
     song: Song,
     input: CreateSongInput,
-    mediaOwner: User,
+    mediaOwner: User | null,
   ): Promise<void> {
     const category = await this.loadActiveCategoryOrFail(em, input.categoryId);
     const tags = await this.loadActiveTagsOrFail(em, input.tagIds);
 
     this.applyFields(song, input, category);
+
+    // Read before the wipe below - the only place an omitted isUncertain
+    // can still be resolved from (see resolveIsUncertain).
+    const previousFlags = await this.loadUncertainTranslationKeys(em, song);
 
     // Replace-all strategy: wipe every child collection, then rebuild it
     // from the request. SongPart's DB-level ON DELETE CASCADE takes
@@ -123,7 +130,13 @@ export class SongContentService {
     await em.nativeDelete(SongPart, { song: song.id });
     await em.nativeDelete(SongMedia, { song: song.id });
 
-    const children = this.buildChildEntities(song, input, tags, mediaOwner);
+    const children = this.buildChildEntities(
+      song,
+      input,
+      tags,
+      mediaOwner,
+      previousFlags,
+    );
 
     await this.persistOrThrowConflict(em, [song, ...children]);
   }
@@ -145,7 +158,8 @@ export class SongContentService {
     song: Song,
     input: CreateSongInput,
     tags: Tag[],
-    mediaOwner: User,
+    mediaOwner: User | null,
+    previousFlags: Set<string>,
   ): object[] {
     const entities: object[] = [
       ...input.alternativeTitles.map((item) =>
@@ -179,12 +193,48 @@ export class SongContentService {
           translation.line = line;
           translation.languageCode = translationInput.languageCode;
           translation.text = translationInput.text;
+          translation.isUncertain = resolveIsUncertain(
+            translationInput.isUncertain,
+            previousFlags,
+            uncertainTranslationKey(
+              lineInput.originalText,
+              translationInput.languageCode,
+              translationInput.text,
+            ),
+          );
           entities.push(translation);
         }
       }
     }
 
     return entities;
+  }
+
+  // Keys of the song's currently stored translations flagged uncertain.
+  // Raw SQL rather than em.find, so the rows about to be wiped never enter
+  // the identity map. A brand-new, unpersisted song simply has none.
+  private async loadUncertainTranslationKeys(
+    em: EntityManager,
+    song: Song,
+  ): Promise<Set<string>> {
+    const rows = await em
+      .getConnection()
+      .execute<{ originalText: string; languageCode: string; text: string }[]>(
+        `select sl.original_text as "originalText", slt.language_code as "languageCode", slt.text
+       from song_line_translations slt
+       inner join song_lines sl on sl.id = slt.line_id
+       inner join song_parts sp on sp.id = sl.part_id
+       where sp.song_id = ? and slt.is_uncertain = true`,
+        [song.id],
+        'all',
+        em.getTransactionContext(),
+      );
+
+    return new Set(
+      rows.map((row) =>
+        uncertainTranslationKey(row.originalText, row.languageCode, row.text),
+      ),
+    );
   }
 
   private buildAlternativeTitle(
@@ -216,7 +266,7 @@ export class SongContentService {
   private buildSongMedia(
     song: Song,
     input: CreateSongMediaInput,
-    mediaOwner: User,
+    mediaOwner: User | null,
   ): SongMedia {
     const media = new SongMedia();
     media.song = song;
@@ -245,4 +295,31 @@ export class SongContentService {
       throw error;
     }
   }
+}
+
+// Identifies "the same translation" across a replace-all rebuild: same
+// original line, same language, same translated text. Positions are
+// deliberately not part of it, so inserting/reordering lines elsewhere in
+// the song doesn't lose a flag.
+function uncertainTranslationKey(
+  originalText: string,
+  languageCode: string,
+  text: string,
+): string {
+  return [originalText, languageCode, text].join('\u0000');
+}
+
+/**
+ * An explicit isUncertain always wins. An omitted one (an older client, or
+ * an edit proposal stored before the flag existed) keeps the flag of the
+ * identical translation the song already had, so editing an unrelated
+ * field never clears it - and defaults to false for anything new or
+ * retyped, since the old flag described the old text.
+ */
+export function resolveIsUncertain(
+  explicit: boolean | undefined,
+  previousFlags: Set<string>,
+  key: string,
+): boolean {
+  return explicit ?? previousFlags.has(key);
 }

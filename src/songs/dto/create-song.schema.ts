@@ -54,10 +54,15 @@ const tagIdsSchema = z
     );
   });
 
+// isUncertain is deliberately optional rather than .default(false): an
+// older client that doesn't know the flag yet omits it, and an omitted
+// flag must not silently clear one already set on the same translation -
+// see SongContentService.replaceContent for how it is resolved.
 const translationItemSchema = z
   .object({
     languageCode: languageCodeSchema,
     text: z.string().trim().min(1).max(5000),
+    isUncertain: z.boolean().optional(),
   })
   .strict();
 

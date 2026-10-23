@@ -1,0 +1,3685 @@
+{
+  "formatVersion": 1,
+  "songs": [
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Quem Vem Lá, Sou Eu",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Quem Vem Lá Sou Eu",
+          "position": 1
+        },
+        {
+          "title": "Capoeira Sou Eu",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Quem vem lá, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto tam idzie? To ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Quem vem lá, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto tam idzie? To ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Berimbau bateu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Berimbau zabrzmiał"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Capoeira sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ja jestem capoeirą"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Quem vem lá - sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto tam idzie? To ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Quem vem lá - sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto tam idzie? To ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Berimbau mais eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Berimbau i ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Capoeira sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ja jestem capoeirą"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Eu venho de longe, venho de Itabuna",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przybywam z daleka, z Itabuny"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Jogo Capoeira meu nome é Suassuna",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gram capoeirę, nazywam się Suassuna"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Quem vem lá - sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto tam idzie? To ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Quem vem lá - sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto tam idzie? To ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Berimbau bateu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Berimbau zabrzmiał"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Capoeira sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ja jestem capoeirą"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Mais sou eu, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ale to ja, to ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Quem vem lá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto tam idzie?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "Eu sou bevenuto",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem Bevenuto",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Quem vem lá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto tam idzie?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 19,
+          "lines": [
+            {
+              "originalText": "Montado a cavalo",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jadąc konno"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 20,
+          "lines": [
+            {
+              "originalText": "Quem vem lá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto tam idzie?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 21,
+          "lines": [
+            {
+              "originalText": "Fumando um charuto",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Paląc cygaro"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 22,
+          "lines": [
+            {
+              "originalText": "Quem vem lá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto tam idzie?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 23,
+          "lines": [
+            {
+              "originalText": "Mais sou eu, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ale to ja, to ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 24,
+          "lines": [
+            {
+              "originalText": "Quem vem lá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto tam idzie?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 25,
+          "lines": [
+            {
+              "originalText": "Quem vem lá, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto tam idzie? To ja"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=Gc5o_0BsfMc",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=DDeNmEr2GIM",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„Quem Vem Lá, Sou Eu” należy do znanych corridos śpiewanych w roda i jest szczególnie kojarzone z repertuarem Mestre Suassuny (Reinaldo Ramos Suassuna). Zachowane zapisy oraz nagrania przypisują mu wykonanie utworu, lecz nie ustalają bezspornie autorstwa jego tekstu i melodii, dlatego pole autora pozostaje nieuzupełnione. Wers „Eu venho de longe, venho de Itabuna / Jogo capoeira, meu nome é Suassuna” bezpośrednio wskazuje na mistrza i Itabunę w stanie Bahia, z którą związana jest jego młodość. Mestre Suassuna współtworzył grupę Cordão de Ouro w São Paulo w 1967 roku. Pieśń ma także warianty z innymi nazwami miejscowości i imionami, dostosowywanymi do osoby śpiewającej.",
+      "meaningContext": "Głównym tematem jest przedstawienie się capoeiristy i podkreślenie jego tożsamości. „Quem vem lá?” to „Kto tam idzie?”, a odpowiedź „Sou eu” — „To ja” — wypowiadana jest z pewnością siebie. „Berimbau bateu” informuje, że instrument zabrzmiał i rozpoczął muzyczny dialog. „Capoeira sou eu” dosłownie brzmi „Capoeirą jestem ja”; sens można oddać jako mocne utożsamienie się z capoeirą, nie jako twierdzenie, że śpiewający ją wymyślił. Zwrotka o Itabunie i Suassunie przedstawia pochodzenie oraz tożsamość mistrza; w innych wykonaniach śpiewający może wymienić własne miasto i imię. W końcowej części „Quem vem lá?” staje się krótką odpowiedzią chóru na kolejne wypowiedzi solisty. „Montado a cavalo / Fumando um charuto” tworzy obraz przybywającego człowieka na koniu z cygarem. Wyrażenie „Eu sou bevenuto” pozostaje niepewne: w źródłach występują różne zapisy i nie ma podstaw do jednoznacznego tłumaczenia go jako imienia, powitania czy przymiotnika.",
+      "meaningTrivia": "Itabuna to miasto w stanie Bahia, ważne w biografii Mestre Suassuny. Współzałożona przez niego grupa Cordão de Ouro powstała w 1967 roku. Refren „Quem vem lá?” umożliwia śpiewającemu wymianę informacji o własnym pochodzeniu, imieniu lub mistrzu, dzięki czemu pieśń funkcjonuje w licznych wariantach. „Berimbau bateu” dosłownie oznacza, że berimbau „uderzył/zagrał”; w języku pieśni naturalniej po polsku brzmi „berimbau zabrzmiał”. W zapisach ostatniej części spotyka się warianty „bevenuto”, „brevenuto” i „Benvenuto”; ich rozbieżność pozostawiono jako nierozstrzygniętą. W przesłanym tekście „fumando a charuto” poprawiono na gramatyczne „fumando um charuto” (paląc cygaro)."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Lampião Subia a Serra",
+      "authorName": "Mestre Barrão",
+      "alternativeTitles": [
+        {
+          "title": "Lampião",
+          "position": 1
+        },
+        {
+          "title": "Lampião Subia Serra",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "CHORUS",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Lampião",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lampião"
+                }
+              ]
+            },
+            {
+              "originalText": "Subia a serra",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wspinał się w góry"
+                }
+              ]
+            },
+            {
+              "originalText": "Lampião",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lampião"
+                }
+              ]
+            },
+            {
+              "originalText": "Descia a ladeira",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Schodził ze zbocza"
+                }
+              ]
+            },
+            {
+              "originalText": "Maria Bonita cantava Mulher Rendeira",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Maria Bonita śpiewała „Mulher Rendeira”"
+                }
+              ]
+            },
+            {
+              "originalText": "Maria Bonita cantava Mulher Rendeira",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Maria Bonita śpiewała „Mulher Rendeira”"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Lampião ele foi pego, foi morto à traição",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lampião został schwytany i zdradziecko zabity"
+                }
+              ]
+            },
+            {
+              "originalText": "Não se entregava à polícia",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie poddawał się policji"
+                }
+              ]
+            },
+            {
+              "originalText": "Coronel nem capitão",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ani pułkownikowi, ani kapitanowi"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Lampião",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lampião"
+                }
+              ]
+            },
+            {
+              "originalText": "Subia a serra",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wspinał się w góry"
+                }
+              ]
+            },
+            {
+              "originalText": "Lampião",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lampião"
+                }
+              ]
+            },
+            {
+              "originalText": "Descia a ladeira",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Schodził ze zbocza"
+                }
+              ]
+            },
+            {
+              "originalText": "Maria Bonita cantava Mulher Rendeira",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Maria Bonita śpiewała „Mulher Rendeira”"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Maria Bonita era mulher-macho, sim senhor",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Maria Bonita była kobietą nieustraszoną, owszem"
+                }
+              ]
+            },
+            {
+              "originalText": "Ao Lampião seu coração lhe entregou",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lampião oddała swoje serce"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Lampião",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lampião"
+                }
+              ]
+            },
+            {
+              "originalText": "Subia a serra",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wspinał się w góry"
+                }
+              ]
+            },
+            {
+              "originalText": "Lampião",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lampião"
+                }
+              ]
+            },
+            {
+              "originalText": "Descia a ladeira",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Schodził ze zbocza"
+                }
+              ]
+            },
+            {
+              "originalText": "Maria Bonita cantava Mulher Rendeira",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Maria Bonita śpiewała „Mulher Rendeira”"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Virgulino Ferreira",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Virgulino Ferreira"
+                }
+              ]
+            },
+            {
+              "originalText": "O cangaceiro Lampião",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Cangaceiro znany jako Lampião"
+                }
+              ]
+            },
+            {
+              "originalText": "Seu nome ficou marcado",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jego imię zapisało się na zawsze"
+                }
+              ]
+            },
+            {
+              "originalText": "Na história do sertão",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W historii sertão"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Lampião",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lampião"
+                }
+              ]
+            },
+            {
+              "originalText": "Subia a serra",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wspinał się w góry"
+                }
+              ]
+            },
+            {
+              "originalText": "Lampião",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lampião"
+                }
+              ]
+            },
+            {
+              "originalText": "Descia a ladeira",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Schodził ze zbocza"
+                }
+              ]
+            },
+            {
+              "originalText": "Maria Bonita cantava Mulher Rendeira",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Maria Bonita śpiewała „Mulher Rendeira”"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Junto com Corisco",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wraz z Corisco"
+                }
+              ]
+            },
+            {
+              "originalText": "Ventania, Azulão e Pontaria",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ventanią, Azulão i Pontarią"
+                }
+              ]
+            },
+            {
+              "originalText": "Zé Sereno, Moita Brava",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zé Sereno i Moita Brava"
+                }
+              ]
+            },
+            {
+              "originalText": "Dadá, Bem-te-vi e Jararaca",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dadá, Bem-te-vi i Jararacą"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Lampião",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lampião"
+                }
+              ]
+            },
+            {
+              "originalText": "Subia a serra",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wspinał się w góry"
+                }
+              ]
+            },
+            {
+              "originalText": "Lampião",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lampião"
+                }
+              ]
+            },
+            {
+              "originalText": "Descia a ladeira",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Schodził ze zbocza"
+                }
+              ]
+            },
+            {
+              "originalText": "Maria Bonita cantava Mulher Rendeira",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Maria Bonita śpiewała „Mulher Rendeira”"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=ZYTha7cT58M",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Lampião Subia a Serra” jest piosenką z repertuaru Mestre Barrão (Axé Capoeira), przypisywaną mu w śpiewnikach; nie potwierdzono tu niezależnie pierwotnej dokumentacji kompozytorskiej. Jej bohaterem jest Virgulino Ferreira da Silva, znany jako Lampião, przywódca cangaceiros działających w północno-wschodniej Brazylii. Jego partnerką była Maria Gomes de Oliveira, znana jako Maria Bonita. Oboje zginęli 28 lipca 1938 roku w policyjnej zasadzce w Angicos, w stanie Sergipe. Wers o śmierci „à traição” przywołuje popularną opowieść o zdradzie i przekazaniu miejsca pobytu grupy; szczegóły donosów bywają przedstawiane rozbieżnie. Cangaço było zjawiskiem zbrojnych band w sertão i łączyło bunt wobec lokalnych układów władzy z rabunkami oraz przemocą wobec ludności. Lampião to postać jednocześnie historyczna i mitologizowana w kulturze ludowej.",
+      "meaningContext": "Piosenka kreśli obraz Lampião przemierzającego górzyste tereny sertão, jego związku z Marią Bonitą, śmierci w zasadzce i towarzyszy z cangaço. „Subia a serra / Descia a ladeira” to „Wspinał się w góry / Schodził ze zbocza” — przywołanie wędrownego, niebezpiecznego życia. Maria Bonita śpiewa w refrenie „Mulher Rendeira”, sławną pieśń ludową silnie kojarzoną z cangaceiros; wyrażenie dosłownie oznacza „kobietę wyrabiającą koronki”, ale w tym wersie jest tytułem pieśni. Określenie „mulher-macho” to historyczne, nacechowane płciowo określenie kobiety uważanej za odważną, twardą i nieustępliwą — nie dosłowna informacja o płci Marii. Lista przezwisk w ostatniej zwrotce odsyła do postaci z kręgu cangaço. Utwór jest folklorystycznym wspomnieniem ich losów, a nie bezstronną oceną działań band.",
+      "meaningTrivia": "„Sertão” oznacza brazylijski interior, szczególnie suchy obszar północnego wschodu, nie zaś jedno miasto czy góry. Przydomek Lampião dosłownie znaczy „latarnia”; postać ta utrwaliła się także w literaturze cordel, filmach i muzyce. „Mulher Rendeira” to odrębna, słynna pieśń związana z pamięcią o cangaceiros — refren tej piosenki cytuje jej tytuł. Wśród wspominanych postaci są Corisco oraz Dadá, znani z historii cangaço; w pozostałych przezwiskach i ich pisowni spotyka się warianty. W pierwotnie przesłanym tekście przy pierwszym refrenie występuje „(bis)”, czyli polecenie powtórzenia ostatniej frazy; w JSON-ie powtórzenie zapisano jawnie. Nie każdy tekst z repertuaru capoeiry opowiada o samej grze: ten pokazuje, jak capoeira przejmuje także historie i obrazy z brazylijskiej kultury popularnej."
+    },
+    {
+      "title": "A Manteiga Derramou",
+      "authorName": null,
+      "categoryCode": "CORRIDO",
+      "alternativeTitles": [
+        {
+          "title": "Vou Dizer ao Meu Senhor",
+          "position": 1
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Vou dizer ao meu senhor",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Powiem mojemu panu"
+                }
+              ]
+            },
+            {
+              "originalText": "Que a manteiga derramou",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Że masło się rozlało"
+                }
+              ]
+            },
+            {
+              "originalText": "A manteiga não é minha",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To masło nie jest moje"
+                }
+              ]
+            },
+            {
+              "originalText": "A manteiga é de ioiô",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To masło należy do młodego pana"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Vou dizer ao meu senhor",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Powiem mojemu panu"
+                }
+              ]
+            },
+            {
+              "originalText": "Que a manteiga derramou",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Że masło się rozlało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Ê, a manteiga não é minha",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ej, to masło nie jest moje"
+                }
+              ]
+            },
+            {
+              "originalText": "A manteiga é de ioiô",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To masło należy do młodego pana"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô, a manteiga não é minha",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, to masło nie jest moje"
+                }
+              ]
+            },
+            {
+              "originalText": "A manteiga derramou",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Masło się rozlało"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô, a manteiga não é minha",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, to masło nie jest moje"
+                }
+              ]
+            },
+            {
+              "originalText": "Caiu no chão e derramou",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Spadło na ziemię i się rozlało"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=jmcLXqerl9M",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„A Manteiga Derramou” to tradycyjne corrido capoeira, związane z pamięcią o okresie niewolnictwa w Brazylii. Nie ma pewnej dokumentacji autora ani czasu powstania. Niektóre śpiewniki przypisują wykonanie lub wersję Mestre Suassunie, inne opisują pieśń jako anonimową. W tradycyjnej opowieści osoba zniewolona ma poinformować pana, że powierzone jej masło się rozlało. Istnieje również przekaz, według którego niewolników zmuszano do przenoszenia masła w liściach bananowca w upale, a rozpuszczenie się go mogło skutkować karą. Taka konkretna historia funkcjonuje w objaśnieniach pieśni, ale nie została tu potwierdzona niezależnym dokumentem z epoki i nie należy jej przedstawiać jako ustalonego faktu historycznego.",
+      "meaningContext": "Solista zapowiada: „Vou dizer ao meu senhor que a manteiga derramou” — „Powiem mojemu panu, że masło się rozlało”. Następnie podkreśla: „A manteiga não é minha / A manteiga é de ioiô” — masło nie należy do niego, lecz do młodego pana. „Senhor” to w historycznym odczytaniu właściciel osoby zniewolonej, natomiast „ioiô” jest dawną formą zwracania się do młodego mężczyzny z rodziny pana. Tekst można odczytać jako przejaw ironii i tzw. oporu pośredniego: mówiący nie zaprzecza zdarzeniu, ale zwraca uwagę na fakt, że rzecz, której pilnowania od niego wymagano, nie jest jego własnością. Nie wiadomo, czy rozlanie było wypadkiem, czy celowym aktem nieposłuszeństwa. Wykonywany w roda refren tworzy prosty dialog pomiędzy prowadzącym a chórem. Sama pieśń nie musi opisywać jednego możliwego do zidentyfikowania wydarzenia.",
+      "meaningTrivia": "„Ioiô” (a także „iaiá” w rodzaju żeńskim) to dawne brazylijskie formy adresatywne związane z hierarchią społeczno-rodzinną epoki niewolnictwa; w dzisiejszym języku mogą brzmieć archaicznie. W innych wariantach tekstu masło należy do „patrão” (pracodawcy/pana) albo pojawia się „filha de ioiô”, a także linia o rozlaniu masła w wodzie. Dzięki temu pieśń pokazuje, jak ustnie przekazywane corridos zmieniają drobne szczegóły, zachowując podstawowy motyw. „Derramou” oznacza „rozlało się”, nie zaś jednoznacznie „stopiło się”; opowieść o topnieniu masła w upale jest interpretacją przekazywaną w środowisku capoeira, a nie dosłowną treścią dostarczonego wersu."
+    },
+    {
+      "title": "Sai, Sai, Catarina",
+      "authorName": null,
+      "categoryCode": "CORRIDO",
+      "alternativeTitles": [
+        {
+          "title": "Sai Sai Catarina",
+          "position": 1
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Iê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Sai, sai, Catarina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyjdź, wyjdź, Catarino"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Saia do mar, venha ver Idalina, bonito",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyjdź z morza, chodź zobaczyć Idalinę — pięknie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Sai, sai, Catarina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyjdź, wyjdź, Catarino"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Iê, saia do mar, venha ver Idalina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, wyjdź z morza, chodź zobaczyć Idalinę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Sai, sai, Catarina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyjdź, wyjdź, Catarino"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Iê, Catarina venha ver",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, Catarino, chodź zobaczyć"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Sai, sai, Catarina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyjdź, wyjdź, Catarino"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Iê, saia do mar, venha ver Idalina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, wyjdź z morza, chodź zobaczyć Idalinę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Sai, sai, Catarina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyjdź, wyjdź, Catarino"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Ô, a Catarina me chamou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, Catarina mnie zawołała"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Sai, sai, Catarina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyjdź, wyjdź, Catarino"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Ah, saia do mar, venha ver Idalina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ach, wyjdź z morza, chodź zobaczyć Idalinę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Sai, sai, Catarina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyjdź, wyjdź, Catarino"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Iê, saia do mar, venha ver Idalina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, wyjdź z morza, chodź zobaczyć Idalinę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Sai, sai, Catarina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyjdź, wyjdź, Catarino"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "Iê, Catarina venha ver",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, Catarino, chodź zobaczyć"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Sai, sai, Catarina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyjdź, wyjdź, Catarino"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 19,
+          "lines": [
+            {
+              "originalText": "Ah, saia do mar, venha ver Idalina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ach, wyjdź z morza, chodź zobaczyć Idalinę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 20,
+          "lines": [
+            {
+              "originalText": "Sai, sai, Catarina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyjdź, wyjdź, Catarino"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 21,
+          "lines": [
+            {
+              "originalText": "Ah, saia do mar, venha ver Idalina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ach, wyjdź z morza, chodź zobaczyć Idalinę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 22,
+          "lines": [
+            {
+              "originalText": "Sai, sai, Catarina",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyjdź, wyjdź, Catarino"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 23,
+          "lines": [
+            {
+              "originalText": "Vam' embora",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodźmy już"
+                }
+              ]
+            },
+            {
+              "originalText": "A bateria, hein",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Hej, bateria!"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=1cKxvNBQuXs",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=uGQ_Zl-eI7k",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„Sai, Sai, Catarina” należy do popularnego, przekazywanego w różnych wersjach repertuaru corridos capoeira. Nie ustalono wiarygodnie twórcy ani daty powstania. Zapisy w śpiewnikach różnią się dodatkowymi wezwaniami do Catariny i treścią improwizowanych wersów. W jednym z opisów La Laue interpretuje ją jako piosenkę o przywoływaniu ukochanej osoby znad morza, ale nie jest to udokumentowana historia jej powstania. Nie ma potwierdzenia, że Catarina albo Idalina oznaczają określone historyczne postaci. Związki Catariny z Iemanjá bywają sugerowane, ale pozostają nieudowodnioną interpretacją.",
+      "meaningContext": "Refren „Sai, sai, Catarina” oznacza „Wyjdź, wyjdź, Catarino”. Wokalista wzywa Catarinę, by wyszła z morza i przyszła zobaczyć Idalinę: „Saia do mar, venha ver Idalina”. Idalina może być po prostu żeńskim imieniem, choć w tradycji capoeira istnieje też toque berimbau o nazwie „Idalina”. Sam tekst nie rozstrzyga, do czego odnosi się to słowo, dlatego w tłumaczeniu zachowano odczytanie jako imienia, a nie bezpodstawnie przypisany rytm. Krótkie powtarzane odpowiedzi chóru nadają pieśni energię i ułatwiają improwizowanie dalszych zwrotek podczas roda. Okrzyki „Iê”, „Ô”, „Ah” pełnią funkcję wokalną; końcowe „Vam' embora / A bateria, hein” może być doraźną wypowiedzią wykonawcy skierowaną do muzyków, a nie ustaloną zwrotką.",
+      "meaningTrivia": "„Catarina” i „Idalina” są żeńskimi imionami portugalskimi, ale w capoeirze „Idalina” jest także nazwą toque berimbau — to ciekawa wieloznaczność, której nie należy rozstrzygać bez dowodów. Istnieją odmiany z wersami „Catarina, meu amor”, „Saia do mar, venha ver capoeira” czy „Saia do mar, venha ver a menina”. Nie ma pewnych podstaw, by identyfikować Catarinę z Iemanjá tylko dlatego, że wychodzi z morza. „Bateria” oznacza w capoeirze zespół instrumentów i grających muzyków, nie zwykłą perkusję zestawową. W przesłanym wariancie końcowe okrzyki i słowo „bonito” mogą być częścią konkretnego wykonania, a nie kanonicznego tekstu."
+    },
+    {
+      "title": "Noite Sem Lua",
+      "authorName": "Mestre Toni Vargas",
+      "categoryCode": "CORRIDO",
+      "alternativeTitles": [
+        {
+          "title": "Era Uma Noite Sem Lua",
+          "position": 1
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Era uma noite sem lua e eu estava sozinho",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc, a ja byłem sam"
+                }
+              ]
+            },
+            {
+              "originalText": "Fazendo do meu caminhar o meu próprio caminho",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Każdym krokiem wytyczałem własną drogę"
+                }
+              ]
+            },
+            {
+              "originalText": "Sentindo o aroma das rosas e a dor dos espinhos",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Czując zapach róż i ból ich kolców"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "De repente, apesar do escuro, eu pude saber",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nagle, pomimo ciemności, zorientowałem się"
+                }
+              ]
+            },
+            {
+              "originalText": "Que havia alguém me espreitando sem ter nem por quê",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Że ktoś czai się na mnie bez żadnego powodu"
+                }
+              ]
+            },
+            {
+              "originalText": "Era hora de luta e de morte, é matar ou morrer",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nadeszła chwila walki na śmierć i życie: zabić albo zginąć"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "A navalha passou me cortando, era quase um carinho",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Brzytwa prześlizgnęła się po mnie, rozcinając skórę — niemal jak pieszczota"
+                }
+              ]
+            },
+            {
+              "originalText": "O meu sangue misturou-se ao pó e às pedras do caminho",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Moja krew zmieszała się z kurzem i kamieniami drogi"
+                }
+              ]
+            },
+            {
+              "originalText": "Era hora de pedir axé para o meu orixá",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nadszedł czas, by prosić mojego orixá o axé"
+                }
+              ]
+            },
+            {
+              "originalText": "E partir para o jogo da morte, é perder ou ganhar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I przystąpić do śmiertelnej gry — przegrać albo wygrać"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Eu dei o bote certeiro da cobra, alguém me guiou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zadałem celny cios niczym atakujący wąż — ktoś mną pokierował"
+                }
+              ]
+            },
+            {
+              "originalText": "Meia-lua bem dada é a morte",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dobrze wymierzona meia-lua może przynieść śmierć"
+                }
+              ]
+            },
+            {
+              "originalText": "E a luta acabou",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I walka się skończyła"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Eu segui pela noite sem lua",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poszedłem dalej przez bezksiężycową noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Histórias na algibeira",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Niosąc historie w kieszeni"
+                }
+              ]
+            },
+            {
+              "originalText": "Não é fácil acabar com a sorte de um bom capoeira",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Niełatwo odebrać szczęście dobremu capoeiriście"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Se você não acredita, me espera num outro caminho",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jeśli mi nie wierzysz, zaczekaj na mnie na innej drodze"
+                }
+              ]
+            },
+            {
+              "originalText": "E prepara bem sua navalha",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I dobrze przygotuj swoją brzytwę"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu não ando sozinho",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie chodzę sam"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Era uma noite sem lua",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To była bezksiężycowa noc"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=5MQzcGf9R5M",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Noite Sem Lua” („Bezksiężycowa noc”) to narracyjna pieśń skomponowana przez Mestre Toni Vargasa, znanego muzyka i mistrza capoeiry. Autorstwo podają śpiewniki i katalogi piosenek; nie udało się ustalić dokładnej daty powstania utworu. Występuje m.in. w repertuarze związanym z grupą Senzala. Tekst przedstawia fikcyjną lub literacko stylizowaną nocną zasadzkę: samotny wędrowiec zostaje zaatakowany brzytwą, jest ranny, przywołuje moc swojego orixá, odpowiada błyskawicznym ciosem i wychodzi z walki żywy. Nie ma podstaw do przedstawiania tej opowieści jako opisu konkretnego historycznego pojedynku. Pieśń korzysta jednak z historycznych skojarzeń capoeiry z ulicznymi walkami, ostrzami i niebezpieczeństwem oraz z afro-brazylijskiego języka duchowości.",
+      "meaningContext": "Powtarzany refren „Era uma noite sem lua” buduje napięcie: noc bez księżyca oznacza ciemność, samotność i ograniczoną widoczność. Bohater idzie własną drogą, odczuwa zarazem piękno („aroma das rosas”) i cierpienie („dor dos espinhos”). Kiedy zauważa czającego się napastnika, walka przestaje być sportową grą: „é matar ou morrer” oznacza „zabić albo zginąć”. „Navalha” to brzytwa, historycznie kojarzona z niektórymi dawnymi środowiskami capoeiristas; nie oznacza, że posługiwanie się nią jest częścią dzisiejszego treningu. „Axé” to siła, energia lub błogosławieństwo w afro-brazylijskich tradycjach, a „orixá” — bóstwo / duchowa moc czczona między innymi w candomblé. „Bote certeiro da cobra” opisuje celny, nagły atak jak u węża, a „meia-lua” jest nazwą rodziny kopnięć capoeiry. Tekst nie rozstrzyga, o który konkretnie wariant kopnięcia chodzi. Finałowe „Eu não ando sozinho” kontrastuje z początkowym „eu estava sozinho”: wędrowiec fizycznie szedł sam, lecz czuje duchowe wsparcie lub opiekę. To jedna z możliwych interpretacji tego zakończenia.",
+      "meaningTrivia": "„Algibeira” to dawne lub regionalne słowo oznaczające kieszeń; „histórias na algibeira” tworzy obraz człowieka, który zabiera ze sobą przeżyte historie. „Navalha” oznacza składaną brzytwę, a nie zwykły nóż. „Bote” w połączeniu z kobrą jest nagłym atakiem węża; w tym wersie bohater porównuje do niego własne błyskawiczne działanie. „Meia-lua” dosłownie znaczy „półksiężyc”, a w capoeirze określa rodzaj kopnięcia — w utworze o nocy bez księżyca tworzy to dodatkową grę obrazów. „Era quase um carinho” („to było niemal jak pieszczota”) jest ironicznym kontrastem z raną po brzytwie. Mimo powtarzanego refrenu pieśń ma pełną, dramatyczną fabułę, co odróżnia ją od wielu krótkich, improwizowanych corridos."
+    },
+    {
+      "title": "A História Nos Engana",
+      "authorName": "Mestre Moraes",
+      "categoryCode": "LADAINHA",
+      "alternativeTitles": [
+        {
+          "title": "A História Nos Engana (Zumbi É Nosso Herói)",
+          "position": 1
+        },
+        {
+          "title": "Zumbi É Nosso Herói",
+          "position": 2
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "A história nos engana",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Historia nas zwodzi"
+                }
+              ]
+            },
+            {
+              "originalText": "Diz tudo pelo contrário",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Opowiada wszystko na opak"
+                }
+              ]
+            },
+            {
+              "originalText": "Até diz que a abolição",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Twierdzi nawet, że zniesienie niewolnictwa"
+                }
+              ]
+            },
+            {
+              "originalText": "Aconteceu no mês de maio",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nastąpiło w maju"
+                }
+              ]
+            },
+            {
+              "originalText": "A prova dessa mentira",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dowodem na to kłamstwo"
+                }
+              ]
+            },
+            {
+              "originalText": "É que da miséria eu não saio",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jest to, że wciąż nie mogę wydostać się z nędzy"
+                }
+              ]
+            },
+            {
+              "originalText": "Viva vinte de novembro",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Niech żyje dwudziesty listopada"
+                }
+              ]
+            },
+            {
+              "originalText": "Momento para se lembrar",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dzień, o którym trzeba pamiętać"
+                }
+              ]
+            },
+            {
+              "originalText": "Não vejo no treze de maio",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie widzę w trzynastym maja"
+                }
+              ]
+            },
+            {
+              "originalText": "Nada para comemorar",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Niczego, co można by świętować"
+                }
+              ]
+            },
+            {
+              "originalText": "Muitos tempos se passaram",
+              "position": 11,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Minęło wiele lat"
+                }
+              ]
+            },
+            {
+              "originalText": "E o negro sempre a lutar",
+              "position": 12,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A czarni wciąż muszą walczyć"
+                }
+              ]
+            },
+            {
+              "originalText": "Zumbi é nosso herói",
+              "position": 13,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zumbi jest naszym bohaterem"
+                }
+              ]
+            },
+            {
+              "originalText": "Zumbi é nosso herói, colega velho",
+              "position": 14,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zumbi jest naszym bohaterem, stary przyjacielu"
+                }
+              ]
+            },
+            {
+              "originalText": "Do Palmares foi senhor",
+              "position": 15,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Był przywódcą Palmares"
+                }
+              ]
+            },
+            {
+              "originalText": "Pela causa do homem negro",
+              "position": 16,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W sprawie praw czarnych ludzi"
+                }
+              ]
+            },
+            {
+              "originalText": "Foi ele que mais lutou",
+              "position": 17,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To on walczył najzacieklej"
+                }
+              ]
+            },
+            {
+              "originalText": "Apesar de toda luta, colega velho",
+              "position": 18,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pomimo całej tej walki, stary przyjacielu"
+                }
+              ]
+            },
+            {
+              "originalText": "O negro não se libertou, camará",
+              "position": 19,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Czarni nie osiągnęli jeszcze pełnej wolności, przyjacielu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Iê, é hora, é hora",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, nadeszła pora, nadeszła pora"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Iê, é hora, é hora, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, nadeszła pora, nadeszła pora, przyjacielu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Oiá-iá, vamos embora",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oiá-iá, chodźmy już"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Iê, vamos embora, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, chodźmy już, przyjacielu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Oiá, pela barra afora",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oiá, przez ujście ku otwartemu morzu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Iê, pela barra afora, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, przez ujście ku otwartemu morzu, przyjacielu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Oiá-iá, viva meu Deus",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oiá-iá, niech żyje mój Bóg"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Iê, viva meu Deus, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, niech żyje mój Bóg, przyjacielu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Oiá, viva meu mestre",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oiá, niech żyje mój mistrz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Iê, viva meu mestre, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, niech żyje mój mistrz, przyjacielu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Oiá-iá, quem me ensinou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oiá-iá, ten, który mnie uczył"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Iê, quem me ensinou, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, ten, który mnie uczył, przyjacielu"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=sKILxS5x64k",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„A História Nos Engana” jest ladainhą Mestre Moraesa, mistrza Capoeira Angola. Powstała w nurcie afro-brazylijskiego przypominania historii niewolnictwa z perspektywy ludzi zniewolonych i ich potomków. W 1888 roku, 13 maja, ustawa Lei Áurea formalnie zniosła niewolnictwo w Brazylii. Nie zapewniła jednak byłym niewolnikom ziemi, odszkodowań ani pełnej integracji społecznej. Pieśń przeciwstawia tej oficjalnie świętowanej dacie 20 listopada — dzień śmierci Zumbiego dos Palmares w 1695 roku i symbol czarnego oporu. Data ta została wybrana przez brazylijskie ruchy czarnych jako Dzień Świadomości Czarnoskórych (Dia da Consciência Negra); od 2024 roku jest świętem państwowym. Nie wiadomo, kiedy dokładnie powstała sama pieśń.",
+      "meaningContext": "Ladainha kwestionuje jednostronną narrację, według której samo uchwalenie zniesienia niewolnictwa zakończyło opresję. „A história nos engana” — „Historia nas zwodzi” — oznacza tu krytykę dominującego sposobu opowiadania historii, nie zaprzeczenie faktowi uchwalenia Lei Áurea 13 maja 1888 roku. „É que da miséria eu não saio” mówi o utrzymującej się nędzy mimo zniesienia niewolnictwa. Wersy o 20 listopada oddają hołd Zumbiemu, przywódcy quilombo dos Palmares, wspólnoty ludzi walczących o wolność i niezależność. Zakończenie „O negro não se libertou” jest politycznym i społecznym stwierdzeniem, że formalna emancypacja nie przyniosła automatycznie rzeczywistej równości i bezpieczeństwa. Utwór jest zatem pieśnią pamięci, oporu i krytyki niesprawiedliwości. Końcowe wezwania „é hora”, „vamos embora”, „viva meu Deus” i „viva meu mestre” stanowią chulę (louvação), czyli dialog solisty z chórem następujący po ladainhi.",
+      "meaningTrivia": "„Zumbi dos Palmares” nie jest imieniem fikcyjnego bohatera — był historyczną postacią kojarzoną z quilombo dos Palmares w XVII wieku. „Palmares” oznacza wielką wspólnotę quilombos, a nie nazwisko Zumbiego. 13 maja obchodzono rocznicę formalnego zniesienia niewolnictwa, natomiast wybór 20 listopada jako dnia pamięci akcentuje sprawczość czarnych Brazylijczyków i ich własną walkę o wolność. Słowa „colega velho” to „stary przyjacielu” (nie „stara koleżanko”); „camará” jest tradycyjnym zawołaniem do towarzysza. „Pela barra afora” przywołuje wyjście przez ujście zatoki na otwarte morze — nie oznacza „tam daleko” w dosłownym sensie. W przesłanej transkrypcji pojawiało się „É que da miséria ou não saio”; w licznych innych zapisach występuje spójne gramatycznie „eu não saio”, które przyjęto w tym rekordzie."
+    },
+    {
+      "title": "Menino, Quem Foi Seu Mestre?",
+      "authorName": "Mestre João Pequeno",
+      "categoryCode": "LADAINHA",
+      "alternativeTitles": [
+        {
+          "title": "Eu Aprendi com Pastinha",
+          "position": 1
+        },
+        {
+          "title": "Menino Quem Foi Teu Mestre",
+          "position": 2
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Menino, quem foi seu mestre?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chłopcze, kto był twoim mistrzem?"
+                }
+              ]
+            },
+            {
+              "originalText": "Quem te ensinou a brincar?",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto nauczył cię grać?"
+                }
+              ]
+            },
+            {
+              "originalText": "O teu mestre foi Besouro",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Twoim mistrzem był Besouro"
+                }
+              ]
+            },
+            {
+              "originalText": "Aprendeu com Mangangá",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Uczył się od Mangangá"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu aprendi com Pastinha",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ja uczyłem się od Pastinhy"
+                }
+              ]
+            },
+            {
+              "originalText": "Quero contigo brincar",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chcę z tobą zagrać"
+                }
+              ]
+            },
+            {
+              "originalText": "A capoeira de Angola",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Capoeira Angola"
+                }
+              ]
+            },
+            {
+              "originalText": "Capoeira de Angola",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Capoeira Angola"
+                }
+              ]
+            },
+            {
+              "originalText": "A africano quem mandou",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To Afrykanin ją przysłał",
+                  "isUncertain": true
+                }
+              ]
+            },
+            {
+              "originalText": "Na capital de Salvador",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W stolicy, Salvadorze"
+                }
+              ]
+            },
+            {
+              "originalText": "Foi Pastinha que me ensinou",
+              "position": 11,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To Pastinha mnie nauczył"
+                }
+              ]
+            },
+            {
+              "originalText": "Na roda de capoeira",
+              "position": 12,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W roda capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Reconheço esse valor",
+              "position": 13,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Doceniam wartość tej nauki"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=CcbmKphgYLI",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=BKt9vS6pR2A",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„Menino, Quem Foi Seu Mestre?” to ladainha kojarzona z Mestre João Pequeno, uczniem Mestre Pastinhy i jednym z najważniejszych mistrzów Capoeira Angola. Archiwum FICA-DC z 2007 roku przypisuje pieśń João Pequeno, jednak opracowania naukowe traktują podobny wariant jako tradycyjny (domínio público), więc autorstwo nie jest bezsporne. Utwór odwołuje się do przekazywania wiedzy między mistrzami i uczniami. Pastinha (Vicente Ferreira Pastinha, 1889–1981) był nauczycielem João Pequeno. Przywołany Besouro, znany też jako Besouro Mangangá lub Besouro Cordão de Ouro, to Manuel Henrique Pereira, historyczny capoeirista otoczony legendami. Wersy „O teu mestre foi Besouro / Aprendeu com Mangangá” nie powinny być traktowane jako wiarygodne wskazanie dwóch różnych osób: Besouro i Mangangá to przydomki tego samego człowieka. Dokładna data powstania kompozycji jest nieustalona.",
+      "meaningContext": "Pieśń stawia pytanie „Kto był twoim mistrzem? Kto nauczył cię grać?” — w capoeirze „brincar” („bawić się”) bywa używane jako poetyckie określenie gry. Odpowiedź „Eu aprendi com Pastinha” wskazuje na naukę i szacunek wobec linii przekazu Capoeira Angola. Wspomnienie Besouro Mangangá łączy tradycję z postacią legendarnego capoeiristy, choć wers o tym, kto od kogo się uczył, jest niejednoznaczny i nie stanowi dokumentu genealogii mistrzów. „Quero contigo brincar” oznacza pragnienie wspólnej gry. Wers „A africano quem mandou” jest w przekazanej transkrypcji niegramatyczny i w innych śpiewnikach występuje w kilku odmianach; jego przybliżony sens wiąże Capoeira Angola z afrykańskim dziedzictwem, bez pewności co do dokładnego sformułowania. Końcowe „Reconheço esse valor” podkreśla docenienie nauki otrzymanej od mistrza. To ladainha śpiewana przez solistę, a nie krótki refren z regularną odpowiedzią chóru.",
+      "meaningTrivia": "Besouro i Mangangá nie są dwoma osobnymi mistrzami. Pełny przydomek Besouro Mangangá odnosi się do Manuela Henrique Pereiry, otoczonego opowieściami o „corpo fechado”, czyli magicznej odporności na broń. Mestre João Pequeno (João Pereira dos Santos) należał do najważniejszych uczniów Mestre Pastinhy i kontynuatorów Capoeira Angola. Wyraz „brincar” dosłownie oznacza „bawić się”, ale w pieśni oddaje zaproszenie do jogo capoeira. Początkowe „Menino, quem foi seu mestre?” nie pojawiło się w przesłanej transkrypcji zaczynającej się od „Quem te ensinou a brincar”, ale występuje w zapisach FICA-DC i La Laue (w drugim przypadku w tytule). Zapis tekstu zawiera więc ten dodatkowy początkowy wers. Nie dołączano chuli, ponieważ nie było jej w przesłanym wykonaniu."
+    },
+    {
+      "categoryCode": "LADAINHA",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Dona Isabel (Que História É Essa?)",
+      "authorName": "Mestre Toni Vargas",
+      "alternativeTitles": [
+        {
+          "title": "Dona Isabel",
+          "position": 1
+        },
+        {
+          "title": "Dona Isabel Que História É Essa",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Iêê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iêê"
+                }
+              ]
+            },
+            {
+              "originalText": "Dona Isabel, que história é essa?",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Izabelo, co to za historia?"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô, Isabel, que história é essa?",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, Izabelo, co to za historia?"
+                }
+              ]
+            },
+            {
+              "originalText": "De ter feito a abolição",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Że to ty doprowadziłaś do zniesienia niewolnictwa"
+                }
+              ]
+            },
+            {
+              "originalText": "De ser princesa boazinha",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Że byłaś taką dobrą księżniczką"
+                }
+              ]
+            },
+            {
+              "originalText": "Que acabou com a escravidão",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Która położyła kres niewolnictwu"
+                }
+              ]
+            },
+            {
+              "originalText": "Estou cansado de conversa",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mam dość pustych słów"
+                }
+              ]
+            },
+            {
+              "originalText": "Estou cansado de ilusão",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mam dość złudzeń"
+                }
+              ]
+            },
+            {
+              "originalText": "Abolição se fez com sangue",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zniesienie niewolnictwa wywalczono krwią"
+                }
+              ]
+            },
+            {
+              "originalText": "Que inundava esse país",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Która zalewała ten kraj"
+                }
+              ]
+            },
+            {
+              "originalText": "Que o negro transformou em luta",
+              "position": 11,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Którą czarni ludzie przekuli w walkę"
+                }
+              ]
+            },
+            {
+              "originalText": "Cansado de ser infeliz",
+              "position": 12,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zmęczeni swoim cierpieniem"
+                }
+              ]
+            },
+            {
+              "originalText": "Abolição se fez bem antes",
+              "position": 13,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Walka o wyzwolenie dokonywała się dużo wcześniej"
+                }
+              ]
+            },
+            {
+              "originalText": "E ainda há por se fazer agora",
+              "position": 14,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A i dziś wiele pozostaje jeszcze do zrobienia"
+                }
+              ]
+            },
+            {
+              "originalText": "Com a verdade da favela",
+              "position": 15,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Z prawdą płynącą z faweli"
+                }
+              ]
+            },
+            {
+              "originalText": "Dona Isabel",
+              "position": 16,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Izabelo"
+                }
+              ]
+            },
+            {
+              "originalText": "Não com a mentira da escola",
+              "position": 17,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A nie ze szkolnym kłamstwem"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô, Isabel, chegou a hora",
+              "position": 18,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, Izabelo, nadszedł czas"
+                }
+              ]
+            },
+            {
+              "originalText": "De se acabar com essa maldade",
+              "position": 19,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "By położyć kres temu złu"
+                }
+              ]
+            },
+            {
+              "originalText": "De se ensinar aos nossos filhos",
+              "position": 20,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "By uczyć nasze dzieci"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô, Isabel",
+              "position": 21,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, Izabelo"
+                }
+              ]
+            },
+            {
+              "originalText": "O quanto custa a liberdade",
+              "position": 22,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak wiele kosztuje wolność"
+                }
+              ]
+            },
+            {
+              "originalText": "Viva Zumbi, nosso guerreiro",
+              "position": 23,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Niech żyje Zumbi, nasz wojownik"
+                }
+              ]
+            },
+            {
+              "originalText": "Que fez-se herói lá em Palmares",
+              "position": 24,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Który stał się bohaterem w Palmares"
+                }
+              ]
+            },
+            {
+              "originalText": "Viva a cultura desse povo",
+              "position": 25,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Niech żyje kultura tego ludu"
+                }
+              ]
+            },
+            {
+              "originalText": "A liberdade verdadeira",
+              "position": 26,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Prawdziwa wolność"
+                }
+              ]
+            },
+            {
+              "originalText": "Que já corria nos quilombos",
+              "position": 27,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Która już rozkwitała w quilombos"
+                }
+              ]
+            },
+            {
+              "originalText": "Dona Isabel",
+              "position": 28,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Izabelo"
+                }
+              ]
+            },
+            {
+              "originalText": "E já jogava capoeira",
+              "position": 29,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I już grała capoeirę"
+                }
+              ]
+            },
+            {
+              "originalText": "Camaradinha",
+              "position": 30,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przyjacielu"
+                }
+              ]
+            },
+            {
+              "originalText": "O que vai fazer?",
+              "position": 31,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co zamierzasz zrobić?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Iêê, que vai fazer, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iêê, co zamierzasz zrobić, przyjacielu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Iêê, com capoeira",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iêê, z capoeirą"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Iêê, com capoeira, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iêê, z capoeirą, przyjacielu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Iêê, menino é bom",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iêê, chłopak jest dobry"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Iêê, menino é bom, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iêê, chłopak jest dobry, przyjacielu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Iêê, sabe jogar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iêê, umie grać"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Iêê, sabe jogar, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iêê, umie grać, przyjacielu"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=BGPg37v2lUA",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Dona Isabel (Que História É Essa?)” to autorska ladainha Mestre Toni Vargasa, która sprzeciwia się uproszczonej opowieści o zniesieniu niewolnictwa jako wyłącznej zasłudze księżniczki Izabeli. Izabela podpisała Lei Áurea 13 maja 1888 roku, co rzeczywiście prawnie zniosło niewolnictwo w Brazylii; nie zapewniło jednak byłym osobom zniewolonym ziemi, majątku ani równego statusu społecznego. Utwór przypomina wcześniejszą, wielopokoleniową walkę osób zniewolonych i społeczności quilombos, w tym Quilombo dos Palmares, oraz przywódcę Zumbiego. Współczesne nierówności symbolizuje favela. Nie należy odczytywać refrenu jako zaprzeczenia istnieniu ustawy z 1888 roku: krytyka dotyczy mitu, że jedna podpisująca osoba zapewniła wszystkim pełną wolność. W innych wersjach kompozycji Mestre Toni Vargas wprowadza przed pieśnią cytat z art. 402 brazylijskiego kodeksu karnego z 1890 roku, który penalizował capoeiragem, podkreślając sprzeczność między abolicją a późniejszą represją. Tego cytatu nie ma w przesłanej transkrypcji od 0:29, więc nie dodano go do tekstu.",
+      "meaningContext": "Pierwsze wersy zwracają się do księżniczki Izabeli z retorycznym pytaniem o to, dlaczego oficjalna historia przedstawia ją jako łagodną wybawicielkę. „Abolição se fez com sangue” podkreśla koszt walki o wyzwolenie, a „Abolição se fez bem antes / E ainda há por se fazer agora” przeciwstawia formalną datę ustawy długiemu procesowi emancypacji i nadal istniejącym nierównościom. Kontrast „verdade da favela” i „mentira da escola” jest krytyką dominującej narracji historycznej, nie dosłownym stwierdzeniem, że cała wiedza szkolna jest nieprawdziwa. Zumbi i Palmares symbolizują opór czarnej ludności; quilombos były społecznościami zakładanymi m.in. przez osoby uciekające z niewolnictwa. Końcowe odniesienie do capoeiry wskazuje ją jako element dziedzictwa i kultury oporu. „Que já corria nos quilombos / E já jogava capoeira” ma charakter poetycki, nie jest precyzyjnym dowodem na występowanie współczesnej formy capoeiry w Palmares. Po ladainhi występuje chula z improwizowanymi w tym wykonaniu wezwaniami „O que vai fazer?”, „Com capoeira”, „Menino é bom” i „Sabe jogar” oraz odpowiedziami chóru.",
+      "meaningTrivia": "Zumbi dos Palmares zginął 20 listopada 1695 roku; dzień ten stał się w Brazylii ważnym symbolem walki o prawa Afro-Brazylijczyków. Art. 402 kodeksu karnego z 1890 roku karał publiczne uprawianie capoeiragem, mimo że niewolnictwo zniesiono dwa lata wcześniej. „Dona” to grzecznościowa forma zwracania się do kobiety, tutaj użyta ironicznie wobec księżniczki Izabeli. „Quilombo” w historycznym kontekście oznaczało społeczność tworzoną przez osoby zbiegłe z niewoli oraz innych mieszkańców. Przesłana wersja różni się od standardowo publikowanej m.in. wersami „Viva Zumbi, nosso guerreiro” zamiast „nosso rei negro” i osobnymi wtrąceniami „Dona Isabel”; zachowano wersję użytkownika. Angielskie automatyczne tłumaczenie „That freed slavery” jest błędne: chodzi o zakończenie niewolnictwa, nie jego „wyzwolenie”. Zapis „menino e bom” poprawiono na „menino é bom”, a „gueirreiro” na „guerreiro”."
+    },
+    {
+      "categoryCode": "SAMBA_DE_RODA",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Lê Lê Lê Baiana",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Le Le Le Baiana",
+          "position": 1
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "A baiana me pega",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kobieta z Bahii chwyta mnie"
+                }
+              ]
+            },
+            {
+              "originalText": "Me leva pro samba",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zabiera mnie na sambę"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu sou do samba",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Samba to mój żywioł"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu vim sambar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przyszedłem tańczyć sambę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Lê lê lê, baiana",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lê lê lê, dziewczyno z Bahii"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Baiana me deu sinal",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kobieta z Bahii dała mi znak"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Lê lê lê, baiana",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lê lê lê, dziewczyno z Bahii"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Pra dançar no carnaval",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Żeby tańczyć podczas karnawału"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Lê lê lê, baiana",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lê lê lê, dziewczyno z Bahii"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Também joga capoeira",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ona gra również w capoeirę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Lê lê lê, baiana",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lê lê lê, dziewczyno z Bahii"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Angola e Regional",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Angola i Regional"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Lê lê lê, baiana",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lê lê lê, dziewczyno z Bahii"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=3-Vl-Ga4rDg",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Lê Lê Lê Baiana” jest pieśnią z repertuaru samba de roda z Bahii, znaną również w środowisku capoeira. Dostępne śpiewniki oraz nagrania podają odmienne warianty tekstu, lecz nie wskazują wiarygodnie pierwotnego autora ani daty kompozycji. Samba de roda rozwinęła się w regionie Recôncavo w stanie Bahia, w społecznościach afro-brazylijskich, z udziałem tradycji afrykańskich i wpływów portugalskich. UNESCO uznało Samba de Roda do Recôncavo jako dziedzictwo niematerialne: proklamacja miała miejsce w 2005 roku, a wpis na Listę Reprezentatywną w 2008 roku. Nie są to daty powstania tej piosenki. Przedstawiony tekst podkreśla bliski związek samby, karnawału i capoeiry w kulturze Bahii.",
+      "meaningContext": "„Baiana” oznacza kobietę pochodzącą ze stanu Bahia, nie konkretną postać o imieniu Baiana. W pierwszych wersach bohater opowiada, że kobieta z Bahii chwyta go i zaprasza do wspólnej samby. „Eu sou do samba / Eu vim sambar” znaczy dosłownie „Należę do samby / Przyszedłem tańczyć sambę” i wyraża radość z udziału w muzyce oraz tańcu. „Baiana me deu sinal” mówi o znaku lub zaproszeniu do zabawy w czasie karnawału. Końcowe „Também joga capoeira / Angola e Regional” wskazuje, że baiana gra także capoeirę, zarówno Angola, jak i Regional — dwie tradycje lub style jej praktykowania. Ponieważ portugalski pomija tutaj podmiot, odniesienie do kobiety wynika z kontekstu, a nie z wyrażonego wprost zaimka. Powtarzane „Lê lê lê, baiana” pełni funkcję śpiewnej odpowiedzi chóru. Całość jest pieśnią taneczną, nie narracją o konkretnym wydarzeniu historycznym.",
+      "meaningTrivia": "Samba de roda tradycyjnie angażuje śpiew, klaskanie, instrumenty i taniec w kręgu. W Recôncavo do środka koła często wchodzi jedna z uczestniczek, wykonując improwizowane kroki; „umbigada”, gest dotknięcia brzuchami, bywa zaproszeniem następnej tancerki. UNESCO opisuje też charakterystyczny krok „miudinho”. „Sambar” to czasownik oznaczający taniec samby, więc „Eu vim sambar” nie znaczy po prostu „przyszedłem”. W innych wersjach spotyka się „Minha baiana que deu o sinal” zamiast „Baiana me deu sinal” oraz „Eu vim dançar” zamiast „Eu vim sambar”. Powiązanie z capoeirą nie oznacza, że samba de roda jest rodzajem gry capoeira: to osobna forma muzyczno-taneczna, która często towarzyszy spotkaniom capoeiristas."
+    },
+    {
+      "title": "Lelê Maculelê",
+      "authorName": "Mestre Suíno",
+      "categoryCode": "MACULELE",
+      "alternativeTitles": [
+        {
+          "title": "Lele Maculele",
+          "position": 1
+        },
+        {
+          "title": "Boa Noite pra Você (Lelê Maculelê)",
+          "position": 2
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Lelê Maculelê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lelê, maculelê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Boa noite pra você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dobry wieczór tobie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Maculelê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Maculelê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Boa noite pra você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dobry wieczór tobie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Olha aqui, meu camarada, presta muita atenção",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Spójrz tutaj, mój towarzyszu, słuchaj bardzo uważnie"
+                }
+              ]
+            },
+            {
+              "originalText": "Isso aqui é o Candeias, não é brincadeira, não",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To grupa Candeias — to nie są żarty"
+                }
+              ]
+            },
+            {
+              "originalText": "Lelê Maculelê",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lelê, maculelê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Boa noite pra você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dobry wieczór tobie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Maculelê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Maculelê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Boa noite pra você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dobry wieczór tobie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "O facão bateu em cima, teve muita vibração",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Maczeta uderzyła z góry, aż rozległo się mocne uderzenie"
+                }
+              ]
+            },
+            {
+              "originalText": "Faísca para todos os lados, é o Candeias, meu irmão",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iskry lecą na wszystkie strony — to Candeias, mój bracie"
+                }
+              ]
+            },
+            {
+              "originalText": "Lelê Maculelê",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lelê, maculelê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Boa noite pra você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dobry wieczór tobie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Maculelê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Maculelê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Boa noite pra você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dobry wieczór tobie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Menino, toma cuidado para não se machucar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chłopcze, uważaj, żeby nie zrobić sobie krzywdy"
+                }
+              ]
+            },
+            {
+              "originalText": "Isso é jogo de facão, é cultura popular",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To gra z maczetami, element kultury ludowej"
+                }
+              ]
+            },
+            {
+              "originalText": "Lelê Maculelê",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lelê, maculelê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Boa noite pra você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dobry wieczór tobie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Maculelê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Maculelê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Boa noite pra você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dobry wieczór tobie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "Eu cortava cana madura para no engenho moer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ścinałem dojrzałą trzcinę, żeby zemleć ją w cukrowni"
+                }
+              ]
+            },
+            {
+              "originalText": "Para fazer a rapadura, para eu sobreviver",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Żeby zrobić rapadurę i mieć z czego żyć"
+                }
+              ]
+            },
+            {
+              "originalText": "Lelê Maculelê",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lelê, maculelê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Boa noite pra você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dobry wieczór tobie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 19,
+          "lines": [
+            {
+              "originalText": "Maculelê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Maculelê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 20,
+          "lines": [
+            {
+              "originalText": "Boa noite pra você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dobry wieczór tobie"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=3my-4UzRSH8",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Lelê Maculelê” to utwór przypisywany Mestre Suíno, związany z grupą Candeias, którą kieruje. Źródło La Laue przypisuje mu autorstwo; nie zweryfikowano niezależnie rejestracji praw autorskich. Pieśń jest współczesnym utworem o maculelê, a nie dowodem na określony moment powstania samego tańca. Maculelê jest afro-brazylijską tradycją muzyczno-taneczną silnie związaną z Santo Amaro da Purificação w regionie Recôncavo Baiano. Jej początki nie są dokładnie udokumentowane. W XX wieku Mestre Popó (Paulino Aluísio de Andrade) odegrał istotną rolę w odnowieniu tej praktyki w Santo Amaro. W tradycyjnych występach uderza się przede wszystkim drewnianymi kijami (grimas), choć w niektórych współczesnych pokazach używa się metalowych maczet. Grupo Candeias powstała w Goiânii w 1977 roku, a nazwę Candeias przyjęła na początku lat dziewięćdziesiątych.",
+      "meaningContext": "To energiczna pieśń wykonywana podczas prezentacji maculelê, z naprzemiennymi wezwaniami solisty „Lelê Maculelê / Maculelê” i odpowiedzią „Boa noite pra você” („Dobry wieczór tobie”). Wokalista zwraca się do uczestników: „Olha aqui, meu camarada, presta muita atenção” — zachęca do uważności, ponieważ maculelê wymaga precyzji i koordynacji. „Isso aqui é o Candeias” odnosi się do konkretnej grupy capoeira, nie do świec ani źródła światła. Wersy o uderzeniach facão i iskrach opisują widowiskowe wykonanie z metalowymi ostrzami; nie oznacza to, że historycznie wszyscy wykonawcy maculelê używali maczet. „Menino, toma cuidado” jest także ostrzeżeniem przed zranieniem. Końcowa zwrotka nawiązuje do ścinania trzciny cukrowej, jej obróbki w engenho oraz wytwarzania rapadury, czyli twardej, nierafinowanej masy z soku trzcinowego, stanowiącej źródło pożywienia i dochodu. Zestawia widowiskowy taniec z historią pracy na plantacjach i w cukrowniach brazylijskiego północnego wschodu.",
+      "meaningTrivia": "Maculelê jest odrębnym tańcem, ale często prezentują go grupy capoeira. Tradycyjne pałki używane w maculelê nazywa się grimas; metalowe facões bywają wykorzystywane w niektórych pokazach, gdzie przy kontakcie może pojawiać się iskra. „Engenho” w tym kontekście to urządzenia lub zakład do przerabiania trzciny cukrowej, nie współczesna cukrownia buraczana. „Rapadura” to tradycyjny produkt z zagęszczonego soku trzcinowego. Grupo Candeias jest grupą pochodzącą z Goiânii (stan Goiás), a nie z Bahii. Podane angielskie tłumaczenie „The machete hit on top had a lot of vibration” nie oddaje całkiem naturalnie opisu rytmicznego uderzenia; przełożono sens, bez dodawania niesprawdzonych szczegółów technicznych. Autorstwo Mestre Suíno pochodzi z katalogu La Laue."
+    }
+  ]
+}

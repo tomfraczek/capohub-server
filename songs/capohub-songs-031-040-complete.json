@@ -1,0 +1,4592 @@
+{
+  "formatVersion": 1,
+  "songs": [
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Quem Nunca Viu Venha Ver",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Caldeirão Sem Fundo Ferver",
+          "position": 1
+        },
+        {
+          "title": "Quem Nunca Viu (Caldeirão Sem Fundo)",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "CHORUS",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Quem nunca viu, venha ver",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto nigdy nie widział, niech przyjdzie zobaczyć"
+                }
+              ]
+            },
+            {
+              "originalText": "Caldeirão sem fundo ferver",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak wrze kocioł bez dna"
+                }
+              ]
+            },
+            {
+              "originalText": "Quem nunca viu, venha ver",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto nigdy nie widział, niech przyjdzie zobaczyć"
+                }
+              ]
+            },
+            {
+              "originalText": "Caldeirão sem fundo ferver",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak wrze kocioł bez dna"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Deu meia-noite",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wybiła północ"
+                }
+              ]
+            },
+            {
+              "originalText": "Cemitério treme",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Cmentarz drży"
+                }
+              ]
+            },
+            {
+              "originalText": "Catacumba racha",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Grobowiec pęka"
+                }
+              ]
+            },
+            {
+              "originalText": "E o defunto geme",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A zmarły jęczy"
+                }
+              ]
+            },
+            {
+              "originalText": "Deu meia-noite, cemitério",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wybiła północ, cmentarz…"
+                }
+              ]
+            },
+            {
+              "originalText": "Treme, catacumba racha",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Drży, grobowiec pęka"
+                }
+              ]
+            },
+            {
+              "originalText": "O defunto geme",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zmarły jęczy"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=mXml8mn6KCs",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=gDEcoO1lmR4",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "Wersja „Quem Nunca Viu Venha Ver / Caldeirão Sem Fundo Ferver” z obrazami północy, cmentarza, pękającego grobowca i jęczącego zmarłego jest udokumentowana jako ponto cantado w Umbandzie, tradycji religijnej afro-brazylijskiej. W śpiewnikach występuje jako „Quem Nunca Viu” oraz jako część punktów związanych z Exu, w tym Exu Capa Preta. Ponto cantado jest religijną pieśnią obrzędową; nie wolno przedstawiać tego tekstu jako od początku stworzonego dla capoeiry. Osobno w repertuarze capoeiry funkcjonuje podobne zawołanie „Quem nunca viu, venha ver” z innymi kontynuacjami, np. „licuri quebrar dendê”. Możliwe jest przenikanie pieśni między tradycjami, lecz brak podstaw do podania jednej, potwierdzonej chronologii lub konkretnego autora. W tym katalogu utwór zapisano jako CORRIDO ze względu na jego przyjętą formę w repertuarze capoeira, przy wyraźnym wskazaniu religijnego kontekstu przesłanej wersji; taka klasyfikacja nie zastępuje jego tradycyjnego określenia „ponto de Umbanda”.",
+      "meaningContext": "Powtarzany refren „Quem nunca viu, venha ver / Caldeirão sem fundo ferver” zaprasza do zobaczenia czegoś pozornie niemożliwego: wrzącego kotła bez dna, który nie powinien utrzymać zawartości. To poetycki obraz przekraczania zwykłego doświadczenia i niezwykłej mocy. Wersy „Deu meia-noite / Cemitério treme / Catacumba racha / E o defunto geme” budują scenerię nocy, cmentarza i świata zmarłych. W kontekście pontów Umbandy obrazy te występują w śpiewach związanych z liniami Exu; nie ma podstaw, by utożsamiać je po prostu ze „złem” lub europejskim diabłem. W capoeirze można śpiewać podobny refren w układzie wezwanie–odpowiedź, ale nie zmienia to faktu, że ten zestaw zwrotek jest znany przede wszystkim z tradycji religijnej. W ostatnich trzech wersach śpiewający powtarza zdanie w skróconym, rytmicznym podziale: „Deu meia-noite, cemitério / Treme, catacumba racha / O defunto geme”.",
+      "meaningTrivia": "„Caldeirão” to duży kocioł; „sem fundo” znaczy „bez dna”, a „ferver” — „wrzeć, gotować się”. „Catacumba” to katakumba lub komora grobowa; w tym tekście „grobowiec” oddaje sens obrazu. „Defunto” oznacza zmarłego, nie konkretną postać historyczną. „Deu meia-noite” jest idiomatycznym sposobem powiedzenia „wybiła północ”. Umbanda to religia afro-brazylijska, w której ponto cantado pełni funkcję śpiewu religijnego, a Exu jest nazwą odnoszącą się do różnych kontekstów duchowych; nie należy jej bezrefleksyjnie utożsamiać z chrześcijańskim diabłem. Spotykany tytuł „Quem Nunca Viu” nie gwarantuje, że chodzi o jedną i tę samą piosenkę: istnieją też teksty capoeira „Quem nunca viu venha ver, licuri quebrar dendê”. W przesłanej transkrypcji zapis „catatumba” poprawiono na „catacumba”, a „cemiterio” na „cemitério”; zachowano układ i powtórzenia."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Tava Lá em Casa",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Tava Lá em Casa (Salomão Mandou Chamar)",
+          "position": 1
+        },
+        {
+          "title": "Era Hora de Lutar",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Sem pensar, sem imaginar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bez zastanawiania się i bez wyobrażania sobie, co nastąpi"
+                }
+              ]
+            },
+            {
+              "originalText": "Quando ouvi bater na porta",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kiedy usłyszałem pukanie do drzwi"
+                }
+              ]
+            },
+            {
+              "originalText": "Salomão mandou chamar",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Salomão kazał mnie wezwać"
+                }
+              ]
+            },
+            {
+              "originalText": "Era hora de lutar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nadszedł czas walki"
+                }
+              ]
+            },
+            {
+              "originalText": "Para ajudar a vencer",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Żeby pomóc odnieść zwycięstwo"
+                }
+              ]
+            },
+            {
+              "originalText": "A batalha liderar",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poprowadzić bitwę"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu que nunca fui de luta",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ja, który nigdy nie rwałem się do walki"
+                }
+              ]
+            },
+            {
+              "originalText": "Nem pretendia lutar, amigo velho",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ani nie zamierzałem walczyć, stary przyjacielu"
+                }
+              ]
+            },
+            {
+              "originalText": "Botei a arma na mão",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wziąłem broń do ręki"
+                }
+              ]
+            },
+            {
+              "originalText": "Era tempo de lutar",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nadszedł czas, by walczyć"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=XqROuKvyQcs",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Tava Lá em Casa” to pieśń obecna od lat w śpiewnikach capoeira; notuje ją m.in. zbiór Mathewa Brighama (Espaguete) z 2006 roku. Brak wiarygodnego potwierdzenia jej kompozytora i daty powstania. Niektóre opublikowane wersje podają „A batalha liberal” zamiast „A batalha liderar”, co może sugerować skojarzenia z walkami o wolność, jednak sam tekst nie wskazuje jednoznacznie konkretnej wojny, powstania ani historycznej osoby o imieniu Salomão. Nie należy przedstawiać utworu jako udokumentowanej relacji z konkretnego wydarzenia. W wielu innych wariantach pojawia się otwierający wers „Tava lá em casa, oi iaiá” oraz powtórzenia zawołań; w przesłanym fragmencie tego początku nie było, więc nie dodano go jako usłyszanego w podanym wykonaniu.",
+      "meaningContext": "Podmiot opowiada o niespodziewanym wezwaniu do walki. Początkowo nie myślał o konflikcie; pukanie do drzwi i polecenie Salomão zmieniają sytuację. Nawet człowiek, który nigdy nie zamierzał walczyć, bierze broń, kiedy nastaje czas działania. „Botei a arma na mão” dosłownie oznacza „wziąłem broń do ręki” — to obraz walki, nie instrukcja użycia uzbrojenia. „Amigo velho” jest bezpośrednim zwrotem do starego przyjaciela lub towarzysza. „A batalha liderar” ma eliptyczny szyk poetycki („poprowadzić bitwę”). Imię „Salomão” jest portugalską formą imienia Salomon, lecz piosenka nie wyjaśnia, czy wskazuje konkretną postać; nie należy bez podstaw utożsamiać go z biblijnym królem. Przekazany fragment nie zawiera wyraźnej odpowiedzi chóru, dlatego wszystkie wersy zapisano jako LEAD; inne wykonania mogą stosować schemat call-and-response.",
+      "meaningTrivia": "„Tava” to potoczny skrót od „estava” („byłem / znajdowałem się”). „Luta” oznacza walkę, a „lutar” — walczyć; w capoeirze te słowa mogą obejmować zarówno dosłowną walkę, jak i szersze zmaganie z przeciwnościami. „Salomão” to portugalski odpowiednik imienia Salomon, ale jego dokładne znaczenie w tej pieśni nie zostało ustalone. „Botei” to przeszła forma potocznego „botar” — położyć, włożyć, wziąć; tutaj „botei a arma na mão” znaczy „wziąłem broń do ręki”. Publikowane warianty różnią się wersami „A batalha liderar” oraz „A batalha liberal”; zachowano wariant użytkownika. Wysłany tekst zaczyna się od „Sem pensar, sem imaginar”, choć powszechnie znany początek piosenki to „Tava lá em casa, oiaiá”. Ze względu na brak tego wersu w transkrypcji nie dopisano go bez potwierdzenia z nagrania. Utwór ma różne klasyfikacje w śpiewnikach (m.in. corrido/chula, czasem ladainha); w tym rekordzie zachowano zaplanowaną kategorię CORRIDO jako klasyfikację roboczą."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Dona Maria do Camboatá",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Dona Maria de Camboatá",
+          "position": 1
+        },
+        {
+          "title": "Dona Maria do Camboatá (Ela Chega na Venda)",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "CHORUS",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Dona Maria do Camboatá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Maria z Camboatá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Ela chega na venda",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przychodzi do sklepiku"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela manda botá",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Każe sobie nalać"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Dona Maria do Camboatá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Maria z Camboatá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Ela chega na venda",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przychodzi do sklepiku"
+                }
+              ]
+            },
+            {
+              "originalText": "E dá salto mortal",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I wykonuje salto"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Dona Maria do Camboatá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Maria z Camboatá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Ela chega na venda",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przychodzi do sklepiku"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela manda botá",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Każe sobie nalać"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Dona Maria do Camboatá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Maria z Camboatá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Ela chega na venda",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przychodzi do sklepiku"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela manda botá",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Każe sobie nalać"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Dona Maria do Camboatá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Maria z Camboatá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Ela chega na venda",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przychodzi do sklepiku"
+                }
+              ]
+            },
+            {
+              "originalText": "E dá salto mortal",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I wykonuje salto"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Dona Maria do Camboatá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Maria z Camboatá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Ela chega na venda",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przychodzi do sklepiku"
+                }
+              ]
+            },
+            {
+              "originalText": "E começa a gingar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I zaczyna wykonywać gingę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Dona Maria do Camboatá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Maria z Camboatá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Ela chega na venda",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przychodzi do sklepiku"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela manda botá",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Każe sobie nalać"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Dona Maria do Camboatá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Maria z Camboatá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Ela chega na venda",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przychodzi do sklepiku"
+                }
+              ]
+            },
+            {
+              "originalText": "E dá salto mortal",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I wykonuje salto"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "Dona Maria do Camboatá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Maria z Camboatá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Ela chega na venda",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przychodzi do sklepiku"
+                }
+              ]
+            },
+            {
+              "originalText": "Ela manda botá",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Każe sobie nalać"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 19,
+          "lines": [
+            {
+              "originalText": "Dona Maria do Camboatá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Maria z Camboatá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 20,
+          "lines": [
+            {
+              "originalText": "Ela chega na venda",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przychodzi do sklepiku"
+                }
+              ]
+            },
+            {
+              "originalText": "E dá salto mortal",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I wykonuje salto"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 21,
+          "lines": [
+            {
+              "originalText": "Dona Maria do Camboatá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pani Maria z Camboatá"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=SOT26ftiZww",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=QawLdD2jKRA",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„Dona Maria do Camboatá” to corrido znane od co najmniej lat sześćdziesiątych XX wieku. Wariant został odnotowany w nagraniu Mestre Traíry z 1962 roku oraz w zbiorze Waldeloira Rego „Capoeira Angola: Ensaio Sócio-Etnográfico” z 1968 roku; wskazuje to na długie funkcjonowanie pieśni, lecz nie pozwala datować jej powstania. Różne śpiewniki rozbieżnie przypisują autorstwo: Papoeira opisuje pieśń jako tradycyjną, a La Laue przypisuje ją Mestre Itapuã Beiramar. Brak wystarczającego potwierdzenia autorstwa, więc pozostaje ono nieustalone. Papoeira opisuje Dona Marię jako legendarną capoeiristkę z przełomu XIX i XX wieku w Bahii, ale nie podaje dokumentów biograficznych potwierdzających jej tożsamość. Pieśń jest więc przede wszystkim przykładem obecności energicznej i sprawczej postaci kobiecej w dawnym repertuarze capoeira, a nie źródłem potwierdzonego życiorysu konkretnej osoby.",
+      "meaningContext": "Powtarzany przez chór wers „Dona Maria do Camboatá” przedstawia bohaterkę, a prowadzący improwizuje krótkie zdania: Maria przychodzi do „venda” (wiejskiego sklepiku lub punktu sprzedaży), „manda botá”, wykonuje salto i zaczyna „gingar”, czyli poruszać się charakterystycznym rytmem capoeiry. „Mandar botar” jest w tym fragmencie eliptyczne: nie mówi, co dokładnie ma zostać podane czy nalane; bywa rozumiane jako wydawanie poleceń w sklepie, a w badaniach nad repertuarem kobiecym pojawia się interpretacja zamawiania porcji cachaçy. Nie należy więc tłumaczyć jednoznacznie jako rozkazywania wszystkim dookoła. „Dar salto mortal” to wykonać salto; bez dodatkowej wskazówki nie musi to być salto w tył. „Gingar” oznacza podstawowy, płynny sposób poruszania się capoeiristy. Kolejne powtórzenia stanowią schemat wezwanie–odpowiedź i mogą być rozbudowywane przez solistę.",
+      "meaningTrivia": "„Camboatá” występuje jako nazwa rośliny (m.in. Cupania vernalis), a także jako określenie ryby słodkowodnej; w niektórych źródłach jest łączone również z nazwą lokalizacji w Bahii. Z samego tekstu nie wynika jednoznacznie, czy oznacza pochodzenie Marii, jej przydomek, czy inne odniesienie. „Dona” to grzecznościowy tytuł kobiety (pani), nie imię. „Venda” oznacza tu mały sklep, gospodę lub punkt sprzedaży, a nie dosłownie sam proces sprzedawania. „Botá” to śpiewna potoczna wymowa „botar” (położyć, podać, nalać), więc zapis pozostawiono bez normalizowania do bezokolicznika. „Salto mortal” oznacza przewrót/salto w powietrzu, niekoniecznie backflip. „Ginga” to podstawowy ruch capoeiry. W zbiorach występują dłuższe zwrotki o zakupach, skargach i zamianie towaru, ale nie dopisano ich do tej wersji, ponieważ nie było ich w transkrypcji. Utwór nie jest tym samym co „Dona Maria Como Vai Você?” z wcześniejszego katalogu."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "A Cobra Me Mordeu (Senhor São Bento)",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "A Cobra Me Mordeu",
+          "position": 1
+        },
+        {
+          "title": "Senhor São Bento",
+          "position": 2
+        },
+        {
+          "title": "Essa Cobra Lhe Morde",
+          "position": 3
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Essa cobra me morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ten wąż mnie kąsa"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "A cobra lhe morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wąż cię kąsa",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Que cobra malvada",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co za zły wąż!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "O buraco da cobra",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nora węża"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "O veneno da cobra",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jad węża"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Â, o dente da cobra",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ząb węża"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "A cobra me morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ten wąż mnie kąsa"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Ê, cobra mordeu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wąż ukąsił"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "A cobra danada",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ten przeklęty wąż"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 19,
+          "lines": [
+            {
+              "originalText": "Que cobra malvada",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co za zły wąż!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 20,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 21,
+          "lines": [
+            {
+              "originalText": "A cobra me morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ten wąż mnie kąsa"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 22,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 23,
+          "lines": [
+            {
+              "originalText": "Ê, a cobra mordeu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wąż ukąsił"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 24,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 25,
+          "lines": [
+            {
+              "originalText": "A cobra lhe morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wąż cię kąsa",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 26,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 27,
+          "lines": [
+            {
+              "originalText": "Ê, que cobra danada",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co za przeklęty wąż!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 28,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 29,
+          "lines": [
+            {
+              "originalText": "O veneno da cobra",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jad węża"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 30,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 31,
+          "lines": [
+            {
+              "originalText": "Ê, cobra é má",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ej, wąż jest zły"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 32,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 33,
+          "lines": [
+            {
+              "originalText": "A cobra me mordeu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wąż mnie ukąsił"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 34,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 35,
+          "lines": [
+            {
+              "originalText": "Ê, a cobra lhe morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ej, wąż cię kąsa",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 36,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 37,
+          "lines": [
+            {
+              "originalText": "A cobra lhe morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wąż cię kąsa",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 38,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 39,
+          "lines": [
+            {
+              "originalText": "A cobra lhe morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wąż cię kąsa",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 40,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 41,
+          "lines": [
+            {
+              "originalText": "Ê, cobra danada",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ten przeklęty wąż"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 42,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 43,
+          "lines": [
+            {
+              "originalText": "O buraco da cobra",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nora węża"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 44,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 45,
+          "lines": [
+            {
+              "originalText": "Olha a rugida da cobra",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Uważaj na ryk węża",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 46,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 47,
+          "lines": [
+            {
+              "originalText": "Ê, a cobra lhe morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ej, wąż cię kąsa",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 48,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 49,
+          "lines": [
+            {
+              "originalText": "Aí a cobra mordeu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wąż ukąsił"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 50,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 51,
+          "lines": [
+            {
+              "originalText": "Aí, a cobra lhe morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I wtedy wąż cię kąsa",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 52,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 53,
+          "lines": [
+            {
+              "originalText": "Ê, que cobra malvada",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co za zły wąż!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 54,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 55,
+          "lines": [
+            {
+              "originalText": "O buraco da cobra",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nora węża"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 56,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 57,
+          "lines": [
+            {
+              "originalText": "A beleza da cobra",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Piękno węża"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 58,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 59,
+          "lines": [
+            {
+              "originalText": "Cuidado com ela",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Uważaj na nią"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 60,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 61,
+          "lines": [
+            {
+              "originalText": "Ela vai-te morder",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ona cię ukąsi"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 62,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 63,
+          "lines": [
+            {
+              "originalText": "Ê, a cobra lhe morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ej, wąż cię kąsa",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 64,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 65,
+          "lines": [
+            {
+              "originalText": "Aí, a cobra danada",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ten przeklęty wąż"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 66,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 67,
+          "lines": [
+            {
+              "originalText": "Ê, que coisa malvada",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co za paskudna rzecz!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 68,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 69,
+          "lines": [
+            {
+              "originalText": "A cobra lhe morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wąż cię kąsa",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 70,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 71,
+          "lines": [
+            {
+              "originalText": "Ê, que cobra danada",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co za przeklęty wąż!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 72,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 73,
+          "lines": [
+            {
+              "originalText": "A cobra malvada",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zły wąż"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 74,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 75,
+          "lines": [
+            {
+              "originalText": "A cobra lhe morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wąż cię kąsa",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 76,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 77,
+          "lines": [
+            {
+              "originalText": "Aí, a cobra lhe morde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I wtedy wąż cię kąsa",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 78,
+          "lines": [
+            {
+              "originalText": "Senhor São Bento",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Święty Benedykcie, panie!"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=xdjOPYiIDGU",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=m0waJVZh5qU",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„A Cobra Me Mordeu / Senhor São Bento” to tradycyjne corrido z repertuaru capoeiry, utrwalone także w opracowaniach poświęconych dawnym pieśniom capoeira. Nie ma jednoznacznie potwierdzonego autora konkretnego wariantu. Pieśń odwołuje się do św. Benedykta z Nursji (São Bento), który w religijności ludowej Brazylii bywa przywoływany jako opiekun przed ukąszeniami węży i zagrożeniami. Jego postać wiąże się również w chrześcijańskiej tradycji z opowieściami o uniknięciu zatrucia. To znaczenie ma charakter wierzeń, a nie medycznego sposobu postępowania po ukąszeniu. Wąż występuje także jako ważna metafora capoeiry: gracza nieprzewidywalnego, szybkiego, sprytnego i zdolnego do nagłego ataku. Dawne opracowania, w tym Waldeloira Rego oraz późniejsze badania muzyki capoeiry, dokumentują liczne warianty śpiewu z naprzemiennymi zawołaniami o wężu i odpowiedzią „Senhor São Bento”. Nie należy przypisywać pieśni konkretnej daty powstania.",
+      "meaningContext": "Pieśń składa się z licznych, krótkich wezwań solisty i stałej odpowiedzi chóru „Senhor São Bento”. Solista zmienia obraz węża: wspomina ukąszenie, jego jad, zęby, norę, złą naturę, ale również piękno, a na końcu przestrzega przed zagrożeniem. Chór przywołuje św. Benedykta, którego imię jest tradycyjnie kojarzone z ochroną. W kontekście gry w capoeirze wąż może symbolizować partnera, którego nie wolno lekceważyć: jego atak bywa szybki i trudny do przewidzenia. To metaforyczna interpretacja, nie dosłowna instrukcja zachowania wobec zwierząt. Zwrot „a cobra lhe morde” w śpiewanym języku może być odnoszony do „pana/pani”, „jego/jej” lub potocznie do „ciebie” zależnie od sytuacji i gramatycznego rejestru. Każda pojedyncza linia „Coro” z przesłanego zapisu została odtworzona jako pełna odpowiedź „Senhor São Bento”; dzięki temu zachowano 39 powtórzeń. Powracające odpowiedzi służą uczestnictwu całego kręgu i podtrzymaniu rytmu.",
+      "meaningTrivia": "„Senhor São Bento” znaczy dosłownie „Pan Święty Benedykt”; jest tradycyjnym wezwaniem do świętego, w wielu wykonaniach brzmiącym „Sinhô São Bento”, gdzie „sinhô” jest potoczną regionalną formą „senhor”. „Veneno” to jad lub trucizna, a „dente” to ząb. „Buraco da cobra” to nora lub kryjówka węża; „cobra danada” i „cobra malvada” to ekspresywne określenia węża jako niebezpiecznego, przebiegłego bądź złośliwego. „Mordeu” oznacza „ukąsił/ugryzł”, natomiast „morde” — „kąsa/gryzie”. Zapis „Olha a rugida da cobra” jest niecodzienny: standardowym portugalskim rzeczownikiem od „ryku” jest „rugido”, a wąż typowo syczy; zachowano dokładne brzmienie transkrypcji zamiast wprowadzać niepotwierdzoną poprawkę. Śpiewanie o ugryzieniach nie oznacza, że św. Benedykt jest środkiem leczniczym: rzeczywiste ukąszenie przez jadowitego węża wymaga pilnej pomocy medycznej."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Abalou Capoeira, Abalou",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Abalou, Deixa Abalar",
+          "position": 1
+        },
+        {
+          "title": "Abalou Capoeira",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "CHORUS",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Abalou, deixa abalar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało się — niech się dalej kołysze"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Abalou, deixa abalar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało się — niech się dalej kołysze"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Oi, quem quiser moça bonita",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Hej, kto chce poznać ładną dziewczynę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Oi, vá na Ilha de Maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Hej, niech jedzie na wyspę Ilha de Maré"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Oi, de uma mão quebro bolacha",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Hej, jedną ręką łamię krakersa"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Oi, com a outra bebo café",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Hej, a drugą piję kawę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Oi, em casamento eu não falei",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Hej, o ślubie nic nie mówiłem"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Oi, mas fica quando Deus quiser",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Hej, ale stanie się, kiedy Bóg zechce"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Abalou, deixa abalar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało się — niech się dalej kołysze"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 19,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 20,
+          "lines": [
+            {
+              "originalText": "Abalou, deixa abalar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało się — niech się dalej kołysze"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 21,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 22,
+          "lines": [
+            {
+              "originalText": "Abalou, deixa abalar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało się — niech się dalej kołysze"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 23,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 24,
+          "lines": [
+            {
+              "originalText": "Abalou, deixa abalar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało się — niech się dalej kołysze"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 25,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 26,
+          "lines": [
+            {
+              "originalText": "Abalou, deixa abalar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało się — niech się dalej kołysze"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 27,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 28,
+          "lines": [
+            {
+              "originalText": "Abalou, deixa abalar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało się — niech się dalej kołysze"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 29,
+          "lines": [
+            {
+              "originalText": "Abalou, capoeira abalou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rozkołysało capoeirę, rozkołysało"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=jhk_WCZIMDY",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Abalou Capoeira, Abalou” to popularne corrido o nieustalonym pierwotnym autorstwie, dokumentowane w śpiewnikach capoeiry i nagraniach repertuaru tradycyjnego, w tym w repertuarze Mestre Paulo dos Anjos. Samo występowanie pieśni w repertuarze mistrza nie jest dowodem jej skomponowania przez niego. W niektórych śpiewnikach powtarzający się refren przyjmuje wariant „Abalou cajueiro, abalou”, co wskazuje na swobodną wymianę zwrotek w ustnej tradycji śpiewania corridos. Tekst nie opowiada o jednym udokumentowanym wydarzeniu historycznym. Wymieniona Ilha de Maré jest rzeczywistą wyspą w zatoce Todos-os-Santos, na obszarze Salvadoru w stanie Bahia; jej obecność w piosence wiąże utwór z lokalną geografią i obyczajowością Bahii, nie jest jednak podstawą do konstruowania konkretnej historii pochodzenia pieśni.",
+      "meaningContext": "Słowo „abalou” pochodzi od „abalar”, czyli poruszyć, zachwiać, wstrząsnąć. Refren „Abalou capoeira, abalou” można rozumieć jako obraz rozkołysanej, pełnej energii roda. Wtrącenie „Abalou, deixa abalar” zachęca, by nie zatrzymywać tego ruchu i rytmu. Zwrotki są żartobliwe i dość swobodne. Solista radzi, by szukający pięknej dziewczyny wybrał się na Ilha de Maré, po czym opisuje humorystyczną scenę: jedną ręką przełamuje bolachę (ciastko lub krakersa), a drugą pije kawę. Wersy „Em casamento eu não falei / Mas fica quando Deus quiser” wyrażają dystans wobec rozmowy o ślubie i pozostawienie tej sprawy przyszłości („gdy Bóg zechce”). Nie jest to relacja z historycznych zaślubin. Naprzemienne krótkie frazy LEAD i stała odpowiedź CHORUS podtrzymują wspólny śpiew i pozwalają prowadzącemu improwizować kolejne wersy. W wariancie z przesłanej transkrypcji refren jest na początku i końcu przeplatany zwrotem „Abalou, deixa abalar”.",
+      "meaningTrivia": "„Ilha de Maré” to rzeczywista wyspa należąca administracyjnie do Salvadoru, nie metaforyczna nazwa kobiety ani miejsca wewnątrz roda. „Moça bonita” oznacza ładną dziewczynę, „bolacha” — w zależności od regionu ciastko, sucharek lub krakersa, a „café” — kawę. „Quebro bolacha” jest dosłownie „łamię ciastko/krakersa”, nie „jem ciastko”. „Oi” jest tu śpiewnym zawołaniem, a nie koniecznie przywitaniem „cześć”. „Deixa abalar” znaczy „pozwól się kołysać / niech dalej porusza”. „Em casamento eu não falei” w mowie codziennej znaczy „nie mówiłem o ślubie”, a nie ogólnie „nie odzywałem się w małżeństwie”. Znane są liczne dodatkowe zwrotki tej pieśni (np. o mandindze i patuá), ale nie dodano ich do transkrypcji, bo nie ma ich w materiale przesłanym przez użytkownika. W przesłanym zapisie jest 29 wersów i 15 powtórzeń odpowiedzi „Abalou, capoeira abalou”."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Canarinho da Alemanha",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Canarinho de Alemanha",
+          "position": 1
+        },
+        {
+          "title": "Canarinho d'Alemanha",
+          "position": 2
+        },
+        {
+          "title": "Quem Matou Meu Curió",
+          "position": 3
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Canarinho de Alemanha",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kanarek z Niemiec"
+                }
+              ]
+            },
+            {
+              "originalText": "Quem matou meu curió",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto zabił mojego curió?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Oi, canarinho da Alemanha",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, kanarku z Niemiec"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Canarinho de Alemanha",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kanarek z Niemiec"
+                }
+              ]
+            },
+            {
+              "originalText": "Quem matou meu curió",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto zabił mojego curió?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Oi, canarinho de Alemanha",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, kanarku z Niemiec"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Quem matou meu curió",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto zabił mojego curió?"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu jogo capoeira, mas meu mestre é o melhor",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gram capoeirę, ale mój mistrz jest najlepszy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Oi, canarinho de Alemanha",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, kanarku z Niemiec"
+                }
+              ]
+            },
+            {
+              "originalText": "Oi, canarinho de Alemanha",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, kanarku z Niemiec"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Quem matou meu curió",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto zabił mojego curió?"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu jogo capoeira e Angola da melhor",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gram capoeirę, i to Angolę najwyższej próby",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Oi, canarinho de Alemanha",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Oj, kanarku z Niemiec"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=AtLQs3G5Yh4",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Canarinho da Alemanha” należy do dobrze udokumentowanego repertuaru capoeiry. Jej refren występuje na historycznych nagraniach Mestre Pastinhy, a warianty zapisano również na płycie Camafeu de Oxóssi z 1968 roku, co potwierdza, że nie jest to współczesny wymysł. Przytoczone źródła nie ustalają wiarygodnie pierwszego autora ani daty powstania. Teksty były przekazywane ustnie i modyfikowane przez kolejnych śpiewających: w różnych wykonaniach wymienia się Mestre Bimbę, Mestre Pastinhę lub innych mistrzów. Nie ma podstaw, aby uznać utwór za historyczną relację o Niemcu zabijającym ptaka ani za piosenkę skomponowaną przez Mestre Bimbę. W przesłanej odmianie pada ogólne stwierdzenie, że własny mestre jest najlepszy, i pochwała Capoeira Angola, lecz brak imienia konkretnie wskazanego mistrza.",
+      "meaningContext": "Przewodnim obrazem jest pytanie: „Canarinho da Alemanha / Quem matou meu curió?” — „Kanarku z Niemiec, kto zabił mojego curió?”. Curió to rozpoznawalny w Brazylii ptak ceniony za melodyjny śpiew, a kanarek to inny ptak śpiewający. Ich zestawienie może działać jako poetycka lub żartobliwa konfrontacja, ale tekst nie pozwala z całą pewnością odtworzyć pierwotnej symboliki. Kolejne wersy zmieniają temat na capoeirę i wychwalają umiejętności mistrza: „Eu jogo capoeira, mas meu mestre é o melhor”. Pieśń w różnych grupach pozwala dopasować pochwałę do własnej linii przekazu. Końcowe „Eu jogo capoeira e Angola da melhor” jest gramatycznie niejasne, prawdopodobnie stanowi śpiewany wariant pochwały capoeira Angola; nie należy udawać, że da się go przetłumaczyć dosłownie bez wątpliwości. Podział LEAD/CHORUS zapisano jako interpretację naprzemiennego układu pytań i odpowiedzi, bez niezależnego potwierdzenia separacji głosów na nagraniu.",
+      "meaningTrivia": "„Canarinho” jest zdrobnieniem słowa „canário” (kanarek). „Curió” to brazylijski ptak śpiewający, zwykle identyfikowany jako Sporophila angolensis, należący do rodziny tanagrowatych. „Alemanha” oznacza Niemcy, a zwroty „da Alemanha”, „de Alemanha” i „d'Alemanha” funkcjonują jako różne zapisy refrenu; w standardowym portugalskim naturalniejsza jest forma „da Alemanha”. „Quem matou” znaczy „kto zabił”, a nie „kto zranił”. „Meu mestre é o melhor” to „mój mistrz jest najlepszy”. Capoeira Angola jest tradycyjnym nurtem capoeiry, a nie odwołaniem do kraju Angola w znaczeniu, że narrator tam podróżuje. Historyczne warianty pieśni pojawiają się w nagraniach Mestre Pastinhy oraz w naukowym zestawieniu pieśni capoeiry w pracy PUC-Rio. Do oryginalnego tekstu nie dodano żadnych zwrotek z innych wariantów."
+    },
+    {
+      "categoryCode": "CHULA",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Quem É Você?",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Quem É Você (Luz do Meu Dia)",
+          "position": 1
+        },
+        {
+          "title": "Luz do Meu Dia, Brilho do Meu Luar",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Quem é você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kim jesteś?"
+                }
+              ]
+            },
+            {
+              "originalText": "Luz do meu dia",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Światłem mojego dnia"
+                }
+              ]
+            },
+            {
+              "originalText": "Quem é você",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kim jesteś?"
+                }
+              ]
+            },
+            {
+              "originalText": "Brilho do meu luar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Blaskiem mojej księżycowej nocy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Quem é você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kim jesteś?"
+                }
+              ]
+            },
+            {
+              "originalText": "Luz do meu dia",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Światłem mojego dnia"
+                }
+              ]
+            },
+            {
+              "originalText": "Quem é você",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kim jesteś?"
+                }
+              ]
+            },
+            {
+              "originalText": "Brilho do meu luar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Blaskiem mojej księżycowej nocy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Quem é você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kim jesteś?"
+                }
+              ]
+            },
+            {
+              "originalText": "Que demorou a chegar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto tak długo kazał na siebie czekać?"
+                }
+              ]
+            },
+            {
+              "originalText": "Trouxe alegria",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przyniosłeś / przyniosłaś radość"
+                }
+              ]
+            },
+            {
+              "originalText": "Pra esse meu cantar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Do mojego śpiewu"
+                }
+              ]
+            },
+            {
+              "originalText": "Quem é você",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kim jesteś?"
+                }
+              ]
+            },
+            {
+              "originalText": "Com esse sorriso faceiro",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Z tym figlarnym uśmiechem"
+                }
+              ]
+            },
+            {
+              "originalText": "Com esse seu jeito ligeiro",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Z tą twoją żywiołową zwinnością"
+                }
+              ]
+            },
+            {
+              "originalText": "Que não para no lugar",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Która nie pozwala ci ustać w miejscu"
+                }
+              ]
+            },
+            {
+              "originalText": "Quem é você",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kim jesteś?"
+                }
+              ]
+            },
+            {
+              "originalText": "Que me aplaude sorrindo",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kto bije mi brawo z uśmiechem"
+                }
+              ]
+            },
+            {
+              "originalText": "Na roda de capoeira",
+              "position": 11,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W kręgu capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu quero comemorar",
+              "position": 12,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chcę świętować"
+                }
+              ]
+            },
+            {
+              "originalText": "Quem é você",
+              "position": 13,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kim jesteś?"
+                }
+              ]
+            },
+            {
+              "originalText": "Luz do meu dia",
+              "position": 14,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Światłem mojego dnia"
+                }
+              ]
+            },
+            {
+              "originalText": "Quem é você",
+              "position": 15,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kim jesteś?"
+                }
+              ]
+            },
+            {
+              "originalText": "Brilho do meu luar",
+              "position": 16,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Blaskiem mojej księżycowej nocy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Quem é você",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kim jesteś?"
+                }
+              ]
+            },
+            {
+              "originalText": "Luz do meu dia",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Światłem mojego dnia"
+                }
+              ]
+            },
+            {
+              "originalText": "Quem é você",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kim jesteś?"
+                }
+              ]
+            },
+            {
+              "originalText": "Brilho do meu luar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Blaskiem mojej księżycowej nocy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Ô, te ver crescer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, patrzeć, jak dorastasz"
+                }
+              ]
+            },
+            {
+              "originalText": "E ver o tempo passar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I obserwować upływ czasu"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô, é pra te fazer dormir",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, żeby pomóc ci zasnąć"
+                }
+              ]
+            },
+            {
+              "originalText": "Canto a cantiga de ninar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Śpiewam kołysankę"
+                }
+              ]
+            },
+            {
+              "originalText": "Xô, meu sabiá",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sio, mój droździe sabiá"
+                }
+              ]
+            },
+            {
+              "originalText": "Xô, meu zabelê",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Xô, mój ptaku zabelê"
+                }
+              ]
+            },
+            {
+              "originalText": "Toda a madrugada",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przez cały czas przed świtem"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu sonho com você",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Śnię o tobie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Xô, meu sabiá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sio, mój droździe sabiá"
+                }
+              ]
+            },
+            {
+              "originalText": "Xô, meu zabelê",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Xô, mój ptaku zabelê"
+                }
+              ]
+            },
+            {
+              "originalText": "Toda a madrugada",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przez cały czas przed świtem"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu sonho com você",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Śnię o tobie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Oi, se você não acredita",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Hej, jeśli nie wierzysz"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu vou sonhar pra você ver",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Będę śnić, żebyś mógł / mogła się przekonać"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Xô, meu sabiá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sio, mój droździe sabiá"
+                }
+              ]
+            },
+            {
+              "originalText": "Xô, meu zabelê",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Xô, mój ptaku zabelê"
+                }
+              ]
+            },
+            {
+              "originalText": "Toda a madrugada",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przez cały czas przed świtem"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu sonho com você",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Śnię o tobie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Êêê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Êêê"
+                }
+              ]
+            },
+            {
+              "originalText": "Xô, meu sabiá",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sio, mój droździe sabiá"
+                }
+              ]
+            },
+            {
+              "originalText": "Xô, meu zabelê",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Xô, mój ptaku zabelê"
+                }
+              ]
+            },
+            {
+              "originalText": "Toda a madrugada",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przez cały czas przed świtem"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu sonho com você",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Śnię o tobie"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=BcHtNteB0jw",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Quem É Você?” jest udokumentowana w śpiewniku Cantigas de Capoeira co najmniej od marca 2012 r.; publikacja oznacza utwór tagami „Chulas” i „Mestre Luiz Renato”. Oznaczenie Mestre Luiz Renato wiąże go z repertuarem, nie stanowi jednak niezależnego dowodu kompozytorskiego, dlatego pierwotne autorstwo pozostaje niepotwierdzone. Pieśń ma ciepły, osobisty charakter i nie dotyczy jednej konkretnej historycznej bitwy ani osoby z dziejów capoeiry. W późniejszej części wykorzystuje refren „Xô, meu sabiá / Xô, meu zabelê / Toda madrugada / Eu sonho com você”. Ta fraza jest znana także poza capoeirą: występuje w tradycji ludowej (m.in. w pieśniach pracy i kalango z Minas Gerais), a także w innych adaptacjach. Warto odróżniać zapożyczone słowa tradycyjnej pieśni od ewentualnego autorstwa nowego tekstu „Quem É Você?”. Dostępne źródła nie pozwalają rozstrzygnąć praw autorskich całej kompozycji.",
+      "meaningContext": "Solista zwraca się do bliskiej osoby, nazywa ją światłem dnia i blaskiem księżycowej nocy. Opisuje radość z jej przybycia, figlarny uśmiech, energię i obecność na roda capoeiry. Najważniejszy dla interpretacji jest wers „Te ver crescer” oraz wzmianka o śpiewaniu kołysanki, które silnie sugerują, że adresatem może być dziecko śpiewającego. Nie jest to jednak wprost powiedziane — tekst można także odczytywać jako czułe zwrócenie się do kogoś bardzo bliskiego. „Quem é você?” nie musi więc oznaczać nieznajomego: jest poetyckim pytaniem, które podkreśla zachwyt i miłość. Przywołane sabiá i zabelê to brazylijskie ptaki, a strofy o śnieniu nawiązują do kołysanek, tradycyjnych śpiewów ludowych i tęsknoty. Zwrot „Se você não acredita / Eu vou sonhar pra você ver” to żartobliwe zapewnienie, że uczucie jest tak silne, iż nawet sen ma je udowodnić. Zmiana refrenu z „Quem é você” na „Xô, meu sabiá” spina motyw capoeiry z domowym, rodzinnym obrazem kołysania dziecka.",
+      "meaningTrivia": "„Sabiá” jest nazwą wielu brazylijskich drozdów znanych z melodyjnego śpiewu. „Zabelê” oznacza brazylijskiego ptaka z grupy kusaczy, w nowszej systematyce związanego z nazwą Crypturellus zabele; regionalne użycie nazwy może być szersze. „Xô” to tradycyjny okrzyk kierowany do zwierzęcia, np. żeby je odpędzić, ale w refrenie funkcjonuje także jako śpiewna, pieszczotliwa formuła. „Sorriso faceiro” to figlarny, zalotny uśmiech; „jeito ligeiro” oznacza szybki, zręczny, ruchliwy sposób bycia; „cantiga de ninar” to kołysanka. „Luar” oznacza blask księżyca, a nie sam Księżyc. „Toda a madrugada” oznacza czas od późnej nocy do świtu. Śpiewnik z 2012 roku klasyfikuje utwór pod tagiem „Chulas”; jest to klasyfikacja robocza użyta w katalogu, a muzyczna forma z refrenami może być inaczej nazywana w poszczególnych grupach. W oryginalnym zapisie były niezręczne wokalizy „Ooo” i „o e”, które ujednolicono do „Ô”; nie dodawano wymowy fonetycznej. Powtarzane etykiety „CORO” z transkrypcji potraktowano jako oznaczenia sekcji, a nie osobne wersy śpiewanej treści."
+    },
+    {
+      "categoryCode": "QUADRA",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Eu Chego Lá",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "O Mar Me Chama Pra Jogar",
+          "position": 1
+        },
+        {
+          "title": "Eu Chego Lá (Se Deus Quiser)",
+          "position": 2
+        },
+        {
+          "title": "Um Dia Eu Chego Lá",
+          "position": 3
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "O mar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Morze"
+                }
+              ]
+            },
+            {
+              "originalText": "Me chama pra jogar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wzywa mnie do gry"
+                }
+              ]
+            },
+            {
+              "originalText": "Capoeira na roda",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Do capoeiry w kręgu roda"
+                }
+              ]
+            },
+            {
+              "originalText": "Mas um dia eu chego lá",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ale pewnego dnia tam dotrę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "O mar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Morze"
+                }
+              ]
+            },
+            {
+              "originalText": "Me chama pra jogar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wzywa mnie do gry"
+                }
+              ]
+            },
+            {
+              "originalText": "Capoeira na roda",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Do capoeiry w kręgu roda"
+                }
+              ]
+            },
+            {
+              "originalText": "Mas um dia eu chego lá",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ale pewnego dnia tam dotrę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Eu chego lá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dotrę tam"
+                }
+              ]
+            },
+            {
+              "originalText": "Se Deus quiser",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jeśli Bóg zechce"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu chego lá, camará",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dotrę tam, przyjacielu"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu tenho fé",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mam wiarę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Eu chego lá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dotrę tam"
+                }
+              ]
+            },
+            {
+              "originalText": "Se Deus quiser",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jeśli Bóg zechce"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu chego lá, camará",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dotrę tam, przyjacielu"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu tenho fé",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mam wiarę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Mas se eu tenho fé",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A jeśli mam wiarę"
+                }
+              ]
+            },
+            {
+              "originalText": "Ninguém vai me pegar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nikt mnie nie schwyta"
+                }
+              ]
+            },
+            {
+              "originalText": "Dou rabo de arraia",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wykonuję rabo de arraia"
+                }
+              ]
+            },
+            {
+              "originalText": "Dou salto mortal",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Robię salto"
+                }
+              ]
+            },
+            {
+              "originalText": "Pula pra ali",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Skacze tam"
+                }
+              ]
+            },
+            {
+              "originalText": "Olha, pula pra lá",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Spójrz, skacze z powrotem"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô moleque mandingueiro",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Och, sprytny, przebiegły chłopak"
+                }
+              ]
+            },
+            {
+              "originalText": "Que sabe jogar",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Który potrafi grać w capoeirę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Eu chego lá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dotrę tam"
+                }
+              ]
+            },
+            {
+              "originalText": "Se Deus quiser",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jeśli Bóg zechce"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu chego lá, camará",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dotrę tam, przyjacielu"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu tenho fé",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mam wiarę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Eu chego lá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dotrę tam"
+                }
+              ]
+            },
+            {
+              "originalText": "Se Deus quiser",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jeśli Bóg zechce"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu chego lá, camará",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dotrę tam, przyjacielu"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu tenho fé",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mam wiarę"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=ScODwF5JVA0",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Eu Chego Lá” (znane także jako „O Mar Me Chama Pra Jogar”) jest notowane w śpiewniku Cantigas de Capoeira najpóźniej 9 marca 2012 roku, z oznaczeniem „Mestre Bigodinho” oraz klasyfikacją „Quadras”. Samo powiązanie pieśni z repertuarem mistrza nie jest rozstrzygającym dowodem jej skomponowania przez niego, dlatego autorstwo wpisano jako niepotwierdzone. Morze jest częstym symbolem brazylijskich pieśni capoeiry, odwołującym się do podróży, oddalenia, tęsknoty i spotkań. Współcześni interpretatorzy niekiedy kojarzą morze z historią diaspory afrykańskiej oraz rozdzieleniem ludzi przez Atlantyk. Jest to możliwe odczytanie symboliczne, ale tekst nie opisuje konkretnego transportu niewolników ani konkretnego wydarzenia historycznego. Czterowersowe zwrotki i refren uzasadniają roboczą kategorię QUADRA, zgodną z oznaczeniem wskazanego śpiewnika.",
+      "meaningContext": "Śpiewający słyszy wezwanie morza do gry w capoeirę i zapewnia, że pewnego dnia dotrze na upragnione miejsce. Powtarzane „Eu chego lá / Se Deus quiser / Eu chego lá, camará / Eu tenho fé” wyraża nadzieję, ufność i wytrwałość. Miejsce, do którego chce dotrzeć, nie zostało określone; może oznaczać rzeczywisty cel podróży, spotkanie z bliskimi albo metaforycznie osiągnięcie celu życiowego lub mistrzostwa w capoeirze. Później podmiot deklaruje, że przy wierze nikt go nie złapie, i wspomina rabo de arraia oraz salto mortal jako przykłady zręczności i sprawności. „Ô moleque mandingueiro, que sabe jogar” chwali młodego gracza obdarzonego sprytem i zdolnością czytania intencji przeciwnika. „Camará” to tradycyjny zwrot do przyjaciela lub towarzysza. Po dwóch początkowych zwrotkach następuje czterowersowy refren najpierw zaśpiewany przez prowadzącego, a później powtórzony przez chór. Ten sam układ wraca na zakończenie.",
+      "meaningTrivia": "„O mar” oznacza morze, „me chama” — „woła mnie / wzywa mnie”, a „eu chego lá” — „dotrę tam”. „Se Deus quiser” to powszechne brazylijskie wyrażenie „jeśli Bóg zechce”. „Rabo de arraia” dosłownie znaczy „ogon płaszczki”; jest tradycyjną nazwą dynamicznego kopnięcia capoeiry, kojarzonego w różnych grupach z meia-lua de compasso, choć szczegóły nazewnictwa bywają odmienne. „Salto mortal” oznacza salto lub przewrót w powietrzu, niekoniecznie salto w tył. „Moleque” oznacza chłopaka, dzieciaka, łobuziaka i może mieć odcień familiarny lub pejoratywny zależnie od kontekstu. „Mandingueiro” to osoba dysponująca mandingą: sprytem, zmyślnym zwodzeniem i umiejętnością przewidywania gry. Początkowe słowa „O mar” nie należy mylić z refrenem innej pieśni „A Maré, A Maré”: mają inne teksty i pozostają osobnymi utworami. W przesłanej transkrypcji występują dokładnie 32 wersy, w tym powtórzony dwukrotnie czterowersowy początek oraz dwa wykonania refrenu w układzie wokalista–chór."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "A Maré, A Maré (Me Leva ao Céu)",
+      "authorName": "Mestre Pequinês",
+      "alternativeTitles": [
+        {
+          "title": "A Maré, A Maré",
+          "position": 1
+        },
+        {
+          "title": "A Maré Me Leva ao Céu",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "CHORUS",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "A maré, a maré, me leva ao céu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przypływ i odpływ, morska fala niesie mnie ku niebu"
+                }
+              ]
+            },
+            {
+              "originalText": "A maré, a maré, me leva ao céu",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przypływ i odpływ, morska fala niesie mnie ku niebu"
+                }
+              ]
+            },
+            {
+              "originalText": "A maré, a maré, me leva ao céu",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przypływ i odpływ, morska fala niesie mnie ku niebu"
+                }
+              ]
+            },
+            {
+              "originalText": "A maré, a maré, me leva ao céu",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przypływ i odpływ, morska fala niesie mnie ku niebu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "A jangada me leva",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Tratwa zabiera mnie"
+                }
+              ]
+            },
+            {
+              "originalText": "Pra outro lugar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W inne miejsce"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu não sei onde eu vou",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie wiem, dokąd zmierzam"
+                }
+              ]
+            },
+            {
+              "originalText": "Nas ondas do mar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Po falach morza"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "A maré, a maré, me leva ao céu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przypływ i odpływ, morska fala niesie mnie ku niebu"
+                }
+              ]
+            },
+            {
+              "originalText": "A maré, a maré, me leva ao céu",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przypływ i odpływ, morska fala niesie mnie ku niebu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "O chicote me corta",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bicz rozcina mi skórę"
+                }
+              ]
+            },
+            {
+              "originalText": "Me faz chorar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sprawia, że płaczę"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu não quero mais isso",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie chcę już tego"
+                }
+              ]
+            },
+            {
+              "originalText": "E vou lá pro mar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I pójdę ku morzu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "A maré, a maré, me leva ao céu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przypływ i odpływ, morska fala niesie mnie ku niebu"
+                }
+              ]
+            },
+            {
+              "originalText": "A maré, a maré, me leva ao céu",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przypływ i odpływ, morska fala niesie mnie ku niebu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Eu vou me embora da terra",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Opuszczę tę ziemię"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu vou pro mar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyruszę na morze"
+                }
+              ]
+            },
+            {
+              "originalText": "No navio negreiro",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Na statku niewolniczym"
+                }
+              ]
+            },
+            {
+              "originalText": "Rezo a Iemanjá",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Modlę się do Iemanjá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "A maré, a maré, me leva ao céu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przypływ i odpływ, morska fala niesie mnie ku niebu"
+                }
+              ]
+            },
+            {
+              "originalText": "A maré, a maré, me leva ao céu",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przypływ i odpływ, morska fala niesie mnie ku niebu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Eu perdi a razão",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Straciłem rozum"
+                }
+              ]
+            },
+            {
+              "originalText": "Meu sofrimento",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Moje cierpienie"
+                }
+              ]
+            },
+            {
+              "originalText": "Porque a escravidão",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ponieważ niewolnictwo"
+                }
+              ]
+            },
+            {
+              "originalText": "Não tem fundamento",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie ma żadnego uzasadnienia"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "A maré, a maré, me leva ao céu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przypływ i odpływ, morska fala niesie mnie ku niebu"
+                }
+              ]
+            },
+            {
+              "originalText": "A maré, a maré, me leva ao céu",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przypływ i odpływ, morska fala niesie mnie ku niebu"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=bp-2Pt9IxJU",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "Piosenka „A Maré, A Maré (Me Leva ao Céu)” jest przypisywana Mestre Pequinês z grupy Capoeira Nagô; wskazuje go jako autora m.in. śpiewnik Capoeira Senzala Lorraine (2017), a grupa Nagô publikuje utwór w swoim repertuarze. Przekazany tekst zestawia motyw morskiej podróży z doświadczeniem przemocy niewolnictwa: chłostą, przymusową żeglugą na statku niewolniczym i pragnieniem ucieczki. To współczesna pieśń odwołująca się do historii transatlantyckiego handlu niewolnikami, ale nie świadectwo konkretnego rejsu ani dokument wypowiedzi jednej zniewolonej osoby. Wers „Rezo a Iemanjá” przywołuje orixá czczoną w tradycjach afro-brazylijskich, szczególnie kojarzoną w Brazylii z morzem, macierzyństwem i ochroną. W zachodnioafrykańskich tradycjach joruba Yemọjá była związana także z wodami rzecznymi; jej wyobrażenia i kult rozwinęły się w diasporze. Sam tekst nie pozwala jednoznacznie ustalić, czy morze symbolizuje ucieczkę, śmierć, nadzieję na wyzwolenie, czy kilka z tych znaczeń jednocześnie.",
+      "meaningContext": "Powtarzane „A maré, a maré, me leva ao céu” można rozumieć dosłownie jako obraz przypływu unoszącego człowieka, a symbolicznie jako marzenie o wolności, ratunku, ukojenia cierpienia lub duchowej przemianie. „Jangada” to tradycyjna brazylijska tratwa rybacka, często wyposażona w żagiel, więc nie jest tym samym co duży statek niewolniczy. Pierwsza zwrotka opisuje niepewną podróż przez fale morza. Druga ukazuje przemoc biczowania i pragnienie wydostania się z niej. Trzecia wprowadza navio negreiro i modlitwę do Iemanjá, łącząc historię niewolnictwa z symboliką religijną. W czwartej podmiot potępia niewolnictwo jako moralnie nieuzasadnione. Przekazany fragment „Eu perdi a razão / Meu sofrimento” ma składnię eliptyczną i pozostawia niejasność; w innych śpiewnikach pojawia się „Eu perdi a razão / Do meu sofrimento”. W JSON-ie zachowano układ i słowa z transkrypcji poza podstawową korektą ortografii. Początkowy refren zaśpiewano czterokrotnie, a po każdej czterowersowej zwrotce dwukrotnie.",
+      "meaningTrivia": "„Maré” to przypływ i odpływ morza, a „me leva ao céu” dosłownie „niesie mnie do nieba”. „Jangada” oznacza niewielką tradycyjną tratwę lub żaglową łódź rybacką używaną w Brazylii. „Chicote” to bicz, „navio negreiro” — statek służący do transportu zniewolonych Afrykanów, a „escravidão” — niewolnictwo. „Iemanjá”, pisana też „Yemanjá”, jest orixá; użyta w transkrypcji forma „Yemanja” została ujednolicona do częstego zapisu „Iemanjá”. W przesłanym zapisie poprawiono oczywiste błędy: „jángada” na „jangada”, „issó” na „isso”, „pérdi” na „perdi”, „raçao” na „razão”, „sófrimento” na „sofrimento”, „no tem fundamento” na „não tem fundamento”; „Por que a escravidão” zapisano jako „Porque a escravidão”, ponieważ chodzi o „ponieważ”. Nie dodano słowa „do” przed „meu sofrimento”, chociaż występuje ono w innych wersjach. Utwór jest odrębny od wcześniejszych „Eu Chego Lá” i „Navio Negreiro”, mimo wspólnych motywów morskich. Autorstwo przypisane Mestre Pequinês opiera się na źródłach repertuarowych, nie na dokumentacji praw autorskich."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "A E I O U",
+      "authorName": "Mestrando Pretinho",
+      "alternativeTitles": [
+        {
+          "title": "A E I O U (Vem Criança, Vem Jogar)",
+          "position": 1
+        },
+        {
+          "title": "Vem Criança, Vem Jogar",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "A E I O U",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A E I O U"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "A E I O U",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A E I O U"
+                }
+              ]
+            },
+            {
+              "originalText": "U O I E A",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "U O I E A"
+                }
+              ]
+            },
+            {
+              "originalText": "A E I O U",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A E I O U"
+                }
+              ]
+            },
+            {
+              "originalText": "Vem, criança, vem jogar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodź, dziecko, chodź grać w capoeirę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Eu aprendi a ler",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nauczyłem się czytać"
+                }
+              ]
+            },
+            {
+              "originalText": "Aprendi a cantar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nauczyłem się śpiewać"
+                }
+              ]
+            },
+            {
+              "originalText": "E foi na capoeira",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I to właśnie w capoeirze"
+                }
+              ]
+            },
+            {
+              "originalText": "Que eu aprendi a jogar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nauczyłem się grać"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "A E I O U",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A E I O U"
+                }
+              ]
+            },
+            {
+              "originalText": "U O I E A",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "U O I E A"
+                }
+              ]
+            },
+            {
+              "originalText": "A E I O U",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A E I O U"
+                }
+              ]
+            },
+            {
+              "originalText": "Vem, criança, vem jogar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodź, dziecko, chodź grać w capoeirę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Eu estudo na escola",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Uczę się w szkole"
+                }
+              ]
+            },
+            {
+              "originalText": "E treino na academia",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "I trenuję w akademii capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu respeito a minha mãe",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Szanuję moją mamę"
+                }
+              ]
+            },
+            {
+              "originalText": "O meu pai e minha tia",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mojego tatę i moją ciocię"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "A E I O U",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A E I O U"
+                }
+              ]
+            },
+            {
+              "originalText": "U O I E A",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "U O I E A"
+                }
+              ]
+            },
+            {
+              "originalText": "A E I O U",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A E I O U"
+                }
+              ]
+            },
+            {
+              "originalText": "Vem, criança, vem jogar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodź, dziecko, chodź grać w capoeirę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Sou criança, sou pequeno",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jestem dzieckiem, jestem mały"
+                }
+              ]
+            },
+            {
+              "originalText": "Mas um dia eu vou crescer",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ale pewnego dnia dorosnę"
+                }
+              ]
+            },
+            {
+              "originalText": "Vou treinando capoeira",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ćwiczę capoeirę dalej"
+                }
+              ]
+            },
+            {
+              "originalText": "Pra poder me defender",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Żeby umieć się obronić"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "A E I O U",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A E I O U"
+                }
+              ]
+            },
+            {
+              "originalText": "U O I E A",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "U O I E A"
+                }
+              ]
+            },
+            {
+              "originalText": "A E I O U",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A E I O U"
+                }
+              ]
+            },
+            {
+              "originalText": "Vem, criança, vem jogar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodź, dziecko, chodź grać w capoeirę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Capoeira é harmonia",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Capoeira to harmonia"
+                }
+              ]
+            },
+            {
+              "originalText": "É amor no coração",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To miłość w sercu"
+                }
+              ]
+            },
+            {
+              "originalText": "Capoeira tem criança",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W capoeirze są dzieci"
+                }
+              ]
+            },
+            {
+              "originalText": "O futuro da nação",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przyszłość narodu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "A E I O U",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A E I O U"
+                }
+              ]
+            },
+            {
+              "originalText": "U O I E A",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "U O I E A"
+                }
+              ]
+            },
+            {
+              "originalText": "A E I O U",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A E I O U"
+                }
+              ]
+            },
+            {
+              "originalText": "Vem, criança, vem jogar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodź, dziecko, chodź grać w capoeirę"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=KFZsyfyKQ8Y",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„A E I O U” to piosenka edukacyjna wykonywana podczas zajęć capoeiry dla dzieci. Autorstwo jest przypisywane Mestrando Pretinho z ABADÁ-Capoeira w zbiorach ASA-Capoeira oraz w opisie nagrania Calopsita Capoeira; nie stanowi to niezależnej dokumentacji praw autorskich, ale jest na tyle konkretnym przypisaniem, że w katalogu zapisano „Mestrando Pretinho”. Tekst jest obecny w internetowych zbiorach capoeira co najmniej od 2012 roku (archiwum ABADÁ Rodos). W przeciwieństwie do wielu tradycyjnych corridos utwór nie opowiada o niewolnictwie ani historycznym mistrzu. Służy dzieciom jako prosty sposób łączenia śpiewu, nauki samogłosek, wspólnej gry, wychowania i szkolnej edukacji. Współczesna capoeira pełni również funkcję dydaktyczną, umożliwiając poznawanie rytmu, języka, zasad współpracy, szacunku i ćwiczeń fizycznych. Utwór jest obecny w repertuarze wielu grup i szkół, a poszczególne transkrypcje różnią się nieznacznie spójnikami i szykiem wersów.",
+      "meaningContext": "Refren wymienia portugalskie samogłoski w kolejności zwykłej (A E I O U) oraz odwróconej (U O I E A), po czym zaprasza dziecko do uczestnictwa w grze capoeira: „Vem, criança, vem jogar”. Pierwsza zwrotka zestawia naukę czytania i śpiewania z nabywaniem umiejętności gry w roda. Druga podkreśla równowagę między szkołą, zajęciami capoeiry i szacunkiem wobec rodziny. Trzecia oddaje dziecięce pragnienie rozwoju i nauki obrony. Zwrot „pra poder me defender” mówi o zdolności do samoobrony, nie o zachęcaniu dzieci do bójek. Ostatnia zwrotka ukazuje capoeirę jako wspólnotę harmonii i miłości oraz przypomina, że młodzi uczestnicy tworzą przyszłość tej tradycji i społeczeństwa. „Jogar” oznacza „grać w capoeirę”, a „academia” to miejsce treningów, nie szkoła wyższa. W przesłanym materiale zapisano najpierw osobne „A E I O U” jako wprowadzenie solisty, potem pełny czterowersowy refren chóru, a następnie cztery czterowersowe zwrotki, każdą zakończoną tym samym refrenem.",
+      "meaningTrivia": "Portugalskie samogłoski podstawowe to A, E, I, O, U, a odwrócone „U O I E A” pomaga dzieciom ćwiczyć pamięć i rytmikę. „Criança” znaczy dziecko; „vem” — chodź; „jogar” — grać (w tym przypadku grać capoeirę), a nie tylko „bawić się”. „Academia” w capoeirze oznacza szkołę lub salę treningową. „Vou treinando” jest konstrukcją oznaczającą kontynuowanie ćwiczenia, czyli „ćwiczę dalej” albo „będę nadal trenować”. „Pra” jest potocznym skrótem „para”, a „nação” oznacza naród. „O futuro da nação” jest określeniem dzieci jako przyszłego pokolenia, nie nazwą jakiejkolwiek grupy capoeira. Śpiewnik Capoeira Senzala Lorraine publikuje ten sam czterowersowy refren z powtórzeniami po zwrotkach. W przesłanej wersji zachowano również samodzielne „A E I O U” przed pierwszym oznaczeniem chóru. Nie wprowadzano osobnych pól transkrypcji fonetycznej."
+    }
+  ]
+}

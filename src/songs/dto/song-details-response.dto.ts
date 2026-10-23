@@ -12,6 +12,7 @@ export interface SongLineTranslationResponseDto {
   id: string;
   languageCode: string;
   text: string;
+  isUncertain: boolean;
 }
 
 // One phonetic transcription per language (mirrors

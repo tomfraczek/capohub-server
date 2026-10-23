@@ -1,0 +1,3794 @@
+{
+  "formatVersion": 1,
+  "songs": [
+    {
+      "categoryCode": "LADAINHA",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "O Mundo de Deus É Grande",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Mundo de Deus É Grande",
+          "position": 1
+        },
+        {
+          "title": "O Mundo de Deus é Grande (Mundo Enganador)",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "O mundo de Deus é grande",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Świat Boga jest ogromny"
+                }
+              ]
+            },
+            {
+              "originalText": "Deus tá numa mão fechada",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bóg mieści się w zaciśniętej dłoni"
+                }
+              ]
+            },
+            {
+              "originalText": "O pouco com Deus é muito",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Niewiele z Bogiem znaczy wiele"
+                }
+              ]
+            },
+            {
+              "originalText": "O muito sem Deus é nada",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wiele bez Boga jest niczym"
+                }
+              ]
+            },
+            {
+              "originalText": "Noite de escuro não serve",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ciemna noc się nie nadaje"
+                }
+              ]
+            },
+            {
+              "originalText": "Pra caçar de madrugada",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Do polowania nad ranem"
+                }
+              ]
+            },
+            {
+              "originalText": "Caçador dá muitos tiros",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Myśliwy oddaje wiele strzałów"
+                }
+              ]
+            },
+            {
+              "originalText": "Ôiaiá, de manhã não acha nada",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ôiaiá, rano niczego nie znajduje"
+                }
+              ]
+            },
+            {
+              "originalText": "Veado corre é pulando",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jeleń ucieka, skacząc"
+                }
+              ]
+            },
+            {
+              "originalText": "Cotia corre na trilha",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Aguti biegnie ścieżką"
+                }
+              ]
+            },
+            {
+              "originalText": "Se eu fosse governador",
+              "position": 11,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Gdybym był gubernatorem"
+                }
+              ]
+            },
+            {
+              "originalText": "Ah, meu Deus, manobrasse a Bahia",
+              "position": 12,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ach, mój Boże, gdybym zarządzał Bahią"
+                }
+              ]
+            },
+            {
+              "originalText": "Marinheiro absoluto",
+              "position": 13,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Prawdziwy, rasowy marynarz"
+                }
+              ]
+            },
+            {
+              "originalText": "Chegou pintando arrelia",
+              "position": 14,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przybył, wszczynając awanturę"
+                }
+              ]
+            },
+            {
+              "originalText": "Isso que marujo faz",
+              "position": 15,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Tego, co wyprawia marynarz"
+                }
+              ]
+            },
+            {
+              "originalText": "Comigo ele não faria",
+              "position": 16,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ze mną by nie zrobił"
+                }
+              ]
+            },
+            {
+              "originalText": "Camaradinha",
+              "position": 17,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przyjacielu"
+                }
+              ]
+            },
+            {
+              "originalText": "É hora, é hora",
+              "position": 18,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Już pora, już pora"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Iê, é hora, é hora, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, już pora, już pora, przyjacielu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Iê, galo cantou",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, kogut zapiał"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Iê, galo cantou, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, kogut zapiał, przyjacielu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Iê, cocorocô",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, kukuryku"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Iê, cocorocô, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, kukuryku, przyjacielu"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=g_v7D_AtxBg",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„O Mundo de Deus É Grande” należy do repertuaru ladainhas Capoeira Angola i jest nagrywana m.in. przez Mestre Paulo dos Anjos. Przypisanie autorstwa pozostaje niejasne: La Laue podaje Mestre Suassunę, a inne śpiewniki przypisują utwór Mestre Paulo dos Anjos lub opisują go przy jego nagraniach, co nie dowodzi kompozytorskiego autorstwa. Dlatego autor nie został wskazany jako ustalony. Tekst korzysta z przekazywanych ustnie sentencji religijnych, obserwacji zwierząt i opowieści o niebezpiecznym, awanturującym się marynarzu. Nie ma podstaw, aby łączyć tę ladainhę z jednym konkretnym wydarzeniem historycznym. Jest to przykład połączenia mądrości ludowej, humoru i ostrzeżenia przed lekkomyślnym działaniem w tradycji śpiewu capoeira.",
+      "meaningContext": "„O mundo de Deus é grande / Deus tá numa mão fechada” jest poetyckim paradoksem: wszechogarniający Bóg może być bliski nawet w najmniejszej przestrzeni. „O pouco com Deus é muito / O muito sem Deus é nada” przekazuje przekonanie, że duchowa siła i właściwy sposób życia mają większą wartość niż posiadanie. Zwrotka o myśliwym strzelającym w ciemności, który rano nic nie znajduje, może być przestrogą przed działaniem bez rozeznania. „Veado” to jeleń lub podobny przedstawiciel jeleniowatych, a „cotia” to aguti — południowoamerykański gryzoń, nie kot. „Se eu fosse governador / ... manobrasse a Bahia” przedstawia fantazję o sprawowaniu władzy nad stanem Bahia; nie jest stwierdzeniem o historycznym gubernatorze. „Marinheiro absoluto / Chegou pintando arrelia” oznacza mniej więcej „prawdziwy marynarz przybył, wywołując awanturę”. „Arrelia” to kłótnia, przykrość lub zaczepka. W końcowej chuli, po „Camaradinha”, prowadzący i chór wymieniają wezwania oznajmiające nadejście odpowiedniego momentu i pianie koguta, symbolicznie kojarzone ze świtem. „Camará” znaczy towarzysz, przyjaciel.",
+      "meaningTrivia": "Tradycyjne ladainhas Capoeira Angola bywają zbudowane z luźno powiązanych przysłów i obrazów; nie każda zwrotka musi opowiadać dalszy ciąg tej samej historii. „Cotia” to aguti, zwierzę znane w Brazylii i obecne w folklorze. „Galo cantou” oznacza „kogut zapiał”, a „cocorocô” to portugalska onomatopeja piania — polskie „kukuryku”. Forma „tá” jest potoczna i pochodzi od „está”; „pra” zastępuje „para”. „Marujo” to marynarz, bliskoznaczne do „marinheiro”. W nagraniach słyszy się warianty „Deus tá numa mão fechada” oraz „Deus traz numa mão fechada”, a także „manobrasse a Bahia” i „abrace a Bahia”. „Marinheiro absoluta” z przesłanej transkrypcji poprawiono na „Marinheiro absoluto”, zgodnie z rodzajem gramatycznym rzeczownika i kilkoma śpiewnikami. Nie należy traktować wszystkich tych wariantów jako bezspornych korekt konkretnego wykonania."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Camungerê",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Camugerê",
+          "position": 1
+        },
+        {
+          "title": "Camujerê",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Como vai, como tá?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak leci, jak się masz?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Camungerê!",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Camungerê!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Como vai vosmecê?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak się pan/pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Camungerê!",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Camungerê!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "E vai bem de saúde?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A czy zdrowie dopisuje?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Camungerê!",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Camungerê!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Para mim é prazer",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dla mnie to przyjemność"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Camungerê!",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Camungerê!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Como tá, como tá?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak się masz, jak się masz?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Camungerê!",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Camungerê!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Como vai vosmecê?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak się pan/pani miewa?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Camungerê!",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Camungerê!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Como vai a família?",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jak się miewa rodzina?"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Camungerê!",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Camungerê!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Mais tarde eu vou ver",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Później się przekonam"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Camungerê!",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Camungerê!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "Eu vou bem de saúde",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ze zdrowiem mam się dobrze"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Camungerê!",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Camungerê!"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=HikNWSR8Qko",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Camungerê” to tradycyjne corrido o charakterze powitalnym, śpiewane w roda capoeira, również podczas przyjmowania gości, mistrzów lub osób z innych grup. Autor i czas powstania nie są wiarygodnie ustaleni, a pieśń krąży w różnych odmianach tradycji ustnej. Niektóre portale capoeira, m.in. Papoeira, podają, że Camugerê/Camujerê było nazwą quilombo, czyli społeczności skupiającej m.in. osoby zbiegłe z niewoli. Brakuje jednak niezależnie potwierdzonego historycznego źródła, które pozwoliłoby jednoznacznie zidentyfikować taką osadę i połączyć ją z powstaniem utworu. Z kolei La Laue opisuje „Camungerê” jako zawołanie powitalne w środowisku capoeira. Te przekazy należy odróżniać od faktów udokumentowanych historycznie.",
+      "meaningContext": "Pieśń jest krótką rozmową prowadzoną przez śpiewaka i grupę. Wokalista pyta „Como vai, como tá?” (Jak leci, jak się masz?), „Como vai vosmecê?” (Jak się pan/pani miewa?), „E vai bem de saúde?” (Czy zdrowie dopisuje?) oraz „Como vai a família?” (Jak się miewa rodzina?). Chór odpowiada za każdym razem „Camungerê!”, utrzymując pogodny, gościnny charakter śpiewu. „Vosmecê” to dawna potoczna forma wywodząca się od „vossa mercê”, historycznego zwrotu grzecznościowego, z którego rozwinęło się dzisiejsze „você”; nie należy brać jej za imię człowieka. „Para mim é prazer” to skrócony, potoczny wariant „Para mim é um prazer” — „Dla mnie to przyjemność”. „Mais tarde eu vou ver” oznacza dosłownie „Później zobaczę / przekonam się”; tekst nie precyzuje, co dokładnie śpiewający sprawdzi. Zakończenie „Eu vou bem de saúde” mówi „Ze zdrowiem mam się dobrze”. Utwór nadaje się do nauki schematu wezwanie–odpowiedź (LEAD/CHORUS).",
+      "meaningTrivia": "„Camungerê”, „Camugerê” i „Camujerê” to spotykane warianty zapisu tego samego zawołania; jego dokładna etymologia nie została wiarygodnie ustalona. Portal Papoeira łączy tę nazwę z rzekomym quilombo, natomiast La Laue podkreśla funkcję pozdrowienia w roda — nie należy przedstawiać niezweryfikowanego pochodzenia jako pewnego faktu. „Vosmecê” pokazuje ewolucję języka portugalskiego: „vossa mercê” → „vosmecê” → „você”. „Tá” jest potocznym skróceniem „está”, a „pra” skróceniem „para”. Pieśń jest tak prosta i powtarzalna, że początkujący może szybko nauczyć się odpowiedzi chóru. W przesłanym wariancie występuje „Mais tarde eu vou ver”, dlatego zachowano ten wers, mimo że inne wykonania mają inny układ pytań."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Dendê Maré (Ô Dendê, Dendê Maré)",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Dendê Maré",
+          "position": 1
+        },
+        {
+          "title": "Ô Dendê Dendê Maré",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "CHORUS",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Pescador já vai pro mar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rybak właśnie wypływa w morze"
+                }
+              ]
+            },
+            {
+              "originalText": "Vai de encontro com a maré",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wypływa naprzeciw pływowi morza"
+                }
+              ]
+            },
+            {
+              "originalText": "Procurando um peixe bom",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Szukając dobrej ryby"
+                }
+              ]
+            },
+            {
+              "originalText": "Conforme a baiana quer",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Takiej, jakiej chce kobieta z Bahii"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Ho!",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ho!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Baiana prepara o peixe",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kobieta z Bahii przygotowuje rybę"
+                }
+              ]
+            },
+            {
+              "originalText": "Pescador trouxe do mar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rybak przyniósł ją z morza"
+                }
+              ]
+            },
+            {
+              "originalText": "Põe tempero na moqueca",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dodaje przypraw do moqueki"
+                }
+              ]
+            },
+            {
+              "originalText": "Dendê não pode faltar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie może zabraknąć oleju dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 19,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie, dendê"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 20,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 21,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 22,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 23,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 24,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 25,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 26,
+          "lines": [
+            {
+              "originalText": "Que Totonho de Maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ach, Totonho de Maré"
+                }
+              ]
+            },
+            {
+              "originalText": "Foi um grande jogador",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Był znakomitym graczem capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "A onda balança o barco",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Fala kołysze łodzią"
+                }
+              ]
+            },
+            {
+              "originalText": "Como Totonho balançou",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Tak jak kołysał się Totonho"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 27,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie, dendê"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 28,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 29,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 30,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 31,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 32,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            },
+            {
+              "originalText": "Puxa, puxa, leva, leva",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ciągnij, ciągnij, zabieraj, zabieraj"
+                }
+              ]
+            },
+            {
+              "originalText": "Puxa a rede do mar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wyciągaj sieć z morza"
+                }
+              ]
+            },
+            {
+              "originalText": "Se for um bom pescador",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jeśli będziesz dobrym rybakiem"
+                }
+              ]
+            },
+            {
+              "originalText": "Peixe bom não vai faltar",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Dobrej ryby nie zabraknie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 33,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie, dendê"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 34,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 35,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 36,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 37,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 38,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 39,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 40,
+          "lines": [
+            {
+              "originalText": "É noite de lua cheia",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jest noc pełni księżyca"
+                }
+              ]
+            },
+            {
+              "originalText": "Pescador volta do mar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Rybak wraca z morza"
+                }
+              ]
+            },
+            {
+              "originalText": "Vai ter festa na aldeia",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W osadzie odbędzie się świętowanie"
+                }
+              ]
+            },
+            {
+              "originalText": "Capoeira vai jogar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Będzie się grało capoeirę"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 41,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie, dendê"
+                }
+              ]
+            },
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 42,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 43,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 44,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 45,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 46,
+          "lines": [
+            {
+              "originalText": "Ô dendê de maré, dendê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, przypływie, dendê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 47,
+          "lines": [
+            {
+              "originalText": "Ô dendê, dendê maré",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ô dendê, dendê, przypływie"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=QfAAdZFqmPo",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "Pieśń „Dendê Maré” jest znana m.in. z repertuaru ABADÁ-Capoeira i łączy sceny codziennego życia nad morzem w Bahii z hołdem dla dawnego capoeiristy. Dendê Arts podaje jako autora Pelézinho, ale inne dostępne śpiewniki nie wskazują kompozytora; bez niezależnego potwierdzenia autorstwo pozostawiono nieustalone. Totonho de Maré to Antônio Laurindo das Neves, urodzony w 1894 roku na Ilha de Maré koło Salvadoru; był uznanym capoeiristą pierwszej połowy XX wieku. Źródła historyczne opisują jego udział w dawnych rodas i spory wokół tytułu najlepszego capoeiristy Bahii. Pieśń ukazuje też rybołówstwo, gotowanie i wspólne świętowanie jako część kultury wybrzeża, a nie dokumentację konkretnego połowu czy wydarzenia.",
+      "meaningContext": "Refren zestawia „dendê” (olej z owoców palmy olejowej, ważny składnik kuchni afro-bahijskiej) i „maré” (pływ morski). Jest to przede wszystkim rytmiczna fraza; dosłowne tłumaczenie całego refrenu na „olej palmowy przypływ” byłoby mylące. Rybak wypływa po rybę, którą baiana — kobieta pochodząca ze stanu Bahia — przyrządza jako moquecę, tradycyjne brazylijskie danie duszone z ryby lub owoców morza; w wariancie bahijskim ważnym składnikiem jest azeite de dendê. Zwrotka „Que Totonho de Maré / Foi um grande jogador” wspomina konkretnego mistrza gry capoeira, a nie wyłącznie pływ morski: przydomek Maré nawiązywał do jego pochodzenia z Ilha de Maré. Kołysanie łodzi przez fale porównano do balansu ciała capoeiristy podczas jogo i ginga. „Puxa a rede” opisuje wyciąganie rybackiej sieci, zaś ostatnia zwrotka przechodzi od powrotu rybaka przy pełni księżyca do wspólnej zabawy i roda. „Aldeia” oznacza osadę lub wieś; nie daje podstaw, by przypisywać scenę konkretnej miejscowości.",
+      "meaningTrivia": "Dendê nie jest nazwą przypływu: to nazwa olejowca gwinejskiego i pozyskiwanego z niego czerwono-pomarańczowego oleju palmowego. W slangu capoeira „ter dendê” bywa metaforą energii, smaku i żywiołowości gry. „Maré” znaczy pływ morski, ale w „Totonho de Maré” jest częścią przydomka pochodzącego od Ilha de Maré. Moqueca baiana to potrawa regionalna z ryby lub owoców morza, zwykle przygotowywana z dendê i często z mlekiem kokosowym; istnieją inne regionalne warianty moqueki. Baiana oznacza mieszkankę lub osobę pochodzącą z Bahii, a nie imię własne. Totonho de Maré, czyli Antônio Laurindo das Neves, jest postacią udokumentowaną w publikacjach historycznych o capoeirze. Przy zapisie zachowano wszystkie 70 wypowiedzianych wersów oraz odmiany refrenu i okrzyk „Ho!”. Niejasny zapis transkrypcji „Que Totonho de maré” pozostawiono z małą interpunkcyjną normalizacją, bo inne śpiewniki podają „Totonho de Maré” lub „O Totonho de Maré”."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Berimbau de Ouro",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "O Meu Berimbau de Ouro",
+          "position": 1
+        },
+        {
+          "title": "Meu Berimbau de Ouro (Gantois)",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "CHORUS",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "O meu berimbau de ouro, minha mãe, eu deixei no Gantois",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mój złoty berimbau, moja matko, zostawiłem w Gantois"
+                }
+              ]
+            },
+            {
+              "originalText": "O meu berimbau de ouro, minha mãe, eu deixei no Gantois",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mój złoty berimbau, moja matko, zostawiłem w Gantois"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "É um gunga bem falante que dá gosto de tocar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To gunga o pięknym, donośnym brzmieniu, na którym aż chce się grać"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu deixei com Menininha para ela abençoar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zostawiłem go u Menininhy, żeby go pobłogosławiła"
+                }
+              ]
+            },
+            {
+              "originalText": "Amanhã às sete horas pra Bahia eu vou voltar",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jutro o siódmej wrócę do Bahii"
+                }
+              ]
+            },
+            {
+              "originalText": "Vou buscar meu berimbau que deixei no Gantois, ha, ha!",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pójdę odebrać mój berimbau, który zostawiłem w Gantois, ha, ha!"
+                }
+              ]
+            },
+            {
+              "originalText": "Ê, viva meu Deus",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ê, niech żyje mój Bóg"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Iê, viva meu Deus, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, niech żyje mój Bóg, przyjacielu"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Ê, a capoeira",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ê, capoeira!"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Ê, a capoeira, camará",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ê, capoeira, przyjacielu"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=BGve0sXTkZQ",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Berimbau de Ouro” przywołuje historycznie ważny Terreiro do Gantois — ośrodek religii afro-brazylijskiej candomblé w Salvadorze, w stanie Bahia — oraz Mãe Menininha do Gantois (Maria Escolástica da Conceição Nazaré, 1894–1986), jedną z najbardziej znanych ialorixás, czyli przywódczyń religijnych candomblé. Mãe Menininha kierowała Gantois od 1922 do 1986 roku i była ważną postacią zachowania oraz społecznego uznania tradycji afro-brazylijskich. Gantois jest miejscem kultu religijnego, nie nazwą miasta ani szkoły capoeiry. Pieśń pokazuje duchowe powiązania świata capoeiry z kulturą afro-brazylijską, ale nie udokumentowano, że opisuje rzeczywiste pozostawienie konkretnego berimbau przez autora. Nie udało się wiarygodnie ustalić autora i daty powstania pieśni.",
+      "meaningContext": "Wokalista opowiada, że zostawił swój „złoty berimbau” w Gantois pod opieką Menininhy, by uzyskać jej błogosławieństwo, i zamierza wrócić po instrument do Bahii. „Berimbau de ouro” może być poetyckim określeniem szczególnie cennego instrumentu, nie musi oznaczać instrumentu rzeczywiście wykonanego ze złota. „Gunga” to berimbau o niskim, głębokim brzmieniu, tradycyjnie prowadzący rytm w wielu układach baterii capoeira. „Bem falante” dosłownie znaczy „dobrze mówiący”, a w tym kontekście opisuje piękny, wyrazisty głos instrumentu. „Minha mãe” może być czułym zwrotem i przywoływać figurę duchowej matki, niekoniecznie biologiczną matkę śpiewającego. „Menininha” jest przydomkiem konkretnej ialorixá, a nie określeniem dowolnej dziewczynki. Końcowe „Viva meu Deus” oraz „A capoeira” należą do krótkiej chuli/louvação z odpowiedziami chóru zakończonymi „camará” (przyjacielu, towarzyszu). Podział ról dla dwóch pierwszych powtórzeń wymaga ewentualnej weryfikacji z nagraniem.",
+      "meaningTrivia": "„Terreiro” oznacza w candomblé miejsce kultu i wspólnotę religijną. „Ialorixá” (mãe de santo) to kapłanka i przywódczyni wspólnoty, a nie dosłownie matka śpiewającego. Terreiro do Gantois jest znane również jako Ilé Ìyá Omi Àṣẹ Ìyámasé; jego początki wiąże się z Marią Júlią da Conceição Nazaré w XIX wieku. Mãe Menininha była inicjowana w candomblé już jako dziecko. Gunga jest jednym z typów berimbau wyróżnianych według wysokości brzmienia; inne częste nazwy to médio i viola. „Abençoar” oznacza pobłogosławić. Wers „Amanhã às sete horas” zawiera obowiązkowy znak akcentu w „às”, ponieważ oznacza godzinę. Inne nagrania tego utworu mogą zawierać dodatkowe zwrotki i przejścia do kolejnych pieśni; tutaj zachowano wyłącznie wersy dostarczone przez użytkownika."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Era um Tal de Besouro Mangangá",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Besouro Mangangá (Era um Tal)",
+          "position": 1
+        },
+        {
+          "title": "Era Um Nome de Besouro Mangangá",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Certo dia tava na roda",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pewnego dnia byłem na roda capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Um menino me chamou pra jogar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pewien chłopak zaprosił mnie do gry"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu que sou desconfiado",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A ja, z natury podejrzliwy"
+                }
+              ]
+            },
+            {
+              "originalText": "Ai, meu Deus, comecei a reparar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ach, mój Boże, zacząłem się przyglądać"
+                }
+              ]
+            },
+            {
+              "originalText": "O que estava escrito na camisa",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co było napisane na koszulce"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Era um tal de Besouro Mangangá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Było tam imię niejakiego Besouro Mangangá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "O que estava escrito na camisa",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co było napisane na koszulce"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Era um tal de Besouro Mangangá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Było tam imię niejakiego Besouro Mangangá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Aê, aê-á",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Aê, aê-á"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Era um tal de Besouro Mangangá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Było tam imię niejakiego Besouro Mangangá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Aê, aê-á",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Aê, aê-á"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Era um tal de Besouro Mangangá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Było tam imię niejakiego Besouro Mangangá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Ê, joga o nego para cima e deixa o nego vadiar",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ej, podrzuć chłopaka w górę i pozwól mu swobodnie grać"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Era um tal de Besouro Mangangá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Było tam imię niejakiego Besouro Mangangá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Ê, você diz que dá no nego, no nego você não dá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ej, mówisz, że potrafisz go pokonać, ale nie dasz mu rady"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Era um tal de Besouro Mangangá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Było tam imię niejakiego Besouro Mangangá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 13,
+          "lines": [
+            {
+              "originalText": "Um dia eu tava na roda",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pewnego dnia byłem na roda capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Um menino me chamou para jogar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pewien chłopak zaprosił mnie do gry"
+                }
+              ]
+            },
+            {
+              "originalText": "Eu que sou desconfiado",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A ja, z natury podejrzliwy"
+                }
+              ]
+            },
+            {
+              "originalText": "Comecei a reparar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zacząłem się przyglądać"
+                }
+              ]
+            },
+            {
+              "originalText": "O que estava escrito na camisa",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co było napisane na koszulce"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 14,
+          "lines": [
+            {
+              "originalText": "Era um nome de Besouro Mangangá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Było tam imię Besouro Mangangá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 15,
+          "lines": [
+            {
+              "originalText": "O que estava escrito na camisa",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Co było napisane na koszulce"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 16,
+          "lines": [
+            {
+              "originalText": "Era um nome de Besouro Mangangá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Było tam imię Besouro Mangangá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 17,
+          "lines": [
+            {
+              "originalText": "Êêê-á",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Êêê-á"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 18,
+          "lines": [
+            {
+              "originalText": "Era um nome de Besouro Mangangá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Było tam imię Besouro Mangangá"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=ygHLq9OyNKk",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=ROpvLIWS_O8",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "Pieśń „Era um Tal de Besouro Mangangá” należy do repertuaru wykonywanego m.in. przez Mestre Jogo de Dentro. W dostępnych publikacjach nie potwierdzono pierwotnego kompozytora, dlatego autorstwo pozostaje nieustalone. Bohaterem przywołanym na koszulce młodego gracza jest Manuel (Manoel) Henrique Pereira, znany jako Besouro Mangangá lub Besouro Cordão de Ouro, capoeirista z Santo Amaro w regionie Recôncavo w Bahii, żyjący w przybliżeniu w latach 1895–1924. Był aktywny w epoce, gdy capoeira była stygmatyzowana i podlegała represjom. Po jego śmierci rozwinęły się liczne opowieści o niezwykłej zręczności, ucieczkach przed policją i „corpo fechado”, czyli rzekomej nadnaturalnej odporności na broń. Badania historyczne odróżniają potwierdzalne dokumenty dotyczące Manuela Henrique Pereiry od folkloru i późniejszych legend. Ta piosenka nie jest biografią Besouro: opowiada o współczesnym lub bliżej nieokreślonym spotkaniu w roda i o rozpoznaniu jego przydomka na koszulce innego uczestnika.",
+      "meaningContext": "Wokalista wspomina chwilę, gdy podczas roda nieznany chłopak zaprosił go do jogo capoeira. Jako człowiek ostrożny („sou desconfiado”) najpierw przygląda się chłopakowi i dostrzega na jego koszulce imię Besouro Mangangá. Powtarzana odpowiedź „Era um tal de Besouro Mangangá” tworzy refren i wyraża rozpoznanie postaci o wielkiej legendzie. „Nego” jest potocznym i kontekstowo nacechowanym określeniem czarnoskórego człowieka, ale w capoeirze może też być familiarnym zwrotem do innego gracza; tłumaczenie wymaga kontekstu i nie powinno być utożsamiane z obelgą w każdym użyciu. „Deixa o nego vadiar” zachęca, by pozwolić uczestnikowi swobodnie grać, improwizować i popisywać się w roda. Czasownik „vadiar” poza capoeirą bywa kojarzony z włóczęgostwem i próżnowaniem, ale w pieśniach capoeiry odnosi się do gry lub swobodnego spędzania czasu przy tej praktyce. „Você diz que dá no nego / no nego você não dá” jest wyzwaniem: przeciwnik twierdzi, że poradzi sobie z drugim graczem, lecz nie jest w stanie go pokonać. Zakończenie powtarza historię w nieco innym brzmieniu („Era um nome” zamiast „Era um tal”).",
+      "meaningTrivia": "„Besouro” dosłownie znaczy „chrząszcz”, a „Mangangá” to regionalne określenie dużego owada (w różnych przekazach odnoszone do trzmiela lub chrząszcza); całość jest przydomkiem, nie nazwą dwóch oddzielnych mistrzów. Ten sam Besouro pojawił się wcześniej w ladainhi „Menino, Quem Foi Seu Mestre?”. „Cordão de Ouro” oznacza „Złoty sznur” i jest kolejnym przydomkiem historycznej postaci; nie trzeba go utożsamiać z nazwą współczesnej grupy capoeira. „Tava” jest potoczną formą „estava”, a „pra” skrótem „para”. „Roda” to krąg uczestników i przestrzeń gry capoeira, a nie jedynie fizyczne koło. „Jogar” w kontekście capoeiry oznacza „grać”, a nie wyłącznie „walczyć”. Przekazana transkrypcja zawiera dwa warianty refrenu „Era um tal de” oraz „Era um nome de” i oba zostały zachowane. Okrzyki „Aee, aea” oraz „Eeea” zapisano umownie jako „Aê, aê-á” i „Êêê-á”, ponieważ są wokalizami i nie mają standardowej ortografii. Przypisanie ról LEAD/CHORUS opiera się na schemacie zawołań i odpowiedzi, a nie na zweryfikowanej transkrypcji wielościeżkowej obu nagrań."
+    },
+    {
+      "title": "Bimba Foi Desafiado",
+      "authorName": null,
+      "categoryCode": "LADAINHA",
+      "alternativeTitles": [
+        {
+          "title": "Mestre Bimba Foi Desafiado",
+          "position": 1
+        },
+        {
+          "title": "Bimba e Benedito",
+          "position": 2
+        }
+      ],
+      "tagSlugs": [],
+      "rhythms": [],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Bimba foi desafiado",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bimba został wyzwany na pojedynek"
+                }
+              ]
+            },
+            {
+              "originalText": "Por um negro esquisito",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przez pewnego osobliwego czarnoskórego mężczyznę"
+                }
+              ]
+            },
+            {
+              "originalText": "De andar malandriado",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "O cwaniackim, zawadiackim sposobie poruszania się"
+                }
+              ]
+            },
+            {
+              "originalText": "Cujo nome é Benedito",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Który nazywał się Benedito"
+                }
+              ]
+            },
+            {
+              "originalText": "Disse não acreditava",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Powiedział, że nie wierzy"
+                }
+              ]
+            },
+            {
+              "originalText": "Nessa tal de capoeira",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W tę całą capoeirę"
+                }
+              ]
+            },
+            {
+              "originalText": "Que essa luta não passava",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Że ta sztuka walki była tylko"
+                }
+              ]
+            },
+            {
+              "originalText": "De uma simples brincadeira",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zwykłą zabawą"
+                }
+              ]
+            },
+            {
+              "originalText": "Logo se formou uma roda",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wkrótce utworzył się krąg capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Ali no meio da rua",
+              "position": 10,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Tam, pośrodku ulicy"
+                }
+              ]
+            },
+            {
+              "originalText": "Bimba desmaiou o homem",
+              "position": 11,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bimba powalił mężczyznę do nieprzytomności"
+                }
+              ]
+            },
+            {
+              "originalText": "Só com uma meia-lua",
+              "position": 12,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jedną tylko meia-luą"
+                }
+              ]
+            },
+            {
+              "originalText": "Quando o homem despertou",
+              "position": 13,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kiedy mężczyzna odzyskał przytomność"
+                }
+              ]
+            },
+            {
+              "originalText": "Mestre Bimba assim falou",
+              "position": 14,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mestre Bimba powiedział wtedy"
+                }
+              ]
+            },
+            {
+              "originalText": "Levanta, cabra safado",
+              "position": 15,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Wstawaj, ty draniu"
+                }
+              ]
+            },
+            {
+              "originalText": "Que o jogo mal começou",
+              "position": 16,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przecież gra dopiero się zaczęła"
+                }
+              ]
+            },
+            {
+              "originalText": "Benedito então falou",
+              "position": 17,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Benedito odparł wtedy"
+                }
+              ]
+            },
+            {
+              "originalText": "Para a pequena multidão",
+              "position": 18,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Do niewielkiego tłumu"
+                }
+              ]
+            },
+            {
+              "originalText": "Segurem Mestre Bimba",
+              "position": 19,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Zatrzymajcie Mestre Bimbę"
+                }
+              ]
+            },
+            {
+              "originalText": "Não quero apanhar mais, não",
+              "position": 20,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Nie chcę już więcej obrywać"
+                }
+              ]
+            },
+            {
+              "originalText": "Na roda de capoeira",
+              "position": 21,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W kręgu capoeiry"
+                }
+              ]
+            },
+            {
+              "originalText": "Esse homem é um cão",
+              "position": 22,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ten człowiek to prawdziwy diabeł"
+                }
+              ]
+            },
+            {
+              "originalText": "Camará",
+              "position": 23,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przyjacielu"
+                }
+              ]
+            },
+            {
+              "originalText": "Iê, viva Seu Bimba",
+              "position": 24,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, niech żyje pan Bimba"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Iê, viva Seu Bimba",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, niech żyje pan Bimba"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Iê, é mandingueiro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, jest mistrzem sprytu i mandingi"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Iê, é mandingueiro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Iê, jest mistrzem sprytu i mandingi"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=OkTQWATR00Y",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Bimba Foi Desafiado” opowiada o rzekomym ulicznym pojedynku Mestre Bimby z Benedito, który miał lekceważyć capoeirę, a następnie zostać znokautowany kopnięciem meia-lua. Nie ma wiarygodnego potwierdzenia, że ten konkretny pojedynek z osobą o imieniu Benedito rzeczywiście się wydarzył; należy go przedstawiać jako historię opowiadaną w pieśni, a nie udokumentowaną biografię. Mestre Bimba, czyli Manoel dos Reis Machado, był rzeczywistym brazylijskim mistrzem, który opracował Luta Regional Baiana, później nazywaną Capoeira Regional. W 1932 roku założył szkołę w Salvadorze, a w 1937 roku jego akademia otrzymała oficjalną rejestrację. Znany był z pokazów i walk, które miały dowodzić skuteczności capoeiry; pojedynki te i ich społeczny kontekst są poświadczone w opracowaniach historycznych. Nie ustalono wiarygodnie autora ani daty powstania tej konkretnej ladainhi.",
+      "meaningContext": "Pieśń zaczyna się od wyzwania rzuconego Bimbie przez Benedito, opisanego jako nieufny wobec capoeiry i poruszający się „malandriado” — w sposób zawadiacki, kojarzący się z malandragem, czyli ulicznym sprytem i cwaniactwem. W ulicznej roda Bimba ma jednym kopnięciem meia-lua pozbawić go przytomności. Kiedy przeciwnik się budzi, mistrz prowokacyjnie oznajmia, że gra ledwie się zaczęła. Przestraszony Benedito prosi świadków, by powstrzymali mistrza. „Esse homem é um cão” to idiomatyczne określenie kogoś niezwykle groźnego lub trudnego do pokonania; nie chodzi o dosłowne zwierzę. „Cabra safado” oznacza potocznie „ty draniu”, „ty łajdaku”, a „camará” jest tradycyjnym zwrotem do towarzysza w roda. Końcowe wersy są formą louvação, w której prowadzący i chór wychwalają Mestre Bimbę jako „mandingueiro” — człowieka sprytnego, posiadającego malícia i umiejącego zaskakiwać przeciwnika. Tekst podkreśla skuteczność Capoeira Regional i przestrzega przed lekceważeniem jej jako zabawy.",
+      "meaningTrivia": "„Meia-lua” znaczy dosłownie „półksiężyc” i jest nazwą ruchów kopnięcia w capoeirze; pieśń nie rozstrzyga jednoznacznie, czy chodzi o meia-lua de frente czy meia-lua de compasso. „Malandriado” pochodzi od „malandro”, określenia ulicznego spryciarza lub cwaniaka, ważnego dla dawnej kultury miejskiej Brazylii. „Mandingueiro” w capoeirze to osoba obdarzona mandingą, umiejętnością zaskakiwania, kontrolowania gry i ukrywania intencji; termin ma także szersze historyczne i afro-brazylijskie konotacje duchowe. „Seu Bimba” oznacza „pan Bimba”, a nie zaimek dzierżawczy „jego Bimba”; to potoczny zwrot grzecznościowy. „Negro esquisito” oznacza wprost „dziwny czarnoskóry mężczyzna”, nie jest tutaj nazwą konkretnej grupy etnicznej. „Desmaiou o homem” używa potocznie czasownika „desmaiar” w znaczeniu „pozbawił przytomności”. W przesłanym tekście poprawiono tylko oczywistą ortografię „multidao” → „multidão” oraz „meia lua” → „meia-lua”, bez zmiany fabuły. Końcowe zdania „Iê, viva Seu Bimba” i „Iê, é mandingueiro” zachowano dwukrotnie jako wezwanie i odpowiedź, ale na podstawie samego tekstu nie można potwierdzić wszystkich detali podziału głosów na nagraniu."
+    },
+    {
+      "categoryCode": "QUADRA",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Navio Negreiro",
+      "authorName": "Mestre Toni Vargas",
+      "alternativeTitles": [
+        {
+          "title": "Navio Negreiro (Tumba Flutuante)",
+          "position": 1
+        },
+        {
+          "title": "Tumba Flutuante",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Navio negreiro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Statek przewożący zniewolonych ludzi"
+                }
+              ]
+            },
+            {
+              "originalText": "Tumba flutuante",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pływający grobowiec"
+                }
+              ]
+            },
+            {
+              "originalText": "Terra mãe distante",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Daleka ziemia ojczysta"
+                }
+              ]
+            },
+            {
+              "originalText": "Dor e desespero",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ból i rozpacz"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Navio negreiro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Statek przewożący zniewolonych ludzi"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Segue a nau errante",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Płynie dalej błądzący statek"
+                }
+              ]
+            },
+            {
+              "originalText": "Singrando saudades",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Przemierzając morze tęsknoty"
+                }
+              ]
+            },
+            {
+              "originalText": "África distante",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Daleka Afryka"
+                }
+              ]
+            },
+            {
+              "originalText": "Ouça meus cantares",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Usłysz moje pieśni"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Navio negreiro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Statek przewożący zniewolonych ludzi"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Mãe que perde o filho",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Matka, która traci dziecko"
+                }
+              ]
+            },
+            {
+              "originalText": "Rei perde rainha",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Król traci królową"
+                }
+              ]
+            },
+            {
+              "originalText": "Povo perde o brio",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Lud traci dumę i godność"
+                }
+              ]
+            },
+            {
+              "originalText": "Enquanto definha",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Podczas gdy słabnie i podupada"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Navio negreiro",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Statek przewożący zniewolonych ludzi"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=8WwCt2Z1FvM",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Navio Negreiro” jest kompozycją Mestre Toni Vargasa, opowiadającą o transatlantyckim handlu zniewolonymi Afrykanami i cierpieniu ludzi przemocą wywożonych z ojczyzny. „Navio negreiro” to historyczne określenie statku wykorzystywanego w handlu niewolnikami; „tumbeiro” jest innym portugalskim określeniem takich jednostek, wywodzącym się ze skojarzenia z grobem. Podróże przez Atlantyk w nieludzkich warunkach wiązały się z chorobami, przemocą, rozdzielaniem rodzin i śmiercią wielu przewożonych ludzi. Brazylia była jednym z głównych miejsc docelowych tego procederu. Materialnym świadectwem jest stanowisko archeologiczne Cais do Valongo w Rio de Janeiro: według UNESCO na tym nabrzeżu lub przez jego bezpośredni obszar przeszło około 900 tysięcy zniewolonych Afrykanów w XIX wieku. Pieśń jest współczesną refleksją artystyczną nad tragiczną historią, a nie relacją z jednej konkretnej wyprawy. Jej autorstwo Mestre Toni Vargasa podaje m.in. Cifra Club.",
+      "meaningContext": "Każda z trzech czterowersowych zwrotek buduje osobny obraz tragedii. Pierwsza nazywa statek „pływającym grobowcem” i akcentuje przymusowe oddalenie od rodzinnej Afryki. Druga personifikuje wędrówkę statku: „nau errante” to błądząca jednostka, a „singrando saudades” jest poetyckim obrazem żeglugi przez tęsknotę i wspomnienia, nie technicznym opisem rejsu. Prośba „Ouça meus cantares” oznacza „Usłysz moje pieśni” i nadaje utworowi charakter świadectwa pamięci. Trzecia zwrotka opisuje rozpad więzi: matka traci dziecko, król królową, a lud dumę i godność. Nie należy przy tym rozumieć słów o królu i królowej jako aluzji do jednej ustalonej pary historycznej. Powracająca odpowiedź „Navio negreiro” wzmacnia centralny obraz statku i zbiorowego cierpienia.",
+      "meaningTrivia": "„Nau” to literackie określenie statku lub okrętu; „singrar” oznacza żeglować, przecinać fale lub przebywać wodną przestrzeń; „saudade” to głęboka tęsknota, zwłaszcza za osobą, miejscem lub przeszłością. „Brio” oznacza dumę, godność, honor albo wolę zachowania własnej wartości. „Definhar” oznacza stopniowo słabnąć, wyniszczać się lub podupadać. „Terra mãe” jest poetyckim określeniem ojczyzny lub ziemi przodków; „África” odnosi się do kontynentu wielu odrębnych ludów, nie jednego państwa. Historyczny „navio negreiro” nie był zwykłym statkiem pasażerskim; przewoził ludzi potraktowanych jako przedmiot handlu. W źródłach pieśń bywa przypisywana do kategorii „quadra”, ponieważ składa się z czterowersowych zwrotek przeplatanych krótką odpowiedzią chóru. Nie należy mylić utworu Mestre Toni Vargasa z XIX-wiecznym poematem „O Navio Negreiro” Castro Alvesa; łączy je temat, ale są odrębnymi dziełami."
+    },
+    {
+      "categoryCode": "SAMBA_DE_RODA",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Sambalelê Bateu na Porta",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Samba Lêlê Bateu na Porta",
+          "position": 1
+        },
+        {
+          "title": "Samba Lelê",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Samba lelê bateu na porta",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê zapukał do drzwi"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê vai ver quem é",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê, idź zobaczyć, kto to"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê é meu amor",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê samba no pé",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê ma sambę we krwi"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Samba lelê bateu na porta",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê zapukał do drzwi"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê vai ver quem é",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê, idź zobaczyć, kto to"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê é meu amor",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê samba no pé",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê ma sambę we krwi"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Samba lelê bateu na porta",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê zapukał do drzwi"
+                }
+              ]
+            },
+            {
+              "originalText": "Escute o que eu vou falar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Posłuchaj, co ci powiem"
+                }
+              ]
+            },
+            {
+              "originalText": "Você é uma moça fina",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jesteś delikatną, elegancką dziewczyną"
+                }
+              ]
+            },
+            {
+              "originalText": "Cuidado pra não quebrar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Uważaj, żeby się nie stłuc"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Samba lelê bateu na porta",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê zapukał do drzwi"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê vai ver quem é",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê, idź zobaczyć, kto to"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê é meu amor",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê samba no pé",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê ma sambę we krwi"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Vamos embora que é de noite",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Chodźmy już, bo zapadła noc"
+                }
+              ]
+            },
+            {
+              "originalText": "Mata tenho que passar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Muszę przejść przez las"
+                }
+              ]
+            },
+            {
+              "originalText": "Se iaiá quiser me ver",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jeśli panienka będzie chciała mnie zobaczyć"
+                }
+              ]
+            },
+            {
+              "originalText": "Bote o seu navio no mar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Niech wypuści swój statek na morze"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Samba lelê bateu na porta",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê zapukał do drzwi"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê vai ver quem é",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê, idź zobaczyć, kto to"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê é meu amor",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê samba no pé",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê ma sambę we krwi"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Puxa, puxa, leva, leva",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ciągnij, ciągnij, zabieraj, zabieraj"
+                }
+              ]
+            },
+            {
+              "originalText": "Dá carreira sem parar",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Biegnij bez zatrzymywania się"
+                }
+              ]
+            },
+            {
+              "originalText": "Na carreira que tu anda",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "W takim tempie, w jakim pędzisz"
+                }
+              ]
+            },
+            {
+              "originalText": "Deus me livre de eu andar",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Niech Bóg mnie broni przed takim biegiem"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Samba lelê bateu na porta",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê zapukał do drzwi"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê vai ver quem é",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê, idź zobaczyć, kto to"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê é meu amor",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê to moja miłość"
+                }
+              ]
+            },
+            {
+              "originalText": "Samba lelê samba no pé",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Sambalelê ma sambę we krwi"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Tum, tum, tum, bateu na porta",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Puk, puk, puk, ktoś zapukał do drzwi"
+                }
+              ]
+            },
+            {
+              "originalText": "Maria vai ver quem é",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Mario, idź zobaczyć, kto to"
+                }
+              ]
+            },
+            {
+              "originalText": "Mas se for um capoeira",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Ale jeśli to capoeirista"
+                }
+              ]
+            },
+            {
+              "originalText": "Vá na ponta do pé",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Podejdź na palcach"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=y-XcVYhakHU",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Sambalelê Bateu na Porta” to pieśń z brazylijskiego folkloru, wykonywana także w repertuarze samba de roda i przez grupy capoeira. Wariant dostarczony do katalogu jest poświadczony m.in. w śpiewniku Biriba, gdzie jako wykonawcę wskazano Mestre Boca Rica; inne zbiory również zamieszczają ten tekst. Nie wynika z tego jednak, że Mestre Boca Rica jest kompozytorem. Dokładne autorstwo i czas powstania tej konkretnej wersji są nieustalone. Samba de roda to afro-brazylijska tradycja muzyki i tańca w kręgu, szczególnie związana z regionem Recôncavo w stanie Bahia. UNESCO uznało Samba de Roda do Recôncavo Baiano za arcydzieło dziedzictwa ustnego i niematerialnego w 2005 roku, a w 2008 wpisało ją na Listę Reprezentatywną niematerialnego dziedzictwa kulturowego. Te daty dotyczą tradycji, a nie momentu powstania piosenki. Nie należy automatycznie utożsamiać tego utworu z każdą inną ludową piosenką noszącą tytuł „Samba Lelê”.",
+      "meaningContext": "Powtarzany czterowersowy refren „Samba lelê bateu na porta / Samba lelê vai ver quem é / Samba lelê é meu amor / Samba lelê samba no pé” tworzy pogodną, taneczną scenkę i łatwy schemat odpowiedzi chóru. „Samba no pé” oznacza umiejętność swobodnego tańczenia samby, dosłownie „sambę w stopach”. W kolejnych zwrotkach pojawiają się żartobliwe zwroty do eleganckiej dziewczyny („moça fina”), obraz nocnej drogi przez las, zaproszenie „iaiá”, zabawna przestroga przed szybkim biegiem oraz scena, w której Maria ma ostrożnie sprawdzić, kto puka do drzwi. „Se iaiá quiser me ver / Bote o seu navio no mar” to obraz poetycki, nie informacja o konkretnym rejsie. Ostatnie „se for um capoeira / Vá na ponta do pé” oznacza: jeśli za drzwiami stoi capoeirista, podejdź cicho, na palcach; można odczytać to jako żartobliwe nawiązanie do ostrożności i malícia. W przesłanej transkrypcji było „se por um capoeira”, ale inne zapisy jednoznacznie podają gramatyczne „se for um capoeira”. Ostatnia czterowersowa zwrotka nie ma w podanym materiale następującego po niej refrenu, więc nie został on dopisany.",
+      "meaningTrivia": "„Sambalelê” lub „Samba Lelê” może być traktowane jako śpiewne imię lub zawołanie bohatera pieśni; zapis różni się między śpiewnikami. „Iaiá” to dawne brazylijskie określenie dziewczyny, panienki lub młodej pani; historycznie było używane także w relacjach społecznych czasów niewolnictwa i nie jest tu pewnym imieniem własnym. „Moça fina” znaczy dosłownie „wytworna, delikatna dziewczyna”, a „cuidado pra não quebrar” jest żartem o kruchości, nie dosłowną groźbą. „Mata” oznacza las lub zarośla. „Bote” to forma rozkazująca od „botar” — umieścić, włożyć, wypuścić; „navio” znaczy statek. „Carreira” w zwrotce odnosi się do biegu lub pośpiechu. „Capoeira” w „um capoeira” oznacza osobę uprawiającą capoeirę. „Na ponta do pé” znaczy na czubkach palców, po cichu lub ostrożnie. Tekst ma formę otwartą: wykonawcy mogą dodawać inne humorystyczne zwrotki, lecz ten rekord obejmuje wyłącznie wersy z przesłanej transkrypcji. Zachowano potoczne „pra” i regionalne formy, poprawiono akcent w „iaiá” i literówkę „por” na „for”."
+    },
+    {
+      "categoryCode": "MACULELE",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Sou Eu, Sou Eu, Maculelê Sou Eu",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Sou Eu Maculelê",
+          "position": 1
+        },
+        {
+          "title": "Maculêlê (Sou Eu, Sou Eu)",
+          "position": 2
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Sou eu, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja, to ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Sou eu, maculelê, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja, maculelê, to ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Sou eu, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja, to ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Sou eu, maculelê, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja, maculelê, to ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Sou eu, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja, to ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Sou eu, maculelê, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja, maculelê, to ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Sou eu, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja, to ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Sou eu, maculelê, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja, maculelê, to ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "E nós viemos das Alagoas",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "A my przybyliśmy z Alagoas"
+                }
+              ]
+            },
+            {
+              "originalText": "Somos filhos da Mata Real",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Jesteśmy dziećmi Mata Real"
+                }
+              ]
+            },
+            {
+              "originalText": "Viva Zumbi, nosso rei negro",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Niech żyje Zumbi, nasz czarny król"
+                }
+              ]
+            },
+            {
+              "originalText": "No caminho do canavial",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Na drodze wśród pól trzciny cukrowej"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou eu, sou eu",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja, to ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Sou eu, maculelê, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja, maculelê, to ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 11,
+          "lines": [
+            {
+              "originalText": "Você bebeu jurema",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Piłeś juremę"
+                }
+              ]
+            },
+            {
+              "originalText": "Você se embriagou",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Odurzyłeś się"
+                }
+              ]
+            },
+            {
+              "originalText": "Da flor do mesmo pau",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Kwiatem z tego samego drzewa",
+                  "isUncertain": true
+                }
+              ]
+            },
+            {
+              "originalText": "Vosmincê se a levantô",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Pan się podniósł"
+                }
+              ]
+            },
+            {
+              "originalText": "Corre pro mato",
+              "position": 5,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Uciekaj do lasu"
+                }
+              ]
+            },
+            {
+              "originalText": "Que a batalha começou",
+              "position": 6,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Bo bitwa się rozpoczęła"
+                }
+              ]
+            },
+            {
+              "originalText": "É a guerra dos Palmares",
+              "position": 7,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To wojna o Palmares"
+                }
+              ]
+            },
+            {
+              "originalText": "Vamos lutar, meu sinhô",
+              "position": 8,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Walczmy, mój panie"
+                }
+              ]
+            },
+            {
+              "originalText": "Sou eu, sou eu",
+              "position": 9,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja, to ja"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 12,
+          "lines": [
+            {
+              "originalText": "Sou eu, maculelê, sou eu",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "To ja, maculelê, to ja"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=s8_NWUGmp5Y",
+          "title": null,
+          "position": 1
+        },
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=VOPC3thAo5Q",
+          "title": null,
+          "position": 2
+        }
+      ],
+      "meaningHistory": "„Sou Eu, Sou Eu, Maculelê Sou Eu” to pieśń z repertuaru maculelê, wykonywana m.in. przez Carolinę Soares. Nie udało się potwierdzić kompozytora ani daty powstania; wykonawstwo Caroliny Soares nie dowodzi jej autorstwa. Pieśń odwołuje się do Quilombo dos Palmares, historycznej społeczności oporu przeciw niewolnictwu, istniejącej w regionie dzisiejszego Alagoas. Zumbi dos Palmares stał się symbolem walki o wolność. Serra da Barriga, związana z Palmares, znajduje się w gminie União dos Palmares w Alagoas i jest chroniona jako dziedzictwo historyczne Brazylii. Zwrotki wspominają canavial (pola trzciny cukrowej), co przywołuje kolonialną gospodarkę plantacyjną i niewolniczą pracę. Nie ma jednak podstaw do traktowania całego utworu jako wiernego opisu konkretnej bitwy w Palmares ani do uznania, że obecna forma tańca maculelê była wówczas wykonywana. Pochodzenie maculelê jest przekazywane w różnych tradycjach ustnych, a jego współczesne wykonania są silnie związane z afro-brazylijską kulturą Bahii.",
+      "meaningContext": "Refren „Sou eu, sou eu / Sou eu maculelê sou eu” jest deklaracją uczestnictwa i tożsamości: „To ja, maculelê, to ja”. „Nós viemos das Alagoas” wskazuje na brazylijski stan Alagoas, związany z historią Palmares. „Mata Real” można dosłownie rozumieć jako „Królewski Las”, ale nie ustalono, czy oznacza konkretny obszar, czy jest poetycką nazwą; nie należy tworzyć fikcyjnej lokalizacji. „Rei negro” to pochwalne określenie Zumbiego, nie precyzyjny oficjalny tytuł państwowy. „Canavial” oznacza plantację lub pole trzciny cukrowej. „Você bebeu jurema / você se embriagou” odwołuje się do juremy: nazwy roślin i przygotowywanych z nich napojów, związanych także z rdzennymi i afro-brazylijskimi tradycjami duchowymi. Wersy „da flor do mesmo pau / vosmincê se a levantô” mają niestandardowy, niepewny zapis; tłumaczenie jest wyłącznie przybliżeniem, bez arbitralnego ujednolicania oryginału. „Corre pro mato” wzywa do ucieczki do lasu w chwili rozpoczęcia bitwy, a „vamos lutar” zachęca do oporu. „Sinhô” to historyczna potoczna forma „senhor”, często kojarzona z relacjami władzy w niewolniczej Brazylii; jej użycie w tej zwrotce może być celowo dwuznaczne.",
+      "meaningTrivia": "Maculelê jest odrębną afro-brazylijską tradycją tańca rytmicznego, często prezentowaną przez grupy capoeira. Palmares znajdowało się na obszarze dzisiejszego stanu Alagoas; „quilombo” oznaczało wspólnotę tworzoną m.in. przez osoby uciekające z niewoli. „Canavial” to pole trzciny cukrowej, a „mato” — zarośla lub las. Jurema może oznaczać roślinę, napój używany w praktykach duchowych oraz szerzej tradycję Jurema Sagrada. Nie każda wzmianka o juremie oznacza konkretny rytuał ani potwierdza skład napoju. „Vosmincê” przypomina historyczną formę grzecznościową „vosmecê”, wywodzącą się z „vossa mercê”; „se a levantô” przypomina potoczne „se levantou”, ale dokładny zapis jest niepewny. W dostępnych transkrypcjach istnieją warianty, np. „da flor do mesmo pau” i „na flor do mesmo palco”; nie należy ich bez odsłuchu utożsamiać. Ostatnie „Sou eu, sou eu / Sou eu maculelê sou eu...” oznaczono jako jedną parę wersów zamiast domyślnie dopisywać dalsze powtórzenia wskazane wielokropkiem."
+    },
+    {
+      "categoryCode": "CORRIDO",
+      "tagSlugs": [],
+      "rhythms": [],
+      "title": "Cajuê (Vou Mandar Leco)",
+      "authorName": null,
+      "alternativeTitles": [
+        {
+          "title": "Vou Mandar Lecô Cajuê",
+          "position": 1
+        },
+        {
+          "title": "Vou Mandar Leco",
+          "position": 2
+        },
+        {
+          "title": "Cajuê",
+          "position": 3
+        }
+      ],
+      "parts": [
+        {
+          "performer": "LEAD",
+          "position": 1,
+          "lines": [
+            {
+              "originalText": "Vou mandar leco cajuê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poślę leco cajuê",
+                  "isUncertain": true
+                }
+              ]
+            },
+            {
+              "originalText": "Vou mandar loiá",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poślę loiá",
+                  "isUncertain": true
+                }
+              ]
+            },
+            {
+              "originalText": "Vou mandar leco cajuê",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poślę leco cajuê",
+                  "isUncertain": true
+                }
+              ]
+            },
+            {
+              "originalText": "Vou mandar loiá",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poślę loiá",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 2,
+          "lines": [
+            {
+              "originalText": "Vou mandar leco cajuê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poślę leco cajuê",
+                  "isUncertain": true
+                }
+              ]
+            },
+            {
+              "originalText": "Vou mandar loiá",
+              "position": 2,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poślę loiá",
+                  "isUncertain": true
+                }
+              ]
+            },
+            {
+              "originalText": "Vou mandar leco cajuê",
+              "position": 3,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poślę leco cajuê",
+                  "isUncertain": true
+                }
+              ]
+            },
+            {
+              "originalText": "Vou mandar loiá",
+              "position": 4,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poślę loiá",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 3,
+          "lines": [
+            {
+              "originalText": "Vou mandar lecô",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poślę lecô",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 4,
+          "lines": [
+            {
+              "originalText": "Cajuê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Cajuê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 5,
+          "lines": [
+            {
+              "originalText": "Vou mandar loiá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poślę loiá",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 6,
+          "lines": [
+            {
+              "originalText": "Cajuê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Cajuê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 7,
+          "lines": [
+            {
+              "originalText": "Vou mandar lecô",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poślę lecô",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 8,
+          "lines": [
+            {
+              "originalText": "Cajuê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Cajuê"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "LEAD",
+          "position": 9,
+          "lines": [
+            {
+              "originalText": "Vou mandar loiá",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Poślę loiá",
+                  "isUncertain": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "performer": "CHORUS",
+          "position": 10,
+          "lines": [
+            {
+              "originalText": "Cajuê",
+              "position": 1,
+              "translations": [
+                {
+                  "languageCode": "pl",
+                  "text": "Cajuê"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "media": [
+        {
+          "provider": "YOUTUBE",
+          "url": "https://www.youtube.com/watch?v=UxvvzOCO8g0",
+          "title": null,
+          "position": 1
+        }
+      ],
+      "meaningHistory": "„Cajuê (Vou Mandar Leco)” to krótkie, tradycyjnie wykonywane corrido, znane w wielu grupach capoeira. Nie ma wiarygodnie potwierdzonego autora ani daty powstania. Katalog La Laue przypisuje tę pieśń Mestre Mão Branca, natomiast Dendê Arts oznacza autora jako nieznanego, dlatego nie należy przedstawiać tego przypisania jako rozstrzygniętego. Pieśń funkcjonuje w różnych wariantach: „leco cajuê”, „lecô cajueiro” oraz krótkie odpowiedzi „cajuê”. Niektóre środowiska capoeira opowiadają, że osoby pracujące w realiach kolonialnych odpoczywały pod drzewami nerkowca (cajueiro), a wezwania oznaczały wysłanie kogoś, aby je tam odnalazł. Jest to interpretacja przekazywana w śpiewnikach, a nie potwierdzony historyczny opis genezy konkretnego utworu.",
+      "meaningContext": "Piosenka działa przede wszystkim jako rytmiczny dialog między solistą i chórem. Najpierw prowadzący śpiewa „Vou mandar leco cajuê / Vou mandar loiá”, a chór powtarza te same wersy. Następnie solista skraca wezwania do „Vou mandar lecô” i „Vou mandar loiá”, na które chór odpowiada „Cajuê”. Czasownik „mandar” oznacza „wysłać”, „nakazać” lub „polecić”, ale znaczenie całego wyrażenia pozostaje niejasne, ponieważ „lecô” i „loiá” nie mają jednoznacznego dosłownego tłumaczenia w standardowym portugalskim. Jedna z hipotez interpretuje je jako zredukowane, śpiewane frazy oznaczające „posłać kogoś sprawdzić pod drzewem nerkowca”; nie jest to jednak ustalone znaczenie. „Cajuê” nawiązuje brzmieniowo do „caju” (owoc nerkowca) i „cajueiro” (drzewo nerkowca). W wariancie przesłanym przez użytkownika słowa są głównie zawołaniami rytmicznymi, dlatego polskie tłumaczenia świadomie zachowują je bez wymyślania nieudokumentowanej fabuły.",
+      "meaningTrivia": "Caju to owoc nerkowca, a „castanha de caju” to orzech nerkowca — właściwie nasiono znajdujące się przy mięsistej części owocu. „Cajueiro” oznacza drzewo nerkowca; „cajuê” jest śpiewaną formą kojarzoną z tym wyrazem, niekoniecznie nazwą konkretnej miejscowości. La Laue sugeruje również związek z miastem Cajueiro, ale bez wiarygodnego potwierdzenia nie należy takiego pochodzenia przyjmować za fakt. „Leco/lecô” i „loiá” nie mają pewnej etymologii. Przytaczana przez Capoeira Angola Sheffield wykładnia „mandar-lhe olhar ao cajueiro” jest jedną z interpretacji tradycji ustnej, nie bezspornym tłumaczeniem. W przesłanej wersji początkowe „leco” zachowano bez akcentu, a późniejsze „lecô” z akcentem, tak jak występują w transkrypcji. Piosenka jest prosta do nauki dzięki krótkim odpowiedziom chóru i nadaje się do ćwiczenia śpiewu w schemacie wezwanie–odpowiedź."
+    }
+  ]
+}
