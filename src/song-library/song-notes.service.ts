@@ -39,7 +39,7 @@ export class SongNotesService {
         throw error;
       }
       // Race: another request created the note first - fall back to
-      // updating it, same as createVoteOrRecoverFromRace in SongsService.
+      // updating it (the unique constraint is the lock).
       const raceNote = await this.em.findOneOrFail(SongNote, {
         user: user.id,
         song: songId,

@@ -17,7 +17,7 @@ interface TranslationSnapshot extends LocalizedTextSnapshot {
  * in one canonical shape that can be built both from an import record and
  * from a persisted Song. Two songs with deep-equal snapshots carry exactly
  * the same catalogue content. Database-only fields (ids, timestamps,
- * status, createdBy, media isVerified/votes) are deliberately not part of
+ * status, createdBy, media isVerified) are deliberately not part of
  * it - they never come from the import file.
  */
 export interface SongContentSnapshot {

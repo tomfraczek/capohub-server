@@ -7,7 +7,6 @@ import { User } from '../users/entities/user.entity';
 import { DuplicateSuggestionsResponseDto } from './dto/duplicate-suggestion-response.dto';
 import { SongDetailsResponseDto } from './dto/song-details-response.dto';
 import { SongMediaDetailsResponseDto } from './dto/song-media-details-response.dto';
-import { SongMediaVoteResponseDto } from './dto/song-media-vote-response.dto';
 import { SongMediaProvider } from './enums/song-media-provider.enum';
 import { SongStatus } from './enums/song-status.enum';
 import { SongsController } from './songs.controller';
@@ -64,18 +63,6 @@ function buildMediaResponse(
     createdBy: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
-    ...overrides,
-  };
-}
-
-function buildVoteResponse(
-  overrides: Partial<SongMediaVoteResponseDto> = {},
-): SongMediaVoteResponseDto {
-  return {
-    songId: 'song-uuid-1',
-    mediaId: 'media-uuid-1',
-    voteCount: 1,
-    isVotedByCurrentUser: true,
     ...overrides,
   };
 }
@@ -425,63 +412,5 @@ describe('SongsController', () => {
         });
       },
     );
-  });
-
-  describe('media voting', () => {
-    it('setMediaVote delegates songId, mediaId and @CurrentUser() to SongsService.setMediaVote', async () => {
-      const user = buildUser();
-      const dto = buildVoteResponse();
-      const setMediaVote = jest.fn().mockResolvedValue(dto);
-      const controller = new SongsController({
-        setMediaVote,
-      } as unknown as SongsService);
-
-      const response = await controller.setMediaVote(
-        'song-uuid-1',
-        'media-uuid-1',
-        user,
-      );
-
-      expect(setMediaVote).toHaveBeenCalledWith(
-        'song-uuid-1',
-        'media-uuid-1',
-        user,
-      );
-      expect(response).toBe(dto);
-    });
-
-    it('removeMediaVote delegates songId and @CurrentUser() to SongsService.removeMediaVote', async () => {
-      const user = buildUser();
-      const removeMediaVote = jest.fn().mockResolvedValue(undefined);
-      const controller = new SongsController({
-        removeMediaVote,
-      } as unknown as SongsService);
-
-      const response = await controller.removeMediaVote('song-uuid-1', user);
-
-      expect(removeMediaVote).toHaveBeenCalledWith('song-uuid-1', user);
-      expect(response).toBeUndefined();
-    });
-
-    it('setMediaVote and removeMediaVote have no PermissionsGuard - only the global ClerkAuthGuard applies', () => {
-      const reflector = new Reflector();
-
-      // eslint-disable-next-line @typescript-eslint/unbound-method -- used only as a metadata target, never invoked
-      const setMediaVoteRef = SongsController.prototype.setMediaVote;
-      // eslint-disable-next-line @typescript-eslint/unbound-method -- used only as a metadata target, never invoked
-      const removeMediaVoteRef = SongsController.prototype.removeMediaVote;
-
-      const setGuards = reflector.get<unknown[]>(
-        GUARDS_METADATA,
-        setMediaVoteRef,
-      );
-      const removeGuards = reflector.get<unknown[]>(
-        GUARDS_METADATA,
-        removeMediaVoteRef,
-      );
-
-      expect(setGuards).toBeUndefined();
-      expect(removeGuards).toBeUndefined();
-    });
   });
 });

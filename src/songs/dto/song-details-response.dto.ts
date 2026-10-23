@@ -53,8 +53,6 @@ export interface SongMediaResponseDto {
   title: string | null;
   position: number;
   isVerified: boolean;
-  voteCount: number;
-  isVotedByCurrentUser: boolean;
   createdBy: SongUserRefDto | null;
 }
 

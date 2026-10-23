@@ -5,7 +5,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { UniqueConstraintViolationException } from '@mikro-orm/core';
 // Not a type-only import: Nest's DI resolves the constructor param via this
 // runtime symbol (see @mikro-orm/postgresql's EntityManager = SqlEntityManager,
 // which adds createQueryBuilder over the plain @mikro-orm/core EntityManager).
@@ -35,10 +34,8 @@ import {
 import { ListSongsQuery } from './dto/song-list-query.schema';
 import { SongDetailsResponseDto } from './dto/song-details-response.dto';
 import { SongMediaDetailsResponseDto } from './dto/song-media-details-response.dto';
-import { SongMediaVoteResponseDto } from './dto/song-media-vote-response.dto';
 import { SongSummaryResponseDto } from './dto/song-summary-response.dto';
 import { UpdateSongInput } from './dto/update-song.schema';
-import { SongMediaVote } from './entities/song-media-vote.entity';
 import { SongMedia } from './entities/song-media.entity';
 import { Song } from './entities/song.entity';
 import { SongStatus } from './enums/song-status.enum';
@@ -48,7 +45,6 @@ import {
   toSongMediaDetailsResponseDto,
   toSongSummaryResponseDto,
 } from './mappers/song.mapper';
-import { loadSongMediaVoteAggregates } from './song-media-vote-aggregates';
 import { SongContentService } from './song-content.service';
 import { SongDuplicateService } from './song-duplicate.service';
 import {
@@ -131,9 +127,8 @@ export class SongsService {
   // currentUserId is only known for a real GET /songs/:id (see the
   // controller) or right after the acting user's own create/update. Every
   // other internal caller (submit/publish/reject/hide/restore) doesn't have
-  // a meaningful "current viewer" to compute isVotedByCurrentUser against,
-  // so it defaults to null - voteCount is unaffected either way, since it
-  // never depends on the caller's identity.
+  // a meaningful "current viewer" for the private user context, so it
+  // defaults to null.
   async getDetails(
     id: string,
     currentUserId: string | null = null,
@@ -148,13 +143,12 @@ export class SongsService {
       throw this.notFound();
     }
 
-    const [voteAggregates, userContext, rhythms] = await Promise.all([
-      loadSongMediaVoteAggregates(this.em, id, currentUserId),
+    const [userContext, rhythms] = await Promise.all([
       this.loadUserContext(id, currentUserId),
       loadRhythmsForSong(this.em, id),
     ]);
 
-    return toSongDetailsResponseDto(song, voteAggregates, userContext, rhythms);
+    return toSongDetailsResponseDto(song, userContext, rhythms);
   }
 
   // GET /songs/:id - the public songbook's detail view. Deliberately NOT
@@ -225,8 +219,7 @@ export class SongsService {
   // Every field is private to currentUserId (spec section 6). currentUserId
   // is null for internal callers with no meaningful "current viewer" (see
   // the comment on getDetails' parameter) - in that case every field
-  // defaults to its "nothing here" value, exactly like
-  // loadSongMediaVoteAggregates' isVotedByCurrentUser.
+  // defaults to its "nothing here" value.
   private async loadUserContext(
     songId: string,
     currentUserId: string | null,
@@ -522,106 +515,6 @@ export class SongsService {
     mediaId: string,
   ): Promise<SongMediaDetailsResponseDto> {
     return this.setMediaVerified(songId, mediaId, false);
-  }
-
-  // A user has zero or exactly one vote per song (song+user is unique - see
-  // the SongMediaVote entity), so "vote for media X" is really "point my
-  // one song-level vote at X", not "add a vote to X".
-  async setMediaVote(
-    songId: string,
-    mediaId: string,
-    user: User,
-  ): Promise<SongMediaVoteResponseDto> {
-    await this.em.transactional(async (em) => {
-      const media = await em.findOne(SongMedia, { id: mediaId, song: songId });
-      if (!media) {
-        throw new NotFoundException({
-          code: 'SONG_MEDIA_NOT_FOUND',
-          message: 'Song media not found',
-        });
-      }
-
-      const existingVote = await em.findOne(SongMediaVote, {
-        song: songId,
-        user: user.id,
-      });
-
-      if (!existingVote) {
-        await this.createVoteOrRecoverFromRace(em, songId, media, user);
-      } else if (existingVote.media.id !== mediaId) {
-        existingVote.media = media;
-        await em.flush();
-      }
-      // else: existingVote already points at mediaId - idempotent no-op.
-    });
-
-    return this.buildVoteResponse(songId, mediaId, user.id);
-  }
-
-  async removeMediaVote(songId: string, user: User): Promise<void> {
-    await this.em.transactional(async (em) => {
-      const vote = await em.findOne(SongMediaVote, {
-        song: songId,
-        user: user.id,
-      });
-      if (vote) {
-        await em.remove(vote).flush();
-      }
-      // else: no-op - DELETE is idempotent, see the controller (204 either way).
-    });
-  }
-
-  // The song+user unique constraint is what actually prevents two
-  // concurrent first-votes from both succeeding - this only turns the loser
-  // of that race into a graceful "update to the requested media" instead of
-  // a raw 500 from an unhandled UniqueConstraintViolationException. No
-  // SELECT ... FOR UPDATE or app-level locking: the constraint is the lock.
-  private async createVoteOrRecoverFromRace(
-    em: EntityManager,
-    songId: string,
-    media: SongMedia,
-    user: User,
-  ): Promise<void> {
-    const vote = new SongMediaVote();
-    vote.song = media.song;
-    vote.media = media;
-    vote.user = user;
-
-    try {
-      await em.persist(vote).flush();
-    } catch (error) {
-      if (!(error instanceof UniqueConstraintViolationException)) {
-        throw error;
-      }
-
-      const raceVote = await em.findOneOrFail(SongMediaVote, {
-        song: songId,
-        user: user.id,
-      });
-      if (raceVote.media.id !== media.id) {
-        raceVote.media = media;
-        await em.flush();
-      }
-    }
-  }
-
-  private async buildVoteResponse(
-    songId: string,
-    mediaId: string,
-    currentUserId: string,
-  ): Promise<SongMediaVoteResponseDto> {
-    const aggregates = await loadSongMediaVoteAggregates(
-      this.em,
-      songId,
-      currentUserId,
-    );
-
-    return {
-      songId,
-      mediaId,
-      voteCount: aggregates.voteCountsByMediaId.get(mediaId) ?? 0,
-      isVotedByCurrentUser: aggregates.votedMediaId === mediaId,
-    };
   }
 
   // Scoping the lookup by both id and song in one query - rather than

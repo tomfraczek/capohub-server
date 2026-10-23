@@ -46,7 +46,7 @@ export class LearningStatusService {
         throw error;
       }
       // Race: another request created the row first - fall back to
-      // updating it, same as createVoteOrRecoverFromRace in SongsService.
+      // updating it (the unique constraint is the lock).
       const raceRecord = await this.em.findOneOrFail(UserSongLearning, {
         user: user.id,
         song: songId,

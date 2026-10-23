@@ -216,8 +216,7 @@ export class RhythmsService {
   // that can't be checked at the Zod layer (see song-link-input.schema.ts).
   // Runs inside the same transaction as the write that can violate it: any
   // other rhythm's SongRhythm row for the same song is simply un-primaried,
-  // never rejected - "last write wins", same spirit as
-  // SongsService.setMediaVote's one-vote-per-user reassignment.
+  // never rejected - "last write wins".
   private async enforcePrimaryInvariant(
     em: EntityManager,
     rhythmId: string,

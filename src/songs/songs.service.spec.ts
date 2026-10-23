@@ -16,7 +16,6 @@ import { CreateSongInput } from './dto/create-song.schema';
 import { SongAlternativeTitle } from './entities/song-alternative-title.entity';
 import { SongCategory } from './entities/song-category.entity';
 import { SongLine } from './entities/song-line.entity';
-import { SongMediaVote } from './entities/song-media-vote.entity';
 import { SongMedia } from './entities/song-media.entity';
 import { SongPart } from './entities/song-part.entity';
 import { SongTag } from './entities/song-tag.entity';
@@ -160,14 +159,6 @@ function buildSongMedia(overrides: Partial<SongMedia> = {}): SongMedia {
   return Object.assign(media, overrides);
 }
 
-function buildVote(overrides: Partial<SongMediaVote> = {}): SongMediaVote {
-  const vote = new SongMediaVote();
-  vote.song = buildPopulatedSong();
-  vote.media = buildSongMedia();
-  vote.user = buildUser();
-  return Object.assign(vote, overrides);
-}
-
 function buildCreateInput(
   overrides: Partial<CreateSongInput> = {},
 ): CreateSongInput {
@@ -203,9 +194,6 @@ interface FindOneRouting {
   category?: SongCategory | null;
   detailsSong?: Song | null;
   media?: SongMedia | null;
-  existingVote?: SongMediaVote | null;
-  voteCounts?: { mediaId: string; voteCount: number }[];
-  votedMediaId?: string | null;
 }
 
 function buildMockEm(routing: FindOneRouting = {}) {
@@ -235,9 +223,6 @@ function buildMockEm(routing: FindOneRouting = {}) {
         routing.media === undefined ? buildSongMedia() : routing.media,
       );
     }
-    if (entity === SongMediaVote) {
-      return Promise.resolve(routing.existingVote ?? null);
-    }
     return Promise.resolve(null);
   });
 
@@ -251,14 +236,7 @@ function buildMockEm(routing: FindOneRouting = {}) {
       return result;
     });
 
-  const execute = jest.fn().mockImplementation((sql: string) => {
-    if (sql.includes('group by media_id')) {
-      return Promise.resolve(routing.voteCounts ?? []);
-    }
-    return Promise.resolve(
-      routing.votedMediaId ? [{ mediaId: routing.votedMediaId }] : [],
-    );
-  });
+  const execute = jest.fn().mockResolvedValue([]);
   const getConnection = jest.fn().mockReturnValue({ execute });
 
   const em = {
@@ -1471,275 +1449,6 @@ describe('SongsService', () => {
       expect(result.title).toBe('Untouched title');
       expect(result.position).toBe(3);
       expect(result.provider).toBe(SongMediaProvider.YOUTUBE);
-    });
-  });
-
-  describe('media voting', () => {
-    describe('setMediaVote', () => {
-      it('creates a SongMediaVote on the first vote', async () => {
-        const media = buildSongMedia();
-        const user = buildUser();
-        const em = buildMockEm({
-          media,
-          existingVote: null,
-          voteCounts: [{ mediaId: media.id, voteCount: 1 }],
-          votedMediaId: media.id,
-        });
-        const service = new SongsService(
-          em,
-          buildMockDuplicateService(),
-          ...buildMockUserContextServices(),
-        );
-
-        let persistedVote: SongMediaVote | undefined;
-        em.persist.mockImplementation((entity: unknown) => {
-          persistedVote = entity as SongMediaVote;
-          return { flush: em.flush };
-        });
-
-        const result = await service.setMediaVote(
-          media.song.id,
-          media.id,
-          user,
-        );
-
-        expect(persistedVote).toBeInstanceOf(SongMediaVote);
-        expect(persistedVote?.song.id).toBe(media.song.id);
-        expect(persistedVote?.media.id).toBe(media.id);
-        expect(persistedVote?.user).toBe(user);
-        expect(em.flush).toHaveBeenCalled();
-        expect(result).toEqual({
-          songId: media.song.id,
-          mediaId: media.id,
-          voteCount: 1,
-          isVotedByCurrentUser: true,
-        });
-      });
-
-      it('is idempotent when voting again for the same media (no unnecessary flush)', async () => {
-        const media = buildSongMedia();
-        const user = buildUser();
-        const vote = buildVote({ song: media.song, media, user });
-        const em = buildMockEm({ media, existingVote: vote });
-        const service = new SongsService(
-          em,
-          buildMockDuplicateService(),
-          ...buildMockUserContextServices(),
-        );
-
-        await service.setMediaVote(media.song.id, media.id, user);
-
-        expect(em.persist).not.toHaveBeenCalled();
-        expect(em.flush).not.toHaveBeenCalled();
-      });
-
-      it('updates the existing vote to point at a different media in the same song, keeping a single record', async () => {
-        const song = buildPopulatedSong();
-        const oldMedia = buildSongMedia({ song });
-        oldMedia.id = 'media-old';
-        const newMedia = buildSongMedia({ song });
-        newMedia.id = 'media-new';
-        const user = buildUser();
-        const vote = buildVote({ song, media: oldMedia, user });
-
-        const em = buildMockEm({ media: newMedia, existingVote: vote });
-        const service = new SongsService(
-          em,
-          buildMockDuplicateService(),
-          ...buildMockUserContextServices(),
-        );
-
-        await service.setMediaVote(song.id, newMedia.id, user);
-
-        expect(vote.media).toBe(newMedia);
-        expect(em.persist).not.toHaveBeenCalled();
-        expect(em.flush).toHaveBeenCalled();
-      });
-
-      it('scopes the existing-vote lookup by songId, so votes in different songs never collide', async () => {
-        const media = buildSongMedia();
-        const user = buildUser();
-        const em = buildMockEm({ media, existingVote: null });
-        const service = new SongsService(
-          em,
-          buildMockDuplicateService(),
-          ...buildMockUserContextServices(),
-        );
-
-        await service.setMediaVote('song-a', media.id, user);
-
-        expect(em.findOne).toHaveBeenCalledWith(SongMediaVote, {
-          song: 'song-a',
-          user: user.id,
-        });
-      });
-
-      it('throws 404 SONG_MEDIA_NOT_FOUND when the media does not exist', async () => {
-        const em = buildMockEm({ media: null });
-        const service = new SongsService(
-          em,
-          buildMockDuplicateService(),
-          ...buildMockUserContextServices(),
-        );
-
-        await expect(
-          service.setMediaVote('song-a', 'missing-media-id', buildUser()),
-        ).rejects.toThrow(NotFoundException);
-      });
-
-      it('throws 404 when the media belongs to a different song, scoping the lookup by both ids', async () => {
-        const em = buildMockEm({ media: null });
-        const service = new SongsService(
-          em,
-          buildMockDuplicateService(),
-          ...buildMockUserContextServices(),
-        );
-
-        await expect(
-          service.setMediaVote('song-a', 'media-from-song-b', buildUser()),
-        ).rejects.toThrow(NotFoundException);
-        expect(em.findOne).toHaveBeenCalledWith(SongMedia, {
-          id: 'media-from-song-b',
-          song: 'song-a',
-        });
-      });
-
-      it('computes voteCount and isVotedByCurrentUser from the aggregate query', async () => {
-        const media = buildSongMedia();
-        const user = buildUser();
-        const em = buildMockEm({
-          media,
-          existingVote: null,
-          voteCounts: [{ mediaId: media.id, voteCount: 3 }],
-          votedMediaId: media.id,
-        });
-        const service = new SongsService(
-          em,
-          buildMockDuplicateService(),
-          ...buildMockUserContextServices(),
-        );
-
-        const result = await service.setMediaVote(
-          media.song.id,
-          media.id,
-          user,
-        );
-
-        expect(result).toEqual({
-          songId: media.song.id,
-          mediaId: media.id,
-          voteCount: 3,
-          isVotedByCurrentUser: true,
-        });
-      });
-
-      it('does not change isVerified or any other SongMedia field when voting', async () => {
-        const creator = buildUser({ email: 'creator@example.com' });
-        const media = buildSongMedia({
-          isVerified: true,
-          position: 5,
-          url: 'https://www.youtube.com/watch?v=untouched',
-          title: 'Untouched title',
-          createdBy: creator,
-        });
-        const em = buildMockEm({ media, existingVote: null });
-        const service = new SongsService(
-          em,
-          buildMockDuplicateService(),
-          ...buildMockUserContextServices(),
-        );
-
-        await service.setMediaVote(media.song.id, media.id, buildUser());
-
-        expect(media.isVerified).toBe(true);
-        expect(media.position).toBe(5);
-        expect(media.url).toBe('https://www.youtube.com/watch?v=untouched');
-        expect(media.title).toBe('Untouched title');
-        expect(media.provider).toBe(SongMediaProvider.YOUTUBE);
-        expect(media.createdBy).toBe(creator);
-      });
-    });
-
-    describe('removeMediaVote', () => {
-      it('deletes an existing vote', async () => {
-        const vote = buildVote();
-        const em = buildMockEm({ existingVote: vote });
-        const service = new SongsService(
-          em,
-          buildMockDuplicateService(),
-          ...buildMockUserContextServices(),
-        );
-
-        await service.removeMediaVote(vote.song.id, vote.user);
-
-        expect(em.remove).toHaveBeenCalledWith(vote);
-      });
-
-      it('is idempotent when no vote exists', async () => {
-        const em = buildMockEm({ existingVote: null });
-        const service = new SongsService(
-          em,
-          buildMockDuplicateService(),
-          ...buildMockUserContextServices(),
-        );
-
-        await service.removeMediaVote('song-a', buildUser());
-
-        expect(em.remove).not.toHaveBeenCalled();
-      });
-    });
-
-    describe('getDetails vote aggregation', () => {
-      it('marks isVotedByCurrentUser=true for exactly the voted media, with correct voteCounts', async () => {
-        const song = buildPopulatedSong();
-        const mediaA = buildSongMedia({ song });
-        mediaA.id = 'media-a';
-        const mediaB = buildSongMedia({ song });
-        mediaB.id = 'media-b';
-        song.media = new Collection<SongMedia>(song, [mediaA, mediaB]);
-
-        const em = buildMockEm({
-          detailsSong: song,
-          voteCounts: [{ mediaId: 'media-a', voteCount: 2 }],
-          votedMediaId: 'media-a',
-        });
-        const service = new SongsService(
-          em,
-          buildMockDuplicateService(),
-          ...buildMockUserContextServices(),
-        );
-
-        const result = await service.getDetails(song.id, 'current-user-id');
-
-        const mediaAResult = result.media.find((m) => m.id === 'media-a');
-        const mediaBResult = result.media.find((m) => m.id === 'media-b');
-        expect(mediaAResult?.isVotedByCurrentUser).toBe(true);
-        expect(mediaAResult?.voteCount).toBe(2);
-        expect(mediaBResult?.isVotedByCurrentUser).toBe(false);
-        expect(mediaBResult?.voteCount).toBe(0);
-      });
-
-      it('defaults isVotedByCurrentUser to false when no currentUserId is given', async () => {
-        const song = buildPopulatedSong();
-        const media = buildSongMedia({ song });
-        song.media = new Collection<SongMedia>(song, [media]);
-
-        const em = buildMockEm({
-          detailsSong: song,
-          voteCounts: [{ mediaId: media.id, voteCount: 5 }],
-          votedMediaId: media.id,
-        });
-        const service = new SongsService(
-          em,
-          buildMockDuplicateService(),
-          ...buildMockUserContextServices(),
-        );
-
-        const result = await service.getDetails(song.id);
-
-        expect(result.media[0].voteCount).toBe(5);
-        expect(result.media[0].isVotedByCurrentUser).toBe(false);
-      });
     });
   });
 });

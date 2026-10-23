@@ -14,7 +14,6 @@ import { SongSummaryResponseDto } from '../dto/song-summary-response.dto';
 import { SongUserRefDto } from '../dto/song-user-ref.dto';
 import { SongMedia } from '../entities/song-media.entity';
 import { Song } from '../entities/song.entity';
-import { SongMediaVoteAggregates } from '../song-media-vote-aggregates';
 import { toSongCategoryResponseDto } from './song-category.mapper';
 import { toTagResponseDto } from './tag.mapper';
 import { resolveDisplayName } from '../../users/display-name.util';
@@ -28,17 +27,10 @@ export interface SongUserContext {
   playlists: SongPlaylistRefDto[];
 }
 
-type SongMediaBaseFields = Omit<
-  SongMediaResponseDto,
-  'voteCount' | 'isVotedByCurrentUser'
->;
-
 // Shared by toSongDetailsResponseDto's nested `media` array and by
 // toSongMediaDetailsResponseDto (verify/unverify endpoints), so the field
-// list is only written once. Vote fields are added on top by each caller,
-// since verify/unverify doesn't need them and toSongDetailsResponseDto
-// needs externally-computed aggregates (see SongMediaVoteAggregates).
-function mapSongMediaFields(media: SongMedia): SongMediaBaseFields {
+// list is only written once.
+function mapSongMediaFields(media: SongMedia): SongMediaResponseDto {
   return {
     id: media.id,
     provider: media.provider,
@@ -69,13 +61,9 @@ export function toSongUserRefDto(user: User | null): SongUserRefDto | null {
  * shape for GET/POST/PATCH /songs/:id. Every child collection is already
  * ordered by `position` at the ORM level (see the entities' `orderBy`
  * options), so no sorting happens here.
- *
- * `voteAggregates` is externally computed (see loadSongMediaVoteAggregates)
- * - this function never queries anything itself.
  */
 export function toSongDetailsResponseDto(
   song: Song,
-  voteAggregates: SongMediaVoteAggregates,
   userContext: SongUserContext,
   rhythms: SongRhythmRefDto[],
 ): SongDetailsResponseDto {
@@ -116,11 +104,7 @@ export function toSongDetailsResponseDto(
         })),
       })),
     })),
-    media: song.media.getItems().map((media): SongMediaResponseDto => ({
-      ...mapSongMediaFields(media),
-      voteCount: voteAggregates.voteCountsByMediaId.get(media.id) ?? 0,
-      isVotedByCurrentUser: voteAggregates.votedMediaId === media.id,
-    })),
+    media: song.media.getItems().map(mapSongMediaFields),
     meaningHistory: song.meaningHistory,
     meaningContext: song.meaningContext,
     meaningTrivia: song.meaningTrivia,
