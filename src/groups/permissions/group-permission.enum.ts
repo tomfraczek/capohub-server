@@ -252,4 +252,15 @@ export enum GroupPermission {
   TRAINING_ATTENDANCE_MANAGE = 'TRAINING_ATTENDANCE_MANAGE',
   TRAINING_PRIVATE_NOTES_MANAGE = 'TRAINING_PRIVATE_NOTES_MANAGE',
   TRAINING_STATS_VIEW = 'TRAINING_STATS_VIEW',
+
+  // Metronome sequences shared in a Section (see
+  // metronome-sequences/entities/section-metronome-sequence.entity.ts) -
+  // exact-Section-only, absent from GROUP_TARGET_ROLE_PERMISSIONS like
+  // Training. METRONOME_SEQUENCE_VIEW lets every member browse, play and copy
+  // the Section's shared sequences to their own account;
+  // METRONOME_SEQUENCE_SHARE (OWNER/ADMIN) shares one's own sequences into the
+  // Section and removes any shared sequence from it. Never public-view-safe:
+  // a non-member gets 404.
+  METRONOME_SEQUENCE_VIEW = 'METRONOME_SEQUENCE_VIEW',
+  METRONOME_SEQUENCE_SHARE = 'METRONOME_SEQUENCE_SHARE',
 }

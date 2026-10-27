@@ -36,6 +36,9 @@ const SECTION_MEMBER_PERMISSIONS: readonly GroupPermission[] = [
   // Who holds which Role in this Section - same tier as the GROUP_VIEW
   // it replaced on RoleAssignmentsController's read routes.
   GroupPermission.ROLE_ASSIGNMENT_VIEW,
+  // Every member may browse, play and copy the metronome sequences shared
+  // in this Section (see GroupPermission.METRONOME_SEQUENCE_VIEW).
+  GroupPermission.METRONOME_SEQUENCE_VIEW,
   // Every member may browse this Section's own Trainings - actual
   // visibility of a MEMBERS_ONLY vs PUBLIC Training is resolved per-row by
   // TrainingsService, this permission only gates the endpoint itself (see
@@ -113,6 +116,9 @@ const SECTION_ADMIN_PERMISSIONS: readonly GroupPermission[] = [
   GroupPermission.TRAINING_ATTENDANCE_MANAGE,
   GroupPermission.TRAINING_PRIVATE_NOTES_MANAGE,
   GroupPermission.TRAINING_STATS_VIEW,
+  // Share own metronome sequences into the Section / remove shared ones
+  // (see GroupPermission.METRONOME_SEQUENCE_SHARE) - OWNER inherits it.
+  GroupPermission.METRONOME_SEQUENCE_SHARE,
 ];
 
 // Every lifecycle-status permission (ARCHIVE, UNARCHIVE, SET_READ_ONLY,
@@ -254,6 +260,9 @@ export const READ_ONLY_SAFE_PERMISSIONS: ReadonlySet<GroupPermission> = new Set(
     GroupPermission.AUDIT_LOG_VIEW,
     GroupPermission.FORMAL_RANK_CORRECTION_VIEW,
     GroupPermission.TRAINING_VIEW,
+    // Browsing and playing shared sequences (and copying one to one's own
+    // account) changes nothing in the Section.
+    GroupPermission.METRONOME_SEQUENCE_VIEW,
     // Keeps the READ_ONLY behavior of the GROUP_VIEW it replaced on
     // RoleAssignmentsController's read routes.
     GroupPermission.ROLE_ASSIGNMENT_VIEW,

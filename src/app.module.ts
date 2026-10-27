@@ -14,6 +14,7 @@ import { HealthModule } from './health/health.module';
 import { HomeModule } from './home/home.module';
 import { InstrumentsModule } from './instruments/instruments.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { MetronomeSequencesModule } from './metronome-sequences/metronome-sequences.module';
 import { PlaylistsModule } from './playlists/playlists.module';
 import { RhythmsModule } from './rhythms/rhythms.module';
 import { SongLibraryModule } from './song-library/song-library.module';
@@ -51,6 +52,7 @@ const schedulerImports =
     SongsModule,
     SongLibraryModule,
     PlaylistsModule,
+    MetronomeSequencesModule,
     InstrumentsModule,
     RhythmsModule,
     GroupsModule,
