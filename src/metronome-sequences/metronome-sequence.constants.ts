@@ -20,7 +20,7 @@ export const METRONOME_DIVISIONS = [4, 8, 16] as const;
 export const METRONOME_FINE_STEPS = 16;
 
 export const METRONOME_MIN_BPM = 40;
-export const METRONOME_MAX_BPM = 240;
+export const METRONOME_MAX_BPM = 300;
 
 export const METRONOME_TITLE_MAX_LENGTH = 80;
 

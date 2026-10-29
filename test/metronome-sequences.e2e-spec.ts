@@ -308,6 +308,12 @@ describe('Metronome sequences (e2e)', () => {
       .delete(`/api/v1/sections/${sectionId}/metronome-sequences/${id}`)
       .set('Authorization', as(user));
 
+  const addToSection = (user: TestUser, sectionId: string, ids: string[]) =>
+    request(server())
+      .post(`/api/v1/sections/${sectionId}/metronome-sequences`)
+      .set('Authorization', as(user))
+      .send({ sequenceIds: ids });
+
   // --- own sequences ------------------------------------------------------
 
   describe('own sequences', () => {
@@ -659,6 +665,115 @@ describe('Metronome sequences (e2e)', () => {
         bpm: 132,
         steps: atabaqueSteps(),
       });
+    });
+  });
+
+  // --- "Dodaj sekwencję" from the section --------------------------------
+
+  describe('adding from the section', () => {
+    it('adds one or several own sequences - links, not copies', async () => {
+      const one = await createSequence('author');
+      const two = await createSequence('author', {
+        instrument: 'agogo',
+        title: 'Agogô – trening',
+        division: 4,
+        steps: [
+          { sound: 'low', muted: false },
+          ...rests(3),
+          { sound: 'high', muted: false },
+          ...rests(11),
+        ],
+      });
+
+      const res = await addToSection('author', sectionA.id, [one, two]).expect(
+        200,
+      );
+      expect(
+        (res.body as { addedSequenceIds: string[] }).addedSequenceIds.sort(),
+      ).toEqual([one, two].sort());
+
+      const items = await sectionItems('member', sectionA.id);
+      expect(items.map((item) => item.id).sort()).toEqual([one, two].sort());
+      expect(await mine('author')).toHaveLength(2);
+      expect(
+        (await mine('author')).every((item) =>
+          item.sharedInSections.some((section) => section.id === sectionA.id),
+        ),
+      ).toBe(true);
+    });
+
+    it('never duplicates - adding again, or both ways, keeps one link', async () => {
+      const id = await createSequence('author');
+      await share('author', id, [sectionA.id]).expect(200);
+
+      const res = await addToSection('author', sectionA.id, [id, id]).expect(
+        200,
+      );
+      expect(
+        (res.body as { addedSequenceIds: string[] }).addedSequenceIds,
+      ).toEqual([]);
+      expect(await sectionItems('member', sectionA.id)).toHaveLength(1);
+    });
+
+    it('keeps the sequence shared in other sections', async () => {
+      const id = await createSequence('author');
+      await share('author', id, [sectionB.id]).expect(200);
+
+      await addToSection('author', sectionA.id, [id]).expect(200);
+
+      expect(
+        (await mine('author'))[0].sharedInSections.map((section) => section.id),
+      ).toEqual(expect.arrayContaining([sectionA.id, sectionB.id]));
+      expect(await sectionItems('author', sectionB.id)).toHaveLength(1);
+    });
+
+    it("refuses someone else's sequence - and adds nothing from that request", async () => {
+      const own = await createSequence('author');
+      const foreign = await createSequence('admin');
+
+      await addToSection('author', sectionA.id, [own, foreign]).expect(404);
+      await addToSection('author', sectionA.id, [randomUUID()]).expect(404);
+      expect(await sectionItems('member', sectionA.id)).toEqual([]);
+    });
+
+    it('is only for the section owner and admins', async () => {
+      const memberSequence = await createSequence('member');
+      const readerSequence = await createSequence('reader');
+      const outsiderSequence = await createSequence('outsider');
+
+      await addToSection('member', sectionA.id, [memberSequence]).expect(403);
+      await addToSection('reader', sectionA.id, [readerSequence]).expect(403);
+      await addToSection('outsider', sectionA.id, [outsiderSequence]).expect(
+        404,
+      );
+
+      const adminSequence = await createSequence('admin');
+      await addToSection('admin', sectionA.id, [adminSequence]).expect(200);
+      // ...but an admin of A can't add to B.
+      await addToSection('admin', sectionB.id, [adminSequence]).expect(404);
+    });
+
+    it('stays consistent under simultaneous changes', async () => {
+      const one = await createSequence('author');
+      const two = await createSequence('author', { bpm: 100 });
+
+      await Promise.all([
+        addToSection('author', sectionA.id, [one, two]),
+        addToSection('author', sectionA.id, [two, one]),
+        addToSection('author', sectionB.id, [one]),
+        share('author', two, [sectionA.id, sectionB.id]),
+      ]);
+
+      expect(
+        (await sectionItems('member', sectionA.id))
+          .map((item) => item.id)
+          .sort(),
+      ).toEqual([one, two].sort());
+      expect(
+        (await sectionItems('author', sectionB.id))
+          .map((item) => item.id)
+          .sort(),
+      ).toEqual([one, two].sort());
     });
   });
 });

@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
@@ -21,6 +22,10 @@ import { GroupPermissionsGuard } from '../groups/guards/group-permissions.guard'
 import { GroupPermission } from '../groups/permissions/group-permission.enum';
 import { User } from '../users/entities/user.entity';
 import {
+  AddSectionMetronomeSequencesDto,
+  addSectionMetronomeSequencesSchema,
+} from './dto/add-section-metronome-sequences.schema';
+import {
   MetronomeSequenceResponseDto,
   SectionMetronomeSequenceResponseDto,
 } from './dto/metronome-sequence-response.dto';
@@ -42,6 +47,21 @@ export class SectionMetronomeSequencesController {
     @Query(new ZodValidationPipe(paginationQuerySchema)) query: PaginationQuery,
   ): Promise<PaginatedResponse<SectionMetronomeSequenceResponseDto>> {
     return this.service.listInSection(sectionId, user.id, query);
+  }
+
+  // "Dodaj sekwencję": adds the caller's own sequences to this Section
+  // (OWNER/ADMIN) - the same links "Udostępnij w sekcji" creates from the
+  // metronome, never copies. Idempotent.
+  @Post()
+  @HttpCode(200)
+  @RequireGroupPermission(GroupPermission.METRONOME_SEQUENCE_SHARE)
+  add(
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+    @CurrentUser() user: User,
+    @Body(new ZodValidationPipe(addSectionMetronomeSequencesSchema))
+    dto: AddSectionMetronomeSequencesDto,
+  ): Promise<{ addedSequenceIds: string[] }> {
+    return this.service.addToSection(user, sectionId, dto.sequenceIds);
   }
 
   // Removes the sequence from this Section's library only.

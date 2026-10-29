@@ -148,11 +148,9 @@ export class MetronomeSequencesService {
     await this.em.transactional(async (em) => {
       // Concurrent updates of one sequence's shares (a double tap) run one
       // after another, so the unique (section, sequence) pair is never hit.
-      await em
-        .getConnection()
-        .execute('select pg_advisory_xact_lock(hashtext(?))', [
-          `metronome-share:${sequenceId}`,
-        ]);
+      await em.execute('select pg_advisory_xact_lock(hashtext(?))', [
+        `metronome-share:${sequenceId}`,
+      ]);
 
       const sequence = await em.findOne(MetronomeSequence, {
         id: sequenceId,
@@ -230,6 +228,56 @@ export class MetronomeSequencesService {
   }
 
   // Route already authorized for METRONOME_SEQUENCE_SHARE in this Section.
+  // Adds the caller's own sequences to the Section - all or nothing: one
+  // that isn't theirs (or doesn't exist) rejects the whole request. Already
+  // shared ones are left as they are, shares elsewhere are never touched.
+  // Takes the same per-sequence locks as setSharedSections, so it can't
+  // interleave with a share update of the same sequence.
+  async addToSection(
+    user: User,
+    sectionId: string,
+    sequenceIds: string[],
+  ): Promise<{ addedSequenceIds: string[] }> {
+    return this.em.transactional(async (em) => {
+      // Sorted, so two requests over overlapping sets lock in the same
+      // order and never deadlock.
+      for (const sequenceId of [...sequenceIds].sort()) {
+        await em.execute('select pg_advisory_xact_lock(hashtext(?))', [
+          `metronome-share:${sequenceId}`,
+        ]);
+      }
+
+      const owned = await em.find(MetronomeSequence, {
+        id: { $in: sequenceIds },
+        owner: user.id,
+      });
+      if (owned.length !== sequenceIds.length) {
+        throw this.notFound();
+      }
+
+      const existing = await em.find(SectionMetronomeSequence, {
+        section: sectionId,
+        sequence: { $in: sequenceIds },
+      });
+      const alreadyShared = new Set(existing.map((share) => share.sequence.id));
+      const added: string[] = [];
+
+      for (const sequence of owned) {
+        if (alreadyShared.has(sequence.id)) continue;
+
+        const share = new SectionMetronomeSequence();
+        share.section = em.getReference(Section, sectionId);
+        share.sequence = sequence;
+        share.sharedBy = em.getReference(User, user.id);
+        em.persist(share);
+        added.push(sequence.id);
+      }
+
+      return { addedSequenceIds: added };
+    });
+  }
+
+  // Route already authorized for METRONOME_SEQUENCE_SHARE in this Section.
   // Removes only the link - the author's sequence and members' copies stay.
   async removeFromSection(
     sectionId: string,
@@ -255,11 +303,9 @@ export class MetronomeSequencesService {
     sequenceId: string,
   ): Promise<SaveResult> {
     const result = await this.em.transactional(async (em) => {
-      await em
-        .getConnection()
-        .execute('select pg_advisory_xact_lock(hashtext(?))', [
-          `metronome-copy:${user.id}:${sequenceId}`,
-        ]);
+      await em.execute('select pg_advisory_xact_lock(hashtext(?))', [
+        `metronome-copy:${user.id}:${sequenceId}`,
+      ]);
 
       const share = await em.findOne(
         SectionMetronomeSequence,
