@@ -1,7 +1,10 @@
+import { TEST_DATABASE_CA_CERT } from '../../test/database-ca-cert.fixture';
 import { validateEnv } from './env.schema';
 
 const VALID_DATABASE_URL =
   'postgresql://user:password@localhost:5432/capoeira_hub';
+const PRODUCTION_DATABASE_URL =
+  'postgresql://user:password@db-capohub.example.invalid:25060/defaultdb';
 const VALID_CLERK_SECRET_KEY = 'sk_test_fixture_not_a_real_key_xyz';
 
 describe('validateEnv', () => {
@@ -12,8 +15,9 @@ describe('validateEnv', () => {
       API_PREFIX: 'api',
       API_VERSION: 'v2',
       CORS_ORIGINS: 'https://example.com, https://foo.com',
-      DATABASE_URL: VALID_DATABASE_URL,
+      DATABASE_URL: PRODUCTION_DATABASE_URL,
       DATABASE_SSL: 'true',
+      DATABASE_CA_CERT: TEST_DATABASE_CA_CERT,
       CLERK_SECRET_KEY: 'sk_live_fixture_not_a_real_key_xyz',
       CLERK_PUBLISHABLE_KEY: 'pk_live_fixture_not_a_real_key_xyz',
     });
@@ -24,8 +28,9 @@ describe('validateEnv', () => {
       API_PREFIX: 'api',
       API_VERSION: 'v2',
       CORS_ORIGINS: ['https://example.com', 'https://foo.com'],
-      DATABASE_URL: VALID_DATABASE_URL,
+      DATABASE_URL: PRODUCTION_DATABASE_URL,
       DATABASE_SSL: true,
+      DATABASE_CA_CERT: TEST_DATABASE_CA_CERT,
       CLERK_SECRET_KEY: 'sk_live_fixture_not_a_real_key_xyz',
       CLERK_PUBLISHABLE_KEY: 'pk_live_fixture_not_a_real_key_xyz',
       CLERK_JWT_KEY: undefined,
@@ -197,6 +202,44 @@ describe('validateEnv', () => {
         CLERK_SECRET_KEY: VALID_CLERK_SECRET_KEY,
       }),
     ).toThrow(/Invalid environment configuration/);
+  });
+
+  // Full rule coverage lives in database-env.schema.spec.ts - these only
+  // pin that the app schema applies the same production database rules.
+  describe('production database rules', () => {
+    const productionEnv = (overrides: Record<string, unknown> = {}) => ({
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://example.com',
+      DATABASE_URL: PRODUCTION_DATABASE_URL,
+      DATABASE_SSL: 'true',
+      DATABASE_CA_CERT: TEST_DATABASE_CA_CERT,
+      CLERK_SECRET_KEY: 'sk_live_fixture_not_a_real_key_xyz',
+      ...overrides,
+    });
+
+    it('rejects production without DATABASE_CA_CERT', () => {
+      expect(() =>
+        validateEnv(productionEnv({ DATABASE_CA_CERT: undefined })),
+      ).toThrow(/DATABASE_CA_CERT: DATABASE_CA_CERT is required in production/);
+    });
+
+    it('rejects production without DATABASE_SSL', () => {
+      expect(() =>
+        validateEnv(productionEnv({ DATABASE_SSL: undefined })),
+      ).toThrow(/DATABASE_SSL must be true in production/);
+    });
+
+    it('rejects production pointing at a local database', () => {
+      expect(() =>
+        validateEnv(productionEnv({ DATABASE_URL: VALID_DATABASE_URL })),
+      ).toThrow(/DATABASE_URL must not point at a local database/);
+    });
+
+    it('rejects an invalid DATABASE_CA_CERT', () => {
+      expect(() =>
+        validateEnv(productionEnv({ DATABASE_CA_CERT: 'garbage' })),
+      ).toThrow(/DATABASE_CA_CERT must be a PEM-encoded/);
+    });
   });
 
   describe('CLERK_SECRET_KEY', () => {

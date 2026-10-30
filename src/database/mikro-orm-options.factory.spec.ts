@@ -1,5 +1,6 @@
 import { PostgreSqlDriver } from '@mikro-orm/postgresql';
 import { Migrator } from '@mikro-orm/migrations';
+import { TEST_DATABASE_CA_CERT } from '../../test/database-ca-cert.fixture';
 import { buildMikroOrmOptions } from './mikro-orm-options.factory';
 
 const DATABASE_URL = 'postgresql://user:password@localhost:5432/capoeira_hub';
@@ -25,14 +26,42 @@ describe('buildMikroOrmOptions', () => {
     expect(options.clientUrl).toBe(DATABASE_URL);
   });
 
-  it('enables SSL when databaseSsl is true', () => {
+  it('enables verified SSL against the default trust store when no CA is given', () => {
     const options = buildMikroOrmOptions({
       databaseUrl: DATABASE_URL,
       databaseSsl: true,
       debug: false,
     });
 
-    expect(options.driverOptions).toEqual({ connection: { ssl: true } });
+    expect(options.driverOptions).toEqual({
+      connection: { ssl: { rejectUnauthorized: true } },
+    });
+  });
+
+  it('passes the CA certificate through with certificate verification on', () => {
+    const options = buildMikroOrmOptions({
+      databaseUrl: DATABASE_URL,
+      databaseSsl: true,
+      databaseCaCert: TEST_DATABASE_CA_CERT,
+      debug: false,
+    });
+
+    expect(options.driverOptions).toEqual({
+      connection: {
+        ssl: { rejectUnauthorized: true, ca: TEST_DATABASE_CA_CERT },
+      },
+    });
+  });
+
+  it('ignores the CA certificate when SSL is disabled', () => {
+    const options = buildMikroOrmOptions({
+      databaseUrl: DATABASE_URL,
+      databaseSsl: false,
+      databaseCaCert: TEST_DATABASE_CA_CERT,
+      debug: false,
+    });
+
+    expect(options.driverOptions).toEqual({ connection: { ssl: false } });
   });
 
   it('disables SSL when databaseSsl is false', () => {

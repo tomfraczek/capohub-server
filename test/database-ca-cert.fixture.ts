@@ -1,0 +1,21 @@
+// Throwaway self-signed CA certificate (CN=capohub-test-fixture-ca) for
+// DATABASE_CA_CERT validation tests. Certificate only - its private key
+// was discarded at generation time, so it can never sign anything and
+// trusts nothing outside these tests.
+export const TEST_DATABASE_CA_CERT = `-----BEGIN CERTIFICATE-----
+MIICwjCCAaoCCQCL+7ngtxPPjDANBgkqhkiG9w0BAQsFADAiMSAwHgYDVQQDDBdj
+YXBvaHViLXRlc3QtZml4dHVyZS1jYTAgFw0yNjEwMjkxNDMxMDNaGA8yMTI2MTAw
+NTE0MzEwM1owIjEgMB4GA1UEAwwXY2Fwb2h1Yi10ZXN0LWZpeHR1cmUtY2EwggEi
+MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDDuIk6F3wTJPpuKw6mooYjMYAE
+imwc4aWyMhK/18tZlpEdmoQdifriFbY/X2WtvMg5z/fIjenUImYgllCyRiIjLF5l
+A3/3m12ML/fdGX81etOSLyJ1K8AJG10ofrcY8UOD7UhG72ZP0v1nCln0ENPGWsSN
+hVoOJL752+kihvHGi+F4W3dX+buboJ6G2NXr6momUi91cdzGe82zbm0pZBBNCEM0
+bOTcuyrjMp9FrhkW32rQqrS0ui0Lmo1IWTD1bJAhXCBnn9GLRpl3hzJt/bk8j/Bj
+0bbX6cBRg0NtSMVZwj9s+yKbvsdSJgvK4Y1a1zC9G+hpP32hJO6rp/QDu6jRAgMB
+AAEwDQYJKoZIhvcNAQELBQADggEBAHMUh/IY/EOHSlAKwzNQeuafmR10+YGJnSZ7
+jF+UuoFff5eChfb6JJRhOZ+ThxFeD0yWsSDTrpL7EhKejbtxrQXb5jXM7MlJXZU7
+0UzhmqFYEeALIqYtNKDQE4iuWeu/8jmsHpRXyZVBZRZwv6hIu5Eds4h0dX69njs/
+KUQja6LLnqz6mxQd0ko2+6f+8M6FheMV5ap6uF0OE7RSscYQGQDwHr39HDFpmCYO
+mvTEyNIXJW7bONgSpZUexa5u1vTorzTCZ+L5tAJDNrmSRThXsxi/QDqN0LjQrtZv
+CePXSmdAgl2FIFvoDkRIb7FalthoXxvrEvFmv/dcvTV6AUmf2es=
+-----END CERTIFICATE-----`;

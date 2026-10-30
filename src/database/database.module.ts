@@ -14,6 +14,7 @@ import { DatabaseHealthService } from './health/database-health.service';
         buildMikroOrmOptions({
           databaseUrl: appConfig.databaseUrl,
           databaseSsl: appConfig.databaseSsl,
+          databaseCaCert: appConfig.databaseCaCert,
           debug: appConfig.isDevelopment,
         }),
     }),

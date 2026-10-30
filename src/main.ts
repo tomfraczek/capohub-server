@@ -11,6 +11,19 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const appConfig = app.get(AppConfigService);
 
+  // Not a hard failure (a staging-like production on a dev Clerk instance
+  // can be intentional), but never silent: dev instances have strict rate
+  // limits and their users are separate from the production instance's.
+  if (
+    appConfig.isProduction &&
+    appConfig.clerkSecretKey.startsWith('sk_test_')
+  ) {
+    Logger.warn(
+      'NODE_ENV=production is using a Clerk development instance key (sk_test_) - the mobile app must use the same instance, and dev instances are not meant for production traffic',
+      'Bootstrap',
+    );
+  }
+
   app.setGlobalPrefix(appConfig.apiPrefix);
   app.enableVersioning({
     type: VersioningType.URI,

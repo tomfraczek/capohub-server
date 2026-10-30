@@ -34,6 +34,10 @@ export class AppConfigService {
     return this.configService.get('DATABASE_SSL', { infer: true });
   }
 
+  get databaseCaCert(): string | undefined {
+    return this.configService.get('DATABASE_CA_CERT', { infer: true });
+  }
+
   get clerkSecretKey(): string {
     return this.configService.get('CLERK_SECRET_KEY', { infer: true });
   }

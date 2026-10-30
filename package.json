@@ -5,6 +5,9 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -24,6 +27,7 @@
     "migration:down": "mikro-orm migration:down",
     "migration:list": "mikro-orm migration:list",
     "migration:pending": "mikro-orm migration:pending",
+    "migration:deploy": "node dist/database/migrate.js",
     "schema:diff": "mikro-orm schema:update --dump",
     "seed:music-content": "ts-node -r tsconfig-paths/register src/database/seeds/seed-music-content.ts",
     "seed:songs": "ts-node -r tsconfig-paths/register src/database/seeds/songs/import-songs.ts",
