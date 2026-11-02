@@ -1,9 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger, VersioningType } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { MikroORM } from '@mikro-orm/core';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AppConfigService } from './config/app.config';
+import {
+  applyPendingMigrations,
+  describeMigrationError,
+} from './database/migrate';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor';
 
@@ -22,6 +27,27 @@ async function bootstrap(): Promise<void> {
       'NODE_ENV=production is using a Clerk development instance key (sk_test_) - the mobile app must use the same instance, and dev instances are not meant for production traffic',
       'Bootstrap',
     );
+  }
+
+  // Pending migrations are applied on every start, on the MikroORM instance
+  // DatabaseModule already connected, before listen() - which is also what
+  // runs app init, so neither HTTP traffic nor the scheduler's cron jobs
+  // ever see a half-migrated schema. A failure stops the process instead of
+  // serving requests against a schema the code doesn't expect. See
+  // docs/digitalocean-production.md for the deployment implications.
+  try {
+    await applyPendingMigrations(app.get(MikroORM));
+  } catch (error) {
+    Logger.error(
+      `Startup migrations failed - not starting the HTTP server: ${describeMigrationError(error, appConfig.databaseUrl)}`,
+      undefined,
+      'Bootstrap',
+    );
+    try {
+      await app.close();
+    } finally {
+      process.exit(1);
+    }
   }
 
   app.setGlobalPrefix(appConfig.apiPrefix);

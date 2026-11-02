@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import type { MikroORM as CoreMikroORM } from '@mikro-orm/core';
 import { MikroORM } from '@mikro-orm/postgresql';
 import {
   DatabaseEnvConfig,
@@ -7,23 +8,51 @@ import {
 import { buildMikroOrmOptions } from './mikro-orm-options.factory';
 
 /**
- * Deploy-time migration runner - the DigitalOcean App Platform PRE_DEPLOY
- * job's command (`yarn migration:deploy`, see docs/digitalocean-production.md).
+ * Migration helpers shared by the two places that apply migrations:
  *
- * Runs the compiled migrations in dist/ with plain `node`: no ts-node, no
- * Nest/MikroORM CLI, so it works after the buildpack prunes devDependencies.
- * Deliberately does NOT load .env - it only ever sees variables actually
- * set on the process, so a local run cannot silently pick up a developer
- * .env. Uses the same database env validation (SSL/CA/production guards)
- * and the same MikroORM options factory as the app. Never seeds.
+ * - app startup (main.ts): `applyPendingMigrations` on the MikroORM
+ *   instance already created by Nest's DatabaseModule, before
+ *   `app.listen()` - the normal production path;
+ * - this file as a standalone script (`yarn migration:deploy`): a manual
+ *   admin tool that applies migrations without starting the HTTP server.
+ *   Runs the compiled dist/ code with plain `node` (no ts-node, no CLI) and
+ *   deliberately does NOT load .env, so it only sees variables actually set
+ *   on the process.
  *
- * Idempotent: with nothing pending it exits 0. Any failure exits 1, which
- * makes App Platform abort the deployment before the new version starts.
- * Pending migrations run in a single transaction (MikroORM's default
+ * Both use the same database env validation (SSL/CA/production guards) and
+ * the same MikroORM options factory as the app, and never seed. Pending
+ * migrations run in a single transaction (MikroORM's default
  * `allOrNothing`), so a failing migration leaves the schema untouched.
  */
 
 const CONTEXT = 'Migrate';
+
+type MigratorOwner = Pick<CoreMikroORM, 'getMigrator'>;
+
+/**
+ * Applies every pending migration; resolves with the applied names (empty
+ * when the database is already up to date). Errors propagate unchanged.
+ */
+export async function applyPendingMigrations(
+  orm: MigratorOwner,
+): Promise<string[]> {
+  const migrator = orm.getMigrator();
+  const pending = await migrator.getPendingMigrations();
+
+  if (pending.length === 0) {
+    Logger.log('No pending migrations - database is up to date', CONTEXT);
+    return [];
+  }
+
+  Logger.log(
+    `Applying ${pending.length} pending migration(s): ${pending.map((m) => m.name).join(', ')}`,
+    CONTEXT,
+  );
+  const executed = await migrator.up();
+  const names = executed.map((m) => m.name);
+  Logger.log(`Applied ${names.length} migration(s)`, CONTEXT);
+  return names;
+}
 
 export async function runPendingMigrations(
   env: DatabaseEnvConfig,
@@ -41,22 +70,7 @@ export async function runPendingMigrations(
   });
 
   try {
-    const migrator = orm.getMigrator();
-    const pending = await migrator.getPendingMigrations();
-
-    if (pending.length === 0) {
-      Logger.log('No pending migrations - database is up to date', CONTEXT);
-      return [];
-    }
-
-    Logger.log(
-      `Applying ${pending.length} pending migration(s): ${pending.map((m) => m.name).join(', ')}`,
-      CONTEXT,
-    );
-    const executed = await migrator.up();
-    const names = executed.map((m) => m.name);
-    Logger.log(`Applied ${names.length} migration(s)`, CONTEXT);
-    return names;
+    return await applyPendingMigrations(orm);
   } finally {
     await orm.close(true);
   }
@@ -83,17 +97,25 @@ export function redactDatabaseUrl(
   return redacted;
 }
 
+/** Log-safe one-line description of a migration/connection failure. */
+export function describeMigrationError(
+  error: unknown,
+  databaseUrl?: string,
+): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: unknown })?.code;
+  const codePrefix =
+    typeof code === 'string' || typeof code === 'number' ? `(${code}) ` : '';
+  return `${codePrefix}${redactDatabaseUrl(message, databaseUrl)}`;
+}
+
 async function bootstrap(): Promise<void> {
   try {
     const env = validateDatabaseEnv(process.env);
     await runPendingMigrations(env);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const code = (error as { code?: unknown })?.code;
-    const codeSuffix =
-      typeof code === 'string' || typeof code === 'number' ? ` (${code})` : '';
     Logger.error(
-      `Migration run failed${codeSuffix}: ${redactDatabaseUrl(message, process.env.DATABASE_URL)}`,
+      `Migration run failed: ${describeMigrationError(error, process.env.DATABASE_URL)}`,
       undefined,
       CONTEXT,
     );
