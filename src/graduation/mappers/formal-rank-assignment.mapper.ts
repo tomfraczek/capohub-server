@@ -1,6 +1,7 @@
 import {
   FormalRankAssignmentResponseDto,
   FormalRankEventRefDto,
+  FormalRankExternalEventDto,
   FormalRankRefDto,
 } from '../dto/formal-rank-assignment-response.dto';
 import { FormalRankAssignment } from '../entities/formal-rank-assignment.entity';
@@ -55,6 +56,25 @@ function toFormalRankEventRef(
   };
 }
 
+// Shared by FormalRankAssignment and FormalRankRequest (same columns) and
+// by the career timeline's RECEIVED_RANK item.
+export function toFormalRankExternalEventDto(source: {
+  externalEventName: string | null;
+  externalEventYear: number | null;
+  externalEventMonth: number | null;
+  externalEventDay: number | null;
+}): FormalRankExternalEventDto | null {
+  if (!source.externalEventName) {
+    return null;
+  }
+  return {
+    name: source.externalEventName,
+    year: source.externalEventYear,
+    month: source.externalEventMonth,
+    day: source.externalEventDay,
+  };
+}
+
 export function toFormalRankAssignmentResponseDto(
   assignment: FormalRankAssignment,
 ): FormalRankAssignmentResponseDto {
@@ -70,5 +90,6 @@ export function toFormalRankAssignmentResponseDto(
     awardedByName: assignment.awardedByName,
     isCurrent: assignment.endedOn === null,
     event: toFormalRankEventRef(assignment),
+    externalEvent: toFormalRankExternalEventDto(assignment),
   };
 }

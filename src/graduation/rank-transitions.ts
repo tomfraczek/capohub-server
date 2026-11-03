@@ -71,6 +71,17 @@ export async function endActiveIndependentRank(
   }
 }
 
+// The free-text event columns FormalRankAssignment and FormalRankRequest
+// share (see FormalRankAssignment.externalEventName) - all null when there
+// is none.
+export type FormalRankExternalEventFields = Pick<
+  FormalRankAssignment,
+  | 'externalEventName'
+  | 'externalEventYear'
+  | 'externalEventMonth'
+  | 'externalEventDay'
+>;
+
 /**
  * Makes `rank` (from `group`'s catalog) the user's current, confirmed rank:
  * ends whatever rank was current (formal or independent - both stay as
@@ -85,6 +96,7 @@ export async function assignFormalRank(
     startedOn: Date | null;
     awardedByName: string | null;
     event: Event | null;
+    externalEvent: FormalRankExternalEventFields;
   },
 ): Promise<FormalRankAssignment> {
   await endActiveFormalRank(em, input.user.id);
@@ -97,6 +109,7 @@ export async function assignFormalRank(
   assignment.startedOn = input.startedOn;
   assignment.awardedByName = input.awardedByName;
   assignment.event = input.event;
+  Object.assign(assignment, input.externalEvent);
 
   try {
     em.persist(assignment);

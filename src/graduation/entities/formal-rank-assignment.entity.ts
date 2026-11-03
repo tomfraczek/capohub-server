@@ -89,4 +89,21 @@ export class FormalRankAssignment extends BaseEntity {
   @Index()
   @ManyToOne(() => Event, { nullable: true, deleteRule: 'no action' })
   event: Event | null = null;
+
+  // The free-text alternative to `event` for one that isn't in CapoHub
+  // (e.g. a batizado from before the app): its name and a partial,
+  // remembered date - year, year+month or a full date, never a month
+  // without its year (see set-formal-rank.schema.ts). Never set together
+  // with `event`. Purely declarative, like awardedByName.
+  @Property({ nullable: true, length: 150 })
+  externalEventName: string | null = null;
+
+  @Property({ nullable: true, type: 'smallint' })
+  externalEventYear: number | null = null;
+
+  @Property({ nullable: true, type: 'smallint' })
+  externalEventMonth: number | null = null;
+
+  @Property({ nullable: true, type: 'smallint' })
+  externalEventDay: number | null = null;
 }

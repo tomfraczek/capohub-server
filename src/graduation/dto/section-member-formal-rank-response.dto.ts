@@ -3,6 +3,7 @@ import { FormalRankCorrectionStatus } from '../enums/formal-rank-correction-stat
 import { RankTrack } from '../enums/rank-track.enum';
 import {
   FormalRankEventRefDto,
+  FormalRankExternalEventDto,
   FormalRankRefDto,
   FormalRankSourceGroupRefDto,
 } from './formal-rank-assignment-response.dto';
@@ -22,6 +23,7 @@ export interface SectionMemberCurrentFormalRankDto {
   startedOn: string | null;
   awardedByName: string | null;
   event: FormalRankEventRefDto | null;
+  externalEvent: FormalRankExternalEventDto | null;
 }
 
 export interface SectionMemberFormalRankCorrectionRankRefDto {

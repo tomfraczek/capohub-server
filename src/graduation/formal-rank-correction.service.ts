@@ -355,6 +355,7 @@ export class FormalRankCorrectionService {
       startedOn: mapped.startedOn,
       awardedByName: mapped.awardedByName,
       event: mapped.event,
+      externalEvent: mapped.externalEvent,
     };
   }
 

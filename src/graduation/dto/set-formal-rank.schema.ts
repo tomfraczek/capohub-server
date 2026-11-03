@@ -14,18 +14,95 @@ import { uuidSchema } from '../../common/validation/uuid.schema';
 // received - eligibility (attended, past/ongoing, viewer had access) is
 // validated in FormalRankService.setCurrent, not here, since it requires
 // DB lookups.
-export const setFormalRankSchema = z.object({
-  rankId: uuidSchema,
-  startedOn: z.string().date('Must be a valid date (YYYY-MM-DD)').optional(),
-  awardedByName: z
-    .string()
-    .trim()
-    .min(1)
-    .max(150)
+//
+// eventName/eventYear/eventMonth/eventDay are the free-text alternative
+// for an event that isn't in CapoHub (most batizados before the app
+// existed): a name plus a partial, remembered date - each part optional,
+// but a month needs its year and a day its month, so the date is always
+// one of "nothing", "YYYY", "YYYY-MM" or "YYYY-MM-DD". Mutually exclusive
+// with eventId. "Not in the future" is checked in the service, like
+// startedOn.
+const optionalInt = (min: number, max: number) =>
+  z
+    .number()
+    .int()
+    .min(min)
+    .max(max)
     .nullish()
-    .transform((value) => (value ? value : null)),
-  eventId: uuidSchema.nullish().transform((value) => (value ? value : null)),
-});
+    .transform((value) => value ?? null);
+
+export const setFormalRankSchema = z
+  .object({
+    rankId: uuidSchema,
+    startedOn: z.string().date('Must be a valid date (YYYY-MM-DD)').optional(),
+    awardedByName: z
+      .string()
+      .trim()
+      .min(1)
+      .max(150)
+      .nullish()
+      .transform((value) => (value ? value : null)),
+    eventId: uuidSchema.nullish().transform((value) => (value ? value : null)),
+    eventName: z
+      .string()
+      .trim()
+      .max(150)
+      .nullish()
+      .transform((value) => (value ? value : null)),
+    eventYear: optionalInt(1900, 9999),
+    eventMonth: optionalInt(1, 12),
+    eventDay: optionalInt(1, 31),
+  })
+  .superRefine((value, ctx) => {
+    if (value.eventId && value.eventName) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['eventName'],
+        message: 'Provide either eventId or eventName, not both',
+      });
+    }
+    const hasDatePart =
+      value.eventYear !== null ||
+      value.eventMonth !== null ||
+      value.eventDay !== null;
+    if (hasDatePart && !value.eventName) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['eventName'],
+        message: 'An event date requires eventName',
+      });
+    }
+    if (value.eventMonth !== null && value.eventYear === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['eventYear'],
+        message: 'eventMonth requires eventYear',
+      });
+    }
+    if (value.eventDay !== null && value.eventMonth === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['eventMonth'],
+        message: 'eventDay requires eventMonth',
+      });
+    }
+    if (
+      value.eventYear !== null &&
+      value.eventMonth !== null &&
+      value.eventDay !== null
+    ) {
+      const daysInMonth = new Date(
+        Date.UTC(value.eventYear, value.eventMonth, 0),
+      ).getUTCDate();
+      if (value.eventDay > daysInMonth) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['eventDay'],
+          message: 'Must be a valid day of the given month',
+        });
+      }
+    }
+  });
 
 export class SetFormalRankDto extends createZodDto(setFormalRankSchema) {}
 

@@ -4,6 +4,7 @@ import { Event } from '../../events/entities/event.entity';
 import { toEventCommunityRefDto } from '../../events/mappers/event-community-ref.mapper';
 import { FormalGroupAffiliation } from '../../groups/entities/formal-group-affiliation.entity';
 import { FormalRankAssignment } from '../../graduation/entities/formal-rank-assignment.entity';
+import { toFormalRankExternalEventDto } from '../../graduation/mappers/formal-rank-assignment.mapper';
 import { resolveRankName } from '../../graduation/rank-name.util';
 import { Group } from '../../groups/entities/group.entity';
 import { RoleAssignment } from '../../groups/entities/role-assignment.entity';
@@ -102,6 +103,7 @@ function systemBase(
   | 'description'
   | 'editable'
   | 'possibleDuplicateOfId'
+  | 'externalEvent'
 > {
   return {
     id,
@@ -117,6 +119,8 @@ function systemBase(
     // Only ever set on a MANUAL item - see
     // CareerTimelineAggregationService's post-processing pass.
     possibleDuplicateOfId: null,
+    // Only a formal-rank item can carry one - buildReceivedRankItem sets it.
+    externalEvent: null,
   };
 }
 
@@ -203,13 +207,13 @@ export function buildReceivedRankItem(
       // Undated assignments predate startedOn defaulting to today - dated
       // by when the rank was recorded in the app instead, same fallback
       // as buildIndependentRankItem.
-      assignment.startedOn ??
-        assignment.createdAt.toISOString().slice(0, 10),
+      assignment.startedOn ?? assignment.createdAt.toISOString().slice(0, 10),
       `Otrzymanie stopnia ${rankName}`,
     ),
     group: groupRef(assignment.sourceGroup),
     section: null,
     event: event && includeEvent ? eventRef(event, urlBuilder) : null,
+    externalEvent: toFormalRankExternalEventDto(assignment),
     apelido: null,
     rankName,
     awardedByName: assignment.awardedByName,
@@ -388,6 +392,7 @@ export function buildManualItem(
               entry.eventLocationNameSnapshot ?? entry.event.locationName,
           }
         : null,
+    externalEvent: null,
     apelido: entry.apelido,
     rankName: entry.rankName,
     awardedByName: entry.awardedByName,

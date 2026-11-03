@@ -1,5 +1,6 @@
 import { EventType } from '../../events/enums/event-type.enum';
 import { EventCommunityRefDto } from '../../events/dto/event-community-ref.dto';
+import { FormalRankExternalEventDto } from '../../graduation/dto/formal-rank-assignment-response.dto';
 import { CordSegmentResponseDto } from '../../graduation/dto/rank-response.dto';
 import { RankTrack } from '../../graduation/enums/rank-track.enum';
 import {
@@ -71,6 +72,11 @@ export interface CareerTimelineItemDto {
   group: CareerTimelineGroupRefDto | null;
   section: CareerTimelineSectionRefDto | null;
   event: CareerTimelineEventRefDto | null;
+  // SYSTEM RECEIVED_RANK from a FormalRankAssignment only - the free-text
+  // event the rank was received at when it isn't in CapoHub (see
+  // FormalRankAssignment.externalEventName). Never set together with
+  // `event`; null everywhere else.
+  externalEvent: FormalRankExternalEventDto | null;
   apelido: string | null;
   rankName: string | null;
   awardedByName: string | null;

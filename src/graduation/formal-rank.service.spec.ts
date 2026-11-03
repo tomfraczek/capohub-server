@@ -14,6 +14,13 @@ import { RankTrack } from './enums/rank-track.enum';
 import { FormalRankService } from './formal-rank.service';
 import { FormalRankRequestsService } from './formal-rank-requests.service';
 
+const NO_EXTERNAL_EVENT = {
+  eventName: null,
+  eventYear: null,
+  eventMonth: null,
+  eventDay: null,
+};
+
 // Not exercised in these cases - every setCurrent() call below passes
 // eventId: null, so FormalRankService never calls into this service.
 function buildMockEventAccessService(): EventAccessService {
@@ -122,6 +129,7 @@ describe('FormalRankService', () => {
         rankId: 'rank-1',
         awardedByName: null,
         eventId: null,
+        ...NO_EXTERNAL_EVENT,
       });
 
       await expect(promise).rejects.toBeInstanceOf(ConflictException);
@@ -145,6 +153,7 @@ describe('FormalRankService', () => {
         rankId: 'rank-1',
         awardedByName: null,
         eventId: null,
+        ...NO_EXTERNAL_EVENT,
       });
 
       await expect(promise).rejects.toMatchObject({
@@ -167,6 +176,7 @@ describe('FormalRankService', () => {
         rankId: 'rank-1',
         awardedByName: null,
         eventId: null,
+        ...NO_EXTERNAL_EVENT,
       });
 
       await expect(promise).rejects.toMatchObject({
@@ -194,6 +204,7 @@ describe('FormalRankService', () => {
         startedOn: '2020-05-01',
         awardedByName: 'Mestre Marcão',
         eventId: null,
+        ...NO_EXTERNAL_EVENT,
       });
 
       expect('pendingRequest' in result).toBe(true);
@@ -229,6 +240,7 @@ describe('FormalRankService', () => {
         rankId: 'rank-1',
         awardedByName: 'Mestre Marcão',
         eventId: null,
+        ...NO_EXTERNAL_EVENT,
       });
 
       expect(

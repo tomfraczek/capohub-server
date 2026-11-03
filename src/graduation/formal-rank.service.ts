@@ -28,6 +28,7 @@ import { FormalRankRequestsService } from './formal-rank-requests.service';
 import {
   assignFormalRank,
   cancelPendingFormalRankRequests,
+  FormalRankExternalEventFields,
   startOfTodayUtc,
 } from './rank-transitions';
 
@@ -180,6 +181,7 @@ export class FormalRankService {
         ? await this.loadAndValidateEventLink(em, user, input.eventId)
         : null;
       const awardedByName = input.awardedByName ?? null;
+      const externalEvent = this.toExternalEventFields(input);
 
       if (await confirmsOwnRankImmediately(em, user.id, formalGroup.group.id)) {
         await cancelPendingFormalRankRequests(em, user.id);
@@ -190,6 +192,7 @@ export class FormalRankService {
           startedOn,
           awardedByName,
           event,
+          externalEvent,
         });
         return toFormalRankAssignmentResponseDto(assignment);
       }
@@ -202,6 +205,7 @@ export class FormalRankService {
       request.startedOn = startedOn;
       request.awardedByName = awardedByName;
       request.event = event;
+      Object.assign(request, externalEvent);
       try {
         em.persist(request);
         await em.flush();
@@ -245,6 +249,45 @@ export class FormalRankService {
       { user: userId, endedOn: null },
       { populate: ['group'] },
     );
+  }
+
+  /**
+   * The free-text event (see FormalRankAssignment.externalEventName) - its
+   * shape is already validated by setFormalRankSchema; only "not in the
+   * future" needs today's date, compared at the precision the user gave
+   * (a year alone is fine for the whole of the current year).
+   */
+  private toExternalEventFields(
+    input: SetFormalRankInput,
+  ): FormalRankExternalEventFields {
+    const { eventName, eventYear, eventMonth, eventDay } = input;
+    if (eventYear !== null) {
+      const today = startOfTodayUtc();
+      const given = [eventYear, eventMonth, eventDay];
+      const current = [
+        today.getUTCFullYear(),
+        today.getUTCMonth() + 1,
+        today.getUTCDate(),
+      ];
+      for (let i = 0; i < given.length; i++) {
+        const part = given[i];
+        if (part === null || part < current[i]) {
+          break;
+        }
+        if (part > current[i]) {
+          throw new BadRequestException({
+            code: 'RANK_EVENT_DATE_IN_FUTURE',
+            message: 'The event date cannot be in the future',
+          });
+        }
+      }
+    }
+    return {
+      externalEventName: eventName,
+      externalEventYear: eventYear,
+      externalEventMonth: eventMonth,
+      externalEventDay: eventDay,
+    };
   }
 
   /**

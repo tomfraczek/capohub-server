@@ -70,6 +70,19 @@ export class FormalRankRequest extends BaseEntity {
   @ManyToOne(() => Event, { nullable: true, deleteRule: 'no action' })
   event: Event | null = null;
 
+  // See FormalRankAssignment.externalEventName - copied onto it on approval.
+  @Property({ nullable: true, length: 150 })
+  externalEventName: string | null = null;
+
+  @Property({ nullable: true, type: 'smallint' })
+  externalEventYear: number | null = null;
+
+  @Property({ nullable: true, type: 'smallint' })
+  externalEventMonth: number | null = null;
+
+  @Property({ nullable: true, type: 'smallint' })
+  externalEventDay: number | null = null;
+
   @Index()
   @Enum({ items: () => Object.values(FormalRankRequestStatus) })
   status: FormalRankRequestStatus = FormalRankRequestStatus.PENDING;

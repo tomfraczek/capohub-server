@@ -238,6 +238,12 @@ export class FormalRankRequestsService {
         startedOn: request.startedOn,
         awardedByName: request.awardedByName,
         event: request.event,
+        externalEvent: {
+          externalEventName: request.externalEventName,
+          externalEventYear: request.externalEventYear,
+          externalEventMonth: request.externalEventMonth,
+          externalEventDay: request.externalEventDay,
+        },
       });
       const corrected = confirmedRank.id !== request.rank.id;
       request.status = FormalRankRequestStatus.APPROVED;

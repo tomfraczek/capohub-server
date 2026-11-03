@@ -28,6 +28,16 @@ export interface FormalRankEventRefDto {
   endsAt: string;
 }
 
+// The free-text event a rank was received at when it isn't in CapoHub (see
+// FormalRankAssignment.externalEventName) - a partial date: year alone,
+// year+month, or a full date, or no date at all.
+export interface FormalRankExternalEventDto {
+  name: string;
+  year: number | null;
+  month: number | null;
+  day: number | null;
+}
+
 // Never exposes internal history bookkeeping (row ids of the underlying
 // FormalGroupAffiliation, role data, etc.) - see the module spec. Never
 // describes a CustomUserRank - see the module spec's naming rule ("Nie
@@ -42,4 +52,6 @@ export interface FormalRankAssignmentResponseDto {
   awardedByName: string | null;
   isCurrent: boolean;
   event: FormalRankEventRefDto | null;
+  // Never set together with `event`.
+  externalEvent: FormalRankExternalEventDto | null;
 }
