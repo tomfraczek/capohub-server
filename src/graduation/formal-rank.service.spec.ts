@@ -201,10 +201,12 @@ describe('FormalRankService', () => {
 
       const result = await service.setCurrent(buildUser(), {
         rankId: 'rank-1',
-        startedOn: '2020-05-01',
         awardedByName: 'Mestre Marcão',
         eventId: null,
-        ...NO_EXTERNAL_EVENT,
+        eventName: 'Batizado 2020',
+        eventYear: 2020,
+        eventMonth: 5,
+        eventDay: 1,
       });
 
       expect('pendingRequest' in result).toBe(true);
@@ -221,6 +223,9 @@ describe('FormalRankService', () => {
       expect(request?.status).toBe(FormalRankRequestStatus.PENDING);
       expect(request?.rank.id).toBe('rank-1');
       expect(request?.awardedByName).toBe('Mestre Marcão');
+      expect(request?.externalEventName).toBe('Batizado 2020');
+      // The rank's date is the event's, when given in full.
+      expect(request?.startedOn).toEqual(new Date('2020-05-01T00:00:00.000Z'));
     });
 
     it("confirms immediately for the formal Group's own OWNER/ADMIN", async () => {

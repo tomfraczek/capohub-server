@@ -665,7 +665,6 @@ describe('Career Timeline (e2e)', () => {
       );
 
       await setFormalRank(MEMBER_TOKEN, rank2.id, {
-        startedOn: '2019-01-01',
         eventId: linkedEvent.id,
       });
 
@@ -1011,7 +1010,10 @@ describe('Career Timeline (e2e)', () => {
 
       await joinSection(catalog.token, catalog.section.id, OUTSIDER_TOKEN);
       await setFormalRank(OUTSIDER_TOKEN, catalog.rank.id, {
-        startedOn: '2023-06-01',
+        eventName: 'Batizado 2023',
+        eventYear: 2023,
+        eventMonth: 6,
+        eventDay: 1,
       });
 
       const timeline = await getOwnTimeline(OUTSIDER_TOKEN);

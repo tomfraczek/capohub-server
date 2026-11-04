@@ -514,18 +514,27 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
       expect(error.statusCode).toBe(409);
     });
 
-    it('sets a formal rank, persisting awardedByName and startedOn into history', async () => {
+    it('sets a formal rank, persisting awardedByName and the free-text event, its full date as startedOn', async () => {
       const { section, group, rank, token } = await createGroupWithCatalog();
       await joinSection(token, section.id, MEMBER_TOKEN);
       await setFormalGroup(MEMBER_TOKEN, group.id);
 
       const result = (await setFormalRank(MEMBER_TOKEN, rank.id, 200, {
         awardedByName: 'Mestre Marcão',
-        startedOn: '2020-01-15',
+        eventName: 'Batizado 2020',
+        eventYear: 2020,
+        eventMonth: 1,
+        eventDay: 15,
       })) as FormalRankAssignmentResponseDto;
 
       expect(result.awardedByName).toBe('Mestre Marcão');
       expect(result.startedOn).toBe('2020-01-15');
+      expect(result.externalEvent).toEqual({
+        name: 'Batizado 2020',
+        year: 2020,
+        month: 1,
+        day: 15,
+      });
       expect(result.isCurrent).toBe(true);
       expect(result.sourceGroup.id).toBe(group.id);
 
@@ -883,7 +892,10 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
 
       const { pendingRequest } = await putFormalRank(MEMBER_TOKEN, {
         rankId: rank.id,
-        startedOn: '2021-09-10',
+        eventName: 'Batizado 2021',
+        eventYear: 2021,
+        eventMonth: 9,
+        eventDay: 10,
       });
       expect(pendingRequest.status).toBe(FormalRankRequestStatus.PENDING);
       expect(pendingRequest.group.id).toBe(group.id);
@@ -917,7 +929,7 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
       await endFormalGroup(MEMBER_TOKEN);
     });
 
-    it('approval makes the requested rank current with the declared startedOn, and keeps the previous rank as history', async () => {
+    it("approval makes the requested rank current with the event's date as startedOn, and keeps the previous rank as history", async () => {
       await ensureNoFormalGroup(MEMBER_TOKEN);
       await ensureNoCustomRank(MEMBER_TOKEN);
       const independent = (await setCustomRank(MEMBER_TOKEN, {
@@ -928,7 +940,10 @@ describe('Formal Rank & Custom Cordão (e2e)', () => {
       await setFormalGroup(MEMBER_TOKEN, group.id);
       const { pendingRequest } = await putFormalRank(MEMBER_TOKEN, {
         rankId: rank.id,
-        startedOn: '2021-09-10',
+        eventName: 'Batizado 2021',
+        eventYear: 2021,
+        eventMonth: 9,
+        eventDay: 10,
       });
 
       await decide(token, group.id, pendingRequest.id, 'approve');

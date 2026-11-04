@@ -185,6 +185,25 @@ export function buildLeftGroupItem(
   };
 }
 
+// A free-text event's year (+ month) as the timeline's partial date -
+// normalized down to the 1st, like a MANUAL entry's MONTH/YEAR precision.
+function externalEventPartialDate(
+  assignment: FormalRankAssignment,
+): { occurredOn: string; precision: CareerTimelinePrecision } | null {
+  const year = assignment.externalEventYear;
+  if (year === null) {
+    return null;
+  }
+  const month = assignment.externalEventMonth;
+  return {
+    occurredOn: `${year}-${String(month ?? 1).padStart(2, '0')}-01`,
+    precision:
+      month === null
+        ? CareerTimelinePrecision.YEAR
+        : CareerTimelinePrecision.MONTH,
+  };
+}
+
 export function buildReceivedRankItem(
   assignment: FormalRankAssignment,
   // The timeline owner's - the title is in their form (rank-name.util.ts).
@@ -200,16 +219,24 @@ export function buildReceivedRankItem(
   const rank = assignment.rank;
   const rankName = resolveRankName(rank, holderGender);
   const event = assignment.event;
+  const partialDate = externalEventPartialDate(assignment);
   return {
     ...systemBase(
       receivedRankId(assignment.id),
       CareerTimelineEntryType.RECEIVED_RANK,
-      // Undated assignments predate startedOn defaulting to today - dated
-      // by when the rank was recorded in the app instead, same fallback
-      // as buildIndependentRankItem.
-      assignment.startedOn ?? assignment.createdAt.toISOString().slice(0, 10),
+      // startedOn is only known when the rank's event has a full date (see
+      // FormalRankService.setCurrent). Otherwise it's placed by the
+      // free-text event's year/month, at that precision, and failing that
+      // by when the rank was recorded in the app - same fallback as
+      // buildIndependentRankItem.
+      assignment.startedOn ??
+        partialDate?.occurredOn ??
+        assignment.createdAt.toISOString().slice(0, 10),
       `Otrzymanie stopnia ${rankName}`,
     ),
+    ...(!assignment.startedOn && partialDate
+      ? { occurredOnPrecision: partialDate.precision }
+      : {}),
     group: groupRef(assignment.sourceGroup),
     section: null,
     event: event && includeEvent ? eventRef(event, urlBuilder) : null,

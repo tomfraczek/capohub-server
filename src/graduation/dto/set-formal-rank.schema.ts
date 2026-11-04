@@ -2,13 +2,14 @@ import { z } from 'zod';
 import { createZodDto } from '../../common/dto/create-zod-dto';
 import { uuidSchema } from '../../common/validation/uuid.schema';
 
-// startedOn optional on the wire - an omitted one defaults to today in
-// FormalRankService.setCurrent, so a new assignment/request always has a
-// date of record - and "not in the future" is validated in the service,
-// not here - same reasoning as SetFormalGroupDto. Only ever a catalog Rank (see
-// formal-rank-assignment.entity.ts) - setting an independent/custom
-// cordão is a wholly separate resource, PUT /users/me/custom-rank (see
-// custom-rank.controller.ts), never this endpoint.
+// Only ever a catalog Rank (see formal-rank-assignment.entity.ts) - setting
+// an independent/custom cordão is a wholly separate resource, PUT
+// /users/me/custom-rank (see custom-rank.controller.ts), never this
+// endpoint.
+//
+// There is no startedOn: the date a rank was received is the linked
+// event's (see FormalRankService.setCurrent), never declared on its own.
+// An older client still sending one has it stripped like any unknown key.
 //
 // eventId is optional evidence linking this rank to the Event where it was
 // received - eligibility (attended, past/ongoing, viewer had access) is
@@ -20,8 +21,8 @@ import { uuidSchema } from '../../common/validation/uuid.schema';
 // existed): a name plus a partial, remembered date - each part optional,
 // but a month needs its year and a day its month, so the date is always
 // one of "nothing", "YYYY", "YYYY-MM" or "YYYY-MM-DD". Mutually exclusive
-// with eventId. "Not in the future" is checked in the service, like
-// startedOn.
+// with eventId. "Not in the future" is checked in the service, since it
+// needs today's date.
 const optionalInt = (min: number, max: number) =>
   z
     .number()
@@ -34,7 +35,6 @@ const optionalInt = (min: number, max: number) =>
 export const setFormalRankSchema = z
   .object({
     rankId: uuidSchema,
-    startedOn: z.string().date('Must be a valid date (YYYY-MM-DD)').optional(),
     awardedByName: z
       .string()
       .trim()

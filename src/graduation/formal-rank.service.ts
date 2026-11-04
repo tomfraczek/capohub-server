@@ -44,6 +44,16 @@ function parseDateOnly(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
+// The calendar day `instant` falls on in `timeZone` - an Event's startsAt
+// is a UTC instant, but the day it was received on is the local one (a
+// batizado starting 00:30 in Warsaw is still that day, not the previous).
+function toDateOnlyInTimeZone(instant: Date, timeZone: string): Date {
+  // en-CA formats as YYYY-MM-DD.
+  return parseDateOnly(
+    new Intl.DateTimeFormat('en-CA', { timeZone }).format(instant),
+  );
+}
+
 // Owns FormalRankAssignment - the global, per-user (never per-Group/per-
 // Section) source of truth for a capoeirista's current and historical
 // *formal* rank (see formal-rank-assignment.entity.ts). Only ever a
@@ -114,8 +124,8 @@ export class FormalRankService {
 
   /**
    * Validates the choice exactly as before (rank from the caller's formal
-   * Group's catalog, not archived, startedOn not in the future, Event
-   * evidence eligible), then:
+   * Group's catalog, not archived, Event evidence eligible, a free-text
+   * event's date not in the future), then:
    *  - the formal Group's OWNER/ADMIN: confirmed immediately - becomes the
    *    current rank (assignFormalRank ends the previous one, formal or
    *    independent, as history);
@@ -163,25 +173,29 @@ export class FormalRankService {
         });
       }
 
-      // Never left unset: a rank without a date of record would have
-      // nothing to be placed by on the career timeline, so an omitted
-      // startedOn means "received today" (the app pre-fills and requires
-      // the same).
-      const startedOn = input.startedOn
-        ? parseDateOnly(input.startedOn)
-        : startOfTodayUtc();
-      if (startedOn.getTime() > startOfTodayUtc().getTime()) {
-        throw new BadRequestException({
-          code: 'RANK_STARTED_ON_IN_FUTURE',
-          message: 'startedOn cannot be in the future',
-        });
-      }
-
       const event = input.eventId
         ? await this.loadAndValidateEventLink(em, user, input.eventId)
         : null;
       const awardedByName = input.awardedByName ?? null;
       const externalEvent = this.toExternalEventFields(input);
+
+      // The date the rank was received is never asked for separately -
+      // it's the linked event's: a CapoHub Event's own day, or a free-text
+      // event's date when it was given in full. A year/month alone, or no
+      // event at all, leaves it unknown (null) - the career timeline then
+      // places the rank by the partial date, or by when it was recorded
+      // (see buildReceivedRankItem); nothing is made up.
+      const startedOn = event
+        ? toDateOnlyInTimeZone(event.startsAt, user.timezone)
+        : externalEvent.externalEventDay !== null
+          ? new Date(
+              Date.UTC(
+                externalEvent.externalEventYear!,
+                externalEvent.externalEventMonth! - 1,
+                externalEvent.externalEventDay,
+              ),
+            )
+          : null;
 
       if (await confirmsOwnRankImmediately(em, user.id, formalGroup.group.id)) {
         await cancelPendingFormalRankRequests(em, user.id);
