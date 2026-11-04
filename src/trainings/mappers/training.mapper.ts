@@ -10,7 +10,7 @@ import {
   TrainingRsvpCountsDto,
 } from '../dto/training-response.dto';
 import { TrainingRsvpStatus } from '../enums/training-rsvp-status.enum';
-import { resolveDisplayName } from '../../users/display-name.util';
+import { toTrainingTrainerRefDto } from './training-trainer-ref.mapper';
 
 export function toTrainingResponseDto(
   training: Training,
@@ -42,11 +42,7 @@ export function toTrainingResponseDto(
     locationName: training.locationName,
     locationAddress: training.locationAddress,
     trainer: training.trainer
-      ? {
-          id: training.trainer.id,
-          displayName: resolveDisplayName(training.trainer),
-          gender: training.trainer.gender,
-        }
+      ? toTrainingTrainerRefDto(training.trainer, urlBuilder)
       : null,
     description: training.description,
     visibility: training.visibility,

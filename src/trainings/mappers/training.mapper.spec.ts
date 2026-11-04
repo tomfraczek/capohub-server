@@ -2,6 +2,7 @@ import { PublicUrlBuilder } from '../../storage/image-url.util';
 import { Section } from '../../groups/entities/section.entity';
 import { GroupStatus } from '../../groups/enums/group-status.enum';
 import { User } from '../../users/entities/user.entity';
+import { AvatarType } from '../../users/enums/avatar-type.enum';
 import { Training } from '../entities/training.entity';
 import { TrainingRsvpStatus } from '../enums/training-rsvp-status.enum';
 import { TrainingStatus } from '../enums/training-status.enum';
@@ -86,5 +87,41 @@ describe('toTrainingResponseDto', () => {
     const dto = toTrainingResponseDto(training, CONTEXT, buildUrlBuilder());
 
     expect(dto.section.logoUrl).toBeNull();
+  });
+
+  it("carries the trainer's uploaded avatar, resolved to its R2 public URL", () => {
+    const training = buildTraining({
+      trainer: Object.assign(new User(), {
+        id: 'trainer-1',
+        displayName: 'mestre.bimba',
+        avatarType: AvatarType.UPLOAD,
+        avatarImageKey: 'users/trainer-1/avatar/uuid.webp',
+        presetAvatarId: null,
+      }),
+    });
+
+    const dto = toTrainingResponseDto(training, CONTEXT, buildUrlBuilder());
+
+    expect(dto.trainer?.image).toEqual({
+      type: AvatarType.UPLOAD,
+      url: 'https://cdn.example.com/users/trainer-1/avatar/uuid.webp',
+      presetAvatarId: null,
+    });
+  });
+
+  it("carries a preset trainer avatar's id, with no URL of its own", () => {
+    const training = buildTraining({
+      trainer: Object.assign(new User(), {
+        id: 'trainer-1',
+        displayName: 'mestre.bimba',
+        avatarType: AvatarType.PRESET,
+        presetAvatarId: 'preset-3',
+      }),
+    });
+
+    const dto = toTrainingResponseDto(training, CONTEXT, buildUrlBuilder());
+
+    expect(dto.trainer?.image.type).toBe(AvatarType.PRESET);
+    expect(dto.trainer?.image.presetAvatarId).toBe('preset-3');
   });
 });

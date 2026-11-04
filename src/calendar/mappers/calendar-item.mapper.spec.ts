@@ -1,3 +1,4 @@
+import { AvatarType } from '../../users/enums/avatar-type.enum';
 import { EventResponseDto } from '../../events/dto/event-response.dto';
 import { EventRsvpStatus } from '../../events/enums/event-rsvp-status.enum';
 import { EventStatus } from '../../events/enums/event-status.enum';
@@ -87,7 +88,12 @@ function buildTraining(
     endsAt: '2026-01-12T20:00:00.000Z',
     locationName: 'Gym',
     locationAddress: '456 Side St',
-    trainer: { id: 'trainer-1', displayName: 'Mestre Ada', gender: null },
+    trainer: {
+      id: 'trainer-1',
+      displayName: 'Mestre Ada',
+      gender: null,
+      image: { type: AvatarType.CLERK, url: null, presetAvatarId: null },
+    },
     description: null,
     visibility: TrainingVisibility.MEMBERS_ONLY,
     status: TrainingStatus.SCHEDULED,

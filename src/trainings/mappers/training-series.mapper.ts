@@ -4,7 +4,7 @@ import {
 } from '../../storage/image-url.util';
 import { TrainingSeries } from '../entities/training-series.entity';
 import { TrainingSeriesResponseDto } from '../dto/training-series-response.dto';
-import { resolveDisplayName } from '../../users/display-name.util';
+import { toTrainingTrainerRefDto } from './training-trainer-ref.mapper';
 
 export function toTrainingSeriesResponseDto(
   series: TrainingSeries,
@@ -31,11 +31,7 @@ export function toTrainingSeriesResponseDto(
     locationName: series.locationName,
     locationAddress: series.locationAddress,
     defaultTrainer: series.defaultTrainer
-      ? {
-          id: series.defaultTrainer.id,
-          displayName: resolveDisplayName(series.defaultTrainer),
-          gender: series.defaultTrainer.gender,
-        }
+      ? toTrainingTrainerRefDto(series.defaultTrainer, urlBuilder)
       : null,
     defaultDescription: series.defaultDescription,
     visibility: series.visibility,

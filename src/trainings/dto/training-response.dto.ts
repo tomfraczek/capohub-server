@@ -3,7 +3,7 @@ import { TrainingStatus } from '../enums/training-status.enum';
 import { TrainingVisibility } from '../enums/training-visibility.enum';
 import {
   TrainingSectionRefDto,
-  TrainingUserRefDto,
+  TrainingTrainerRefDto,
 } from './training-user-ref.dto';
 
 export interface TrainingRsvpCountsDto {
@@ -41,7 +41,7 @@ export interface TrainingResponseDto {
   locationAddress: string | null;
   // null = no one assigned (module: "prowadzący opcjonalny") - never
   // defaulted to the creator or anyone else.
-  trainer: TrainingUserRefDto | null;
+  trainer: TrainingTrainerRefDto | null;
   description: string | null;
   visibility: TrainingVisibility;
   status: TrainingStatus;

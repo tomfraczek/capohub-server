@@ -1,7 +1,7 @@
 import { TrainingVisibility } from '../enums/training-visibility.enum';
 import {
   TrainingSectionRefDto,
-  TrainingUserRefDto,
+  TrainingTrainerRefDto,
 } from './training-user-ref.dto';
 
 export interface TrainingSeriesResponseDto {
@@ -14,7 +14,7 @@ export interface TrainingSeriesResponseDto {
   locationAddress: string | null;
   // null = no default trainer (module: "prowadzący opcjonalny") - every
   // generated/regenerated occurrence is created with no trainer either.
-  defaultTrainer: TrainingUserRefDto | null;
+  defaultTrainer: TrainingTrainerRefDto | null;
   defaultDescription: string | null;
   visibility: TrainingVisibility;
   startDate: string;

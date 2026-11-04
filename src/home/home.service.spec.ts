@@ -25,6 +25,7 @@ import { EventResponseDto } from '../events/dto/event-response.dto';
 import { EventType } from '../events/enums/event-type.enum';
 import { EventsService } from '../events/events.service';
 import { TrainingResponseDto } from '../trainings/dto/training-response.dto';
+import { AvatarType } from '../users/enums/avatar-type.enum';
 import { TrainingVisibility } from '../trainings/enums/training-visibility.enum';
 import { TrainingStatus } from '../trainings/enums/training-status.enum';
 import { TrainingsService } from '../trainings/trainings.service';
@@ -102,7 +103,12 @@ function buildTraining(
     endsAt: '2026-08-01T20:00:00.000Z',
     locationName: null,
     locationAddress: null,
-    trainer: { id: 'user-2', displayName: 'Trainer', gender: null },
+    trainer: {
+      id: 'user-2',
+      displayName: 'Trainer',
+      gender: null,
+      image: { type: AvatarType.CLERK, url: null, presetAvatarId: null },
+    },
     description: null,
     visibility: TrainingVisibility.MEMBERS_ONLY,
     status: TrainingStatus.SCHEDULED,

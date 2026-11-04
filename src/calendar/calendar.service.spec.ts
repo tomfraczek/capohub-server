@@ -11,6 +11,7 @@ import { Group } from '../groups/entities/group.entity';
 import { Section } from '../groups/entities/section.entity';
 import { GroupHierarchyService } from '../groups/group-hierarchy.service';
 import { TrainingResponseDto } from '../trainings/dto/training-response.dto';
+import { AvatarType } from '../users/enums/avatar-type.enum';
 import { TrainingStatus } from '../trainings/enums/training-status.enum';
 import { TrainingVisibility } from '../trainings/enums/training-visibility.enum';
 import { TrainingsService } from '../trainings/trainings.service';
@@ -113,7 +114,12 @@ function buildTraining(
     endsAt: '2026-01-12T20:00:00.000Z',
     locationName: null,
     locationAddress: null,
-    trainer: { id: 'trainer-1', displayName: 'Mestre Ada', gender: null },
+    trainer: {
+      id: 'trainer-1',
+      displayName: 'Mestre Ada',
+      gender: null,
+      image: { type: AvatarType.CLERK, url: null, presetAvatarId: null },
+    },
     description: null,
     visibility: TrainingVisibility.MEMBERS_ONLY,
     status: TrainingStatus.SCHEDULED,
