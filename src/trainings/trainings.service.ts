@@ -137,6 +137,17 @@ export class TrainingsService {
     if (!isMember) {
       where.visibility = TrainingVisibility.PUBLIC;
     }
+    if (query.collapseSeries) {
+      const nextOccurrenceIds = await this.findNextSeriesOccurrenceIds(
+        em,
+        where,
+      );
+      if (nextOccurrenceIds.length > 0) {
+        where.$or = [{ series: null }, { id: { $in: nextOccurrenceIds } }];
+      } else {
+        where.series = null;
+      }
+    }
 
     const [trainings, total] = await em.findAndCount(Training, where, {
       populate: [...TRAINING_POPULATE],
@@ -155,6 +166,32 @@ export class TrainingsService {
     }
 
     return { items, total, hasMore: query.offset + items.length < total };
+  }
+
+  // Own fork, so these id-only partial entities never land in the identity
+  // map the full list query below reads from.
+  private async findNextSeriesOccurrenceIds(
+    em: EntityManager,
+    where: FilterQuery<Training>,
+  ): Promise<string[]> {
+    const occurrences = await em.fork().find(
+      Training,
+      {
+        status: TrainingStatus.SCHEDULED,
+        ...(where as object),
+        series: { $ne: null },
+      },
+      { fields: ['id', 'series'], orderBy: { startsAt: 'asc' } },
+    );
+
+    const nextOccurrenceBySeries = new Map<string, string>();
+    for (const occurrence of occurrences) {
+      const seriesId = occurrence.series!.id;
+      if (!nextOccurrenceBySeries.has(seriesId)) {
+        nextOccurrenceBySeries.set(seriesId, occurrence.id);
+      }
+    }
+    return [...nextOccurrenceBySeries.values()];
   }
 
   /**

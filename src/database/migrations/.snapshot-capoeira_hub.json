@@ -5677,6 +5677,70 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "external_event_name": {
+          "name": "external_event_name",
+          "type": "varchar(150)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 150,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "external_event_year": {
+          "name": "external_event_year",
+          "type": "int2",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": 16,
+          "scale": 0,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "smallint"
+        },
+        "external_event_month": {
+          "name": "external_event_month",
+          "type": "int2",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": 16,
+          "scale": 0,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "smallint"
+        },
+        "external_event_day": {
+          "name": "external_event_day",
+          "type": "int2",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": 16,
+          "scale": 0,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "smallint"
         }
       },
       "name": "formal_rank_assignments",
@@ -6456,6 +6520,70 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "text"
+        },
+        "external_event_name": {
+          "name": "external_event_name",
+          "type": "varchar(150)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 150,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "external_event_year": {
+          "name": "external_event_year",
+          "type": "int2",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": 16,
+          "scale": 0,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "smallint"
+        },
+        "external_event_month": {
+          "name": "external_event_month",
+          "type": "int2",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": 16,
+          "scale": 0,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "smallint"
+        },
+        "external_event_day": {
+          "name": "external_event_day",
+          "type": "int2",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": 16,
+          "scale": 0,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "smallint"
         }
       },
       "name": "formal_rank_requests",
@@ -9357,6 +9485,257 @@
           ],
           "updateRule": "cascade",
           "deleteRule": "set null"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(80)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 80,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "instrument": {
+          "name": "instrument",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "agogo",
+            "atabaque"
+          ],
+          "mappedType": "enum"
+        },
+        "bpm": {
+          "name": "bpm",
+          "type": "int2",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 16,
+          "scale": 0,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "smallint"
+        },
+        "division": {
+          "name": "division",
+          "type": "int2",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 16,
+          "scale": 0,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "smallint"
+        },
+        "steps": {
+          "name": "steps",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
+        "copied_from_id": {
+          "name": "copied_from_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "original_author_id": {
+          "name": "original_author_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        }
+      },
+      "name": "metronome_sequences",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "owner_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "metronome_sequences_owner_id_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "metronome_sequences_pkey",
+          "unique": true,
+          "primary": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "metronome_sequences_copied_from_id_foreign": {
+          "columnNames": [
+            "copied_from_id"
+          ],
+          "constraintName": "metronome_sequences_copied_from_id_foreign",
+          "localTableName": "public.metronome_sequences",
+          "referencedTableName": "public.metronome_sequences",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "metronome_sequences_original_author_id_foreign": {
+          "columnNames": [
+            "original_author_id"
+          ],
+          "constraintName": "metronome_sequences_original_author_id_foreign",
+          "localTableName": "public.metronome_sequences",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "metronome_sequences_owner_id_foreign": {
+          "columnNames": [
+            "owner_id"
+          ],
+          "constraintName": "metronome_sequences_owner_id_foreign",
+          "localTableName": "public.metronome_sequences",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
         }
       },
       "nativeEnums": {},
@@ -12807,6 +13186,196 @@
           ],
           "updateRule": "cascade",
           "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "sequence_id": {
+          "name": "sequence_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "shared_by_id": {
+          "name": "shared_by_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        }
+      },
+      "name": "section_metronome_sequences",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "section_metronome_sequences_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "section_id",
+            "created_at"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "section_metronome_sequences_section_id_created_at_index",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "section_id",
+            "sequence_id"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "section_metronome_sequences_section_id_sequence_id_unique",
+          "unique": true,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "sequence_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "section_metronome_sequences_sequence_id_index",
+          "unique": false,
+          "primary": false
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "section_metronome_sequences_section_id_foreign": {
+          "columnNames": [
+            "section_id"
+          ],
+          "constraintName": "section_metronome_sequences_section_id_foreign",
+          "localTableName": "public.section_metronome_sequences",
+          "referencedTableName": "public.sections",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        },
+        "section_metronome_sequences_sequence_id_foreign": {
+          "columnNames": [
+            "sequence_id"
+          ],
+          "constraintName": "section_metronome_sequences_sequence_id_foreign",
+          "localTableName": "public.section_metronome_sequences",
+          "referencedTableName": "public.metronome_sequences",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        },
+        "section_metronome_sequences_shared_by_id_foreign": {
+          "columnNames": [
+            "shared_by_id"
+          ],
+          "constraintName": "section_metronome_sequences_shared_by_id_foreign",
+          "localTableName": "public.section_metronome_sequences",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
         }
       },
       "nativeEnums": {},
@@ -18127,447 +18696,6 @@
         }
       ],
       "foreignKeys": {},
-      "nativeEnums": {},
-      "comment": null
-    },
-    {
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": true,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "owner_id": {
-          "name": "owner_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "title": {
-          "name": "title",
-          "type": "varchar(80)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 80,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "instrument": {
-          "name": "instrument",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [
-            "agogo",
-            "atabaque"
-          ],
-          "mappedType": "enum"
-        },
-        "bpm": {
-          "name": "bpm",
-          "type": "int2",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": 16,
-          "scale": 0,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "smallint"
-        },
-        "division": {
-          "name": "division",
-          "type": "int2",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": 16,
-          "scale": 0,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "smallint"
-        },
-        "steps": {
-          "name": "steps",
-          "type": "jsonb",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "json"
-        },
-        "copied_from_id": {
-          "name": "copied_from_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "original_author_id": {
-          "name": "original_author_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        }
-      },
-      "name": "metronome_sequences",
-      "schema": "public",
-      "indexes": [
-        {
-          "columnNames": [
-            "owner_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "metronome_sequences_owner_id_index",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "metronome_sequences_pkey",
-          "unique": true,
-          "primary": true
-        }
-      ],
-      "checks": [],
-      "foreignKeys": {
-        "metronome_sequences_copied_from_id_foreign": {
-          "columnNames": [
-            "copied_from_id"
-          ],
-          "constraintName": "metronome_sequences_copied_from_id_foreign",
-          "localTableName": "public.metronome_sequences",
-          "referencedTableName": "public.metronome_sequences",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "set null"
-        },
-        "metronome_sequences_original_author_id_foreign": {
-          "columnNames": [
-            "original_author_id"
-          ],
-          "constraintName": "metronome_sequences_original_author_id_foreign",
-          "localTableName": "public.metronome_sequences",
-          "referencedTableName": "public.users",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "set null"
-        },
-        "metronome_sequences_owner_id_foreign": {
-          "columnNames": [
-            "owner_id"
-          ],
-          "constraintName": "metronome_sequences_owner_id_foreign",
-          "localTableName": "public.metronome_sequences",
-          "referencedTableName": "public.users",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        }
-      },
-      "nativeEnums": {},
-      "comment": null
-    },
-    {
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": true,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "section_id": {
-          "name": "section_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": true,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "sequence_id": {
-          "name": "sequence_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "shared_by_id": {
-          "name": "shared_by_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        }
-      },
-      "name": "section_metronome_sequences",
-      "schema": "public",
-      "indexes": [
-        {
-          "columnNames": [
-            "id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "section_metronome_sequences_pkey",
-          "unique": true,
-          "primary": true
-        },
-        {
-          "columnNames": [
-            "section_id",
-            "created_at"
-          ],
-          "composite": true,
-          "constraint": false,
-          "keyName": "section_metronome_sequences_section_id_created_at_index",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "section_id",
-            "sequence_id"
-          ],
-          "composite": true,
-          "constraint": true,
-          "keyName": "section_metronome_sequences_section_id_sequence_id_unique",
-          "unique": true,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "sequence_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "section_metronome_sequences_sequence_id_index",
-          "unique": false,
-          "primary": false
-        }
-      ],
-      "checks": [],
-      "foreignKeys": {
-        "section_metronome_sequences_section_id_foreign": {
-          "columnNames": [
-            "section_id"
-          ],
-          "constraintName": "section_metronome_sequences_section_id_foreign",
-          "localTableName": "public.section_metronome_sequences",
-          "referencedTableName": "public.sections",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        },
-        "section_metronome_sequences_sequence_id_foreign": {
-          "columnNames": [
-            "sequence_id"
-          ],
-          "constraintName": "section_metronome_sequences_sequence_id_foreign",
-          "localTableName": "public.section_metronome_sequences",
-          "referencedTableName": "public.metronome_sequences",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        },
-        "section_metronome_sequences_shared_by_id_foreign": {
-          "columnNames": [
-            "shared_by_id"
-          ],
-          "constraintName": "section_metronome_sequences_shared_by_id_foreign",
-          "localTableName": "public.section_metronome_sequences",
-          "referencedTableName": "public.users",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "set null"
-        }
-      },
       "nativeEnums": {},
       "comment": null
     }

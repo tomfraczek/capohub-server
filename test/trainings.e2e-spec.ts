@@ -539,6 +539,77 @@ describe('Trainings (e2e)', () => {
 
   // ─── CREATE: recurring series ───────────────────────────────────────────
 
+  describe('list with collapseSeries', () => {
+    async function listCollapsed(token: string, sectionId: string) {
+      return bodyOf<{ items: TrainingResponseDto[]; total: number }>(
+        request(app.getHttpServer())
+          .get(
+            `/api/v1/sections/${sectionId}/trainings?collapseSeries=true&limit=100`,
+          )
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200),
+      );
+    }
+
+    it('returns every one-off Training but only the next occurrence of each series', async () => {
+      const section = await createSectionWithRoles();
+      // Wednesdays in July 2031: 2, 9, 16, 23, 30.
+      const wednesdays = await createSeries(section.token, section.id);
+      // Fridays in July 2031: 4, 11, 18, 25.
+      const fridays = await createSeries(section.token, section.id, {
+        dayOfWeek: 5,
+      });
+      const oneOff = await createTraining(section.token, section.id, {
+        startsAt: '2031-07-20T18:00:00.000Z',
+        endsAt: '2031-07-20T20:00:00.000Z',
+      });
+
+      const list = await listCollapsed(section.token, section.id);
+
+      expect(list.total).toBe(3);
+      expect(list.items.map((t) => t.seriesId)).toEqual([
+        wednesdays.id,
+        fridays.id,
+        null,
+      ]);
+      expect(list.items[2].id).toBe(oneOff.id);
+    });
+
+    it('skips a cancelled occurrence and shows the next scheduled one', async () => {
+      const section = await createSectionWithRoles();
+      await createSeries(section.token, section.id);
+      const [first, second] = (await listAll(section)).items;
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/sections/${section.id}/trainings/${first.id}/cancel`)
+        .set('Authorization', `Bearer ${section.token}`)
+        .send({ scope: 'THIS' })
+        .expect(201);
+
+      const list = await listCollapsed(section.token, section.id);
+
+      expect(list.items.map((t) => t.id)).toEqual([second.id]);
+    });
+
+    it('works for a Section with no series at all', async () => {
+      const section = await createSectionWithRoles();
+      const oneOff = await createTraining(section.token, section.id);
+
+      const list = await listCollapsed(section.token, section.id);
+
+      expect(list.items.map((t) => t.id)).toEqual([oneOff.id]);
+    });
+
+    function listAll(section: { id: string; token: string }) {
+      return bodyOf<{ items: TrainingResponseDto[] }>(
+        request(app.getHttpServer())
+          .get(`/api/v1/sections/${section.id}/trainings?limit=100`)
+          .set('Authorization', `Bearer ${section.token}`)
+          .expect(200),
+      );
+    }
+  });
+
   describe('create TrainingSeries (recurring)', () => {
     it('generates one Training per matching weekday, all real database rows', async () => {
       const section = await createSectionWithRoles();
